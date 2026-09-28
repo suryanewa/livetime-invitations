@@ -1,0 +1,39 @@
+# Asset conventions and provenance manifest
+
+Owner: design.inc. Every mesh, texture, font, environment and sound used at runtime is listed here with creator/source, licence, modifications, source master and runtime derivative (Master §8).
+
+## Conventions
+
+- **Axes and units.** Y-up, right-handed, ground plane at y = 0. One scene unit is a "stage decimetre": objects are stylised, not real-world scale. A ready-pose object spans roughly 2–2.5 units so the shared camera frames every family consistently.
+- **Transforms.** Applied transforms; origins at the natural contact point (base centre for grounded objects, clip pivot for the card). Pivots are named nodes, never implicit mesh origins.
+- **Named nodes.** Each scene exports exactly the node names in its sub-spec (e.g. `business_root`, `card_authored`, `card_secondary`, `clip_pivot` …). Authored motion writes `*_authored`; bounded secondary springs write only `*_secondary` children. No node is written by two systems.
+- **Materials.** `mat_<role>[_<preset>]`, resolved at runtime from the selected direction's material library, so presets and art direction change values, not geometry. Roughness bands: satin 0.40–0.55, enamel 0.62–0.75, metal 0.25–0.40, food 0.55–0.86. Metalness 0 or 1 except explicitly anodised or painted metal.
+- **Status materials** are unique instances (`mat_status`) so indicator colour never touches card or body materials.
+- **Signature detail.** UVs on signature surfaces map one UV unit to one tile in scene units, so stipple or perforation density is identical on every object.
+- **Contact shadows** are named `<object>_shadow`, move with their object, and fade and spread with height.
+- **Posters.** WebP per scene × visually distinct preset × {guest-ready, accepted, declined}, same framing/background as the renderer, generated from the browser renderer. Only the currently needed poster is fetched.
+- **Masters.** Models are code-authored parametric sources in `models/` (see below). Selected high-resolution exports and approved style frames go to `~/Creative/Livetime/invitation-interactions/`.
+
+## Why code-authored masters
+
+This machine has no Blender installation, and the handoff transfers no DCC files. The models are therefore authored as explicit, parametric TypeScript builders: lathe profiles with per-corner fillets, bevelled extrusions, rounded boxes and fixed-length strap curves. Each builder is the editable master. It is original work, has no third-party geometry, and exports deterministically to GLB from Milestone 2 onward. Primitive-looking parts are placeholders only where the study labels them "blockout". This substitution needs Surya's visual approval at the style-selection gate (Master §5: "do not substitute generic primitive assemblies … without visual approval").
+
+## Provenance
+
+| Asset | Creator / source | Licence | Modifications | Source master | Runtime derivative |
+| --- | --- | --- | --- | --- | --- |
+| Studio environment (softbox room) | design.inc, procedural | Original | — | `src/render/lighting.ts` | PMREM texture generated at load (no file) |
+| Stipple normal map | design.inc, procedural | Original | — | `src/render/textures.ts` | Canvas texture generated at load |
+| Perforation colour/normal maps | design.inc, procedural | Original | — | `src/render/textures.ts` | Canvas textures generated at load |
+| Weave normal map (lanyard) | design.inc, procedural | Original | — | `src/render/textures.ts` | Canvas texture generated at load |
+| Ring normal maps (pad, record) | design.inc, procedural | Original | — | `src/render/textures.ts` | Canvas texture generated at load |
+| Contact-shadow falloff | design.inc, procedural | Original | — | `src/render/contactShadow.ts` | Canvas texture generated at load |
+| Cake, tray, candles, flames | design.inc | Original | — | `models/cake.ts` | Study: runtime geometry. Production: `assets/scenes/birthday/` (M4) |
+| Keycard, clip, lanyard, scanner | design.inc | Original | — | `models/keycard.ts`, `models/lanyard.ts` | Study: runtime geometry. Production: `assets/scenes/business/` (M2) |
+| Record player, basketball/hoop, covered dish blockouts | design.inc | Original | Study blockouts only | `models/blockouts.ts` | Study only |
+| Three.js RoundedBoxGeometry, BufferGeometryUtils, LatheGeometry | three.js authors | MIT | Used as library code | `node_modules/three` | Bundled |
+| UI typography | Platform system fonts (SF Pro, Segoe UI, Roboto) | OS-provided, not redistributed | — | — | None shipped |
+| Icons (check, minus, back chevron) | design.inc, inline SVG paths | Original | — | `src/demo/study.ts`, `src/ui/` | Inline |
+| Audio | None | — | Audio is absent from v1 | — | — |
+
+No fonts, HDRIs, photographs, generated images or brand assets from third parties are used.

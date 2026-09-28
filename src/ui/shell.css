@@ -1,0 +1,179 @@
+/*
+ * Livetime invitation UI tokens (study inputs, Master §5 — not an approved brand palette).
+ * The component owns its stage surface; no automatic dark-mode recolouring in v1.
+ */
+:root {
+  --lt-stage: #f4f1eb;
+  --lt-text: #202320;
+  --lt-text-2: #585c57;
+  --lt-muted: #dcddd5;
+  --lt-accent: #ff714a;
+  --lt-ok: #176b42;
+  --lt-no: #a62d36;
+  --lt-surface: #ffffff;
+  --lt-line: #c9cac2;
+  --lt-line-strong: #6f736d;
+  --lt-focus: #2f54c9;
+  --lt-radius-stage: 22px;
+  --lt-radius-control: 14px;
+  --lt-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --lt-font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --lt-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--lt-font);
+  color: var(--lt-text);
+  background: var(--lt-surface);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 3px solid var(--lt-focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Invitation card (guest-facing chrome shared by showcase and study frames) ── */
+
+.lt-invite {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 16px;
+}
+
+.lt-invite__eyebrow {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lt-text-2);
+}
+
+.lt-invite__title {
+  margin: 4px 0 0;
+  font-family: var(--lt-font-display);
+  font-size: 1.625rem;
+  line-height: 1.15;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.lt-invite__meta {
+  margin: 6px 0 0;
+  font-size: 0.9375rem;
+  color: var(--lt-text-2);
+}
+
+.lt-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--lt-radius-stage);
+  background: var(--lt-stage);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.lt-stage > canvas,
+.lt-stage > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.lt-question {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.lt-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.lt-choice {
+  min-height: 52px;
+  min-width: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--lt-text);
+  background: var(--lt-surface);
+  border: 1.5px solid var(--lt-line-strong);
+  border-radius: var(--lt-radius-control);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lt-choice svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.lt-choice:hover {
+  background: #f7f6f2;
+}
+
+.lt-choice[aria-pressed='true'][data-response='accept'] {
+  background: var(--lt-ok);
+  border-color: var(--lt-ok);
+  color: #fff;
+}
+
+.lt-choice[aria-pressed='true'][data-response='decline'] {
+  background: var(--lt-no);
+  border-color: var(--lt-no);
+  color: #fff;
+}
+
+.lt-status {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--lt-text-2);
+}
+
+.lt-footnote {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--lt-text-2);
+}
