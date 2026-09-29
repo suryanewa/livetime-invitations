@@ -98,7 +98,7 @@ State for your UI comes from `getState()` / `onStateChange`: `response.intent`, 
 
 - **Resource states**: `poster` (still image) → `loading` → `ready` (live 3D) or `fallback` (poster or text). After 6 s without readiness `canRetryGraphics` becomes true: offer "Try 3D again" (`retryGraphics()`). Context loss falls back to the poster and responses keep working.
 - **Reduced motion**: sequences snap to their final pose; no simulation runs; the drag handle hides. `setReducedMotion(enabled)` applies live.
-- **Quality tiers**: High, Normal, Low (no shadow map, gobo or plaster relief; simplified materials), Static (poster only). The controller steps down on sustained slow frames; `setQualityTier` forces a tier (tooling).
+- **Quality tiers**: High, Normal, Low (no shadow map or plaster relief, a small copy of the gobo, simplified materials), Static (poster only). The controller steps down on sustained slow frames; `setQualityTier` forces a tier (tooling).
 - **Render on demand**: the loop stops when nothing moves and pauses in hidden tabs; the visual clock resumes without skipping.
 
 ## Assets

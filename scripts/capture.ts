@@ -261,6 +261,11 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
   await record(`decline-${secondKey}`, '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("decline")', plan.clips.decline);
 
   await browser.close();
+  if (process.env.CAPTURE_STAGE_ONLY) {
+    // Copying into assets/ makes a running dev server reload every open page; defer it.
+    console.log('Staged in', outDir, '(posters and thumbnail not copied into assets/)');
+    return;
+  }
   const { cp } = await import('node:fs/promises');
   await mkdir(posterDir, { recursive: true });
   await cp(stagedPosters, posterDir, { recursive: true });

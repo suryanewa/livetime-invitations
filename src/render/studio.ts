@@ -23,8 +23,9 @@ import {
 /**
  * Premium studio (fidelity pass): a sunlit key with a soft-edged foliage gobo, a seamless
  * paper sweep that receives real soft shadows, and a quiet hemisphere fill. Everything is
- * procedural (no HDRI, no downloads). Low tier drops the shadowed key, the gobo and the plaster
- * relief for the contact-shadow rig; camera, silhouette and timing are unchanged.
+ * procedural (no HDRI, no downloads). Low tier drops the shadow map and the plaster relief and
+ * keeps a small copy of the gobo, leaving the contact-shadow rig; camera, silhouette, light and
+ * timing are unchanged.
  */
 
 export const STUDIO = {
@@ -286,6 +287,20 @@ export interface PremiumStudio {
   dispose(): void;
 }
 
+/** A small copy of the gobo cookie for the Low tier (same pattern, softer edges). */
+function downsampledCookie(full: Texture, size: number): Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(full.image as CanvasImageSource, 0, 0, size, size);
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  tex.minFilter = LinearFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
 /** Add the premium key/fill/sweep to a scene that already has the PMREM environment. */
 export function createPremiumStudio(renderer: WebGLRenderer, scene: Scene, target: Object3D): PremiumStudio {
   smoothPcf();
@@ -324,17 +339,23 @@ export function createPremiumStudio(renderer: WebGLRenderer, scene: Scene, targe
   const cookie = key.map!;
   const sweepMaterial = sweep.material as MeshStandardMaterial;
   const relief = sweepMaterial.normalMap!;
+  let lowCookie: Texture | null = null;
   let lowDetail = false;
   const setLowDetail = (enabled: boolean) => {
     if (enabled === lowDetail) return;
     lowDetail = enabled;
-    key.map = enabled ? null : cookie;
+    // Low keeps the dappled sun at 192² (0.14 MiB instead of 2.25): the cookie also dims and
+    // warms the key on every object, so dropping it would brighten and cool the whole scene.
+    lowCookie ??= downsampledCookie(cookie, 192);
+    key.map = enabled ? lowCookie : cookie;
     sweepMaterial.normalMap = enabled ? null : relief;
     sweepMaterial.needsUpdate = true;
+    // The canvases stay, so each map uploads again when it returns.
     if (enabled) {
-      // The canvases stay, so the maps upload again on restore.
       cookie.dispose();
       relief.dispose();
+    } else {
+      lowCookie.dispose();
     }
   };
 
@@ -356,6 +377,7 @@ export function createPremiumStudio(renderer: WebGLRenderer, scene: Scene, targe
     dispose() {
       scene.remove(key, fill, bounce, sweep);
       cookie.dispose();
+      lowCookie?.dispose();
       key.shadow.map?.dispose();
       sweep.geometry.dispose();
       relief.dispose();

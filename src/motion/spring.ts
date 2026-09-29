@@ -36,6 +36,13 @@ export class Spring {
     this.zeta = options.damping ?? DEFAULT_DAMPING;
   }
 
+  /** Scale the remaining displacement and velocity (an authored damp-to-rest beat). */
+  damp(factor: number): void {
+    if (this.settled) return;
+    this.x = this.target + (this.x - this.target) * factor;
+    this.v *= factor;
+  }
+
   /** Displace (e.g. from an authored beat); clamped to limits. */
   kick(displacement: number, velocity = 0): void {
     const { limit, maxVelocity = Infinity } = this.options;

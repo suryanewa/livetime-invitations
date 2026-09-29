@@ -20,6 +20,10 @@ const APPROACH_T = SCAN_AT - 0.08;
 const MAX_TILT = (12 * Math.PI) / 180;
 const DEG = Math.PI / 180;
 
+/** Final-beat damping: over the last 0.25 s a 0.5° sway decays to about 0.015°. */
+const SWAY_DAMP_WINDOW = 0.25;
+const SWAY_DAMP_RATE = 14;
+
 export class BusinessScene implements SceneInstance {
   readonly category = 'business' as const;
   readonly root: Object3D;
@@ -102,6 +106,13 @@ export class BusinessScene implements SceneInstance {
       this.releaseLeft = Math.max(0, this.releaseLeft - dt);
       const k = this.releaseLeft / RELEASE_BLEND;
       this.dragOffset.copy(this.releaseFrom).multiplyScalar(k * k * (3 - 2 * k));
+    }
+    // Each sequence's last beat damps the sway to rest, so the canonical end pose (which
+    // snaps the springs) never pops.
+    if (this.sequence && !this.dragging && DURATIONS[this.sequence] - this.t < SWAY_DAMP_WINDOW) {
+      const k = Math.exp(-dt * SWAY_DAMP_RATE);
+      this.swing.damp(k);
+      this.pitch.damp(k);
     }
     this.swing.step(dt);
     this.pitch.step(dt);
