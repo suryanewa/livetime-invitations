@@ -239,11 +239,13 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
     await mkdir(framesDir, { recursive: true });
     await call(action);
     const total = Math.round(seconds * 60);
+    // Integer-millisecond schedule (the fake clock rounds fractional steps: 16.67 ms ticks
+    // double-stepped every 16 frames). Frame i shows time round(i × 1000/60).
     for (let i = 0; i <= total; i++) {
       if (mid && i === Math.round(mid[0] * 60)) await call(mid[1]);
       const url = await still(540, 1);
       await saveDataUrl(join(framesDir, `f${String(i).padStart(4, '0')}.png`), url!);
-      await tick(1000 / 60);
+      await tick(Math.round(((i + 1) * 1000) / 60) - Math.round((i * 1000) / 60));
     }
     const mp4 = join(outDir, `${name}.mp4`);
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '60', '-i', join(framesDir, 'f%04d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', mp4]);
