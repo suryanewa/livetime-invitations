@@ -21,6 +21,8 @@ import { createSimplifier, type Simplify } from '../models/simplify.ts';
 import { buildRecordPlayerGeometry } from '../models/recordPremium.ts';
 import { buildCakeGeometry } from '../models/cake.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
+import { buildSportsGeometry } from '../models/sportsPremium.ts';
+import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 
 /** Direction exported to runtime GLB (the showcase's production look). */
 const EXPORT_DIRECTION: DirectionId = 'L2';
@@ -71,6 +73,8 @@ const SCENES: Record<string, () => Object3D> = {
   party: () => buildRecordPlayerGeometry({ lib: exportLibrary(), simplify }, 'coral'),
   birthday: () => buildCakeGeometry({ lib: exportLibrary(), simplify }, 'vanilla'),
   bin: () => buildDisposalBin({ lib: exportLibrary(), simplify }),
+  sports: () => buildSportsGeometry({ lib: exportLibrary(), simplify }, 'orange'),
+  dinner: () => buildDinnerGeometry({ lib: exportLibrary(), simplify }, 'pasta'),
 };
 
 /** Output path per target (shared props live outside any one scene). */

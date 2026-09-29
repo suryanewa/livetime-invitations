@@ -40,7 +40,7 @@ export const DISH_HEIGHT = PLATE.well + COVER_TOP;
 
 /** Seated cover (skirt on the well) and the accepted rest pose beside the plate. */
 export const COVER_SEATED = new Vector3(0, PLATE.well, 0);
-export const COVER_BESIDE = new Vector3(1.28, 0, 0.28);
+export const COVER_BESIDE = new Vector3(1.45, 0, 0.45);
 /** Host-ready: the cover poised beside and above the plate, tipped towards it. */
 export const COVER_POISED = new Vector3(1.05, 0.62, 0.18);
 export const COVER_POISED_TILT = 0.32;

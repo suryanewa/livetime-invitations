@@ -112,15 +112,15 @@ export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | '
   sports: {
     'host-ready': 'A basketball waits on the host side.',
     'guest-ready': 'A basketball in front of a hoop.',
-    accepted: 'The ball went through the hoop.',
-    declined: 'The ball missed the hoop.',
+    accepted: 'The ball rests under the hoop after going through it.',
+    declined: 'The ball rests to the side of the hoop.',
   },
   dinner: {
-    'host-ready': 'A plate of food with the cover beside it.',
+    'host-ready': 'A plate of food with the cover poised beside it.',
     'guest-ready': 'A covered dish.',
     accepted: 'The cover is lifted and the food is revealed.',
     declined: 'The covered dish is in the bin.',
   },
 };
 
-export const LIVE_CATEGORIES: readonly Category[] = ['party', 'birthday', 'business'];
+export const LIVE_CATEGORIES: readonly Category[] = ['party', 'birthday', 'sports', 'dinner', 'business'];

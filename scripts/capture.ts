@@ -139,6 +139,18 @@ const SCENE_CAPTURE = {
     sharedDeclined: true,
     clips: { host: 1.6, accept: 1.7, decline: 1.8, change: 2.6 },
   },
+  sports: {
+    presets: [['orange', '{ category: "sports", ball: "orange" }'], ['cream', '{ category: "sports", ball: "cream" }']],
+    // Every pose shows the ball, so each preset gets its own posters.
+    sharedDeclined: false,
+    clips: { host: 1.5, accept: 2.0, decline: 1.9, change: 2.6 },
+  },
+  dinner: {
+    presets: [['pasta', '{ category: "dinner", dish: "pasta" }'], ['vegetables', '{ category: "dinner", dish: "vegetables" }']],
+    // Declined shows the closed bin and the cleared place: identical for both dishes.
+    sharedDeclined: true,
+    clips: { host: 1.5, accept: 1.8, decline: 1.8, change: 2.6 },
+  },
 } as const;
 
 /**
@@ -295,7 +307,7 @@ async function captureUi() {
         .map(({ el, r }) => `${(el.textContent ?? '').trim().slice(0, 24)} ${Math.round(r.width)}×${Math.round(r.height)}`);
       return { overflow, small };
     });
-  for (const scene of ['business', 'party', 'birthday'] as const) {
+  for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner'] as const) {
     for (const c of cases) {
       const name = `${scene}-${c.name}`;
       const page = await browser.newPage({ viewport: { width: c.width, height: c.height }, deviceScaleFactor: c.dsf });
@@ -413,7 +425,7 @@ else if (mode === 'lookdev') await captureLookdev();
 else if (mode === 'perf') await capturePerf();
 else if (mode === 'ui') await captureUi();
 else if (mode === 'thumbs') await captureThumbs();
-else if (mode === 'business' || mode === 'party' || mode === 'birthday') await captureScene(mode);
+else if (mode === 'business' || mode === 'party' || mode === 'birthday' || mode === 'sports' || mode === 'dinner') await captureScene(mode);
 else if (mode === 'skeleton') await captureSkeleton();
 else if (mode === 'motion') await captureMotion();
 else throw new Error(`Unknown capture mode ${mode}`);

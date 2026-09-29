@@ -100,7 +100,7 @@ const SUBJECTS: Subject[] = [
       const model = buildDinner({ lib, simplify }, 'pasta');
       model.nodes.bin_root!.visible = false;
       const cover = model.nodes.cover_authored!;
-      cover.position.set(1.28, 0, 0.28);
+      cover.position.set(1.45, 0, 0.45);
       return { model, dispose: () => model.dispose() };
     },
   },
