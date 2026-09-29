@@ -29,12 +29,17 @@ This machine has no Blender installation, and the handoff transfers no DCC files
 | Weave normal map (lanyard) | design.inc, procedural | Original | — | `src/render/textures.ts` | Canvas texture generated at load |
 | Ring normal maps (pad, record) | design.inc, procedural | Original | — | `src/render/textures.ts` | Canvas texture generated at load |
 | Contact-shadow falloff | design.inc, procedural | Original | — | `src/render/contactShadow.ts` | Canvas texture generated at load |
+| Premium studio: palm gobo cookie, limewash plaster sweep, 16-tap PCF patch | design.inc, procedural | Original | — | `src/render/studio.ts` | Canvas textures generated at load (768² cookie, 512² plaster normal + albedo) |
+| Printed art: badge faces, strap, record labels, holo seal, groove directions | design.inc, procedural (original geometric glyphs, no fonts) | Original | — | `src/render/print.ts` | Canvas textures generated at load |
+| Stage finish: vignette + film grain | design.inc | Original | — | `src/ui/shell.css` (SVG feTurbulence data URI) | Inline CSS |
 | Cake, tray, candles, flames | design.inc | Original | — | `models/cake.ts` | Study: runtime geometry. Production: `assets/scenes/birthday/` (M4) |
-| Keycard, clip, scanner (static geometry) | design.inc | Original | — | `models/keycard.ts` (`buildKeycardGeometry`) | `assets/scenes/business/business.glb` — `pnpm models`: GLTFExporter → gltf-transform dedup/weld/prune/quantise (POSITION 14-bit, NORMAL 10-bit, UV float) · 504.4 KiB raw / 111.7 KiB gz · 33 nodes · 22 primitives · both templates share geometry (material swap only) |
+| Keycard, clip, scanner (static geometry, L2 premium) | design.inc | Original | — | `models/keycard.ts` + `models/badgePremium.ts` (SDF reader, cast clip) | `assets/scenes/business/business.glb` — `pnpm models`: GLTFExporter → gltf-transform dedup/weld/prune/quantise; SDF parts decimated with meshoptimizer at export · 720.6 KiB raw / 267.6 KiB gz · 32 nodes · 19 primitives |
 | Lanyard strap curves, contact shadows, status/symbol materials | design.inc | Original | Runtime rig | `models/keycard.ts` (`rigKeycard`), `models/lanyard.ts` | Generated at load; not in the GLB |
 | Business posters (light/dark × host-ready, guest-ready, accepted, declined) | design.inc, browser-rendered | Original | — | `pnpm capture business` (shipping renderer, fixed camera, reduced-motion canonical poses) | `assets/scenes/business/posters/*.webp`, 720², q0.86, 12–15 KB each |
-| Collection-rail thumbnails (5) | design.inc, browser-rendered | Original | Study models of direction L | `pnpm capture thumbs` | `assets/ui/collection/*.webp`, 192², 2–3.5 KB each |
-| Record player, basketball/hoop, covered dish blockouts | design.inc | Original | Study blockouts only | `models/blockouts.ts` | Study only |
+| Collection-rail thumbnails (5) | design.inc, browser-rendered | Original | Live scenes from their production capture (`pnpm capture <scene>`); others from direction-L study models (`pnpm capture thumbs`) | — | `assets/ui/collection/*.webp`, 192², 2–3.5 KB each |
+| Record player (production) | design.inc | Original | — | `models/recordContract.ts`, `models/recordPremium.ts`, rig `models/recordPlayer.ts` | `assets/scenes/party/party.glb` — `pnpm models party` |
+| Party posters (coral/cobalt × host-ready, guest-ready, accepted; shared declined) | design.inc, browser-rendered | Original | — | `pnpm capture party` | `assets/scenes/party/posters/*.webp`, 720², q0.86 |
+| Basketball/hoop, covered dish blockouts | design.inc | Original | Study blockouts only | `models/blockouts.ts` | Study only |
 | Three.js RoundedBoxGeometry, BufferGeometryUtils, LatheGeometry | three.js authors | MIT | Used as library code | `node_modules/three` | Bundled |
 | UI typography | Platform system fonts (SF Pro, Segoe UI, Roboto) | OS-provided, not redistributed | — | — | None shipped |
 | Icons (check, minus, back chevron) | design.inc, inline SVG paths | Original | — | `src/demo/study.ts`, `src/ui/` | Inline |
