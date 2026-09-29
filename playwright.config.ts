@@ -5,7 +5,7 @@ import { defineConfig } from '@playwright/test';
  * Start `pnpm dev` first, or let the webServer entry start it. BASE_URL points the suite at
  * another server (e.g. a worktree's own dev server) and skips the built-in one.
  */
-const baseURL = process.env.BASE_URL ?? 'http://127.0.0.1:5199';
+const baseURL = process.env.BASE_URL || 'http://127.0.0.1:5199';
 
 export default defineConfig({
   testDir: 'tests/browser',
