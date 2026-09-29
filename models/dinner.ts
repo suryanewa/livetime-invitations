@@ -51,7 +51,7 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
   }));
   nodes.dish_shadow = dishShadow;
   const coverShadow = new ContactShadow({
-    name: 'cover_shadow', shape: 'round', width: COVER.radius * 2, depth: COVER.radius * 2, spread: [1.1, 1.35], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,
+    name: 'cover_shadow', shape: 'round', width: COVER.radius * 2, depth: COVER.radius * 2, spread: [1.1, 1.35], opacity: dir.shadow.opacity, line: 0.7, lineScale: 1.07, color: dir.shadow.color,
   });
   coverShadow.visible = false;
   dishShadow.parent!.add(coverShadow);

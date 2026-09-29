@@ -1,5 +1,5 @@
 import { Box3, type BufferAttribute, CylinderGeometry, LatheGeometry, Matrix4, type Mesh, type Object3D, Quaternion, Shape, ShapeGeometry, Vector2, Vector3 } from 'three';
-import { filletPolyline, group, lathe, mergeParts, mesh, roundedBox, type ProfilePoint } from './geometry.ts';
+import { filletPolyline, group, lathe, mergeParts, mesh, roundedBox, type ProfilePoint, withTangents } from './geometry.ts';
 import type { ModelContext } from './types.ts';
 
 /**
@@ -109,18 +109,22 @@ export function buildDisposalBin(ctx: ModelContext): Object3D {
   const lid = group('bin_lid', root);
   lid.position.set(0, top, 0);
   const profile: ProfilePoint[] = [[0, -0.012], [R + 0.02, -0.012, 0.008], [R + 0.022, 0.03, 0.012], [R - 0.12, 0.085, 0.14], [0, 0.11]];
-  const pts = filletPolyline(profile, 3);
+  // Fine fillets and 48 segments per half, with analytic tangents: the brushed flaps read as
+  // turned metal, not radial wedges (checkpoint 4 review).
+  const pts = filletPolyline(profile, 6);
   for (const side of [-1, 1] as const) {
     const flap = group(side < 0 ? 'bin_flap_l' : 'bin_flap_r', lid);
     flap.position.set(side * BIN.hingeX, 0, 0);
     // LatheGeometry places points at (sin φ·r, y, cos φ·r): φ ∈ [π, 2π] is the −x half.
-    const half = new LatheGeometry(pts, 32, side < 0 ? Math.PI : 0, Math.PI);
+    const half = withTangents(new LatheGeometry(pts, 48, side < 0 ? Math.PI : 0, Math.PI), 'around');
     // Cap on the cut plane (x = 0): the profile mirrored across the axis.
     const shape = new Shape([...pts.map((p) => new Vector2(p.x, p.y)), ...[...pts].reverse().map((p) => new Vector2(-p.x, p.y))]);
     const cap = new ShapeGeometry(shape, 1);
     cap.rotateY(side < 0 ? Math.PI / 2 : -Math.PI / 2);
+    withTangents(cap, 'around');
     const knuckle = new CylinderGeometry(0.016, 0.016, 0.14, 12);
     knuckle.rotateX(Math.PI / 2);
+    withTangents(knuckle, 'around');
     const g = mergeParts([{ geometry: half }, { geometry: cap }, { geometry: knuckle, position: [side * BIN.hingeX, 0, 0] }]);
     g.translate(-side * BIN.hingeX, 0, 0);
     mesh(side < 0 ? 'bin_flap_l_mesh' : 'bin_flap_r_mesh', g, lib.get('mat_metal_brushed'), flap);

@@ -2,7 +2,9 @@ import { BufferAttribute, BufferGeometry, Matrix4, SphereGeometry, Vector3 } fro
 import { mergeGeometries, mergeVertices, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mergeIndexed, rng } from './cakeParts.ts';
 import { COVER, PLATE } from './dinnerContract.ts';
-import type { ProfilePoint } from './geometry.ts';
+import { type ProfilePoint, withTangents } from './geometry.ts';
+
+export { withTangents };
 import { turned } from './recordParts.ts';
 
 /**
@@ -291,39 +293,6 @@ function fixingHardware(ceiling: number): BufferGeometry[] {
  * circumferentially brushed), round the circumference inside (quieter concentric sheen).
  */
 export const CLOCHE_BRUSH = { outer: 'meridian', inner: 'around' } as const;
-
-/**
- * Analytic tangents for a surface of revolution about +y, so the anisotropic highlight is
- * smooth across facets (derivative tangents are per-triangle and quilt the brushed sheen).
- * `around` follows the circumference; `meridian` runs up the profile.
- */
-export function withTangents(g: BufferGeometry, mode: 'meridian' | 'around'): BufferGeometry {
-  const pos = g.getAttribute('position') as BufferAttribute;
-  const nor = g.getAttribute('normal') as BufferAttribute;
-  const tan = new Float32Array(pos.count * 4);
-  const C = new Vector3(), N = new Vector3(), T = new Vector3();
-  for (let k = 0; k < pos.count; k++) {
-    let x = pos.getX(k), z = pos.getZ(k);
-    // A vertex on the axis takes its direction from its triangle (non-indexed sweep output),
-    // so the brushed sheen converges cleanly at the pole instead of pinching.
-    if (Math.hypot(x, z) < 1e-5 && !g.index) {
-      const t0 = k - (k % 3);
-      x = 0; z = 0;
-      for (let q = t0; q < t0 + 3; q++) if (q !== k) { x += pos.getX(q); z += pos.getZ(q); }
-    }
-    const r = Math.hypot(x, z);
-    if (r > 1e-9) C.set(z / r, 0, -x / r);
-    else C.set(1, 0, 0);
-    N.fromBufferAttribute(nor, k);
-    if (mode === 'around') T.copy(C).addScaledVector(N, -N.dot(C));
-    else T.crossVectors(N, C);
-    if (T.lengthSq() < 1e-12) T.set(1, 0, 0);
-    T.normalize();
-    tan.set([T.x, T.y, T.z, 1], k * 4);
-  }
-  g.setAttribute('tangent', new BufferAttribute(tan, 4));
-  return g;
-}
 
 /** Knob in cover_handle space (origin on the dome apex); top at COVER.handleHeight (less EPS). */
 export const KNOB = { collar: 0.1, bulb: 0.11, equator: 0.078, under: 0.026, neck: 0.021, spigot: 0.03 } as const;

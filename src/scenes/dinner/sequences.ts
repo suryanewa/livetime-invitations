@@ -1,4 +1,5 @@
-import { Vector3 } from 'three';
+import { MathUtils, Vector3 } from 'three';
+import { CAMERA_ANGLES } from '../../render/camera.ts';
 import { cubicBezier, EASE, lerp, seg, smoothstep } from '../../motion/curves.ts';
 import {
   COVER, COVER_BESIDE, COVER_POISED, COVER_POISED_TILT, COVER_SEATED, DINNER_BIN_POS, DINNER_BIN_START, DINNER_CARRY,
@@ -46,9 +47,10 @@ const COVER_DIR = new Vector3(COVER_SEATED.x - COVER_POISED.x, 0, COVER_SEATED.z
 /**
  * The optional secondary settle (sub-spec: at most 1°): a heavy cover rocks once on its rim and
  * comes to rest. It rocks on the edge, so the lifted side rises and the other side stays on the
- * surface; the peak is about 0.6°, one cycle, well damped, never rubbery.
+ * surface; the peak is about 0.95° (under the sub-spec's 1°), one cycle, well damped. It is
+ * driven by contact: the cover arrives with a little speed left instead of floating to rest.
  */
-export const SETTLE_TILT = 0.017;
+export const SETTLE_TILT = 0.0275;
 function settle(out: DinnerFrame, u: number, dir: Vector3, rest: Vector3): void {
   const a = SETTLE_TILT * Math.sin(2 * Math.PI * u) * (1 - u) ** 2;
   out.coverTilt = -a * dir.x;
@@ -103,32 +105,37 @@ function hermite(u: number, p0: number, m0: number, p1: number, m1: number): num
 }
 /** Host cover height 0.20–0.90 s: through SAFE_SKIRT at 0.60 s at LOWER_SPEED, seated at rest. */
 const LOWER_SPEED = -1.1;
+/** Vertical speed left at touch-down (u/s): the contact that starts the rim rock. */
+const TOUCH_DOWN = -0.3;
 function coverLowering(t: number, fromY: number): number {
   if (t < 0.6) return hermite(seg(t, 0.2, 0.6), fromY, 0, SAFE_SKIRT, LOWER_SPEED * 0.4);
-  return hermite(seg(t, 0.6, 0.9), SAFE_SKIRT, LOWER_SPEED * 0.3, COVER_SEATED.y, 0);
+  return hermite(seg(t, 0.6, 0.9), SAFE_SKIRT, LOWER_SPEED * 0.3, COVER_SEATED.y, TOUCH_DOWN * 0.3);
 }
 
 // ── Accept: 1.5 s ─────────────────────────────────────────────────────────────
 const REVEAL = cubicBezier(0.35, 0, 0.3, 1);
-/** Separation then lift in one curve: slow off the plate (≈0.07 at 0.20 s), no zero-velocity joint. */
-const RISE = cubicBezier(0.85, 0, 0.35, 1);
+/** Separation then lift in one curve: slow off the plate (≈8 cm at 0.20 s), no zero-velocity joint. */
+const RISE = cubicBezier(0.85, 0, 0.3, 1);
+/** Reveal lean: peaks early (about a third of the way across) so the satin sweeps the dome. */
+const LEAN = 0.18;
 function accept(t: number, out: DinnerFrame): void {
   frameFor('guest-ready', out);
   const c = out.coverPos;
   if (t < 0.85) {
-    // One continuous action: it separates from the plate (about 7 cm by 0.20 s), keeps rising
-    // clear of the food with no stop, then travels across and down beside it.
-    const s = seg(t, 0.2, 0.85);
-    const across = t < 0.2 ? 0 : REVEAL(seg(s, 0.3, 1));
+    // One continuous action: it separates from the plate, and the sideways move starts while it is
+    // still rising (no hitch at the top), then it is set down beside the plate by 0.85 s with a
+    // little speed left, which starts the rim rock.
+    const across = REVEAL(seg(t, 0.26, 0.85));
     c.set(lerp(COVER_SEATED.x, COVER_BESIDE.x, across), 0, lerp(COVER_SEATED.z, COVER_BESIDE.z, across));
-    const up = COVER_SEATED.y + (SAFE_SKIRT + 0.22 - COVER_SEATED.y) * RISE(seg(t, 0, 0.52));
-    c.y = s < 0.55 ? up : lerp(up, COVER_BESIDE.y, smoothstep(seg(s, 0.55, 1)));
-    // Leading edge dips a little along the path (small-angle lean about up × path).
-    const lean = 0.12 * Math.sin(Math.PI * across);
+    const top = SAFE_SKIRT + 0.16;
+    const up = COVER_SEATED.y + (top - COVER_SEATED.y) * RISE(seg(t, 0, 0.48));
+    c.y = t < 0.55 ? up : hermite(seg(t, 0.55, 0.85), top, 0, COVER_BESIDE.y, TOUCH_DOWN * 0.3);
+    // Leading edge dips along the path (small-angle lean about up × path).
+    const lean = LEAN * Math.sin(Math.PI * Math.pow(across, 0.66));
     out.coverTilt = -lean * REVEAL_DIR.x;
     out.coverTiltX = lean * REVEAL_DIR.z;
   } else if (t < 1.3) {
-    // Sets down beside the plate and settles on its rim; the food stays centred and visible.
+    // Settles on its rim beside the plate; the food stays centred and visible.
     settle(out, seg(t, 0.85, 1.3), REVEAL_DIR, COVER_BESIDE);
   } else {
     // Final presentation.
@@ -143,7 +150,10 @@ const FLAP_CLOSE = cubicBezier(0.45, 0, 0.35, 1);
 /** One continuous move along the transfer path: eases off the floor, travels, lowers in gently. */
 const TRANSFER = cubicBezier(0.33, 0, 0.3, 1);
 const FLAP_GAP = 0.03;
-const BIN_ENTER = cubicBezier(0.2, 0.55, 0.3, 1);
+/** The dish's knob is below the rim (out of sight) from here: the flaps begin to close. */
+export const FLAP_CLOSE_AT = 0.8;
+/** Bin entrance: eases in from off-frame and decelerates into place (no full-speed first frame). */
+const BIN_ENTER = cubicBezier(0.25, 0.25, 0.2, 1);
 
 /**
  * The approved transfer path in the vertical plane from the plate to the bin: straight up, across
@@ -152,6 +162,8 @@ const BIN_ENTER = cubicBezier(0.2, 0.55, 0.3, 1);
  * reaches it; the second ends above the rim only once the plate is inside the opening.
  */
 const REACH = Math.hypot(DINNER_BIN_POS.x, DINNER_BIN_POS.z);
+/** Share of world distance in the transfer's pacing metric (0 = purely on-screen). */
+const WORLD_SHARE = 0.35;
 const LIFT_CORNER = 0.2;
 const DROP_CORNER = 0.12;
 const PATH = (() => {
@@ -173,14 +185,43 @@ const PATH = (() => {
     line([REACH, Y - b], [REACH, floor]),
   ];
   const total = pieces.reduce((n, p) => n + p.length, 0);
-  /** Point at arc-length fraction s ∈ [0, 1]: [distance towards the bin, height]. */
-  return (s: number): [number, number] => {
+  const world = (s: number): [number, number] => {
     let d = Math.min(Math.max(s, 0), 1) * total;
     for (const p of pieces) {
       if (d <= p.length) return p.at(p.length ? d / p.length : 0);
       d -= p.length;
     }
     return [REACH, floor];
+  };
+  // Pace the move by distance ON SCREEN (the shared camera): the bin sits almost behind the dish,
+  // so the across leg is mostly depth, and world-distance pacing read as rise, hover, snap.
+  const az = MathUtils.degToRad(CAMERA_ANGLES.azimuthDeg), el = MathUtils.degToRad(CAMERA_ANGLES.elevationDeg);
+  const ux = DINNER_BIN_POS.x / REACH, uz = DINNER_BIN_POS.z / REACH;
+  const screen = ([d, y]: [number, number]): [number, number] => {
+    const x = ux * d, z = uz * d;
+    return [Math.cos(az) * x - Math.sin(az) * z, -Math.sin(az) * Math.sin(el) * x + Math.cos(el) * y - Math.cos(az) * Math.sin(el) * z];
+  };
+  // Mostly on-screen distance, with a share of world distance so the depth leg (and the floor
+  // shadow that follows the dish) never streaks.
+  const N = 600;
+  const cum = new Float64Array(N + 1);
+  let prev = screen(world(0));
+  let prevW = world(0);
+  for (let i = 1; i <= N; i++) {
+    const w = world(i / N);
+    const q = screen(w);
+    cum[i] = cum[i - 1]! + Math.hypot(q[0] - prev[0], q[1] - prev[1]) + WORLD_SHARE * Math.hypot(w[0] - prevW[0], w[1] - prevW[1]);
+    prev = q;
+    prevW = w;
+  }
+  /** Point at on-screen arc-length fraction f ∈ [0, 1]: [distance towards the bin, height]. */
+  return (f: number): [number, number] => {
+    const target = Math.min(Math.max(f, 0), 1) * cum[N]!;
+    let lo = 0, hi = N;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (cum[mid]! < target) lo = mid; else hi = mid; }
+    const span = cum[hi]! - cum[lo]!;
+    const k = span > 0 ? (target - cum[lo]!) / span : 0;
+    return world((lo + k) / N);
   };
 })();
 
@@ -191,10 +232,12 @@ function decline(t: number, out: DinnerFrame): void {
   out.binVisible = t > 0;
   // Its speed peaks off-screen and it decelerates across the visible part (no dark mass
   // slamming across the frame in a few frames).
-  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(t, 0, 0.26)));
-  if (t < 0.95) out.flaps = FLAP_OPEN(seg(t, 0.1, 0.27));
-  else if (t < 1.2) out.flaps = lerp(1, FLAP_GAP, FLAP_CLOSE(seg(t, 0.95, 1.2)));
-  else out.flaps = lerp(FLAP_GAP, 0, EASE.land(seg(t, 1.2, 1.4)));
+  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(t, 0, 0.34)));
+  // Flaps open as it arrives, and start closing as soon as the dish is out of sight (no frozen
+  // frames): nearly shut by 1.10 s, the last gap settles by 1.30 s.
+  if (t < FLAP_CLOSE_AT) out.flaps = FLAP_OPEN(seg(t, 0.14, 0.36));
+  else if (t < 1.1) out.flaps = lerp(1, FLAP_GAP, FLAP_CLOSE(seg(t, FLAP_CLOSE_AT, 1.1)));
+  else out.flaps = lerp(FLAP_GAP, 0, EASE.land(seg(t, 1.1, 1.3)));
   // 0.25–0.95: the covered dish, as one unit, rises clear, crosses over the rim between the
   // open flaps and is lowered onto the liner floor, in one continuous move (no stop over the bin).
   const [d, y] = PATH(TRANSFER(seg(t, 0.25, 0.95)));
@@ -203,7 +246,7 @@ function decline(t: number, out: DinnerFrame): void {
   out.platePos.copy(dish);
   out.coverPos.copy(dish).add(COVER_SEATED);
   // Once the flaps have closed over it, the hidden dish stops rendering.
-  out.dishVisible = t < 1.2;
+  out.dishVisible = t < 1.1;
 }
 
 /**

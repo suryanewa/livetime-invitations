@@ -59,7 +59,7 @@ export const COVER_POISED_TILT = 0.32;
 export const DINNER_BIN_POS = new Vector3(-0.7, 0, -1.7);
 export const DINNER_BIN_YAW = Math.atan2(-DINNER_BIN_POS.x, -DINNER_BIN_POS.z);
 /** Off-frame start: the bin slides in from the left margin. */
-export const DINNER_BIN_START = new Vector3(-3.9, 0, -1.7);
+export const DINNER_BIN_START = new Vector3(-4.3, 0, -1.7);
 export const DINNER_WALL_Z = -4.2;
 /** Underside clearance over the rim while the dish crosses it, and the carry height. */
 export const DINNER_RIM_CLEARANCE = 0.06;

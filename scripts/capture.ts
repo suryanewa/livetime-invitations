@@ -241,17 +241,18 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
     const framesDir = join(outDir, `frames-${name}`);
     await mkdir(framesDir, { recursive: true });
     await call(action);
-    const total = Math.round(seconds * 60);
-    // Integer-millisecond schedule (the fake clock rounds fractional steps: 16.67 ms ticks
-    // double-stepped every 16 frames). Frame i shows time round(i × 1000/60).
+    // Playwright's fake clock fires animation frames every 16 ms, so each recorded frame advances
+    // exactly one 16 ms frame and the clip is encoded at 62.5 fps: real speed, no double steps.
+    const FRAME_MS = 16;
+    const total = Math.round((seconds * 1000) / FRAME_MS);
     for (let i = 0; i <= total; i++) {
-      if (mid && i === Math.round(mid[0] * 60)) await call(mid[1]);
+      if (mid && i === Math.round((mid[0] * 1000) / FRAME_MS)) await call(mid[1]);
       const url = await still(540, 1);
       await saveDataUrl(join(framesDir, `f${String(i).padStart(4, '0')}.png`), url!);
-      await tick(Math.round(((i + 1) * 1000) / 60) - Math.round((i * 1000) / 60));
+      await tick(FRAME_MS);
     }
     const mp4 = join(outDir, `${name}.mp4`);
-    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '60', '-i', join(framesDir, 'f%04d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', mp4]);
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(1000 / FRAME_MS), '-i', join(framesDir, 'f%04d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-r', '60', mp4]);
     console.log('recording', mp4);
   };
   await record('host', '(s) => { s.controller.setMode("host"); s.controller.resetVisual(); }', '(s) => s.controller.prepareHost()', plan.clips.host);

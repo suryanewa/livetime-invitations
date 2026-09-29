@@ -77,6 +77,8 @@ export interface ContactShadowOptions {
   opacity?: number;
   /** Tight contact-line opacity; 0 disables it (e.g. objects that never touch down). */
   line?: number;
+  /** Tight contact-line extent relative to the footprint (default 1.04). */
+  lineScale?: number;
   color?: string;
 }
 
@@ -119,7 +121,8 @@ export class ContactShadow extends Mesh<PlaneGeometry, MeshBasicMaterial> {
       this.line.renderOrder = -1;
       this.line.position.z = 0.001;
       // Child scale is relative to the soft layer: tight layer ≈ 1.04 × footprint.
-      this.line.scale.set(1.04 / this.spread[0], 1.04 / this.spread[1], 1);
+      const ls = opts.lineScale ?? 1.04;
+      this.line.scale.set(ls / this.spread[0], ls / this.spread[1], 1);
       this.add(this.line);
     } else {
       this.line = null;
