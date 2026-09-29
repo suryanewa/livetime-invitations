@@ -1,4 +1,5 @@
 import { type BufferAttribute, type BufferGeometry, Float32BufferAttribute, Matrix4, type Mesh, type Object3D, Vector3 } from 'three';
+import { cameraDirection } from '../src/render/camera.ts';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { BALL_R, NET, POLE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES, type BallPreset, type NetDeform } from './sportsContract.ts';
 import { buildSportsGeometry } from './sportsPremium.ts';
@@ -38,6 +39,7 @@ export function netDeform(net: Object3D): NetDeform {
   const hoop = net.parent!;
   hoop.updateWorldMatrix(true, true);
   const toHoop = new Matrix4().copy(hoop.matrixWorld).invert();
+  const toCamera = cameraDirection().transformDirection(toHoop);
   const meshes: { attr: BufferAttribute; base: Float32Array; geometry: BufferGeometry }[] = [];
   const v = new Vector3();
   const m4 = new Matrix4();
@@ -53,6 +55,7 @@ export function netDeform(net: Object3D): NetDeform {
     }
     const attr = new Float32BufferAttribute(base.slice(), 3);
     m.geometry.setAttribute('position', attr);
+    m.geometry.setAttribute('color', farLayerShade(base, toCamera));
     m.geometry.deleteAttribute('normal');
     m.geometry.computeVertexNormals();
     m.frustumCulled = false;
@@ -87,6 +90,26 @@ export function netDeform(net: Object3D): NetDeform {
       }
     },
   };
+}
+
+/**
+ * The net's far layer, seen through the near one, reads a little darker (as cotton does in
+ * shade): without it the two layers merge into a busy crosshatch. Shade is a function of the
+ * vertex's side of the rim as seen from the shared camera, so it holds while the net deforms.
+ */
+export const NET_FAR_SHADE = 0.8;
+export function farLayerShade(base: Float32Array, toCamera: Vector3): Float32BufferAttribute {
+  const hx = toCamera.x, hz = toCamera.z, hl = Math.hypot(hx, hz);
+  const colors = new Float32Array(base.length);
+  for (let i = 0; i < base.length; i += 3) {
+    const x = base[i]!, z = base[i + 2]!;
+    const r = Math.hypot(x, z) || 1;
+    const facing = (x * hx + z * hz) / (r * hl);
+    const k = Math.min(1, Math.max(0, (facing + 0.35) / 0.7));
+    const shade = NET_FAR_SHADE + (1 - NET_FAR_SHADE) * k * k * (3 - 2 * k);
+    colors[i] = colors[i + 1] = colors[i + 2] = shade;
+  }
+  return new Float32BufferAttribute(colors, 3);
 }
 
 /** Deformation gains (shared with the choreography's clearance checks). */

@@ -17,6 +17,7 @@ const close = (a: DinnerFrame, b: DinnerFrame, eps = 1e-6) => {
   expect(a.coverPos.distanceTo(b.coverPos)).toBeLessThan(eps);
   expect(a.binPos.distanceTo(b.binPos)).toBeLessThan(eps);
   expect(Math.abs(a.coverTilt - b.coverTilt)).toBeLessThan(eps);
+  expect(Math.abs(a.coverTiltX - b.coverTiltX)).toBeLessThan(eps);
   expect(Math.abs(a.flaps - b.flaps)).toBeLessThan(eps);
   expect(a.dishVisible).toBe(b.dishVisible);
   expect(a.binVisible).toBe(b.binVisible);
@@ -24,7 +25,7 @@ const close = (a: DinnerFrame, b: DinnerFrame, eps = 1e-6) => {
 const plan = (p: Vector3, c: Vector3) => Math.hypot(p.x - c.x, p.z - c.z);
 
 /** Lowest point of the cover's skirt for its position and tilt. */
-const skirtLow = (f: DinnerFrame) => f.coverPos.y - COVER.radius * Math.abs(Math.sin(f.coverTilt));
+const skirtLow = (f: DinnerFrame) => f.coverPos.y - COVER.radius * Math.abs(Math.sin(Math.hypot(f.coverTilt, f.coverTiltX)));
 
 describe('Dinner choreography', () => {
   it('each sequence starts and ends exactly on its canonical poses', () => {
@@ -44,6 +45,7 @@ describe('Dinner choreography', () => {
         expect(cur.coverPos.distanceTo(prev.coverPos)).toBeLessThan(0.02);
         expect(cur.platePos.distanceTo(prev.platePos)).toBeLessThan(0.02);
         expect(Math.abs(cur.coverTilt - prev.coverTilt)).toBeLessThan(0.01);
+        expect(Math.abs(cur.coverTiltX - prev.coverTiltX)).toBeLessThan(0.01);
         if (seq !== 'decline' || i > 1) expect(cur.binPos.distanceTo(prev.binPos)).toBeLessThan(0.05);
         prev = cur;
       }
@@ -55,7 +57,7 @@ describe('Dinner choreography', () => {
       for (let i = 0; i <= DURATIONS[seq] * 1000; i++) {
         const f = at(seq, i / 1000);
         const off = plan(f.coverPos, f.platePos);
-        const seatedish = off < 1e-6 && Math.abs(f.coverTilt) < 1e-6;
+        const seatedish = off < 1e-6 && Math.abs(f.coverTilt) < 1e-6 && Math.abs(f.coverTiltX) < 1e-6;
         if (seatedish) continue; // Level and centred: the food is inside the cavity (model test).
         // Over the food: the skirt clears the food envelope.
         if (off < COVER.radius + FOOD.radius) expect(skirtLow(f)).toBeGreaterThan(PLATE.well + FOOD.centreHeight + COVER_CLEARANCE - 1e-6);

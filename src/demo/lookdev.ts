@@ -5,6 +5,8 @@ import { buildKeycard } from '../../models/keycard.ts';
 import { buildRecordPlayer } from '../../models/recordPlayer.ts';
 import { buildBirthday } from '../../models/birthday.ts';
 import { buildSports } from '../../models/sports.ts';
+import { frameFor as sportsFrameFor, newFrame as sportsNewFrame } from '../scenes/sports/sequences.ts';
+import { COVER_BESIDE } from '../../models/dinnerContract.ts';
 import { buildDinner } from '../../models/dinner.ts';
 import { buildBasketballBlockout, buildDishBlockout, buildRecordPlayerBlockout } from '../../models/blockouts.ts';
 import type { BuiltModel } from '../../models/types.ts';
@@ -85,7 +87,15 @@ const SUBJECTS: Subject[] = [
     key: 'sports',
     label: 'Sports · guest-ready (ball, hoop, net)',
     build(lib) {
-      const model = lib.direction.id === 'L2' ? buildSports({ lib, simplify }, 'orange') : buildBasketballBlockout({ lib });
+      if (lib.direction.id !== 'L2') {
+        const model = buildBasketballBlockout({ lib });
+        return { model, dispose: () => model.dispose() };
+      }
+      // The guest-ready ball: rotated so the seams read as the classic "( + )".
+      const model = buildSports({ lib, simplify }, 'orange');
+      const ready = sportsFrameFor('guest-ready', sportsNewFrame());
+      model.nodes.ball_authored!.position.copy(ready.ballPos);
+      model.nodes.ball_secondary!.quaternion.copy(ready.ballRot);
       return { model, dispose: () => model.dispose() };
     },
   },
@@ -100,7 +110,7 @@ const SUBJECTS: Subject[] = [
       const model = buildDinner({ lib, simplify }, 'pasta');
       model.nodes.bin_root!.visible = false;
       const cover = model.nodes.cover_authored!;
-      cover.position.set(1.45, 0, 0.45);
+      cover.position.copy(COVER_BESIDE);
       return { model, dispose: () => model.dispose() };
     },
   },

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { Box3, Color, MeshStandardMaterial, OrthographicCamera, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
-import { fitCameraToBounds } from '../src/render/camera.ts';
+import { cameraDirection, fitCameraToBounds } from '../src/render/camera.ts';
+import { SEAM_FRAME } from '../src/render/ballMaterial.ts';
 import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, POLE, RIM, RIM_CENTER, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES } from '../models/sportsContract.ts';
 import { buildSportsGeometry } from '../models/sportsPremium.ts';
 import { CONTACT_AT, DURATIONS, frameFor, newFrame, sampleSequence, type SportsFrame } from '../src/scenes/sports/sequences.ts';
-import { NET_FLARE_WIDEN, NET_STRETCH } from '../models/sports.ts';
+import { farLayerShade, NET_FAR_SHADE, NET_FLARE_WIDEN, NET_STRETCH } from '../models/sports.ts';
 import { sportsFramePoints } from '../src/scenes/sports/index.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
@@ -155,5 +156,32 @@ describe('Sports framing and model contract', () => {
     const netBox = new Box3().setFromObject(net, true);
     expect(netBox.max.y).toBeLessThanOrEqual(RIM_CENTER.y + 0.03);
     expect(netBox.min.y).toBeGreaterThan(RIM_CENTER.y - NET.depth - 0.06);
+  });
+});
+
+describe('sports look guards', () => {
+  it('the hard-coded seam frame shows the classic "( + )" to the shared camera at guest-ready', () => {
+    // If the camera angles or the host pass change, SEAM_FRAME must be recomputed.
+    const cam = cameraDirection();
+    const toObject = pose('guest-ready').ballRot.clone().invert();
+    const view = cam.clone().applyQuaternion(toObject).applyMatrix3(SEAM_FRAME);
+    const screenUp = new Vector3(0, 1, 0).addScaledVector(cam, -cam.y).normalize().applyQuaternion(toObject).applyMatrix3(SEAM_FRAME);
+    const lon = (Math.atan2(view.x, view.z) * 180) / Math.PI;
+    const el = (Math.asin(view.y) * 180) / Math.PI;
+    expect(Math.abs(lon)).toBeLessThan(12);
+    expect(Math.abs(el)).toBeLessThan(12);
+    expect(screenUp.y).toBeGreaterThan(0.9);
+  });
+
+  it('the net far layer is shaded darker than the near layer, smoothly', () => {
+    const toCam = new Vector3(cameraDirection().x, 0, cameraDirection().z).normalize();
+    const side = new Vector3(-toCam.z, 0, toCam.x);
+    const pts = [toCam, toCam.clone().negate(), side].map((d) => d.clone().multiplyScalar(RIM.innerRadius));
+    const base = new Float32Array(pts.flatMap((p) => [p.x, -0.2, p.z]));
+    const c = farLayerShade(base, cameraDirection()).array as Float32Array;
+    expect(c[0]).toBeCloseTo(1, 5);
+    expect(c[3]).toBeCloseTo(NET_FAR_SHADE, 5);
+    expect(c[6]).toBeGreaterThan(NET_FAR_SHADE);
+    expect(c[6]).toBeLessThan(1);
   });
 });

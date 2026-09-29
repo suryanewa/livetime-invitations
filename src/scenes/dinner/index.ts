@@ -119,7 +119,7 @@ export class DinnerScene implements SceneInstance {
     n.plate_authored!.position.copy(f.platePos);
     n.plate_authored!.visible = f.dishVisible;
     n.cover_authored!.position.copy(f.coverPos);
-    n.cover_authored!.rotation.set(0, 0, f.coverTilt);
+    n.cover_authored!.rotation.set(f.coverTiltX, 0, f.coverTilt);
     n.cover_authored!.visible = f.dishVisible;
     // The dish shadow follows the plate and softens as it is carried up and away.
     const shadow = this.rig.dishShadow;

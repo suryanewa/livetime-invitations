@@ -49,6 +49,14 @@ export interface SurfaceSpec {
   normalScale?: number;
   perforated?: boolean | 'dark';
   doubleSide?: boolean;
+  /**
+   * Environment response for a material that carries its own copy of the stage environment
+   * (the stage assigns it). In r186 a material lit by scene.environment takes the scene's
+   * intensity and ignores its own; polished metal needs more than the shared 0.52.
+   */
+  ownEnv?: number;
+  /** Multiply by per-vertex colour (the rig writes it: e.g. the net's far layer). */
+  vertexColors?: boolean;
 }
 
 export interface DirectionTokens {
@@ -301,7 +309,10 @@ export const DIRECTIONS = {
     mat_metal_dark: { color: '#8A8C8F', roughness: 0.2, metalness: 1 },
     // Dyed anodised aluminium: partly metallic so the coral holds in shade instead of going brick.
     mat_anodized: { color: '#FF7650', roughness: 0.3, metalness: 0.7, clearcoat: 0.4, clearcoatRoughness: 0.2 },
-    mat_cloche: { color: '#DAD6CF', roughness: 0.3, metalness: 1, anisotropy: 0.7 },
+    // Satin brushed cloche with its own environment (checkpoint 4 review): silver, not gunmetal.
+    mat_cloche: { color: '#DAD6CF', roughness: 0.3, metalness: 1, anisotropy: 0.7, ownEnv: 1.1 },
+    // The cloche's polished lip bead: brighter than the satin dome, still not a mirror.
+    mat_cloche_polished: { color: '#E6E4E0', roughness: 0.18, metalness: 1, ownEnv: 1.1 },
     mat_card_light: { color: '#FFFFFF', roughness: 0.45, clearcoat: 1, clearcoatRoughness: 0.1, print: 'card-light' },
     mat_card_dark: { color: '#FFFFFF', roughness: 0.45, clearcoat: 1, clearcoatRoughness: 0.1, print: 'card-dark' },
     mat_fabric: { color: '#FFFFFF', roughness: 0.82, print: 'strap', normal: 'weave', normalScale: 0.9, sheen: 0.7, sheenColor: '#b9c4e8', doubleSide: true },
@@ -315,7 +326,8 @@ export const DIRECTIONS = {
     mat_candle_1: { color: '#F2603B', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.2 },
     mat_candle_2: { color: '#2C47A6', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.2 },
     mat_candle_3: { color: '#E8A93A', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.2 },
-    mat_plate: { color: '#F7F2E9', roughness: 0.22, clearcoat: 0.8, clearcoatRoughness: 0.08 },
+    // Softer clearcoat: a sharp one aliases into a dashed line along the thin rolled rim.
+    mat_plate: { color: '#F7F2E9', roughness: 0.22, clearcoat: 0.4, clearcoatRoughness: 0.3 },
     // Party (fidelity v1.1): glossy vinyl with a concentric groove sheen, printed labels,
     // brushed platter, satin dust cover.
     mat_vinyl: { color: '#141416', roughness: 0.3, clearcoat: 0.5, clearcoatRoughness: 0.12, anisotropy: 0.85, grooves: true },
@@ -328,7 +340,8 @@ export const DIRECTIONS = {
     // Sports (M5): leather basketballs (shader seams), cotton net.
     mat_ball_orange: { color: '#E36A2C', roughness: 0.62, sheen: 0.4, sheenColor: '#FFB27A', ball: 'orange' },
     mat_ball_cream: { color: '#EFE4CD', roughness: 0.6, sheen: 0.35, sheenColor: '#FFF4E0', ball: 'cream' },
-    mat_net: { color: '#F4EFE6', roughness: 0.85, sheen: 0.3, sheenColor: '#FFFFFF', doubleSide: true },
+    // The rig shades the net's far layer through vertex colour (models/sports.ts).
+    mat_net: { color: '#F4EFE6', roughness: 0.85, sheen: 0.3, sheenColor: '#FFFFFF', doubleSide: true, vertexColors: true },
     // Dinner (M6): glossy, appetising food; the cloche stays brushed (no mirror reflections).
     mat_pasta: { color: '#F0CB74', roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.4 },
     mat_sauce: { color: '#C23F28', roughness: 0.3, clearcoat: 0.7, clearcoatRoughness: 0.15 },
@@ -443,6 +456,11 @@ function buildMaterial(name: string, spec: SurfaceSpec): Material {
     side: spec.doubleSide ? DoubleSide : FrontSide,
   };
   const m = needsPhysical ? new MeshPhysicalMaterial(params) : new MeshStandardMaterial(params);
+  if (spec.ownEnv) {
+    m.envMapIntensity = spec.ownEnv;
+    m.userData.ownEnv = true;
+  }
+  if (spec.vertexColors) m.vertexColors = true;
   if (m instanceof MeshPhysicalMaterial) {
     m.clearcoat = spec.clearcoat ?? 0;
     m.clearcoatRoughness = spec.clearcoatRoughness ?? 0.4;

@@ -20,6 +20,8 @@ export interface DinnerFrame {
   coverPos: Vector3;
   /** cover_authored rotation.z: the poised cover tips towards the plate (+ leans to −x). */
   coverTilt: number;
+  /** cover_authored rotation.x: with coverTilt, leans the cover along its path when it moves. */
+  coverTiltX: number;
   dishVisible: boolean;
   binPos: Vector3;
   binVisible: boolean;
@@ -36,7 +38,10 @@ const set = (out: DinnerFrame, plate: Vector3, cover: Vector3, tilt: number) => 
   out.platePos.copy(plate);
   out.coverPos.copy(cover);
   out.coverTilt = tilt;
+  out.coverTiltX = 0;
 };
+/** Horizontal direction from the seated cover to its resting place (the reveal's path). */
+const REVEAL_DIR = new Vector3(COVER_BESIDE.x - COVER_SEATED.x, 0, COVER_BESIDE.z - COVER_SEATED.z).normalize();
 
 export function frameFor(pose: CanonicalPose, out: DinnerFrame): DinnerFrame {
   if (pose === 'host-ready') set(out, ORIGIN, COVER_POISED, COVER_POISED_TILT);
@@ -51,7 +56,7 @@ export function frameFor(pose: CanonicalPose, out: DinnerFrame): DinnerFrame {
 }
 
 export function newFrame(): DinnerFrame {
-  return frameFor('guest-ready', { platePos: new Vector3(), coverPos: new Vector3(), coverTilt: 0, dishVisible: true, binPos: new Vector3(), binVisible: false, flaps: 0 });
+  return frameFor('guest-ready', { platePos: new Vector3(), coverPos: new Vector3(), coverTilt: 0, coverTiltX: 0, dishVisible: true, binPos: new Vector3(), binVisible: false, flaps: 0 });
 }
 
 // ── Host: 1.2 s ───────────────────────────────────────────────────────────────
@@ -92,7 +97,10 @@ function accept(t: number, out: DinnerFrame): void {
     c.set(lerp(COVER_SEATED.x, COVER_BESIDE.x, across), 0, lerp(COVER_SEATED.z, COVER_BESIDE.z, across));
     const up = COVER_SEATED.y + 0.06 + (SAFE_SKIRT + 0.22 - COVER_SEATED.y - 0.06) * EASE.lift(seg(s, 0, 0.45));
     c.y = s < 0.55 ? up : lerp(up, COVER_BESIDE.y, smoothstep(seg(s, 0.55, 1)));
-    out.coverTilt = -0.12 * Math.sin(Math.PI * across);
+    // Leading edge dips a little along the path (small-angle lean about up × path).
+    const lean = 0.12 * Math.sin(Math.PI * across);
+    out.coverTilt = -lean * REVEAL_DIR.x;
+    out.coverTiltX = lean * REVEAL_DIR.z;
   } else {
     // Rests beside the plate; the food stays centred and fully visible.
     c.copy(COVER_BESIDE);

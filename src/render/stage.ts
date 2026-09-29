@@ -1,4 +1,4 @@
-import { Box3, Color, Mesh, Object3D, type OrthographicCamera, PerspectiveCamera, Scene, type Vector3, type WebGLRenderer } from 'three';
+import { Box3, Color, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PerspectiveCamera, Scene, type Vector3, type WebGLRenderer } from 'three';
 import { cameraDirection, createStageCamera, fitCameraToBounds, fitPerspectiveToBounds } from './camera.ts';
 import { createPremiumStudio, type PremiumStudio } from './studio.ts';
 import { createRenderer, sizeRenderer } from './createRenderer.ts';
@@ -85,6 +85,7 @@ export class Stage {
     if (object) {
       this.scene.add(object);
       if (bounds) this.bounds.copy(bounds);
+      this.assignOwnEnvironment(object);
       if (this.premium) {
         this.premium.setWall(studio?.wallZ);
         object.traverse((o) => {
@@ -105,6 +106,21 @@ export class Stage {
       }
       this.fit();
     }
+  }
+
+  /**
+   * Materials marked `ownEnv` (polished metal) take the stage environment as their own map, so
+   * their envMapIntensity applies instead of the scene-wide intensity. The texture stays the
+   * rig's: material disposal never frees it.
+   */
+  assignOwnEnvironment(object: Object3D): void {
+    const env = this.scene.environment;
+    object.traverse((o) => {
+      const m = (o as Mesh).material as MeshStandardMaterial | undefined;
+      if (!m || Array.isArray(m) || !m.userData?.ownEnv || m.envMap === env) return;
+      m.envMap = env;
+      m.needsUpdate = true;
+    });
   }
 
   setBounds(bounds: Box3): void {
