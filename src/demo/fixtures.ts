@@ -110,7 +110,7 @@ export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | '
     declined: 'The cake is in the bin; the tray is empty.',
   },
   sports: {
-    'host-ready': 'A basketball waits on the host side.',
+    'host-ready': 'A basketball rests at the foot of the hoop, ready to pass.',
     'guest-ready': 'A basketball in front of a hoop.',
     accepted: 'The ball rests under the hoop after going through it.',
     declined: 'The ball rests to the side of the hoop.',

@@ -53,6 +53,28 @@ test('30 scene switches keep one canvas, free each scene\'s GPU resources and le
   expect(frames).toBeLessThanOrEqual(2);
 });
 
+test('choosing another category opens a fresh invitation: the previous answer never carries over', async ({ page }) => {
+  // Master §7: a controller and adapter serve one invitation identity; each category is a new event.
+  await page.goto('/?scene=sports');
+  await ready(page);
+  await page.getByRole('button', { name: 'Guest', exact: true }).click();
+  await page.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.locator('.lt-status')).toHaveText('Accepted');
+  const before = await page.evaluateHandle(() => (window as any).__showcase.adapter);
+  await page.locator('.sc-rail__item', { hasText: 'Dinner' }).click();
+  await expect(page.locator('.sc-event__title')).toHaveText('Supper club: autumn menu');
+  await expect(page.getByRole('button', { name: 'Accept' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'Decline' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.lt-status')).toHaveText('');
+  await expect.poll(async () => (await state(page)).visual).toBe('guest-ready');
+  expect(await page.evaluate((old) => {
+    const s = (window as any).__showcase;
+    return { fresh: s.adapter !== old, stored: s.adapter.stored, intent: s.state.response.intent };
+  }, before)).toEqual({ fresh: true, stored: null, intent: null });
+  await ready(page);
+  expect(await page.locator('.lt-stage canvas').count()).toBe(1);
+});
+
 test('every category plays host, accept and decline to its canonical pose', async ({ page }) => {
   test.setTimeout(240_000);
   await page.goto('/');
