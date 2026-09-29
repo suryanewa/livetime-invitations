@@ -34,7 +34,7 @@ Living record of devices, browsers and evidence. No result is claimed here witho
 
 Setup evidence only. It is not visual approval.
 
-## Milestone 2 — Business evidence (2026-09-28)
+## Milestone 2 — Business evidence (2026-09-28, direction L; superseded by the checkpoint 3 figures below)
 
 ### Functional checks
 
@@ -93,3 +93,63 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 - Textures: contact-shadow falloffs 4 × 256² RGBA ≈ 1.0 MiB; perforation, weave and dark-perforation maps with mips ≈ 0.35 MiB; PMREM environment (768×1024 RGBA16F) ≈ 6 MiB.
 - Drawing buffer at the showcase stage (≈400 CSS px, DPR 1.5 → 600², MSAA 4×): ≈13 MiB. **Total ≈ 20 MiB** against the 48 MiB budget.
 - **Risk recorded:** at the master's 2.5 MP drawing-buffer ceiling, MSAA 4× alone would need ≈90 MiB. Embeds larger than ≈700 CSS px at DPR 1.5 should create the renderer without MSAA; this is a decision for Milestone 7 integration guidance.
+
+## Checkpoint 3 evidence (2026-09-29, premium L2: Business, Party, Birthday)
+
+All figures measured on the authoring Mac (M2 Pro, Chrome 153) from the committed build at checkpoint 3. None of this is phone evidence.
+
+### Checks
+
+| Check | Result |
+| --- | --- |
+| Typecheck | Clean |
+| Unit tests (Vitest) | 82 / 82 pass (11 files): choreography continuity and canonical endpoints per scene, stylus/lid/spindle contacts, swept-lid clearance, rim clearance and occlusion order for the bin drop, model fit, framing lock, response ledger, clock, quality tiers, material-library disposal |
+| Browser tests (Playwright, system Chrome) | 33 / 33 pass: Business 12, Party 9, Birthday 5, keyboard access 5, idle loop 2 |
+| Real-time sequence length (live showcase) | Business accept 1.53 s (spec 1.5), Party accept 1.63 s (1.6), Birthday accept 1.43 s (1.4) |
+| UI matrix (320, 390, landscape 844×390, 200 % zoom, desktop 1440) × Business, Party, Birthday × host and guest | No horizontal overflow; no target under 44 × 44 |
+
+**Capture harness correction.** Review recordings made before this checkpoint (including the checkpoint 2 Business clips) played about 2.4× too fast: `page.clock.install()` lets real time keep flowing, so each captured frame advanced by its own capture time. The harness now pauses the page clock after load. Runtime timing was never affected (see the real-time lengths above). All clips were re-recorded.
+
+### Render cost per scene (lookdev, 358² @3×, includes the shadow pass, contact shadows and the studio sweep)
+
+| Scene (ready pose) | Triangles | Draw calls | Budget |
+| --- | --- | --- | --- |
+| Business, guest-ready / accepted (dark) | 53.4k / 53.5k | 32 / 34 | 60k / 40 |
+| Party, guest-ready | 44.7k | 32 | 60k / 40 |
+| Birthday, guest-ready (bin off stage) | 35.1k | 21 | 60k / 40 |
+
+Birthday's dense frosting, glaze and pearls skip the shadow pass; two invisible low-poly proxies cast for them (the cake was 65.5k triangles before). The shared bin adds about 8.4k triangles and 5 draw calls only while it is on stage during decline.
+
+### Frame cadence (desktop only)
+
+Business, 10 alternating answer cycles, 390×844 @3×, Normal tier: 1,004 frames, p50 16.7 ms, p95 16.7 ms, p99 16.8 ms, max 16.8 ms, none over 50 ms. The 4× CPU-throttle run matched (a simulation, not device evidence). Party and Birthday are not yet measured separately; they cost less per frame than Business on this machine.
+
+### Transfer (gzip −9 of each file)
+
+| Asset | Raw | Gzip |
+| --- | --- | --- |
+| business.glb | 720.6 KiB | 251.6 KiB |
+| party.glb | 608.3 KiB | 234.9 KiB |
+| birthday.glb | 561.7 KiB | 270.8 KiB |
+| shared/disposal-bin.glb | 143.7 KiB | 61.4 KiB |
+| Posters (23 files, all scenes) | 552 KiB total | only the needed one is fetched (15–30 KB) |
+
+A cold first scene is the runtime JavaScript (≈195 KB gz at Milestone 2; re-measure at packaging), the scene's GLB (235–271 KiB gz, plus 61 KiB for the bin in Birthday) and one poster: well under the 2.5 MiB budget.
+
+### Framing (Master §5: 60–75 % of stage width in the ready pose)
+
+| Scene | Measured | Status |
+| --- | --- | --- |
+| Business | 61.6 % (card and reader footprint projected with the shared camera fit; lanyard excluded) | Pass, near the low edge |
+| Party | 71.2 % on the guest-ready poster (was 78 %; bounds widened, locked by a unit test) | Pass |
+| Birthday | 52.1 % on the guest-ready poster | **Below range**, decision pending at checkpoint 3: the camera must fit the literal cake-to-bin path, and a bin deep enough to swallow the cake with its candles sets the frame height |
+
+### GPU memory (calculated, not driver readings)
+
+The material library now owns its textures and frees them on every category switch and stage teardown, so memory no longer accumulates across scenes. Per-scene peak on the Normal tier: drawing buffer ≈ 13 MiB (≈400 CSS px at DPR 1.5, MSAA 4×), PMREM environment ≈ 6 MiB, shadow map 4–8 MiB, gobo cookie 2.3 MiB, plaster 2.7 MiB, contact shadows ≈ 1 MiB, plus the scene's own prints (Business ≈ 6 MiB for both card prints; Party and Birthday under 2 MiB). About 35–40 MiB against the 48 MiB budget, to be confirmed on the phone. Low and Static free the shadow map and drop the gobo and plaster relief.
+
+### Still open
+
+- iPhone 17 Max session (Business, Party, Birthday at Normal and Low): frame times, cold shader compile, shimmer, legibility, compositor cost of the CSS finish.
+- Birthday framing decision (above).
+- A remaining tonearm lift step of about 0.5° in a single frame when a guest changes from accepting to declining while the stylus is on the record (the interruption blend lifts the arm from its captured pose; removing it needs a director-level lift-before-swing). Judged invisible at phone scale; recorded rather than fixed.
