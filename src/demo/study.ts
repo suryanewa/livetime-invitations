@@ -26,7 +26,10 @@ const EVENTS = {
 type Subject = 'cake' | 'keycard' | 'record' | 'sports' | 'dish';
 const SUBJECT_LABEL: Record<Subject, string> = { cake: 'Cake', keycard: 'Badge', record: 'Record player', sports: 'Basketball', dish: 'Covered dish' };
 
-const libraries: Record<DirectionId, MaterialLibrary> = { A: new MaterialLibrary('A'), B: new MaterialLibrary('B') };
+const DIRS = ['L', 'A', 'B'] as const;
+const dirLabel = (d: DirectionId) => (d === 'L' ? 'L — Satin Enamel (locked)' : `${d} — ${DIRECTIONS[d].name}`);
+
+const libraries: Record<DirectionId, MaterialLibrary> = { A: new MaterialLibrary('A'), B: new MaterialLibrary('B'), L: new MaterialLibrary('L') };
 
 function build(subject: Subject, dir: DirectionId): BuiltModel {
   const ctx = { lib: libraries[dir] };
@@ -57,7 +60,6 @@ function inviteMarkup(subject: 'cake' | 'keycard', stageSrc: string, alt: string
   return `
     <div class="lt-invite">
       <div>
-        <p class="lt-invite__eyebrow">${e.eyebrow}</p>
         <h3 class="lt-invite__title">${e.title}</h3>
         <p class="lt-invite__meta">${e.meta}</p>
       </div>
@@ -106,9 +108,9 @@ async function main() {
 
   wrap.append(
     el('header', { class: 's-head' }, `
-      <p class="s-kicker">Livetime · Invitation interactions · Milestone 1</p>
-      <h1>Visual study: Satin Studio vs Enamel Workshop</h1>
-      <p>Same camera, composition, light direction, scale, HTML controls and copy in both directions. Only material, geometry treatment, accent placement and the signature detail change. Every image on this page is rendered live by the shipping browser renderer (Three.js WebGL2, NeutralToneMapping) — no offline renders or generated imagery.</p>
+      <p class="s-kicker">Livetime · Invitation interactions · Milestone 1 · style lock</p>
+      <h1>Visual study: locked direction L, with the A / B comparison</h1>
+      <p>Each section shows the locked direction <strong>L — Satin Enamel</strong> (B’s construction and perforation signature with A’s restraint, keeping A’s coloured candles and covered dish, refined once from the panel’s findings) above the original checkpoint-1 comparison of A and B. Camera, composition, light, scale, controls and copy are identical throughout. Every image is rendered live by the shipping browser renderer (Three.js WebGL2, NeutralToneMapping).</p>
       <span class="s-pill">${STUDY_RECORD.selection ? `Selected: ${STUDY_RECORD.selection.choice}` : 'Neither direction selected — awaiting Surya'}</span>`),
   );
 
@@ -121,10 +123,10 @@ async function main() {
   stage.resize(liveSize, liveSize, 2);
 
   const stats: Record<string, { triangles: number; calls: number; materials: number }> = {};
-  const shot = (subject: Subject, dir: DirectionId, size: number, dpr: number) => {
+  const shot = (subject: Subject, dir: DirectionId, size: number, dpr: number, type = 'image/png', quality?: number) => {
     const m = build(subject, dir);
     stage.setContent(m.root, m.bounds);
-    const url = stage.snapshot(size, size, dpr);
+    const url = stage.snapshot(size, size, dpr, type, quality);
     const info = stage.renderer.info.render;
     const mats = new Set<string>();
     m.root.traverse((o) => { const mat = (o as { material?: { uuid: string } }).material; if (mat) mats.add(mat.uuid); });
@@ -136,14 +138,14 @@ async function main() {
   const s1 = section('01', 'Primary browser style frames', '390 × 844 CSS px. Stage rendered at 3× device pixel ratio, guest-ready pose, unselected response.');
   const frames = el('div', { class: 's-frames' });
   const frameShots: Record<string, string> = {};
-  for (const dir of ['A', 'B'] as const) {
+  for (const dir of DIRS) {
     for (const subject of ['cake', 'keycard'] as const) {
       const { m, url } = shot(subject, dir, 358, 3);
       frameShots[`${subject}-${dir}`] = url;
       m.dispose();
-      const fig = el('figure', { class: 's-frame-wrap', style: 'margin:0' });
+      const fig = el('figure', { class: 's-frame-wrap', style: 'margin:0', 'data-name': `frame-${subject}-${dir}` });
       fig.append(phone(subject, url, `${SUBJECT_LABEL[subject]} in direction ${dir}`));
-      fig.append(el('figcaption', {}, `${SUBJECT_LABEL[subject]} · ${dir} — ${DIRECTIONS[dir].name}`));
+      fig.append(el('figcaption', {}, `${SUBJECT_LABEL[subject]} · ${dirLabel(dir)}`));
       frames.append(fig);
     }
   }
@@ -155,9 +157,9 @@ async function main() {
   const blind = el('button', { class: 's-btn', type: 'button', 'aria-pressed': 'false' }, 'Hide labels for blind recognition check');
   s2.querySelector('header')!.append(blind);
   const sheets: HTMLElement[] = [];
-  for (const dir of ['A', 'B'] as const) {
-    s2.append(el('p', { class: 's-dir-label' }, `${DIRECTIONS[dir].name} <small>Direction ${dir}</small>`));
-    const sheet = el('div', { class: 's-sheet' });
+  for (const dir of DIRS) {
+    s2.append(el('p', { class: 's-dir-label' }, `${DIRECTIONS[dir].name} <small>Direction ${dir}${dir === 'L' ? ' · locked' : ''}</small>`));
+    const sheet = el('div', { class: 's-sheet', 'data-dir': dir });
     for (const subject of ['record', 'cake', 'sports', 'dish', 'keycard'] as const) {
       const { m, url } = shot(subject, dir, 240, 2);
       m.dispose();
@@ -179,7 +181,7 @@ async function main() {
   // 03 — Material detail crops at actual mobile render scale
   const s3 = section('03', 'Material detail crops', 'Cropped from the 390 pt style frames at 3× — device pixels shown 1:1 then enlarged ≈2.2× without smoothing. This is exactly what a phone rasterises.');
   const crops = el('div', { class: 's-crops' });
-  for (const dir of ['A', 'B'] as const) {
+  for (const dir of DIRS) {
     const m = build('keycard', dir);
     stage.setContent(m.root, m.bounds);
     const url = frameShots[`keycard-${dir}`]!;
@@ -187,12 +189,12 @@ async function main() {
     const clipWorld = HANG_PIVOT.clone().add(new Vector3(-0.1, -0.1, 0));
     const [x1, y1] = project(stage, cornerWorld.lerp(clipWorld, 0.5), 358, 358, 3);
     crops.append(await crop(url, x1, y1, 120, `${dir} · Bevel and edge highlight (card corner, clip)`));
-    const bandWorld = new Vector3(HANG_PIVOT.x + 0.05, HANG_PIVOT.y + CARD_OFFSET_Y - (dir === 'A' ? 0.24 : 0.46), HANG_PIVOT.z + 0.03);
+    const bandWorld = new Vector3(HANG_PIVOT.x + 0.05, HANG_PIVOT.y + CARD_OFFSET_Y - (dir === 'A' ? 0.24 : dir === 'B' ? 0.5 : 0.535), HANG_PIVOT.z + 0.03);
     const [x2, y2] = project(stage, bandWorld, 358, 358, 3);
     crops.append(await crop(url, x2, y2, 120, `${dir} · Shared surface detail (${DIRECTIONS[dir].signature.kind})`));
     m.dispose();
   }
-  for (const dir of ['A', 'B'] as const) {
+  for (const dir of DIRS) {
     const m = build('cake', dir);
     stage.setContent(m.root, m.bounds);
     const url = frameShots[`cake-${dir}`]!;
@@ -208,11 +210,11 @@ async function main() {
   // 04 — 320 px checks
   const s4 = section('04', 'Narrow 320 px checks', 'Stage at 288 CSS px (320 viewport minus 16 px gutters). Candles, clip, scanner and object boundaries must stay visible.');
   const narrow = el('div', { class: 's-narrow' });
-  for (const dir of ['A', 'B'] as const) {
+  for (const dir of DIRS) {
     for (const subject of ['cake', 'keycard'] as const) {
       const { m, url } = shot(subject, dir, 288, 3);
       m.dispose();
-      const fig = el('figure');
+      const fig = el('figure', { 'data-name': `narrow-${subject}-${dir}` });
       fig.append(el('img', { src: url, alt: `${SUBJECT_LABEL[subject]} at 320 px, direction ${dir}` }), el('figcaption', {}, `${SUBJECT_LABEL[subject]} · ${dir} · 288 px stage`));
       narrow.append(fig);
     }
@@ -223,7 +225,7 @@ async function main() {
   // 05 — Token sheets
   const s5 = section('05', 'Token sheets', 'Study inputs only. Status colours pair with symbols and text; UI contrast verified separately.');
   const tokens = el('div', { class: 's-tokens' });
-  for (const dir of ['A', 'B'] as const) {
+  for (const dir of DIRS) {
     const d = DIRECTIONS[dir];
     const card = el('article', { class: 's-token-card' });
     const swatchNames = ['mat_body', 'mat_body_ink', 'mat_accent', 'mat_insert', 'mat_insert_warm', 'mat_metal', 'mat_anodized', 'mat_tray', 'mat_fabric', 'mat_cloche'];
@@ -233,7 +235,7 @@ async function main() {
       return `<div class="s-swatch"><i style="background:${s.color}"></i>${n.replace('mat_', '')}<br><code>${s.color} · r${s.roughness}${s.metalness ? ` · m${s.metalness}` : ''}</code></div>`;
     }).join('');
     card.innerHTML = `
-      <h3>${dir} — ${d.name}</h3>
+      <h3>${dirLabel(dir)}</h3>
       <p>${d.summary}</p>
       <p class="s-kicker" style="margin-bottom:8px">Interface</p>
       <div class="s-swatches">${ui}</div>
@@ -246,7 +248,7 @@ async function main() {
         <tr><th>Background</th><td><code>${d.ui.stage}</code> seamless stage, no floor line</td></tr>
         <tr><th>Shadow</th><td>Contact card <code>${d.shadow.color}</code> at ${d.shadow.opacity} opacity; spreads ×(1+0.55h) and fades by height</td></tr>
         <tr><th>Edges</th><td>Bevel ≈ ${Math.round(d.geometry.bevelRatio * 100)}% of the smallest part dimension · ${d.geometry.bevelSegments} segments · fullness ${d.geometry.fullness}</td></tr>
-        <tr><th>Roughness</th><td>${dir === 'A' ? 'Satin bodies 0.42–0.48 with light clearcoat · metal 0.30–0.34' : 'Enamel bodies 0.66–0.72, no clearcoat · painted metal 0.48–0.55'} · food 0.52–0.86</td></tr>
+        <tr><th>Roughness</th><td>${dir === 'A' ? 'Satin bodies 0.42–0.48 with light clearcoat · metal 0.30–0.34' : dir === 'B' ? 'Enamel bodies 0.66–0.72, no clearcoat · painted metal 0.48–0.55' : 'Satin bodies 0.44–0.48, no clearcoat · enamel inserts 0.62–0.74 · brushed metal 0.42–0.45'} · food 0.52–0.86</td></tr>
         <tr><th>Signature</th><td>${d.signature.description}<br>Placement: ${d.signature.placement.join(', ')}</td></tr>
         <tr><th>Type</th><td>System sans (SF Pro / Segoe / Roboto). Title 26/1.15 semibold · body 15 · meta 15 muted <code>#585C57</code></td></tr>
         <tr><th>Status</th><td>Accept <code>${d.ui.ok}</code> + check · Decline <code>${d.ui.no}</code> + minus · scanner light accept <code>${d.status.accept}</code> / decline <code>${d.status.decline}</code> (emissive, always paired with symbol)</td></tr>
@@ -256,22 +258,23 @@ async function main() {
   s5.append(tokens);
   const feas = el('table', { class: 's-table', style: 'margin-top:24px;background:#fff;border-radius:12px' });
   const subjects: Subject[] = ['cake', 'keycard', 'record', 'sports', 'dish'];
-  feas.innerHTML = `<thead><tr><th>Measured at render (study models)</th>${subjects.map((x) => `<th>${SUBJECT_LABEL[x]}</th>`).join('')}</tr></thead><tbody>${(['A', 'B'] as const).map((d) => `<tr><th>${d} triangles · draw calls · materials</th>${subjects.map((x) => { const st = stats[`${x}-${d}`]; return `<td><code>${st ? `${st.triangles.toLocaleString()} · ${st.calls} · ${st.materials}` : '—'}</code></td>`; }).join('')}</tr>`).join('')}<tr><th>Master budget</th><td colspan="5"><code>≤ 60,000 triangles · ≤ 40 draw calls per scene (normal quality)</code></td></tr></tbody>`;
+  feas.innerHTML = `<thead><tr><th>Measured at render (study models)</th>${subjects.map((x) => `<th>${SUBJECT_LABEL[x]}</th>`).join('')}</tr></thead><tbody>${DIRS.map((d) => `<tr><th>${d} triangles · draw calls · materials</th>${subjects.map((x) => { const st = stats[`${x}-${d}`]; return `<td><code>${st ? `${st.triangles.toLocaleString()} · ${st.calls} · ${st.materials}` : '—'}</code></td>`; }).join('')}</tr>`).join('')}<tr><th>Master budget</th><td colspan="5"><code>≤ 60,000 triangles · ≤ 40 draw calls per scene (normal quality)</code></td></tr></tbody>`;
   s5.append(feas);
   (window as unknown as { __studyStats: unknown }).__studyStats = stats;
   wrap.append(s5);
 
   // 06 — Motion sample (the single live canvas)
-  const s6 = section('06', 'Two-second motion sample', 'Identical card settle in both directions: 9° swing and 4° pitch released into the shared spring (damping ratio 0.85, fixed 1/120 s step). Watch the edge highlight and specular crawl.');
+  const s6 = section('06', 'Two-second motion sample', 'Identical card settle in every direction: 9° swing and 4° pitch released into the shared spring (damping ratio 0.85, fixed 1/120 s step). Watch the edge highlight and specular crawl.');
   const motion = el('div', { class: 's-motion' });
   const stageBox = el('div', { class: 'lt-stage' });
   stageBox.append(stage.canvas);
   stage.canvas.setAttribute('aria-hidden', 'true');
   const side = el('div');
   const seg = el('div', { class: 's-seg', role: 'group', 'aria-label': 'Direction' });
-  const btnA = el('button', { type: 'button', 'aria-pressed': 'true' }, 'A — Satin Studio');
+  const btnL = el('button', { type: 'button', 'aria-pressed': 'true' }, 'L — locked');
+  const btnA = el('button', { type: 'button', 'aria-pressed': 'false' }, 'A — Satin Studio');
   const btnB = el('button', { type: 'button', 'aria-pressed': 'false' }, 'B — Enamel Workshop');
-  seg.append(btnA, btnB);
+  seg.append(btnL, btnA, btnB);
   const replay = el('button', { class: 's-btn', type: 'button' }, 'Replay settle');
   const controls = el('div', { class: 's-controls' });
   controls.append(seg, replay);
@@ -293,6 +296,7 @@ async function main() {
     current = buildKeycard({ lib: libraries[dir] }, 'light');
     stage.setContent(current.root, current.bounds);
     stage.resize(stageBox.clientWidth || liveSize, stageBox.clientWidth || liveSize, 2);
+    btnL.setAttribute('aria-pressed', String(dir === 'L'));
     btnA.setAttribute('aria-pressed', String(dir === 'A'));
     btnB.setAttribute('aria-pressed', String(dir === 'B'));
     play();
@@ -351,6 +355,7 @@ async function main() {
     },
   };
 
+  btnL.addEventListener('click', () => showDir('L'));
   btnA.addEventListener('click', () => showDir('A'));
   btnB.addEventListener('click', () => showDir('B'));
   replay.addEventListener('click', play);
@@ -358,7 +363,7 @@ async function main() {
     if (document.hidden) cancelAnimationFrame(raf);
   });
   void SCANNER_POS;
-  showDir('A');
+  showDir('L');
 
   // 07 — Rubric and recommendation
   const s7 = section('07', 'Selection rubric', 'Scores 1–5 with one sentence of visual evidence. Any failure of recognition, legibility or feasibility blocks selection regardless of total.');
@@ -389,6 +394,12 @@ async function main() {
   s7.append(reco);
   wrap.append(s7);
 
+  // Tooling hook: collection-rail thumbnails from the locked direction.
+  (window as unknown as { __studyThumb: unknown }).__studyThumb = (subject: Subject, size: number) => {
+    const { m, url } = shot(subject, 'L', size, 1, 'image/webp', 0.9);
+    m.dispose();
+    return url;
+  };
   document.body.dataset.ready = 'true';
 }
 

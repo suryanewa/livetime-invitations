@@ -1,0 +1,531 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-29T02:49:10Z",
+  "title": "Design System: Livetime Invitation Interactions",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "Olive Ink",
+        "canonical": "#202320",
+        "oklch": "oklch(25.2% 0.007 145.4)",
+        "tonalRamp": [
+          "#090C09",
+          "#232623",
+          "#404340",
+          "#5F625F",
+          "#808380",
+          "#A2A6A2",
+          "#C6CAC6",
+          "#ECF0EC"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "#3A3D39",
+        "oklch": "oklch(35.6% 0.008 137.8)",
+        "tonalRamp": [
+          "#0A0C09",
+          "#232622",
+          "#40433F",
+          "#5F625E",
+          "#80837F",
+          "#A3A6A1",
+          "#C7CAC5",
+          "#ECF0EB"
+        ]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Sage Graphite",
+        "canonical": "#585C57",
+        "oklch": "oklch(47.0% 0.009 139.4)",
+        "tonalRamp": [
+          "#090C08",
+          "#232622",
+          "#3F433E",
+          "#5E635D",
+          "#7F847E",
+          "#A2A6A1",
+          "#C6CBC5",
+          "#EBF0EA"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Keyline Grey",
+        "canonical": "#6F736D",
+        "oklch": "oklch(55.0% 0.010 134.9)",
+        "tonalRamp": [
+          "#090C08",
+          "#232621",
+          "#40433E",
+          "#5F635D",
+          "#80847E",
+          "#A2A7A0",
+          "#C6CBC4",
+          "#EBF0E9"
+        ]
+      },
+      "accept": {
+        "role": "semantic",
+        "displayName": "Saved Pine",
+        "canonical": "#176B42",
+        "oklch": "oklch(46.9% 0.102 156.6)",
+        "tonalRamp": [
+          "#001005",
+          "#022E18",
+          "#054F2E",
+          "#217249",
+          "#479569",
+          "#6BB88B",
+          "#90DEAE",
+          "#C6FEDA"
+        ]
+      },
+      "decline": {
+        "role": "semantic",
+        "displayName": "Garnet",
+        "canonical": "#A62D36",
+        "oklch": "oklch(48.7% 0.157 21.3)",
+        "tonalRamp": [
+          "#1E0002",
+          "#4C020C",
+          "#7F051B",
+          "#A82F38",
+          "#CF5458",
+          "#F87879",
+          "#FEB2B0",
+          "#FFE8E7"
+        ]
+      },
+      "focus": {
+        "role": "semantic",
+        "displayName": "Focus Cobalt",
+        "canonical": "#2F54C9",
+        "oklch": "oklch(49.2% 0.187 266.2)",
+        "tonalRamp": [
+          "#010035",
+          "#060279",
+          "#152FA3",
+          "#2F54C9",
+          "#4D78F1",
+          "#7DA1FB",
+          "#B2C9FD",
+          "#E7EFFE"
+        ]
+      },
+      "page": {
+        "role": "neutral",
+        "displayName": "Warm White",
+        "canonical": "#FBFAF7",
+        "oklch": "oklch(98.5% 0.004 91.4)",
+        "tonalRamp": [
+          "#0C0B09",
+          "#262523",
+          "#434240",
+          "#62615F",
+          "#838280",
+          "#A6A5A2",
+          "#CAC9C6",
+          "#EFEEEB"
+        ]
+      },
+      "stage": {
+        "role": "neutral",
+        "displayName": "Stage Linen",
+        "canonical": "#F4F1EB",
+        "oklch": "oklch(95.9% 0.009 84.6)",
+        "tonalRamp": [
+          "#0D0B07",
+          "#272520",
+          "#44423D",
+          "#63615C",
+          "#85827D",
+          "#A7A59F",
+          "#CCC9C3",
+          "#F1EEE8"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "#FFFFFF",
+        "oklch": "oklch(100.0% 0 0)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "track": {
+        "role": "neutral",
+        "displayName": "Track Stone",
+        "canonical": "#EEECE6",
+        "oklch": "oklch(94.3% 0.008 91.5)",
+        "tonalRamp": [
+          "#0C0B07",
+          "#262521",
+          "#43423D",
+          "#63615C",
+          "#84827D",
+          "#A7A59F",
+          "#CBC9C3",
+          "#F0EEE8"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline Sand",
+        "canonical": "#E6E3DC",
+        "oklch": "oklch(91.6% 0.010 87.5)",
+        "tonalRamp": [
+          "#0D0B07",
+          "#272520",
+          "#44423C",
+          "#64615B",
+          "#85827C",
+          "#A8A59E",
+          "#CCC9C2",
+          "#F1EEE7"
+        ]
+      },
+      "hover-wash": {
+        "role": "neutral",
+        "displayName": "Hover Wash",
+        "canonical": "#F7F6F2",
+        "oklch": "oklch(97.3% 0.005 95.1)",
+        "tonalRamp": [
+          "#0C0B09",
+          "#262522",
+          "#43423F",
+          "#62615E",
+          "#83827F",
+          "#A6A5A1",
+          "#CAC9C5",
+          "#EFEEEA"
+        ]
+      },
+      "perforation": {
+        "role": "neutral",
+        "displayName": "Perforation Taupe",
+        "canonical": "#CDC7BB",
+        "oklch": "oklch(83.1% 0.018 84.6)",
+        "tonalRamp": [
+          "#0F0B04",
+          "#29241B",
+          "#464137",
+          "#666156",
+          "#878277",
+          "#AAA499",
+          "#CEC8BC",
+          "#F4EEE1"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The event title inside the invitation card; the only size above 16px. Balanced wrap."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Collection heading, rail row names, drawer summary; the wordmark uses this size at 700."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Labels on 52px decision buttons: primary, secondary, Accept, Decline."
+      },
+      "body-strong": {
+        "displayName": "Body strong",
+        "purpose": "Segmented-control labels, the question, the status line, quiet links."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Event meta (tabular numerals, breaks only at separators), collection lede (max 44ch)."
+      },
+      "body-sm": {
+        "displayName": "Body small",
+        "purpose": "Rail object lines, the Motion toggle, the graphics notice."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Fieldset legends naming a control group and small segmented controls; 400 for notes and the drawer hint."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Status badge and rail tags."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Developer drawer only: state values (13px) and the event log (12px)."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card-lift",
+        "value": "0 1px 2px rgba(32,35,32,0.05), 0 18px 48px -28px rgba(32,35,32,0.32)",
+        "purpose": "The invitation card only, with a 1px rgba(32,35,32,0.07) border. The one ambient shadow on the page."
+      },
+      {
+        "name": "segment-selected",
+        "value": "inset 0 0 0 1px #6F736D, 0 1px 2px rgba(32,35,32,0.12), 0 2px 8px -4px rgba(32,35,32,0.2)",
+        "purpose": "White thumb of a pressed segment; the inset keyline carries the state at >=3:1 on the track."
+      },
+      {
+        "name": "row-selected",
+        "value": "0 1px 2px rgba(32,35,32,0.05)",
+        "purpose": "Current collection row, with a Hairline Sand border."
+      },
+      {
+        "name": "pending-keyline-accept",
+        "value": "inset 0 0 0 1.5px #176B42",
+        "purpose": "Chosen-but-unsaved Accept, over a 2px Saved Pine border on white."
+      },
+      {
+        "name": "pending-keyline-decline",
+        "value": "inset 0 0 0 1.5px #A62D36",
+        "purpose": "Chosen-but-unsaved Decline, over a 2px Garnet border on white."
+      },
+      {
+        "name": "emphasis-keyline",
+        "value": "inset 0 0 0 1px #202320",
+        "purpose": "'Preview as guest' after the host prepares the card, over an ink border."
+      },
+      {
+        "name": "focus-ring",
+        "value": "outline: 3px solid #2F54C9; outline-offset: 2px",
+        "purpose": "Global :focus-visible treatment on every focusable element (an outline, not a shadow)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fade",
+        "value": "120ms ease-out",
+        "purpose": "Background, border, colour and shadow changes on buttons, segments and rail rows."
+      },
+      {
+        "name": "press",
+        "value": "transform: translateY(1px)",
+        "purpose": "Response choice :active press-down."
+      },
+      {
+        "name": "poster-crossfade",
+        "value": "opacity 180ms ease-out",
+        "purpose": "Poster image fading out as the live canvas appears on the stage."
+      },
+      {
+        "name": "disclosure",
+        "value": "transform 160ms ease-out",
+        "purpose": "Developer drawer chevron rotation."
+      },
+      {
+        "name": "check-draw",
+        "value": "stroke-dashoffset 20 -> 0, 360ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The saved check or minus drawing itself in the status line; the shell's one authored motion moment."
+      },
+      {
+        "name": "spinner",
+        "value": "rotate 360deg, 800ms linear infinite",
+        "purpose": "14px saving ring."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "@media (prefers-reduced-motion: reduce)",
+        "purpose": "Removes spinner rotation, check draw and poster cross-fade; the Replay control is hidden."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "max-width: 420px",
+        "purpose": "Card padding 14px / radius 24px, host actions stack, brand descriptor hidden, drawer hint wraps."
+      },
+      {
+        "name": "landscape-narrow",
+        "value": "(max-width: 720px) and (orientation: landscape)",
+        "purpose": "Brand descriptor hidden."
+      },
+      {
+        "name": "single-column",
+        "value": "max-width: 900px",
+        "purpose": "One centred 480px column; rail and drawer follow the card."
+      },
+      {
+        "name": "wide",
+        "value": "min-width: 1280px",
+        "purpose": "Columns 480px / 400px, space-around, 1120px measure."
+      },
+      {
+        "name": "short-landscape",
+        "value": "(orientation: landscape) and (max-height: 540px) and (min-width: 600px)",
+        "purpose": "Mode switch moves into the top bar; card splits into stage left, controls right. Also catches 200% zoom on a laptop."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action per panel (host's prepare action). Ink fill, 52px, 14px radius.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Attach card</button> <button class=\"ds-btn-primary\" type=\"button\" disabled>Attach card</button>",
+      "css": ".ds-btn-primary { min-height: 52px; padding: 0 16px; border-radius: 14px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 1rem; font-weight: 600; background: var(--lt-text, #202320); color: #fff; border: 1.5px solid var(--lt-text, #202320); cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out; } .ds-btn-primary:hover { background: #33372f; } .ds-btn-primary:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-btn-primary:disabled { background: var(--lt-line-strong, #6f736d); border-color: var(--lt-line-strong, #6f736d); cursor: progress; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "White with a 1.5px Keyline Grey outline; gains an ink emphasis keyline when it is the next step.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\">Preview as guest</button> <button class=\"ds-btn-secondary\" type=\"button\" data-emphasis=\"true\">Preview as guest</button>",
+      "css": ".ds-btn-secondary { min-height: 52px; padding: 0 16px; border-radius: 14px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 1rem; font-weight: 600; background: #fff; color: var(--lt-text, #202320); border: 1.5px solid var(--lt-line-strong, #6f736d); cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out; } .ds-btn-secondary:hover { background: #f7f6f2; } .ds-btn-secondary:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-btn-secondary[data-emphasis='true'] { border-color: var(--lt-text, #202320); box-shadow: inset 0 0 0 1px var(--lt-text, #202320); }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "chip",
+      "refersTo": "segmented-track",
+      "description": "The single pattern for every finite choice: Track Stone recess, 3px inset, white selected thumb with an inset keyline. Small variant for developer settings.",
+      "html": "<div class=\"ds-seg\" role=\"group\" aria-label=\"Card template\"><button type=\"button\" aria-pressed=\"true\">Light card</button><button type=\"button\" aria-pressed=\"false\">Dark card</button></div><div class=\"ds-seg ds-seg--small\" role=\"group\" aria-label=\"Simulated save\"><button type=\"button\" aria-pressed=\"true\">Normal <small>250 ms</small></button><button type=\"button\" aria-pressed=\"false\">Slow <small>3 s</small></button><button type=\"button\" aria-pressed=\"false\">Fail</button></div>",
+      "css": ".ds-seg { display: flex; padding: 3px; gap: 2px; border-radius: 13px; background: var(--sc-track, #eeece6); max-width: 100%; margin-bottom: 12px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-seg button { flex: 1 1 auto; min-height: 44px; min-width: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 0.9375rem; font-weight: 600; color: var(--lt-text-2, #585c57); cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out, color 120ms ease-out, box-shadow 120ms ease-out; } .ds-seg button small { font-weight: 500; color: var(--lt-text-2, #585c57); margin-left: 4px; font-variant-numeric: tabular-nums; } .ds-seg button:hover { color: var(--lt-text, #202320); } .ds-seg button:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-seg button[aria-pressed='true'] { background: #fff; color: var(--lt-text, #202320); box-shadow: inset 0 0 0 1px var(--lt-line-strong, #6f736d), 0 1px 2px rgba(32,35,32,0.12), 0 2px 8px -4px rgba(32,35,32,0.2); } .ds-seg--small button { font-size: 0.8125rem; padding: 0 12px; }"
+    },
+    {
+      "name": "Response Choices",
+      "kind": "custom",
+      "refersTo": "choice",
+      "description": "Equal-weight Accept/Decline pair. Solid status fill only once the save is confirmed; pending or failed shows a 2px status border plus 1.5px inset keyline on white. Rows: idle, saved Accept, unsaved Decline.",
+      "html": "<div class=\"ds-choices\" role=\"group\" aria-label=\"Will you attend?\"><button class=\"ds-choice\" type=\"button\" data-response=\"accept\" aria-pressed=\"false\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M4.5 10.5l3.5 3.5 7.5-8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span>Accept</span></button><button class=\"ds-choice\" type=\"button\" data-response=\"decline\" aria-pressed=\"false\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M5 10h10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\"/></svg><span>Decline</span></button></div><div class=\"ds-choices\" data-persistence=\"saved\"><button class=\"ds-choice\" type=\"button\" data-response=\"accept\" aria-pressed=\"true\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M4.5 10.5l3.5 3.5 7.5-8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span>Accept</span></button><button class=\"ds-choice\" type=\"button\" data-response=\"decline\" aria-pressed=\"false\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M5 10h10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\"/></svg><span>Decline</span></button></div><div class=\"ds-choices\" data-persistence=\"error\"><button class=\"ds-choice\" type=\"button\" data-response=\"accept\" aria-pressed=\"false\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M4.5 10.5l3.5 3.5 7.5-8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span>Accept</span></button><button class=\"ds-choice\" type=\"button\" data-response=\"decline\" aria-pressed=\"true\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M5 10h10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\"/></svg><span>Decline</span></button></div>",
+      "css": ".ds-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-choice { min-height: 52px; min-width: 44px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-size: 1rem; font-weight: 600; color: var(--lt-text, #202320); background: #fff; border: 1.5px solid var(--lt-line-strong, #6f736d); border-radius: 14px; cursor: pointer; transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease; } .ds-choice svg { width: 18px; height: 18px; flex: none; } .ds-choice:hover { background: #f7f6f2; } .ds-choice:active { transform: translateY(1px); } .ds-choice:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-choices[data-persistence='saved'] .ds-choice[aria-pressed='true'][data-response='accept'] { background: var(--lt-ok, #176b42); border-color: var(--lt-ok, #176b42); color: #fff; } .ds-choices[data-persistence='saved'] .ds-choice[aria-pressed='true'][data-response='decline'] { background: var(--lt-no, #a62d36); border-color: var(--lt-no, #a62d36); color: #fff; } .ds-choices:not([data-persistence='saved']) .ds-choice[aria-pressed='true'] { background: #fff; border-width: 2px; } .ds-choices:not([data-persistence='saved']) .ds-choice[aria-pressed='true'][data-response='accept'] { border-color: var(--lt-ok, #176b42); color: var(--lt-ok, #176b42); box-shadow: inset 0 0 0 1.5px var(--lt-ok, #176b42); } .ds-choices:not([data-persistence='saved']) .ds-choice[aria-pressed='true'][data-response='decline'] { border-color: var(--lt-no, #a62d36); color: var(--lt-no, #a62d36); box-shadow: inset 0 0 0 1.5px var(--lt-no, #a62d36); }"
+    },
+    {
+      "name": "Status Line",
+      "kind": "custom",
+      "refersTo": "link-quiet",
+      "description": "44px row under the choices: polite live-region status (saving / saved with drawn glyph / error) and quiet actions. Replay is an underlined quiet link; recovery is bordered.",
+      "html": "<div class=\"ds-status-row\"><p class=\"ds-status\" role=\"status\"><span class=\"ds-spinner\" aria-hidden=\"true\"></span>Saving response…</p></div><div class=\"ds-status-row\"><p class=\"ds-status\" data-tone=\"accept\" role=\"status\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M4.5 10.5l3.5 3.5 7.5-8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>Accepted</p><button class=\"ds-quiet\" type=\"button\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M4.5 10a5.5 5.5 0 1 0 1.8-4.1M4.5 3.5v3h3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span>Replay</span></button></div><div class=\"ds-status-row\"><p class=\"ds-status\" data-tone=\"error\" role=\"status\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M10 6.5v4.5M10 13.8v.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><circle cx=\"10\" cy=\"10\" r=\"7.25\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg>Couldn’t save your response.</p><button class=\"ds-quiet ds-quiet--retry\" type=\"button\">Try again</button></div>",
+      "css": ".ds-status-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; min-height: 44px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-status { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 0.9375rem; font-weight: 600; color: var(--lt-text-2, #585c57); } .ds-status svg { width: 18px; height: 18px; flex: none; } .ds-status[data-tone='accept'] { color: var(--lt-ok, #176b42); } .ds-status[data-tone='decline'] { color: var(--lt-no, #a62d36); } .ds-status[data-tone='error'] { color: var(--lt-text, #202320); } .ds-status[data-tone='accept'] svg path, .ds-status[data-tone='decline'] svg path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: ds-draw 360ms cubic-bezier(0.16, 1, 0.3, 1) forwards; } @keyframes ds-draw { to { stroke-dashoffset: 0; } } .ds-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--lt-muted, #dcddd5); border-top-color: var(--lt-text, #202320); animation: ds-spin 800ms linear infinite; } @keyframes ds-spin { to { transform: rotate(360deg); } } .ds-quiet { min-height: 44px; min-width: 44px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 0.9375rem; font-weight: 600; color: var(--lt-text, #202320); background: transparent; border: 0; border-radius: 12px; cursor: pointer; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; } .ds-quiet svg { width: 16px; height: 16px; } .ds-quiet:hover { background: #f1efea; } .ds-quiet:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-quiet--retry { border: 1.5px solid var(--lt-line-strong, #6f736d); text-decoration: none; } @media (prefers-reduced-motion: reduce) { .ds-spinner { animation: none; border-top-color: var(--lt-text-2, #585c57); } .ds-status svg path { animation: none; stroke-dashoffset: 0; } }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "Track Stone pill labelling simulated behaviour in the chrome. A label, not a button.",
+      "html": "<span class=\"ds-badge\" title=\"This demo never contacts a real RSVP service\">Simulated saves</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; min-height: 28px; border-radius: 999px; background: var(--sc-track, #eeece6); font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 0.75rem; font-weight: 600; color: var(--sc-ink-soft, #3a3d39); white-space: nowrap; }"
+    },
+    {
+      "name": "Invitation Card",
+      "kind": "card",
+      "refersTo": "card-invitation",
+      "description": "The only lifted surface: event title and meta, the 1:1 Stage Linen stage, then the active panel. One per page.",
+      "html": "<article class=\"ds-card\"><header><h1 class=\"ds-card__title\">Partner Summit — Welcome Reception</h1><p class=\"ds-card__meta\"><span>Thu, Nov 12 · 6:30 PM</span><span aria-hidden=\"true\"> · </span><span>Hudson Yards, New York</span><span aria-hidden=\"true\"> · </span><span>Sample event</span></p></header><div class=\"ds-stage\" role=\"img\" aria-label=\"Stage placeholder\"></div></article>",
+      "css": ".ds-card { display: grid; gap: 16px; padding: 20px; max-width: 440px; border-radius: 28px; background: #fff; border: 1px solid rgba(32,35,32,0.07); box-shadow: 0 1px 2px rgba(32,35,32,0.05), 0 18px 48px -28px rgba(32,35,32,0.32); font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); color: var(--lt-text, #202320); line-height: 1.4; } .ds-card__title { margin: 0; font-family: var(--lt-font-display, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 1.5rem; line-height: 1.15; font-weight: 650; letter-spacing: -0.018em; text-wrap: balance; } .ds-card__meta { margin: 6px 0 0; font-size: 0.9375rem; color: var(--lt-text-2, #585c57); font-variant-numeric: tabular-nums; text-wrap: pretty; } .ds-card__meta span { white-space: nowrap; } .ds-stage { width: 100%; aspect-ratio: 1 / 1; border-radius: 20px; background: var(--lt-stage, #f4f1eb); overflow: hidden; }"
+    },
+    {
+      "name": "Collection Rail Item",
+      "kind": "nav",
+      "refersTo": "rail-item",
+      "description": "Row button with a 60px Stage Linen thumbnail, name over object line, right tag. Selected row is white with a hairline; unavailable rows are aria-disabled and desaturated.",
+      "html": "<ul class=\"ds-rail\"><li><button class=\"ds-rail__item\" type=\"button\" aria-pressed=\"false\" aria-disabled=\"true\"><span class=\"ds-rail__thumb\"></span><span class=\"ds-rail__text\"><span class=\"ds-rail__name\">Dinner</span><span class=\"ds-rail__obj\">Covered dish</span></span><span class=\"ds-rail__tag\">In production</span></button></li><li><button class=\"ds-rail__item\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-rail__thumb\"></span><span class=\"ds-rail__text\"><span class=\"ds-rail__name\">Business</span><span class=\"ds-rail__obj\">Keycard</span></span><span class=\"ds-rail__tag\">Showing</span></button></li></ul>",
+      "css": ".ds-rail { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 420px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-rail__item { width: 100%; min-height: 72px; padding: 6px 14px 6px 6px; display: grid; grid-template-columns: 60px 1fr auto; align-items: center; gap: 14px; text-align: left; font: inherit; font-size: 1rem; line-height: 1.4; color: var(--lt-text, #202320); background: transparent; border: 1px solid transparent; border-radius: 16px; cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out; } .ds-rail__thumb { width: 60px; height: 60px; border-radius: 12px; background: var(--lt-stage, #f4f1eb); } .ds-rail__item:hover { background: #f4f2ed; } .ds-rail__item:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-rail__item[aria-pressed='true'] { background: #fff; border-color: var(--sc-line, #e6e3dc); box-shadow: 0 1px 2px rgba(32,35,32,0.05); } .ds-rail__item[aria-disabled='true'] { cursor: default; } .ds-rail__item[aria-disabled='true']:hover { background: transparent; } .ds-rail__item[aria-disabled='true'] .ds-rail__thumb { filter: saturate(0.55); opacity: 0.8; } .ds-rail__text { display: grid; gap: 2px; min-width: 0; } .ds-rail__name { font-weight: 650; } .ds-rail__obj { font-size: 0.875rem; color: var(--lt-text-2, #585c57); } .ds-rail__tag { font-size: 0.75rem; font-weight: 600; color: var(--lt-text-2, #585c57); white-space: nowrap; } .ds-rail__item[aria-pressed='true'] .ds-rail__tag { color: var(--lt-text, #202320); }"
+    },
+    {
+      "name": "Developer Drawer",
+      "kind": "custom",
+      "refersTo": "drawer-summary",
+      "description": "Native details panel, collapsed by default: 56px summary with hint and rotating CSS chevron; body holds small segmented controls, a hairline state list with mono values, and the mono event log.",
+      "html": "<details class=\"ds-dev\" open><summary><span>Developer</span><span class=\"ds-dev__hint\">State, simulated saves and fallbacks</span></summary><div class=\"ds-dev__body\"><dl class=\"ds-state\"><div><dt>Response</dt><dd>decline · error</dd></div><div><dt>Motion</dt><dd>reduced</dd></div></dl><ol class=\"ds-log\"><li><time>20:44:04</time><b>result</b><span>23c88410-1-1 error</span></li><li><time>20:44:03</time><b>request</b><span>23c88410-1-1 decline</span></li></ol></div></details>",
+      "css": ".ds-dev { max-width: 420px; border-radius: 18px; border: 1px solid var(--sc-line, #e6e3dc); background: #fff; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); color: var(--lt-text, #202320); line-height: 1.4; } .ds-dev summary { min-height: 56px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; font-weight: 650; border-radius: 18px; } .ds-dev summary::-webkit-details-marker { display: none; } .ds-dev summary:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-dev summary::after { content: ''; width: 8px; height: 8px; border-right: 1.75px solid currentColor; border-bottom: 1.75px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform 160ms ease-out; flex: none; } .ds-dev[open] summary::after { transform: rotate(-135deg) translateY(-2px); } .ds-dev__hint { margin-left: auto; font-size: 0.8125rem; font-weight: 500; color: var(--lt-text-2, #585c57); text-align: right; } .ds-dev__body { display: grid; gap: 18px; padding: 4px 18px 18px; } .ds-state { display: grid; grid-template-columns: 1fr 1fr; margin: 0; border-top: 1px solid var(--sc-line, #e6e3dc); } .ds-state div { padding: 8px 0; border-bottom: 1px solid var(--sc-line, #e6e3dc); } .ds-state dt { font-size: 0.75rem; color: var(--lt-text-2, #585c57); } .ds-state dd { margin: 2px 0 0; font-family: var(--lt-mono, ui-monospace, 'SF Mono', Menlo, Consolas, monospace); font-size: 0.8125rem; overflow-wrap: anywhere; } .ds-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-family: var(--lt-mono, ui-monospace, 'SF Mono', Menlo, Consolas, monospace); font-size: 0.75rem; color: var(--sc-ink-soft, #3a3d39); } .ds-log li { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; padding: 3px 0; font-variant-numeric: tabular-nums; } .ds-log time { color: var(--lt-text-2, #585c57); } .ds-log b { font-weight: 600; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Instrument Beside the Object",
+    "overview": "The 3D invitation object is the hero; everything in HTML is a precise, quiet instrument placed next to it. The interface is built from warm neutrals, olive-black ink and one segmented-control grammar, so the eye lands on the stage square first and the controls second. Nothing in the chrome is decorative except a single perforation-dot rule under the top bar, borrowed from the objects' own family mark. The page is one lifted invitation card, a collection rail and a collapsed Developer drawer. It is deliberately not a dashboard of cards.\n\nDensity is compact but never cramped: a 12 to 16px type ramp carried mostly by weight, 44px minimum targets everywhere, and 52px targets for the decisions that matter (the host's primary action, Accept and Decline). Colour is almost absent from the interface. Ink is the only filled action colour. Pine green and garnet appear only to report a response the app has confirmed, and always alongside a glyph and words.\n\nThe objects' look (satin bodies, enamel inserts, the perforation construction rule, lighting and shadows) is owned by `docs/style-reference.md` (direction L \"Satin Enamel\"). This file covers the interface around the stage. It never restyles the objects.",
+    "keyCharacteristics": [
+      "One phone-width column holds the event, the square stage and the controls, in that order, inside one white card.",
+      "A warm tonal stack (page, stage, track, hairline, white) instead of borders and shadows.",
+      "One segmented-control pattern for every finite choice.",
+      "Status colour is earned: solid fill only after a confirmed save.",
+      "The system sans is pinned by the client specification; hierarchy comes from weight, not typeface.",
+      "A single perforation rule is the only ornament."
+    ],
+    "rules": [
+      {
+        "name": "The Solid Means Stored Rule",
+        "body": "A response choice fills with Saved Pine or Garnet only when the application has confirmed the save. While saving, or after a failed save, the chosen button stays white with a 2px border plus a 1.5px inset keyline and status-coloured text. The UI never implies persistence it has not confirmed.",
+        "section": "colors"
+      },
+      {
+        "name": "The Enamel Stays in the Object Rule",
+        "body": "The coral enamel #FF714A belongs to the objects. The interface never uses it, not for text, fills, outlines or focus (it measures 2.7:1 on white).",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Acts Rule",
+        "body": "Olive Ink is the only filled action colour. Status colours fill nothing except a saved choice, and every other control is white with a keyline or a tint of the track.",
+        "section": "colors"
+      },
+      {
+        "name": "The Weight Not Size Rule",
+        "body": "Below the event title the ramp moves in 1px steps from 12px to 16px, and hierarchy is carried by weight and ink tone. Exactly one role (the event title at 24px) jumps in size.",
+        "section": "typography"
+      },
+      {
+        "name": "The Plain Wordmark Rule",
+        "body": "\"Livetime\" is set as text (700) beside a 400 descriptor. There is no logo, monogram or brand graphic.",
+        "section": "typography"
+      },
+      {
+        "name": "The Diagnostics-Only Mono Rule",
+        "body": "Monospace appears only inside the Developer drawer. Guest- and host-facing copy is always the system sans.",
+        "section": "typography"
+      },
+      {
+        "name": "The Controls Under the Stage Rule",
+        "body": "Every control that acts on the object sits directly beneath the stage, inside the same card. In host mode the preset choice comes before the primary action, because the host picks and then acts.",
+        "section": "layout"
+      },
+      {
+        "name": "The Phone-Width Rule",
+        "body": "The invitation never grows beyond phone-to-small-tablet width (440–480px), even on a wide desktop. The object is shown at the size a guest will actually see it.",
+        "section": "layout"
+      },
+      {
+        "name": "The One Lifted Card Rule",
+        "body": "The invitation card is the only element with an ambient drop shadow. The rail, the drawer and the notices sit flat on the page.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Perforation Rule",
+        "body": "The one ornament is a single row of whole dots under the top bar: 1.35px dots on a 12px pitch in a 6px band, in Perforation Taupe, spanning the top-bar measure. It echoes the objects' inset perforation band. It appears once per page and never as a divider between sections.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do keep the object the largest thing in the first viewport: a full-width square stage inside a phone-width column (440px; 480px at ≥1280px and in the single-column layout).",
+      "Do place every control that acts on the object directly under the stage, inside the invitation card, with the host's preset choice before the primary action.",
+      "Do use the segmented control (Track Stone recess, 3px inset, white thumb with a Keyline Grey keyline) for every finite choice.",
+      "Do fill a response choice with Saved Pine or Garnet only after the save is confirmed; show pending and failed choices as a 2px status border plus a 1.5px inset keyline.",
+      "Do pair every status colour with a glyph and words: check for Accept, minus for Decline, circled alert for an error.",
+      "Do keep every target at least 44px tall, and make decision buttons 52px.",
+      "Do use the 3px Focus Cobalt (#2F54C9) outline at a 2px offset on everything focusable.",
+      "Do label simulated behaviour in the chrome itself: the \"Simulated saves\" badge and \"Sample event\" in the meta line.",
+      "Do honour reduced motion: no spinner rotation, no check draw, no poster cross-fade, and no Replay control."
+    ],
+    "donts": [
+      "Don't use the coral enamel #FF714A anywhere in the interface: not for text, fills, outlines or focus rings. It belongs to the objects.",
+      "Don't add a second lifted card or a grid of cards; the invitation card is the only surface with the ambient shadow.",
+      "Don't add ornament beyond the single perforation rule under the top bar, and don't repeat that rule as a section divider.",
+      "Don't draw a Livetime logo, monogram or brand graphic; the wordmark is plain text.",
+      "Don't outline a control (button, toggle, choice) in a grey lighter than Keyline Grey (#6F736D); Hairline Sand is for containers and rules, where text carries the affordance.",
+      "Don't set monospace outside the Developer drawer.",
+      "Don't put small labels above headings; the only small labels are fieldset legends that name a control group.",
+      "Don't restyle the objects from the interface side; their materials, perforation construction and lighting live in `docs/style-reference.md`."
+    ]
+  }
+}

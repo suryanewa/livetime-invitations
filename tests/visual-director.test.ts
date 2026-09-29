@@ -141,4 +141,56 @@ describe('VisualDirector', () => {
     };
     expect(run(30)).toBeCloseTo(run(120), 6);
   });
+
+  it('holding pauses the timeline and a seek jumps it forward, never backward', () => {
+    const { v, d, completed } = setup();
+    let hold = false;
+    let seek: number | null = null;
+    d.holding = () => hold;
+    d.takeSeek = () => { const s = seek; seek = null; return s; };
+    v.update(0);
+    v.setIntent('accept');
+    v.update(0.3);
+    const at03 = d.node.position.x;
+    hold = true;
+    v.update(1.0);
+    v.update(2.0);
+    expect(d.node.position.x).toBeCloseTo(at03);
+    hold = false;
+    seek = 1.2;
+    v.update(2.05);
+    expect(d.node.position.x).toBeCloseTo(1.2 / 1.5);
+    seek = 0.1;
+    v.update(2.1);
+    expect(d.node.position.x).toBeGreaterThan(1.2 / 1.5);
+    for (let t = 2.1; t < 3; t += 1 / 60) v.update(t);
+    expect(completed).toEqual(['accept']);
+  });
+
+  it('a late load after a completed host preparation keeps the prepared pose', () => {
+    const completed: SequenceName[] = [];
+    const v = new VisualDirector({ complete: (s) => completed.push(s) }, 'host', null);
+    v.prepareHost();
+    expect(v.state).toBe('guest-ready');
+    v.update(0);
+    expect(completed).toEqual(['host']);
+    const d = fakeDriver();
+    v.attach(d);
+    expect(v.state).toBe('guest-ready');
+    expect(d.node.position.x).toBe(0);
+    v.update(0.1);
+    expect(completed).toEqual(['host']);
+  });
+
+  it('detaching the scene mid-sequence finishes at the final state instead of sticking', () => {
+    const { v, completed } = setup();
+    v.update(0);
+    v.setIntent('accept');
+    v.update(0.4);
+    v.attach(null);
+    expect(v.isPlaying).toBe(false);
+    expect(v.state).toBe('accepted-pose');
+    v.update(0.5);
+    expect(completed).toEqual(['accept']);
+  });
 });

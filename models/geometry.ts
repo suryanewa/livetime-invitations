@@ -13,6 +13,13 @@ import {
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries as mergeBufferGeometriesRaw } from 'three/addons/utils/BufferGeometryUtils.js';
+
+function mergeBufferGeometries(list: BufferGeometry[]): BufferGeometry {
+  const merged = mergeBufferGeometriesRaw(list, false);
+  if (!merged) throw new Error('mergeParts: incompatible geometries');
+  return merged;
+}
 
 /**
  * Modelling primitives for code-authored masters. Everything is built from explicit
@@ -134,7 +141,7 @@ export function inlayPlate(w: number, h: number, depth: number, radius: number, 
   return geo;
 }
 
-export function mesh(name: string, geometry: BufferGeometry, material: Material, parent?: Object3D): Mesh {
+export function mesh(name: string, geometry: BufferGeometry, material: Material | Material[], parent?: Object3D): Mesh {
   const m = new Mesh(geometry, material);
   m.name = name;
   parent?.add(m);
@@ -191,4 +198,36 @@ export function ringPositions(count: number, radius: number, y: number, phase = 
     const a = phase + (i / count) * Math.PI * 2;
     return new Vector3(Math.cos(a) * radius, y, Math.sin(a) * radius);
   });
+}
+
+/**
+ * Signature perforation row (direction B/L): whole dots only, spacing equal to band height,
+ * centred by construction. Returns a plate exactly N·pitch long; callers leave at least one
+ * pitch of plain surface at each end. Material groups: 0 = faces (perforated), 1 = sides
+ * (plain host material), so bevel walls never smear the dot texture.
+ */
+export function perforationRow(available: number, pitch: number, depth = 0.004): { geometry: ExtrudeGeometry; count: number; length: number } {
+  const count = Math.max(1, Math.floor(available / pitch));
+  const length = count * pitch;
+  return { geometry: inlayPlate(length, pitch, depth, pitch * 0.5, pitch), count, length };
+}
+
+/**
+ * Merge same-material parts into one mesh (one draw call). Each part is placed by its own
+ * position/rotation before merging; attributes are normalised to position/normal/uv.
+ */
+export function mergeParts(parts: { geometry: BufferGeometry; position?: [number, number, number]; rotationX?: number }[]): BufferGeometry {
+  const prepared = parts.map(({ geometry, position, rotationX }) => {
+    let g = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+    if (!g.getAttribute('uv')) g.setAttribute('uv', new BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2));
+    for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
+    g.clearGroups();
+    if (rotationX) g.rotateX(rotationX);
+    if (position) g.translate(...position);
+    geometry.dispose();
+    return g;
+  });
+  const merged = mergeBufferGeometries(prepared);
+  prepared.forEach((g) => g.dispose());
+  return merged;
 }

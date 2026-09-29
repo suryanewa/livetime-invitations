@@ -16,6 +16,12 @@ export interface SceneDriver {
   pose(pose: CanonicalPose): void;
   sample(sequence: SequenceName, t: number): void;
   settle?(): void;
+  /** Optional manipulation holds the timeline (only it may extend the choreography). */
+  holding?(): boolean;
+  /** One-shot request to jump the timeline (e.g. early scan on contact). */
+  takeSeek?(): number | null;
+  /** Recompute derived state (strap curves, shadows) from the current node transforms. */
+  refresh?(): void;
 }
 
 export interface VisualHooks {
@@ -82,11 +88,17 @@ export class VisualDirector {
 
   /** Scene loaded (or unloaded). A late load shows the current final pose without replay. */
   attach(driver: SceneDriver | null): void {
+    // Detaching mid-sequence (context loss, static tier) completes the intent visually so
+    // the state never sticks at *-playing.
+    if (!driver && this.playback) this.finishNow();
     this.playback = null;
     this.driver = driver;
     if (driver) {
-      this.set(this.restingState());
-      driver.pose(this.restingPose());
+      // A late load shows the settled target: a host preparation that already completed
+      // stays prepared rather than resetting to host-ready.
+      const prepared = this.mode === 'host' && this.visual === 'guest-ready';
+      this.set(prepared ? 'guest-ready' : this.restingState());
+      driver.pose(prepared ? 'guest-ready' : this.restingPose());
       driver.settle?.();
     }
   }
@@ -126,6 +138,7 @@ export class VisualDirector {
     this.driver.pose('guest-ready');
     const to = capture(this.driver.animatedNodes);
     this.restore(from);
+    this.driver.refresh?.();
     this.playback = { kind: 'blend', start: this.lastNow, from, to, next: sequence };
     this.set(intent === 'accept' ? 'accept-playing' : 'decline-playing');
   }
@@ -150,6 +163,7 @@ export class VisualDirector {
 
   /** Advance to active time `now`. Returns true while frames are required. */
   update(now: number): boolean {
+    const dt = Math.max(0, now - this.lastNow);
     this.lastNow = now;
     if (this.pendingSnapComplete) {
       const s = this.pendingSnapComplete;
@@ -167,9 +181,13 @@ export class VisualDirector {
         n.quaternion.slerpQuaternions(a.q, b.q, k);
         n.scale.lerpVectors(a.s, b.s, k);
       }
+      this.driver.refresh?.();
       if (k >= 1) this.startSequence(pb.next, now);
       return true;
     }
+    if (this.driver.holding?.()) pb.start += dt;
+    const seek = this.driver.takeSeek?.();
+    if (seek !== null && seek !== undefined) pb.start = Math.min(pb.start, now - seek);
     const duration = this.driver.durations[pb.sequence];
     const t = now - pb.start;
     if (t >= duration) {

@@ -12,6 +12,7 @@ Owner: design.inc. Every mesh, texture, font, environment and sound used at runt
 - **Signature detail.** UVs on signature surfaces map one UV unit to one tile in scene units, so stipple or perforation density is identical on every object.
 - **Contact shadows** are named `<object>_shadow`, move with their object, and fade and spread with height.
 - **Posters.** WebP per scene × visually distinct preset × {guest-ready, accepted, declined}, same framing/background as the renderer, generated from the browser renderer. Only the currently needed poster is fetched.
+- **Runtime binding.** GLB materials are named placeholders; `bindLibraryMaterials` re-binds them from the locked library at load, so tokens change without re-exporting geometry.
 - **Masters.** Models are code-authored parametric sources in `models/` (see below). Selected high-resolution exports and approved style frames go to `~/Creative/Livetime/invitation-interactions/`.
 
 ## Why code-authored masters
@@ -29,7 +30,10 @@ This machine has no Blender installation, and the handoff transfers no DCC files
 | Ring normal maps (pad, record) | design.inc, procedural | Original | — | `src/render/textures.ts` | Canvas texture generated at load |
 | Contact-shadow falloff | design.inc, procedural | Original | — | `src/render/contactShadow.ts` | Canvas texture generated at load |
 | Cake, tray, candles, flames | design.inc | Original | — | `models/cake.ts` | Study: runtime geometry. Production: `assets/scenes/birthday/` (M4) |
-| Keycard, clip, lanyard, scanner | design.inc | Original | — | `models/keycard.ts`, `models/lanyard.ts` | Study: runtime geometry. Production: `assets/scenes/business/` (M2) |
+| Keycard, clip, scanner (static geometry) | design.inc | Original | — | `models/keycard.ts` (`buildKeycardGeometry`) | `assets/scenes/business/business.glb` — `pnpm models`: GLTFExporter → gltf-transform dedup/weld/prune/quantise (POSITION 14-bit, NORMAL 10-bit, UV float) · 504.4 KiB raw / 111.7 KiB gz · 33 nodes · 22 primitives · both templates share geometry (material swap only) |
+| Lanyard strap curves, contact shadows, status/symbol materials | design.inc | Original | Runtime rig | `models/keycard.ts` (`rigKeycard`), `models/lanyard.ts` | Generated at load; not in the GLB |
+| Business posters (light/dark × host-ready, guest-ready, accepted, declined) | design.inc, browser-rendered | Original | — | `pnpm capture business` (shipping renderer, fixed camera, reduced-motion canonical poses) | `assets/scenes/business/posters/*.webp`, 720², q0.86, 12–15 KB each |
+| Collection-rail thumbnails (5) | design.inc, browser-rendered | Original | Study models of direction L | `pnpm capture thumbs` | `assets/ui/collection/*.webp`, 192², 2–3.5 KB each |
 | Record player, basketball/hoop, covered dish blockouts | design.inc | Original | Study blockouts only | `models/blockouts.ts` | Study only |
 | Three.js RoundedBoxGeometry, BufferGeometryUtils, LatheGeometry | three.js authors | MIT | Used as library code | `node_modules/three` | Bundled |
 | UI typography | Platform system fonts (SF Pro, Segoe UI, Roboto) | OS-provided, not redistributed | — | — | None shipped |

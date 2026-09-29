@@ -1,44 +1,365 @@
-import '../ui/shell.css';
-import { buildKeycard } from '../../models/keycard.ts';
-import { MaterialLibrary } from '../render/materials.ts';
-import { Stage } from '../render/stage.ts';
-
-/**
- * Milestone 0 skeleton: one stage, readable controls at 320 px, and a poster rendered from
- * the same camera to prove matching framing. Replaced by the full showcase in Milestone 2.
+/*
+ * DIRECTION CONTRACT (showcase shell)
+ * THESIS: the object is the hero; the interface is a precise instrument beside it. Refuses
+ *   the dashboard-of-cards demo page.
+ * OWN-WORLD: warm white page, #F4F1EB stage, ink type, segmented controls on a #EEECE6 track,
+ *   one perforation-dot rule echoing the objects' signature. System sans (pinned by spec).
+ * STORY: host prepares the card → previews as guest → guest answers → simulated save status.
+ * FIRST VIEWPORT: phone-width invitation (event, stage, controls) left; the collection rail
+ *   and a collapsed Developer drawer right. Controls sit directly under the stage; in host
+ *   mode the preset choice precedes the primary action because the host picks, then acts.
+ * FORM: shaped directly from a precisely specified brief (the skill's allowance for precise
+ *   requests; no concept roll was run, so no seed key exists).
+ * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review,
+ *   the verdict, and DESIGN.md
  */
+import '../ui/shell.css';
+import './showcase.css';
+import { createInvitation, type InvitationHandle, type InvitationState, type SceneRegistry } from '../core/controller.ts';
+import { presetOf } from '../core/config.ts';
+import type { Category, Mode, ResponseRequest, SceneConfig } from '../core/types.ts';
+import { DEFAULT_CONFIGS } from '../core/types.ts';
+import { createGuestControls, ICONS } from '../ui/guestControls.ts';
+import type { Tier } from '../render/quality.ts';
+import { MockResponseAdapter, type MockMode, MOCK_DELAYS } from './mockAdapter.ts';
+import { CATEGORY_LABEL, EVENTS, HOST_ACTION, LIVE_CATEGORIES, OBJECT_LABEL, POSE_TEXT, PRESETS } from './fixtures.ts';
+import { posterUrl } from './posters.ts';
+import { collectionThumb } from './collection.ts';
+
+const scenes: SceneRegistry = {
+  business: () => import('../scenes/business/index.ts').then((m) => m.businessScene),
+};
+
 const app = document.getElementById('app')!;
 app.innerHTML = `
-  <main class="lt-invite" style="max-width:420px;margin:0 auto;padding-top:24px;padding-bottom:40px">
-    <div>
-      <p class="lt-invite__eyebrow">Milestone 0 · setup skeleton</p>
-      <h1 class="lt-invite__title">Stage and poster framing check</h1>
-      <p class="lt-invite__meta">Live canvas above, poster from the same camera below.</p>
-    </div>
-    <div class="lt-stage" id="live"></div>
-    <div class="lt-stage" id="poster"></div>
-    <div class="lt-choices">
-      <button class="lt-choice" type="button" data-response="accept" aria-pressed="false">Accept</button>
-      <button class="lt-choice" type="button" data-response="decline" aria-pressed="false">Decline</button>
-    </div>
-    <p class="lt-status" role="status">Controls are inert in the skeleton.</p>
-  </main>`;
+  <div class="sc">
+    <header class="sc-top">
+      <p class="sc-brand"><strong>Livetime</strong><span>Invitation interactions</span></p>
+      <div class="sc-top-actions">
+        <span class="sc-badge" title="This demo never contacts a real RSVP service">Simulated saves</span>
+        <button class="sc-motion" type="button" aria-pressed="true" data-action="motion">
+          <span class="sc-motion__label">Motion</span><span class="sc-motion__value" aria-hidden="true">On</span>
+        </button>
+      </div>
+    </header>
+    <div class="sc-rule" aria-hidden="true"></div>
+    <main class="sc-main">
+      <section class="sc-preview" aria-label="Invitation preview">
+        <div class="sc-seg sc-mode" role="group" aria-label="Preview as">
+          <button type="button" data-mode="host" aria-pressed="true">Host</button>
+          <button type="button" data-mode="guest" aria-pressed="false">Guest</button>
+        </div>
+        <article class="sc-card">
+          <header class="sc-event">
+            <h1 class="sc-event__title" data-bind="title"></h1>
+            <p class="sc-event__meta"><span data-bind="when"></span><span aria-hidden="true"> · </span><span data-bind="where"></span><span aria-hidden="true"> · </span><span class="sc-sample">Sample event</span></p>
+          </header>
+          <div class="sc-stage" data-bind="stage"></div>
+          <div class="sc-panel" data-panel="host">
+            <fieldset class="sc-field">
+              <legend>Card template</legend>
+              <div class="sc-seg" data-bind="presets"></div>
+            </fieldset>
+            <div class="sc-host-actions">
+              <button class="sc-primary" type="button" data-action="prepare"></button>
+              <button class="sc-secondary" type="button" data-action="preview">Preview as guest</button>
+            </div>
+            <p class="sc-note">Changing the template resets the preview. Nothing is sent to guests from this page.</p>
+          </div>
+          <div class="sc-panel" data-panel="guest" hidden></div>
+          <div class="sc-graphics" data-bind="graphics" hidden>
+            <p data-bind="graphics-text"></p>
+            <button class="sc-quiet-btn" type="button" data-action="retry-3d">Try 3D again</button>
+          </div>
+        </article>
+      </section>
 
-const live = document.getElementById('live')!;
-const posterBox = document.getElementById('poster')!;
-const stage = Stage.create();
-if (!stage) {
-  live.textContent = 'WebGL2 unavailable — poster fallback path.';
-} else {
-  const model = buildKeycard({ lib: new MaterialLibrary('A') });
-  live.append(stage.canvas);
-  stage.setContent(model.root, model.bounds);
-  const size = () => live.clientWidth;
-  stage.resize(size(), size(), 1.5);
-  stage.render();
-  const img = new Image();
-  img.alt = 'Poster: badge on lanyard above scanner';
-  img.src = stage.snapshot(size(), size(), 2, 'image/webp', 0.9);
-  posterBox.append(img);
-  new ResizeObserver(() => { stage.resize(size(), size(), 1.5); stage.render(); }).observe(live);
+      <aside class="sc-side">
+        <section class="sc-collection" aria-labelledby="sc-collection-h">
+          <h2 id="sc-collection-h">The collection</h2>
+          <p class="sc-lede">Five invitation scenes built as one family of small objects. Guests choose first; the object acts out their answer.</p>
+          <ul class="sc-rail" data-bind="rail"></ul>
+        </section>
+
+        <details class="sc-dev">
+          <summary><span>Developer</span><span class="sc-dev__hint">State, simulated saves and fallbacks</span></summary>
+          <div class="sc-dev__body">
+            <fieldset class="sc-field">
+              <legend>Simulated save</legend>
+              <div class="sc-seg sc-seg--small" data-bind="mock">
+                <button type="button" data-mock="normal" aria-pressed="true">Normal <small>${MOCK_DELAYS.normal} ms</small></button>
+                <button type="button" data-mock="slow" aria-pressed="false">Slow <small>3 s</small></button>
+                <button type="button" data-mock="fail" aria-pressed="false">Fail</button>
+              </div>
+            </fieldset>
+            <fieldset class="sc-field">
+              <legend>Render quality</legend>
+              <div class="sc-seg sc-seg--small" data-bind="tier">
+                <button type="button" data-tier="high" aria-pressed="false">High</button>
+                <button type="button" data-tier="normal" aria-pressed="true">Normal</button>
+                <button type="button" data-tier="low" aria-pressed="false">Low</button>
+                <button type="button" data-tier="static" aria-pressed="false">Static</button>
+              </div>
+            </fieldset>
+            <dl class="sc-state" data-bind="state"></dl>
+            <div class="sc-dev__actions">
+              <button class="sc-quiet-btn" type="button" data-action="reset">Reset demo</button>
+              <button class="sc-quiet-btn" type="button" data-action="lose-context">Simulate graphics loss</button>
+              <button class="sc-quiet-btn" type="button" data-action="retry-3d">Try 3D again</button>
+            </div>
+            <h3 class="sc-dev__h">Integration events</h3>
+            <ol class="sc-log" data-bind="log" aria-live="off"></ol>
+          </div>
+        </details>
+      </aside>
+    </main>
+  </div>`;
+
+const $ = <T extends Element = HTMLElement>(sel: string) => app.querySelector<T>(sel)!;
+const $$ = <T extends Element = HTMLElement>(sel: string) => [...app.querySelectorAll<T>(sel)];
+
+let category: Category = 'business';
+let config: SceneConfig = DEFAULT_CONFIGS.business;
+let mode: Mode = 'host';
+const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let motionOn = !motionQuery.matches;
+/** Once the viewer uses the toggle it wins; until then the OS preference is followed live. */
+let motionOverridden = false;
+let mockMode: MockMode = 'normal';
+let controller: InvitationHandle | null = null;
+let adapter: MockResponseAdapter | null = null;
+let hostPrepared = false;
+/** Dev/test: ?saved=accept|decline simulates an authoritative response loaded from the app. */
+const savedParam = new URLSearchParams(location.search).get('saved');
+let initialResponse: 'accept' | 'decline' | undefined = savedParam === 'accept' || savedParam === 'decline' ? savedParam : undefined;
+if (initialResponse) mode = 'guest';
+const requests: ResponseRequest[] = [];
+const events: string[] = [];
+
+const guest = createGuestControls({
+  onChoose: (r) => controller?.chooseResponse(r),
+  onRetry: () => controller?.retryResponse(),
+  onReplay: () => controller?.replay(),
+});
+$('[data-panel="guest"]').append(guest.element);
+
+// ── Integration event log (developer drawer) ───────────────────────────────
+const logEl = $('[data-bind="log"]');
+function log(kind: string, detail: string) {
+  const li = document.createElement('li');
+  const time = new Date().toLocaleTimeString([], { hour12: false });
+  li.innerHTML = `<time>${time}</time><b>${kind}</b><span>${detail}</span>`;
+  events.push(`${kind} ${detail}`);
+  logEl.prepend(li);
+  while (logEl.children.length > 10) logEl.lastElementChild!.remove();
 }
+
+// ── Controller lifecycle ───────────────────────────────────────────────────
+function mount() {
+  controller?.dispose();
+  adapter?.dispose();
+  hostPrepared = false;
+  const stage = $('[data-bind="stage"]');
+  stage.replaceChildren();
+  adapter = new MockResponseAdapter((result) => {
+    log('result', result.status === 'saved' ? `${result.requestId} saved ${result.response}` : `${result.requestId} error`);
+    controller?.applyResponseResult(result);
+  });
+  adapter.mode = mockMode;
+  if (initialResponse) adapter.stored = initialResponse;
+  controller = createInvitation({
+    mount: stage,
+    config,
+    mode,
+    initialResponse,
+    direction: 'L',
+    reducedMotion: motionOverridden ? !motionOn : undefined,
+    scenes,
+    posterFor: posterUrl,
+    describePose: (c, pose) => POSE_TEXT[c][pose],
+    onResponseRequested: (req) => {
+      requests.push(req);
+      log('request', `${req.requestId} ${req.response}`);
+      adapter?.submit(req);
+    },
+    onVisualComplete: ({ sequence }) => {
+      log('visual', `${sequence} complete`);
+      if (sequence === 'host') hostPrepared = true;
+      render(controller!.getState());
+    },
+    onResourceState: ({ state, reason }) => log('resource', `${state} · ${reason}`),
+    onIntegrationError: (e) => log('integration', e.kind),
+    onStateChange: render,
+  });
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────────
+function renderStatic() {
+  const ev = EVENTS[category];
+  $('[data-bind="title"]').textContent = ev.title;
+  $('[data-bind="when"]').textContent = ev.when;
+  $('[data-bind="where"]').textContent = ev.where;
+  $('[data-action="prepare"]').textContent = HOST_ACTION[category];
+
+  const presets = $('[data-bind="presets"]');
+  presets.replaceChildren(
+    ...PRESETS[category].map((p) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = p.label;
+      b.dataset.preset = presetOf(p.config);
+      b.addEventListener('click', () => {
+        config = p.config;
+        hostPrepared = false;
+        controller?.setConfig(config);
+        syncPresets();
+      });
+      return b;
+    }),
+  );
+  syncPresets();
+
+  const rail = $('[data-bind="rail"]');
+  rail.replaceChildren(
+    ...(['party', 'birthday', 'sports', 'dinner', 'business'] as Category[]).map((c) => {
+      const li = document.createElement('li');
+      const live = LIVE_CATEGORIES.includes(c);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sc-rail__item';
+      b.setAttribute('aria-pressed', String(c === category));
+      if (!live) b.setAttribute('aria-disabled', 'true');
+      b.innerHTML = `
+        <img src="${collectionThumb(c)}" alt="" width="96" height="96" loading="lazy" decoding="async" />
+        <span class="sc-rail__text">
+          <span class="sc-rail__name">${CATEGORY_LABEL[c]}</span>
+          <span class="sc-rail__obj">${OBJECT_LABEL[c]}</span>
+        </span>
+        <span class="sc-rail__tag">${live ? (c === category ? 'Showing' : 'Live') : 'In production'}</span>`;
+      b.addEventListener('click', () => {
+        if (!live || c === category) return;
+        category = c;
+        config = DEFAULT_CONFIGS[c];
+        hostPrepared = false;
+        controller?.setConfig(config);
+        renderStatic();
+      });
+      li.append(b);
+      return li;
+    }),
+  );
+}
+
+function syncPresets() {
+  const current = presetOf(config);
+  $$<HTMLButtonElement>('[data-bind="presets"] button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === current)));
+}
+
+function render(state: InvitationState) {
+  mode = state.mode;
+  $$<HTMLButtonElement>('.sc-mode button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  ($('[data-panel="host"]') as HTMLElement).hidden = mode !== 'host';
+  ($('[data-panel="guest"]') as HTMLElement).hidden = mode !== 'guest';
+  const prepare = $<HTMLButtonElement>('[data-action="prepare"]');
+  const playing = state.visual === 'host-playing';
+  prepare.textContent = hostPrepared ? `${HOST_ACTION[category]} again` : HOST_ACTION[category];
+  prepare.disabled = playing;
+  $<HTMLButtonElement>('[data-action="preview"]').dataset.emphasis = hostPrepared ? 'true' : 'false';
+  guest.update(state);
+
+  const graphics = $('[data-bind="graphics"]');
+  const unavailable = state.resource === 'fallback' || state.canRetryGraphics;
+  graphics.hidden = !unavailable;
+  $('[data-bind="graphics-text"]').textContent =
+    state.resource === 'fallback'
+      ? 'Showing a still image. Your response still works.'
+      : 'The 3D scene is taking a while. Your response still works.';
+
+  $$<HTMLButtonElement>('[data-bind="tier"] button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tier === state.tier)));
+  const rows: [string, string][] = [
+    ['Resource', `${state.resource} · ${state.resourceReason}`],
+    ['Visual', state.visual],
+    ['Response', `${state.response.intent ?? '—'} · ${state.response.persistence}`],
+    ['Request', state.response.latestRequestId ?? '—'],
+    ['Quality', state.tier],
+    ['Motion', state.reducedMotion ? 'reduced' : 'full'],
+    ['Stored (mock)', adapter?.stored ?? '—'],
+  ];
+  $('[data-bind="state"]').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+}
+
+// ── Wiring ─────────────────────────────────────────────────────────────────
+$$<HTMLButtonElement>('.sc-mode button').forEach((b) =>
+  b.addEventListener('click', () => controller?.setMode(b.dataset.mode as Mode)),
+);
+$('[data-action="prepare"]').addEventListener('click', () => controller?.prepareHost());
+$('[data-action="preview"]').addEventListener('click', () => controller?.setMode('guest'));
+
+const motionBtn = $<HTMLButtonElement>('[data-action="motion"]');
+function syncMotion() {
+  motionBtn.setAttribute('aria-pressed', String(motionOn));
+  motionBtn.querySelector('.sc-motion__value')!.textContent = motionOn ? 'On' : 'Off';
+}
+motionBtn.addEventListener('click', () => {
+  motionOn = !motionOn;
+  motionOverridden = true;
+  syncMotion();
+  controller?.setReducedMotion(!motionOn);
+});
+motionQuery.addEventListener('change', () => {
+  if (motionOverridden) return;
+  motionOn = !motionQuery.matches;
+  syncMotion();
+});
+
+$$<HTMLButtonElement>('[data-bind="mock"] button').forEach((b) =>
+  b.addEventListener('click', () => {
+    mockMode = b.dataset.mock as MockMode;
+    if (adapter) adapter.mode = mockMode;
+    $$<HTMLButtonElement>('[data-bind="mock"] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    log('mock', `save mode ${mockMode}`);
+  }),
+);
+$$<HTMLButtonElement>('[data-bind="tier"] button').forEach((b) =>
+  b.addEventListener('click', () => controller?.setQualityTier(b.dataset.tier as Tier)),
+);
+$('[data-action="reset"]').addEventListener('click', () => {
+  logEl.replaceChildren();
+  initialResponse = undefined;
+  mount();
+  log('demo', 'reset');
+});
+$$('[data-action="retry-3d"]').forEach((b) => b.addEventListener('click', () => controller?.retryGraphics()));
+$('[data-action="lose-context"]').addEventListener('click', () => {
+  const canvas = $('[data-bind="stage"] canvas') as HTMLCanvasElement | null;
+  const gl = canvas?.getContext('webgl2');
+  gl?.getExtension('WEBGL_lose_context')?.loseContext();
+  log('demo', 'graphics context lost (simulated)');
+});
+
+// Tooling hook (dev builds only): drives deterministic captures and posters.
+if (import.meta.env.DEV) {
+  (window as unknown as { __showcase: unknown }).__showcase = {
+    get controller() {
+      return controller;
+    },
+    get state() {
+      return controller?.getState();
+    },
+    get adapter() {
+      return adapter;
+    },
+    requests,
+    events,
+    setConfig(next: SceneConfig) {
+      config = next;
+      controller?.setConfig(next);
+      syncPresets();
+    },
+  };
+}
+
+void ICONS;
+syncMotion();
+renderStatic();
+mount();

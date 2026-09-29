@@ -115,6 +115,28 @@ export function perforationMaps(): { map: Texture; normalMap: Texture } {
   return { map, normalMap };
 }
 
+/** Perforations through a dark body: ink band, holes showing the light stage behind. */
+export function perforationDarkMap(): Texture {
+  return cached('perf-dark', () => {
+    const size = 128;
+    const r = 0.26;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#25282B';
+    ctx.fillRect(0, 0, size, size);
+    const g = ctx.createRadialGradient(size / 2, size / 2 - 3, 0, size / 2, size / 2, size * r);
+    g.addColorStop(0, '#EDE7DB');
+    g.addColorStop(0.7, '#D9D2C4');
+    g.addColorStop(1, '#8B857B');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size * r, 0, Math.PI * 2);
+    ctx.fill();
+    return dataTexture(canvas, true, ClampToEdgeWrapping);
+  });
+}
+
 /** Woven strap: a tight twill so the lanyard reads as fabric at phone scale. */
 export function weaveNormal(): Texture {
   return cached('weave', () => {
@@ -139,6 +161,14 @@ export function ringNormal(rings: number): Texture {
     t.wrapS = ClampToEdgeWrapping;
     return t;
   });
+}
+
+/**
+ * Free GPU copies of cached textures without discarding them: a disposed renderer's
+ * listeners are dropped and any live renderer re-uploads lazily on next use.
+ */
+export function releaseCachedTextureGpu(): void {
+  for (const t of cache.values()) t.dispose();
 }
 
 export function disposeTextureCache(): void {

@@ -57,6 +57,8 @@ export interface InvitationHandle extends InvitationController {
   getState(): InvitationState;
   retryGraphics(): void;
   setQualityTier(tier: Tier): void;
+  /** Tooling only (posters, review captures): render the current pose to an image URL. */
+  captureStill(size: number, dpr?: number, type?: string, quality?: number): string | null;
 }
 
 export const LOAD_TIMEOUT_MS = 6000;
@@ -74,6 +76,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   let canRetryGraphics = false;
   let disposed = false;
   let restorationAttempted = false;
+  let contextLost = false;
 
   const media = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   let explicitReduced: boolean | undefined = options.reducedMotion;
@@ -109,10 +112,12 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   root.append(poster, posterText, canvasHost);
 
   poster.addEventListener('error', () => {
+    posterFailed = true;
     poster.hidden = true;
-    posterText.hidden = false;
+    if (resource !== 'ready') posterText.hidden = false;
   });
   poster.addEventListener('load', () => {
+    posterFailed = false;
     posterText.hidden = true;
   });
 
@@ -174,32 +179,44 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     emit();
   }
 
+  let posterFailed = false;
+  /** The canvas replaces the poster only after it has actually drawn (hidden tabs never do). */
+  let drawnSinceReady = false;
   function updatePoster() {
-    const showPoster = resource !== 'ready';
+    if (disposed) return;
+    const showPoster = resource !== 'ready' || !drawnSinceReady;
     const pose = director.targetPose;
     const url = options.posterFor?.(config.category, presetOf(config), pose) ?? null;
     posterText.textContent = options.describePose?.(config.category, pose) ?? '';
     if (showPoster && url) {
       if (poster.getAttribute('src') !== url) {
+        posterFailed = false;
         poster.hidden = false;
         poster.src = url;
+      } else {
+        poster.hidden = posterFailed;
+        posterText.hidden = !posterFailed;
       }
     } else if (showPoster) {
       poster.hidden = true;
       poster.removeAttribute('src');
       posterText.hidden = !posterText.textContent;
     }
+    if (!showPoster) posterText.hidden = true;
     poster.classList.toggle('is-hidden', !showPoster);
     canvasHost.classList.toggle('is-visible', !showPoster);
   }
 
   // ── Scene lifecycle ───────────────────────────────────────────────────────
   function releaseScene() {
+    drawnSinceReady = false;
     endPointer(true);
+    grab.hidden = true;
     director.attach(null);
     stage?.setContent(null);
     scene?.dispose();
     scene = null;
+    simulate = null;
   }
 
   async function loadScene() {
@@ -214,6 +231,10 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     }
     if (quality.tier === 'static') {
       setResource('fallback', 'performance-static');
+      return;
+    }
+    if (contextLost) {
+      setResource('fallback', 'context-lost');
       return;
     }
 
@@ -252,20 +273,36 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
         return;
       }
       scene = instance;
+      // A preset chosen while the asset was loading wins over the one the load started with.
+      instance.setConfig(config);
       stage.setContent(instance.root, instance.bounds);
       resize();
+      library().setLowDetail(quality.tier === 'low');
+      let shaderError = false;
+      stage.renderer.debug.onShaderError = () => {
+        shaderError = true;
+      };
       try {
         if (instance.precompile) await instance.precompile(stage.renderer, stage.camera);
         else await stage.renderer.compileAsync(stage.scene, stage.camera);
+        // compileAsync resolves even when linking failed; force the link check now so a
+        // broken program becomes a poster fallback instead of a blank stage.
+        for (const program of stage.renderer.info.programs ?? []) (program as { getUniforms(): unknown }).getUniforms();
       } catch {
-        throw Object.assign(new Error('shader'), { reason: 'shader-failure' as const });
+        shaderError = true;
       }
+      stage.renderer.debug.onShaderError = null;
       if (abort.signal.aborted || disposed) return;
+      if (shaderError) throw Object.assign(new Error('shader'), { reason: 'shader-failure' as const });
+      if (contextLost || stage.renderer.getContext().isContextLost()) {
+        throw Object.assign(new Error('context'), { reason: 'context-lost' as const });
+      }
       director.setReducedMotion(reduced());
       director.attach(instance);
       if (loadTimer) clearTimeout(loadTimer);
       const late = performance.now() - startedAt > LATE_LOAD_MS;
       canvasHost.style.transition = late || reduced() ? 'none' : `opacity ${ENTRANCE_MS}ms ease-out`;
+      canRetryGraphics = false;
       setResource('ready', 'loaded');
       requestFrame();
     } catch (err) {
@@ -298,8 +335,13 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
 
   function onContextLost(event: Event) {
     event.preventDefault();
+    contextLost = true;
+    loadAbort?.abort();
+    loadAbort = null;
+    if (loadTimer) clearTimeout(loadTimer);
     cancelAnimationFrame(raf);
     raf = 0;
+    looping = false;
     releaseScene();
     setResource('fallback', 'context-lost');
   }
@@ -308,32 +350,50 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     if (restorationAttempted || disposed) return;
     restorationAttempted = true;
     destroyStage();
+    contextLost = false;
     void loadScene().then(() => {
       if (resource === 'ready') options.onResourceState?.({ state: 'ready', reason: 'context-restored' });
     });
   }
 
   // ── Render loop: on demand only ───────────────────────────────────────────
+  let looping = false;
   function requestFrame() {
     if (raf || disposed || document.hidden) return;
+    // Waking from idle: reset the clock baseline so the first frame of a new sequence samples
+    // t = 0 instead of jumping ahead by the clamped idle gap.
+    if (!looping) clock.resume();
+    looping = true;
     raf = requestAnimationFrame(frame);
   }
 
+  let simulate: ((dt: number) => void) | null = null;
   function frame(now: number) {
     raf = 0;
-    if (!stage || !scene || resource !== 'ready') return;
+    if (!stage || !scene || resource !== 'ready') {
+      // No live scene: still deliver queued snap completions, then go idle.
+      looping = false;
+      director.update(clock.seconds);
+      return;
+    }
     const dt = clock.tick();
     const playing = director.update(clock.seconds);
     let settling = false;
     if (scene.simulate && !reduced()) {
-      const sim = scene.simulate.bind(scene);
-      stepper.advance(dt, sim);
+      if (!simulate) simulate = scene.simulate.bind(scene);
+      stepper.advance(dt, simulate);
       settling = scene.settling?.() ?? false;
     }
+    scene.beforeRender?.();
     stage.render();
+    if (!drawnSinceReady) {
+      drawnSinceReady = true;
+      updatePoster();
+    }
     positionGrabTarget();
 
     const active = playing || settling || pointerActive;
+    looping = active;
     if (active) {
       if (warm && lastFrameAt) quality.record(now - lastFrameAt, now);
       warm = true;
@@ -356,10 +416,19 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       setResource('fallback', 'performance-static');
       return;
     }
+    library().setLowDetail(next === 'low');
     resize();
+    redraw();
     options.onResourceState?.({ state: resource, reason: 'reduced-quality' });
     emit();
     requestFrame();
+  }
+
+  /** A resize clears the drawing buffer; draw the current pose at once so no blank frame shows. */
+  function redraw() {
+    if (!stage || !scene || resource !== 'ready' || document.hidden) return;
+    scene.beforeRender?.();
+    stage.render();
   }
 
   function resize() {
@@ -371,6 +440,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
 
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
     resize();
+    redraw();
     requestFrame();
   }) : null;
   resizeObserver?.observe(root);
@@ -568,26 +638,44 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     retryGraphics() {
       if (disposed || resource === 'ready') return;
       if (quality.tier === 'static') quality.tier = 'low';
+      contextLost = false;
       destroyStage();
       void loadScene();
     },
 
     setQualityTier(tier: Tier) {
+      if (disposed) return;
       quality.tier = tier;
       quality.pending = null;
       if (tier === 'static') {
+        loadAbort?.abort();
+        loadAbort = null;
+        if (loadTimer) clearTimeout(loadTimer);
         releaseScene();
         setResource('fallback', 'performance-static');
       } else if (resource !== 'ready') {
+        if (contextLost) destroyStage();
+        contextLost = false;
         void loadScene();
       } else {
+        library().setLowDetail(tier === 'low');
         resize();
+        redraw();
         requestFrame();
       }
       emit();
     },
 
     getState,
+
+    captureStill(size: number, dpr = 2, type = 'image/png', quality?: number) {
+      if (!stage || !scene || resource !== 'ready') return null;
+      scene.beforeRender?.();
+      const url = stage.snapshot(size, size, dpr, type, quality);
+      resize();
+      requestFrame();
+      return url;
+    },
 
     dispose() {
       if (disposed) return;

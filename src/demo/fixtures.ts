@@ -1,0 +1,110 @@
+import type { Category, SceneConfig } from '../core/types.ts';
+
+/** Fixture data for the standalone showcase. Nothing here is a real event or customer. */
+
+export interface EventFixture {
+  title: string;
+  when: string;
+  where: string;
+}
+
+export const EVENTS: Record<Category, EventFixture> = {
+  party: { title: 'Rooftop listening party', when: 'Fri, Oct 23 · 9:00 PM', where: 'Greenpoint Terrace' },
+  birthday: { title: "Alex's birthday", when: 'Sat, Oct 17 · 7:00 PM', where: 'The Loft, 214 Grand St' },
+  sports: { title: 'Sunday pickup game', when: 'Sun, Oct 25 · 10:00 AM', where: 'West 4th Street Courts' },
+  dinner: { title: 'Supper club: autumn menu', when: 'Thu, Nov 5 · 7:30 PM', where: 'Studio kitchen, 12 Orchard St' },
+  business: { title: 'Partner Summit — Welcome Reception', when: 'Thu, Nov 12 · 6:30 PM', where: 'Hudson Yards, New York' },
+};
+
+export const CATEGORY_LABEL: Record<Category, string> = {
+  party: 'Party',
+  birthday: 'Birthday',
+  sports: 'Sports',
+  dinner: 'Dinner',
+  business: 'Business',
+};
+
+export const OBJECT_LABEL: Record<Category, string> = {
+  party: 'Record player',
+  birthday: 'Cake',
+  sports: 'Basketball',
+  dinner: 'Covered dish',
+  business: 'Keycard',
+};
+
+export const HOST_ACTION: Record<Category, string> = {
+  party: 'Place record',
+  birthday: 'Place candles',
+  sports: 'Pass ball',
+  dinner: 'Cover dish',
+  business: 'Attach card',
+};
+
+export const SONGS = [
+  { id: 'sample-track-a', title: 'Sample track A' },
+  { id: 'sample-track-b', title: 'Sample track B' },
+];
+
+export interface PresetOption {
+  label: string;
+  config: SceneConfig;
+}
+
+export const PRESETS: Record<Category, PresetOption[]> = {
+  party: [
+    { label: 'Coral label', config: { category: 'party', songId: 'sample-track-a', label: 'coral' } },
+    { label: 'Cobalt label', config: { category: 'party', songId: 'sample-track-a', label: 'cobalt' } },
+  ],
+  birthday: [
+    { label: 'Vanilla', config: { category: 'birthday', cake: 'vanilla' } },
+    { label: 'Cocoa', config: { category: 'birthday', cake: 'cocoa' } },
+  ],
+  sports: [
+    { label: 'Orange ball', config: { category: 'sports', ball: 'orange' } },
+    { label: 'Cream ball', config: { category: 'sports', ball: 'cream' } },
+  ],
+  dinner: [
+    { label: 'Pasta', config: { category: 'dinner', dish: 'pasta' } },
+    { label: 'Vegetables', config: { category: 'dinner', dish: 'vegetables' } },
+  ],
+  business: [
+    { label: 'Light card', config: { category: 'business', template: 'light' } },
+    { label: 'Dark card', config: { category: 'business', template: 'dark' } },
+  ],
+};
+
+/** Plain-language pose descriptions for the text fallback when a poster cannot load. */
+export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | 'accepted' | 'declined', string>> = {
+  business: {
+    'host-ready': 'A keycard waits below an open lanyard clip.',
+    'guest-ready': 'A keycard hangs on a lanyard above a card reader.',
+    accepted: 'The keycard rests beside the reader; its light shows green with a check.',
+    declined: 'The keycard rests beside the reader; its light shows red with a minus.',
+  },
+  party: {
+    'host-ready': 'A record hovers above an open record player.',
+    'guest-ready': 'A record sits on the player with the lid open.',
+    accepted: 'The needle is on the record.',
+    declined: 'The record player lid is closed.',
+  },
+  birthday: {
+    'host-ready': 'A cake waits on its tray.',
+    'guest-ready': 'A cake with three lit candles.',
+    accepted: 'The candles are blown out.',
+    declined: 'The cake is in the bin; the tray is empty.',
+  },
+  sports: {
+    'host-ready': 'A basketball waits on the host side.',
+    'guest-ready': 'A basketball in front of a hoop.',
+    accepted: 'The ball went through the hoop.',
+    declined: 'The ball missed the hoop.',
+  },
+  dinner: {
+    'host-ready': 'A plate of food with the cover beside it.',
+    'guest-ready': 'A covered dish.',
+    accepted: 'The cover is lifted and the food is revealed.',
+    declined: 'The covered dish is in the bin.',
+  },
+};
+
+export const LIVE_CATEGORIES: readonly Category[] = ['business'];

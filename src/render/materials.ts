@@ -1,5 +1,5 @@
 import { Color, DoubleSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Vector2 } from 'three';
-import { perforationMaps, ringNormal, stippleNormal, weaveNormal } from './textures.ts';
+import { perforationDarkMap, perforationMaps, ringNormal, stippleNormal, weaveNormal } from './textures.ts';
 
 /**
  * Material naming and roughness convention (asset contract, Master §8):
@@ -8,7 +8,10 @@ import { perforationMaps, ringNormal, stippleNormal, weaveNormal } from './textu
  * food 0.55–0.85. Metalness is 0 or 1 except anodised/painted metal.
  */
 
-export type DirectionId = 'A' | 'B';
+export type DirectionId = 'A' | 'B' | 'L';
+
+/** The production direction locked at checkpoint 1 (B construction + A restraint). */
+export const LOCKED_DIRECTION: DirectionId = 'L';
 
 export interface SurfaceSpec {
   color: string;
@@ -20,14 +23,14 @@ export interface SurfaceSpec {
   sheenColor?: string;
   emissive?: string;
   emissiveIntensity?: number;
-  normal?: 'stipple' | 'perforation' | 'weave' | 'rings-pad' | 'rings-record';
+  normal?: 'stipple' | 'perforation' | 'weave' | 'rings-pad' | 'rings-record' | 'rings-target';
   /** Unlit, exact colour (flames). Never tone mapped so they read as light sources. */
   unlit?: boolean;
   opacity?: number;
   /** View-dependent unlit flame: hot core facing the camera, orange rim. */
   flame?: { core: string; rim: string };
   normalScale?: number;
-  perforated?: boolean;
+  perforated?: boolean | 'dark';
   doubleSide?: boolean;
 }
 
@@ -53,6 +56,18 @@ export interface DirectionTokens {
     fullness: number;
   };
   signature: { kind: 'stipple' | 'perforation'; description: string; placement: string[] };
+  /** Construction choices per object, so models never infer style from the signature. */
+  style: {
+    cake: 'piped' | 'drip';
+    card: 'band' | 'panel' | 'panel-id';
+    clip: 'metal' | 'enamel';
+    scanner: 'ring' | 'pill' | 'window';
+    cloche: 'metal' | 'enamel';
+    record: 'body' | 'accent' | 'band';
+    hoop: 'blockout' | 'refined';
+    /** Dark keyline on card and faceplate edges so light bodies hold a 3:1 silhouette. */
+    inkEdges: boolean;
+  };
   shadow: { opacity: number; color: string };
   surfaces: Record<string, SurfaceSpec>;
 }
@@ -67,6 +82,7 @@ const shared = {
 };
 
 const food: Record<string, SurfaceSpec> = {
+  mat_status_symbol: { color: '#FFFFFF', roughness: 0.4, emissive: '#FFFFFF', emissiveIntensity: 1.2 },
   mat_frosting_vanilla: { color: '#F5EAD8', roughness: 0.6 },
   mat_frosting_cocoa: { color: '#5B3627', roughness: 0.52 },
   mat_sponge_vanilla: { color: '#E8C48C', roughness: 0.86 },
@@ -96,6 +112,7 @@ export const DIRECTIONS: Record<DirectionId, DirectionTokens> = {
       description: 'Fine staggered stipple inlay (0.025-unit pitch) on an ink or cream band.',
       placement: ['card band', 'tray rim', 'record-player face', 'hoop support', 'scanner face'],
     },
+    style: { cake: 'piped', card: 'band', clip: 'metal', scanner: 'ring', cloche: 'metal', record: 'body', hoop: 'blockout', inkEdges: false },
     shadow: { opacity: 0.5, color: '#3a2f24' },
     surfaces: {
       mat_body: { color: '#ECE5D8', roughness: 0.44, clearcoat: 0.35, clearcoatRoughness: 0.45 },
@@ -146,6 +163,7 @@ export const DIRECTIONS: Record<DirectionId, DirectionTokens> = {
       description: 'Single row of inset perforations, spacing equal to band height, on manufactured supports only.',
       placement: ['card border', 'tray band', 'record-player plinth', 'backboard frame', 'scanner collar'],
     },
+    style: { cake: 'drip', card: 'panel', clip: 'enamel', scanner: 'pill', cloche: 'enamel', record: 'accent', hoop: 'blockout', inkEdges: false },
     shadow: { opacity: 0.46, color: '#3a2f24' },
     surfaces: {
       mat_body: { color: '#F0E6D2', roughness: 0.7 },
@@ -183,6 +201,63 @@ export const DIRECTIONS: Record<DirectionId, DirectionTokens> = {
       ...food,
     },
   },
+  L: {
+    id: 'L',
+    name: 'Satin Enamel',
+    summary:
+      'Locked production direction. Enamel Workshop construction and perforation signature with Satin Studio restraint: cream satin bodies, one enamel insert per object, brushed satin metal, crisp edges. Keeps A’s coloured candles and covered dish.',
+    ui: { ...shared, accentText: '#202320' },
+    status: { accept: '#3BE08A', decline: '#E53E3E', neutral: '#6E7175' },
+    geometry: { bevelRatio: 0.16, bevelSegments: 4, fullness: 1.04 },
+    signature: {
+      kind: 'perforation',
+      description: 'One row of inset perforations, spacing equal to band height. Whole dots only, centred with at least one pitch of margin. Manufactured supports only, never food.',
+      placement: ['tray band', 'card border', 'scanner collar', 'record-player plinth band', 'backboard frame', 'plate rim band'],
+    },
+    style: { cake: 'drip', card: 'panel-id', clip: 'metal', scanner: 'window', cloche: 'metal', record: 'band', hoop: 'refined', inkEdges: true },
+    shadow: { opacity: 0.5, color: '#3a2f24' },
+    surfaces: {
+      mat_body: { color: '#ECE5D8', roughness: 0.46 },
+      mat_body_ink: { color: '#25282B', roughness: 0.5 },
+      mat_body_alt: { color: '#DAD3C6', roughness: 0.48 },
+      mat_body_shadow: { color: '#A59E92', roughness: 0.6 },
+      mat_accent: { color: '#FF714A', roughness: 0.62 },
+      mat_insert: { color: '#2C47A6', roughness: 0.66 },
+      mat_insert_warm: { color: '#EDB449', roughness: 0.62 },
+      mat_anodized: { color: '#E8603C', roughness: 0.34, metalness: 1 },
+      mat_metal: { color: '#CFCAC2', roughness: 0.42, metalness: 1 },
+      mat_metal_dark: { color: '#5A5C5E', roughness: 0.4, metalness: 1 },
+      mat_edge: { color: '#4A4C50', roughness: 0.55 },
+      mat_signature: { color: '#ECE5D8', roughness: 0.52, perforated: true, normal: 'perforation', normalScale: 1 },
+      mat_signature_light: { color: '#ECE5D8', roughness: 0.52, perforated: true, normal: 'perforation', normalScale: 1 },
+      mat_signature_dark: { color: '#FFFFFF', roughness: 0.5, perforated: 'dark', normal: 'perforation', normalScale: 1 },
+      mat_rubber: { color: '#2B2B2A', roughness: 0.85 },
+      mat_fabric: { color: '#2F3135', roughness: 0.85, normal: 'weave', normalScale: 0.9, sheen: 0.3, sheenColor: '#7d828a', doubleSide: true },
+      mat_pad: { color: '#1C1E21', roughness: 0.42 },
+      mat_print: { color: '#8E9196', roughness: 0.5 },
+      mat_status: { color: '#6E7175', roughness: 0.45, emissive: '#000000', emissiveIntensity: 0 },
+      mat_tray: { color: '#2C47A6', roughness: 0.74 },
+      mat_candle_1: { color: '#F2603B', roughness: 0.45 },
+      mat_candle_2: { color: '#2C47A6', roughness: 0.45 },
+      mat_candle_3: { color: '#E8A93A', roughness: 0.45 },
+      mat_vinyl: { color: '#1B1C1E', roughness: 0.4, normal: 'rings-record', normalScale: 0.12 },
+      mat_label_coral: { color: '#FF714A', roughness: 0.62 },
+      mat_label_cobalt: { color: '#2C47A6', roughness: 0.62 },
+      mat_ball_orange: { color: '#E8702F', roughness: 0.64 },
+      mat_ball_cream: { color: '#EEE3CC', roughness: 0.64 },
+      mat_ball_seam: { color: '#26282B', roughness: 0.7 },
+      mat_net: { color: '#F2EEE6', roughness: 0.8 },
+      mat_plate: { color: '#F3EEE4', roughness: 0.32 },
+      mat_cloche: { color: '#D8D4CC', roughness: 0.45, metalness: 1 },
+      mat_bin: { color: '#ECE5D8', roughness: 0.46 },
+      mat_card_light: { color: '#EFE8DB', roughness: 0.44 },
+      mat_card_dark: { color: '#25282B', roughness: 0.48 },
+      mat_card_mark: { color: '#F3ECDD', roughness: 0.5 },
+      mat_glaze_vanilla: { color: '#FFF8EC', roughness: 0.36 },
+      mat_glaze_cocoa: { color: '#3A2219', roughness: 0.3 },
+      ...food,
+    },
+  },
 };
 
 function flameMaterial(name: string, core: string, rim: string): ShaderMaterial {
@@ -209,9 +284,12 @@ function flameMaterial(name: string, core: string, rim: string): ShaderMaterial 
       varying float vHeight;
       void main() {
         float facing = clamp(abs(vNormal.z), 0.0, 1.0);
-        float core = smoothstep(0.35, 0.95, facing) * (1.0 - smoothstep(0.06, 0.14, vHeight));
+        // Pale core low in the flame, warm towards the tip; the silhouette fades instead of
+        // drawing an outline.
+        float core = smoothstep(0.2, 0.9, facing) * (1.0 - smoothstep(0.03, 0.15, vHeight));
         vec3 col = mix(uRim, uCore, core);
-        gl_FragColor = vec4(col, uOpacity);
+        float alpha = smoothstep(0.02, 0.5, facing) * uOpacity;
+        gl_FragColor = vec4(col, alpha);
         #include <colorspace_fragment>
       }`,
     transparent: true,
@@ -260,12 +338,13 @@ function buildMaterial(name: string, spec: SurfaceSpec): Material {
       : spec.normal === 'weave' ? weaveNormal()
       : spec.normal === 'rings-pad' ? ringNormal(9)
       : spec.normal === 'rings-record' ? ringNormal(22)
+      : spec.normal === 'rings-target' ? ringNormal(3)
       : perforationMaps().normalMap;
     m.normalMap = tex;
     const s = spec.normalScale ?? 1;
     m.normalScale = new Vector2(s, s);
   }
-  if (spec.perforated) m.map = perforationMaps().map;
+  if (spec.perforated) m.map = spec.perforated === 'dark' ? perforationDarkMap() : perforationMaps().map;
   return m;
 }
 
@@ -295,8 +374,38 @@ export class MaterialLibrary {
     return buildMaterial(name, spec);
   }
 
+  private lowDetail = false;
+  private readonly saved = new Map<Material, { normalMap: unknown; sheen: number; envMapIntensity: number }>();
+
+  /**
+   * Low tier (Master §9): simplified materials — no normal maps or sheen, softer environment
+   * response. Colours, silhouettes and timing are unchanged. Reversible.
+   */
+  setLowDetail(enabled: boolean): void {
+    if (enabled === this.lowDetail) return;
+    this.lowDetail = enabled;
+    for (const m of this.materials.values()) {
+      const std = m as MeshStandardMaterial & { sheen?: number };
+      if (!(std instanceof MeshStandardMaterial)) continue;
+      if (enabled) {
+        this.saved.set(m, { normalMap: std.normalMap, sheen: std.sheen ?? 0, envMapIntensity: std.envMapIntensity });
+        std.normalMap = null;
+        if (std instanceof MeshPhysicalMaterial) std.sheen = 0;
+        std.envMapIntensity = 0.8;
+      } else {
+        const prev = this.saved.get(m);
+        if (!prev) continue;
+        std.normalMap = prev.normalMap as MeshStandardMaterial['normalMap'];
+        if (std instanceof MeshPhysicalMaterial) std.sheen = prev.sheen;
+        std.envMapIntensity = prev.envMapIntensity;
+      }
+      std.needsUpdate = true;
+    }
+  }
+
   dispose(): void {
     for (const m of this.materials.values()) m.dispose();
     this.materials.clear();
+    this.saved.clear();
   }
 }

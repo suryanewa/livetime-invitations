@@ -1,7 +1,9 @@
 import { Box3, Color, type Object3D, type OrthographicCamera, Scene, type WebGLRenderer } from 'three';
 import { createStageCamera, fitCameraToBounds } from './camera.ts';
 import { createRenderer, sizeRenderer } from './createRenderer.ts';
+import { releaseShadowTextureGpu } from './contactShadow.ts';
 import { createStudioRig, type StudioRig } from './lighting.ts';
+import { releaseCachedTextureGpu } from './textures.ts';
 
 export const STAGE_COLOR = '#F4F1EB';
 
@@ -83,6 +85,11 @@ export class Stage {
   dispose(): void {
     this.setContent(null);
     this.rig.dispose();
+    // Shared texture caches hold dispose listeners that would keep this renderer (and its
+    // GL context) reachable; release their GPU copies, then drop the context explicitly.
+    releaseCachedTextureGpu();
+    releaseShadowTextureGpu();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
 }

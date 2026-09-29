@@ -55,6 +55,14 @@ export interface SceneInstance {
   /** Snap secondary offsets to rest (reduced motion, interruption, settle deadline). */
   settle?(): void;
   pointer?: ScenePointer;
+  /** Optional manipulation holds the timeline while active. */
+  holding?(): boolean;
+  /** One-shot timeline jump requested by the scene (e.g. early scan on contact). */
+  takeSeek?(): number | null;
+  /** Recompute derived state (strap curves, shadows) from current node transforms. */
+  refresh?(): void;
+  /** Called once per rendered frame, after sampling and simulation, before drawing. */
+  beforeRender?(): void;
   /** Warm shader programs for every material/preset variant before declaring ready. */
   precompile?(renderer: WebGLRenderer, camera: Camera): Promise<void>;
   dispose(): void;
