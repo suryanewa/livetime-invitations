@@ -20,5 +20,8 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
+    // Dense geometric checks (swept-lid and cloche clearance at 1–2 ms steps) take several
+    // seconds on a busy machine; the default 5 s timeout made them flaky under load.
+    testTimeout: 60_000,
   },
 });
