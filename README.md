@@ -6,7 +6,7 @@ Five real-time 3D RSVP scenes — Party (record player), Birthday (cake), Sports
 
 ```bash
 pnpm install
-pnpm dev        # showcase at http://127.0.0.1:5199/  (?scene=party|birthday|sports|dinner|business)
+pnpm dev        # showcase at http://127.0.0.1:5199/  (?scene=party|birthday|sports|dinner|business); /gallery.html compares all five
 ```
 
 Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm test` (unit) and `pnpm test:browser` (behaviour, uses the installed Google Chrome).
@@ -31,7 +31,13 @@ Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm tes
 - [Style reference](docs/style-reference.md): the approved premium look (v1.1) and object rules.
 - [Asset manifest](docs/asset-manifest.md): provenance and licence of every model, texture and dependency.
 - [Qualification record](docs/qualification.md): device coverage, measurements, known limitations.
+- [Coverage table](docs/coverage.md): every Master and sub-spec requirement linked to a result or a recorded exception (regenerate with `node --experimental-strip-types scripts/coverage-table.ts`).
+- [Spec revisions](docs/spec-revisions.md): approved and recorded deviations to reconcile into the Master Specification.
 - [Time log](docs/time-log.md): actual effort by milestone.
+
+## Release package
+
+`pnpm package:release` copies the source (git archive of HEAD), runtime assets, the static build, evidence clips and stills, and these docs into `~/Creative/Livetime/invitation-interactions/release-<date>/` with a SHA-256 manifest. Nothing is sent or deployed.
 
 ## Boundaries
 

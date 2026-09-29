@@ -8,7 +8,7 @@
  *   source/      git archive of HEAD (the code-authored models are the editable masters)
  *   runtime/     GLB models, posters, collection thumbnails (as shipped in assets/)
  *   showcase/    the static production build (dist/)
- *   evidence/    real-speed clips and review stills per scene, UI matrix, perf samples
+ *   evidence/    real-speed clips and review stills per scene, UI matrix, perf samples, lookdev stills
  *   docs/        README, integration guide, style reference, asset manifest, qualification, time log
  *   MANIFEST.md  every file with its size and SHA-256
  */
@@ -56,6 +56,8 @@ for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
 }
 await copyIfExists(join(root, 'outputs', 'ui'), join(out, 'evidence', 'ui'), (src) => !/\/_/.test(src));
 await copyIfExists(join(root, 'outputs', 'perf'), join(out, 'evidence', 'perf'));
+// Material close-ups: the premium lookdev stills (orthographic shipping camera).
+await copyIfExists(join(root, 'outputs', 'lookdev'), join(out, 'evidence', 'lookdev'), (src) => !src.includes('.') || /premium-ortho\.png$/.test(src));
 
 // Documentation.
 await mkdir(join(out, 'docs'), { recursive: true });
