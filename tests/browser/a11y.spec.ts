@@ -97,6 +97,63 @@ test('Choosing a scene in the collection returns focus to the rebuilt rail item'
   await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
 });
 
+test('On a phone, choosing a scene brings its stage into view and announces the event; focus stays on the rail', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await ready(page);
+  const party = page.locator('.sc-rail__item', { hasText: 'Party' });
+  await party.scrollIntoViewIfNeeded();
+  await party.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-bind="announce"]')).toHaveText('Showing Party: Rooftop listening party');
+  await expect(party).toBeFocused();
+  await expect(party).toHaveAttribute('aria-pressed', 'true');
+  // At least half the stage is on screen once the (smooth) scroll settles.
+  await expect.poll(() => page.evaluate(() => {
+    const r = document.querySelector('.sc-stage')!.getBoundingClientRect();
+    return (Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) / r.height;
+  })).toBeGreaterThanOrEqual(0.5);
+  await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
+});
+
+test('Rail items are named by scene and object; the event meta reads as separate items', async ({ page }) => {
+  await ready(page);
+  await expect(page.locator('.sc-rail')).toMatchAriaSnapshot(`
+    - list:
+      - listitem:
+        - button "Party, record player"
+      - listitem:
+        - button "Birthday, cake"
+      - listitem:
+        - button "Sports, basketball"
+      - listitem:
+        - button "Dinner, covered dish"
+      - listitem:
+        - button "Business, keycard" [pressed]
+  `);
+  // No run-together words such as "PMHudson": each meta item is separated for assistive tech.
+  const snapshot = await page.locator('.sc-event__meta').ariaSnapshot();
+  expect(snapshot).toMatch(/6:30 PM\s*,\s*Hudson Yards, New York\s*,\s*Sample event/);
+});
+
+test('The graphics notice names what the stage shows and who it is for', async ({ page }) => {
+  const notice = page.locator('[data-bind="graphics-text"]');
+  await ready(page, '/?scene=birthday');
+  await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('static'));
+  await expect(notice).toHaveText('Showing a still image. Presets and preview still work.');
+  await page.getByRole('button', { name: 'Guest', exact: true }).click();
+  await expect(notice).toHaveText('Showing a still image. Your response still works.');
+  // A poster that cannot load leaves a sentence on the stage, so the notice must not claim an image.
+  await page.route('**/posters/**', (r) => (r.request().resourceType() === 'image' ? r.abort() : r.continue()));
+  await ready(page, '/?scene=party');
+  await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('static'));
+  await expect(page.locator('.lt-stage__fallback')).toBeVisible();
+  await expect(notice).toHaveText('The 3D scene isn’t available right now. Presets and preview still work.');
+  await page.locator('.sc-dev summary').click();
+  // The two graphics buttons are distinguishable in a screen reader's button list.
+  await expect(page.getByRole('button', { name: 'Try 3D again' })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Restore 3D (dev)' })).toBeVisible();
+});
+
 test('Motion Off from the keyboard also stops the shell CSS motion', async ({ page }) => {
   await ready(page);
   const motion = page.getByRole('button', { name: /Motion/ });

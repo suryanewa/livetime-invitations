@@ -254,10 +254,10 @@ A near-monochrome warm-neutral palette with olive-black ink; the only saturated 
 - **Title** (650, 1rem, 1.4, -0.01em): the collection heading, rail row names, the drawer summary. The "Livetime" wordmark uses the same size at 700.
 - **Control** (600, 1rem): labels on 52px decision buttons (primary, secondary, Accept, Decline).
 - **Body strong** (600, 0.9375rem): segmented-control labels, the "Will you attend?" question, the status line, quiet links.
-- **Body** (400, 0.9375rem, 1.4): the event meta line (tabular numerals, breaking only at the " · " separators), the Party song title, the collection lede (max 44ch), the brand descriptor.
+- **Body** (400, 0.9375rem, 1.4): the event meta line (tabular numerals; date, place and "Sample event" wrap as whole items, the date never breaks, and a " · " separator never starts or ends a line), the Party song title, the collection lede (max 44ch), the brand descriptor.
 - **Body small** (400, 0.875rem): rail object lines, the Motion toggle, the graphics notice.
 - **Label** (600, 0.8125rem): fieldset legends naming a control group, small segmented controls. The same size at 400 is used for notes, the drawer hint and the "Song" key of the Party song line.
-- **Caption** (600, 0.75rem): the status badge and rail tags ("Showing", "Live", "In production").
+- **Caption** (600, 0.75rem): the status badge and the rail tag ("Showing"; "In production" for a scene not yet live).
 - **Mono** (400, 0.8125rem; 0.75rem in the log): developer state values and the integration event log.
 
 ### Named Rules
@@ -269,16 +269,17 @@ A near-monochrome warm-neutral palette with olive-black ink; the only saturated 
 
 ## Layout
 
-The page is a warm-white field with a side gutter of `max(16px, safe-area insets)` and a bottom pad of `max(40px, safe-area-bottom)`. A 64px top bar (wordmark left; badge and Motion toggle right) and the perforation rule share a 1040px measure (1120px at ≥1280px). The rule has a 28px bottom margin (16px at ≤420px, 10px in short landscape).
+The page is a warm-white field with a side gutter of `max(16px, safe-area insets)` and a bottom pad of `max(40px, safe-area-bottom)`. The header block stacks a 64px top bar (wordmark left; badge and Motion toggle right), the perforation rule and the Host/Guest switch on one measure: 1040px (1120px at ≥1280px, the 480px column at ≤900px). The rule has a 28px bottom margin (16px at ≤420px, 8px on short portrait phones, 10px in short landscape); the switch sits 14px above the card (10px on short portrait phones).
 
-**Two columns on desktop.** The main grid is `minmax(0, 440px)` for the invitation and `minmax(0, 420px)` for the side column, pushed apart with `space-between` and gaps of 40px (rows) and 56px (columns). At ≥1280px the columns become 480px and 400px with `space-around`. The side column starts 58px down, so the collection heading lines up with the top of the invitation card below the Host/Guest switch.
+**Two columns on desktop.** The main grid is `minmax(0, 440px)` for the invitation and `minmax(0, 420px)` for the side column, pushed apart with `space-between` and gaps of 40px (rows) and 56px (columns). At ≥1280px the columns become 480px and 400px, still `space-between`, so at every desktop width the card starts at the wordmark's edge and the rail ends at the Motion toggle's. The side column is pulled up 6px so the collection heading's cap line meets the top edge of the invitation card.
 
-**Inside the invitation column,** a 14px stack puts the mode switch first, then the card. Inside the card, on a 16px rhythm: title and meta, then the square stage, then (Party only) the song line, then the active panel. The host panel reads preset control (Party: the Song control first, then Record label), then a two-column action pair (10px gap), then a note. The guest panel reads question, then an equal-width Accept/Decline pair (10px gap), then a 44px status row.
+**Inside the invitation column** the card stands alone under the mode switch. Inside the card, on a 16px rhythm: title and meta, then the square stage, then (Party only) the song line, then the active panel. The host panel reads preset control (Party: the Song control first, then Record label), then a two-column action pair (10px gap), then a note. The guest panel reads question, then an equal-width Accept/Decline pair (10px gap), then a 44px status row.
 
 **Responsive behaviour** (all observed in the review captures):
-- **≤900px:** one centred 480px column; the collection rail and the Developer drawer follow the card.
+- **≤900px:** one centred 480px column; the top bar, rule and switch share its measure; the collection rail and the Developer drawer follow the card.
 - **≤420px:** the card padding drops to 14px (the radius stays 28px); the host action pair stacks; the brand descriptor hides; the drawer hint wraps under its title.
-- **Short landscape** (landscape, height ≤540px, width ≥600px, which also catches 200% zoom on a laptop): the Host/Guest switch moves to the centre of the top bar, and the card becomes two columns. The stage square sits on the left, sized `min(100svh − 112px − safe areas, 48vw)`; title, controls and status sit on the right. The whole answer stays above the fold.
+- **Short portrait** (portrait, height ≤740px, iPhone SE class): the rule's margin drops to 8px and the switch's to 10px, so more of the card reaches the first viewport. The answers may still need a scroll there, which the specification allows.
+- **Short landscape** (landscape, height ≤540px, width ≥600px, which also catches 200% zoom on a laptop): the Host/Guest switch joins the top bar in flow, between the wordmark and the actions. Wordmark and actions share the row equally, so the switch sits at the centre while there is room; the wider side takes what it needs, and when the three cannot fit (enlarged text) the actions wrap to a row of their own. Nothing is positioned over anything else. The brand descriptor hides, the header and card run full width, and the rail is capped at 480px. The card becomes two columns: the stage square sits on the left, sized `min(100svh − 112px − safe areas, 48vw)`; title, controls and status sit on the right. The whole answer stays above the fold.
 - **Landscape ≤720px wide:** the brand descriptor hides.
 
 ### Named Rules
@@ -319,7 +320,7 @@ Firm, calm and exactly sized; nothing bounces.
 - **Hover / Focus:** the primary shifts to Soft Ink (#3A3D39) and the secondary takes Hover Wash, over a 120ms ease-out colour transition. Focus is the global 3px Focus Cobalt outline at a 2px offset. While the host sequence plays, the primary takes `aria-disabled` (so keyboard focus stays on it) and a Keyline Grey fill with a progress cursor.
 - **Secondary:** white with a 1.5px Keyline Grey outline and an ink label. After the host prepares the card it gains emphasis (ink border plus a 1px inset ink keyline), pointing to the next step without competing with the primary.
 - **Pairing:** primary and secondary share a two-column grid with a 10px gap, at equal widths. They stack at ≤420px.
-- **Utility:** white, 44px, 12px radius, 14px/600 label ("Try 3D again", "Reset demo", "Simulate graphics loss"). This tier is reserved for the drawer and the graphics notice.
+- **Utility:** white, 44px, 12px radius, 14px/600 label ("Try 3D again" in the graphics notice; "Reset demo", "Simulate graphics loss" and "Restore 3D (dev)" in the drawer, so no two visible buttons share a name). This tier is reserved for the drawer and the graphics notice.
 
 ### Response Choices (signature)
 - **Style:** Accept and Decline are always an equal-width pair: 52px tall, white, 1.5px Keyline Grey outline, a 16px/600 label led by an 18px stroked glyph (check for Accept, minus for Decline). They carry `aria-pressed`.
@@ -351,11 +352,12 @@ Firm, calm and exactly sized; nothing bounces.
 ### Cards / Containers
 - **Invitation card:** Paper White, 28px radius at every width, 20px padding (14px at ≤420px, 16px in short landscape), 16px internal gap, card-lift shadow and a 7% ink hairline border. There is exactly one per page.
 - **Stage:** a Stage Linen 1:1 square, 20px radius, full card width. A poster image cross-fades to the live canvas (180ms ease-out); if graphics fail, a centred 15px Sage Graphite sentence replaces it. The warm vignette and film grain over poster and canvas are part of the object look (`docs/style-reference.md` v1.1), not interface ornament. The response never waits on the stage.
-- **Graphics notice:** a 14px-radius warm strip under the panel, holding 14px Soft Ink text ("Showing a still image. Your response still works.") and a utility button. It is shown only when graphics are degraded.
+- **Graphics notice:** a 14px-radius warm strip under the panel, holding 14px Soft Ink text and a "Try 3D again" utility button. It is shown only when graphics are degraded. The text says what the stage shows ("Showing a still image." when a poster is up, "The 3D scene isn't available right now." when only the text description is, "The 3D scene is taking a while." during a slow load) and what still works for this viewer ("Your response still works." for a guest, "Presets and preview still work." for a host).
 
 ### Collection Rail
-- **Style:** a list of full-width row buttons (72px minimum, 16px radius, 6px 14px 6px 6px padding, 6px apart). Each row has a 60px Stage Linen thumbnail (12px radius), a name (16px/650) over an object line (14px Sage Graphite), and a right-aligned 12px/600 tag.
-- **States:** hover takes a faint warm fill. The current row is Paper White with a Hairline Sand border, a 1px shadow and its tag in ink ("Showing"). Scenes not yet live are `aria-disabled`, with a desaturated thumbnail (saturation 0.55, opacity 0.8), no hover and the tag "In production".
+- **Style:** a list of full-width row buttons (72px minimum, 16px radius, 6px 14px 6px 6px padding, 6px apart; at most 480px wide). Each row has a 60px Stage Linen thumbnail (12px radius) and a name (16px/650) over an object line (14px Sage Graphite). Only the current row carries a right-aligned 12px/600 tag. Each button is named "Party, record player" and so on; `aria-pressed` carries the selection.
+- **States:** hover takes a faint warm fill. The current row is Paper White with a Hairline Sand border, a 1px shadow and the tag "Showing" in ink. Scenes not yet live are `aria-disabled`, with a desaturated thumbnail (saturation 0.55, opacity 0.8), no hover and the tag "In production".
+- **Choosing a scene** opens a new invitation: a fresh controller and adapter with no response, so an answer never carries from one event to the next (presets and songs change within one event and keep it). If less than half the stage is on screen (phones, where the rail follows the card), the card scrolls into view, smoothly only with Motion on. A visually hidden polite live region announces the event ("Showing Party: Rooftop listening party"), and focus stays on the pressed row so keyboard users can keep browsing.
 
 ### Developer Drawer
 - **Style:** a native `details` panel: Paper White, 18px radius, Hairline Sand border. The 56px summary carries "Developer" in the Title role, a 13px Sage Graphite hint and a CSS-drawn chevron that rotates over 160ms. It is collapsed by default.

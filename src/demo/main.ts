@@ -37,26 +37,28 @@ const scenes: SceneRegistry = {
 const app = document.getElementById('app')!;
 app.innerHTML = `
   <div class="sc">
-    <header class="sc-top">
-      <p class="sc-brand"><strong>Livetime</strong><span>Invitation interactions</span></p>
-      <div class="sc-top-actions">
-        <span class="sc-badge" title="This demo never contacts a real RSVP service">Simulated saves</span>
-        <button class="sc-motion" type="button" aria-pressed="true" data-action="motion">
-          <span class="sc-motion__label">Motion</span><span class="sc-motion__value" aria-hidden="true">On</span>
-        </button>
+    <header class="sc-head">
+      <div class="sc-top">
+        <p class="sc-brand"><strong>Livetime</strong><span>Invitation interactions</span></p>
+        <div class="sc-top-actions">
+          <span class="sc-badge" title="This demo never contacts a real RSVP service">Simulated saves</span>
+          <button class="sc-motion" type="button" aria-pressed="true" data-action="motion">
+            <span class="sc-motion__label">Motion</span><span class="sc-motion__value" aria-hidden="true">On</span>
+          </button>
+        </div>
+      </div>
+      <div class="sc-rule" aria-hidden="true"></div>
+      <div class="sc-seg sc-mode" role="group" aria-label="Preview as">
+        <button type="button" data-mode="host" aria-pressed="true">Host</button>
+        <button type="button" data-mode="guest" aria-pressed="false">Guest</button>
       </div>
     </header>
-    <div class="sc-rule" aria-hidden="true"></div>
     <main class="sc-main">
       <section class="sc-preview" aria-label="Invitation preview">
-        <div class="sc-seg sc-mode" role="group" aria-label="Preview as">
-          <button type="button" data-mode="host" aria-pressed="true">Host</button>
-          <button type="button" data-mode="guest" aria-pressed="false">Guest</button>
-        </div>
         <article class="sc-card">
           <header class="sc-event">
             <h1 class="sc-event__title" data-bind="title"></h1>
-            <p class="sc-event__meta"><span data-bind="when"></span><span aria-hidden="true"> · </span><span data-bind="where"></span><span aria-hidden="true"> · </span><span class="sc-sample">Sample event</span></p>
+            <p class="sc-event__meta"><span class="sc-meta"><span data-bind="when"></span><span data-bind="where"></span><span class="sc-sample">Sample event</span></span></p>
           </header>
           <div class="sc-stage" data-bind="stage"></div>
           <p class="sc-track" data-bind="track" hidden><span class="sc-track__k">Song</span> <span data-bind="track-title"></span></p>
@@ -88,6 +90,7 @@ app.innerHTML = `
           <h2 id="sc-collection-h">The collection</h2>
           <p class="sc-lede">Five invitation scenes built as one family of small objects. Guests choose first; the object acts out their answer.</p>
           <ul class="sc-rail" data-bind="rail"></ul>
+          <p class="visually-hidden" aria-live="polite" data-bind="announce"></p>
         </section>
 
         <details class="sc-dev">
@@ -114,7 +117,7 @@ app.innerHTML = `
             <div class="sc-dev__actions">
               <button class="sc-quiet-btn" type="button" data-action="reset">Reset demo</button>
               <button class="sc-quiet-btn" type="button" data-action="lose-context">Simulate graphics loss</button>
-              <button class="sc-quiet-btn" type="button" data-action="retry-3d">Try 3D again</button>
+              <button class="sc-quiet-btn" type="button" data-action="retry-3d">Restore 3D (dev)</button>
             </div>
             <h3 class="sc-dev__h">Integration events</h3>
             <ol class="sc-log" data-bind="log" aria-live="off"></ol>
@@ -126,6 +129,8 @@ app.innerHTML = `
 
 const $ = <T extends Element = HTMLElement>(sel: string) => app.querySelector<T>(sel)!;
 const $$ = <T extends Element = HTMLElement>(sel: string) => [...app.querySelectorAll<T>(sel)];
+/** Polite, visually hidden: names the event a rail choice just opened. */
+const announce = $('[data-bind="announce"]');
 
 /** ?scene=party opens a live scene directly (links, tests, captures). */
 const sceneParam = new URLSearchParams(location.search).get('scene') as Category | null;
@@ -203,6 +208,12 @@ function mount() {
     onIntegrationError: (e) => log('integration', e.kind),
     onStateChange: render,
   });
+  // The graphics notice names what the stage shows: the controller swaps a poster that fails
+  // to load for a sentence without emitting, so re-render when the poster settles.
+  const poster = stage.querySelector('img.lt-stage__poster');
+  const settle = () => controller && render(controller.getState());
+  poster?.addEventListener('load', settle);
+  poster?.addEventListener('error', settle);
 }
 
 // ── Rendering ──────────────────────────────────────────────────────────────
@@ -262,10 +273,13 @@ function renderStatic() {
     ...(['party', 'birthday', 'sports', 'dinner', 'business'] as Category[]).map((c) => {
       const li = document.createElement('li');
       const live = LIVE_CATEGORIES.includes(c);
+      const tag = !live ? 'In production' : c === category ? 'Showing' : '';
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'sc-rail__item';
       b.setAttribute('aria-pressed', String(c === category));
+      // aria-pressed carries "Showing"; the name stays the scene and its object.
+      b.setAttribute('aria-label', `${CATEGORY_LABEL[c]}, ${OBJECT_LABEL[c].toLowerCase()}${live ? '' : ', in production'}`);
       if (!live) b.setAttribute('aria-disabled', 'true');
       b.innerHTML = `
         <img src="${collectionThumb(c)}" alt="" width="96" height="96" loading="lazy" decoding="async" />
@@ -273,20 +287,34 @@ function renderStatic() {
           <span class="sc-rail__name">${CATEGORY_LABEL[c]}</span>
           <span class="sc-rail__obj">${OBJECT_LABEL[c]}</span>
         </span>
-        <span class="sc-rail__tag">${live ? (c === category ? 'Showing' : 'Live') : 'In production'}</span>`;
+        ${tag ? `<span class="sc-rail__tag">${tag}</span>` : ''}`;
       b.addEventListener('click', () => {
         if (!live || c === category) return;
+        // Each category is its own invitation: dispose and mount a fresh controller and adapter
+        // with no response, never carry one across (Master §7, docs/integration.md).
         category = c;
         config = DEFAULT_CONFIGS[c];
-        hostPrepared = false;
-        controller?.setConfig(config);
+        initialResponse = undefined;
+        mount();
         renderStatic();
+        log('demo', `new invitation · ${c}`);
+        announce.textContent = `Showing ${CATEGORY_LABEL[c]}: ${EVENTS[c].title}`;
+        revealStage();
       });
       li.append(b);
       return li;
     }),
   );
   if (railFocused) rail.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
+}
+
+/** A rail choice whose stage is mostly off-screen (phones: the rail follows the card) scrolls it in. */
+function revealStage() {
+  const r = $('[data-bind="stage"]').getBoundingClientRect();
+  const shown = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+  if (shown >= r.height / 2) return;
+  // Focus stays on the pressed rail item so keyboard users can keep browsing the collection.
+  $('.sc-card').scrollIntoView({ block: 'start', behavior: motionOn ? 'smooth' : 'auto' });
 }
 
 function syncPresets() {
@@ -297,6 +325,12 @@ function syncPresets() {
   const track = $('[data-bind="track"]');
   track.hidden = config.category !== 'party';
   $('[data-bind="track-title"]').textContent = songTitle(songId);
+}
+
+/** The controller's poster has a source and has not failed (a loading poster counts; a failure re-renders). */
+function posterShown(): boolean {
+  const img = $('[data-bind="stage"]').querySelector<HTMLImageElement>('img.lt-stage__poster');
+  return !!img && !img.hidden && img.hasAttribute('src') && !(img.complete && img.naturalWidth === 0);
 }
 
 function render(state: InvitationState) {
@@ -318,10 +352,10 @@ function render(state: InvitationState) {
   const hadFocus = !unavailable && !graphics.hidden && graphics.contains(document.activeElement);
   graphics.hidden = !unavailable;
   if (hadFocus) (mode === 'host' ? $<HTMLButtonElement>('[data-action="prepare"]') : $<HTMLButtonElement>('[data-panel="guest"] button'))?.focus();
-  $('[data-bind="graphics-text"]').textContent =
-    state.resource === 'fallback'
-      ? 'Showing a still image. Your response still works.'
-      : 'The 3D scene is taking a while. Your response still works.';
+  // Hosts have no response to reassure about; a missing or failed poster leaves a sentence, not an image.
+  const works = mode === 'host' ? 'Presets and preview still work.' : 'Your response still works.';
+  const shows = state.resource !== 'fallback' ? 'The 3D scene is taking a while.' : posterShown() ? 'Showing a still image.' : 'The 3D scene isn’t available right now.';
+  $('[data-bind="graphics-text"]').textContent = `${shows} ${works}`;
 
   $$<HTMLButtonElement>('[data-bind="tier"] button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tier === state.tier)));
   const rows: [string, string][] = [
