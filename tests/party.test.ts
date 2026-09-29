@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Box3, Color, type Mesh, MeshStandardMaterial, type Object3D, Vector3 } from 'three';
+import { Box3, Color, DoubleSide, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, Raycaster, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import {
   LID, PARTY_BOUNDS, PARTY_NODES, PLATTER, PLATTER_TOP, RECORD, RECORD_TOP, stylusAt, TONEARM, tonearmYawFor,
@@ -263,6 +263,29 @@ describe('Party model contract', () => {
     for (const p of ['host-ready', 'accepted'] as const) {
       apply(pose(p));
       expect(cuts(parts()), p).toBe(0);
+    }
+  });
+
+  it('the closed lid frames its top panel with one reveal wide and deep enough to read on a phone', () => {
+    // Cross-sections of the outer skin across the right and front edges (lid_mesh space). The
+    // 8 × 2 mm groove broke into dashes at phone scale (checkpoint 4); the reveal must span
+    // ≥ 12 mm and sink ≥ 3 mm, as a single run, so it resolves as one continuous line.
+    const shell = new Mesh((get('lid_shell') as Mesh).geometry, new MeshBasicMaterial({ side: DoubleSide }));
+    const box = new Box3().setFromObject(shell);
+    const top = box.max.y, step = 0.0005;
+    const ray = new Raycaster();
+    const section = (at: (inset: number) => [number, number]) => Array.from({ length: 121 }, (_, i) => {
+      const [x, z] = at(0.03 + i * step);
+      ray.set(new Vector3(x, top + 0.1, z), new Vector3(0, -1, 0));
+      return ray.intersectObject(shell)[0]!.point.y;
+    });
+    const mid = box.getCenter(new Vector3());
+    const sections = { right: section((d) => [box.max.x - d, mid.z]), front: section((d) => [mid.x, box.max.z - d]) };
+    for (const [side, heights] of Object.entries(sections)) {
+      const below = heights.map((y) => y < top - 0.00025);
+      expect(below.filter((b, i) => b && !below[i - 1]).length, side).toBe(1);
+      expect(below.filter(Boolean).length * step, side).toBeGreaterThanOrEqual(0.012);
+      expect(top - Math.min(...heights), side).toBeGreaterThanOrEqual(0.003);
     }
   });
 

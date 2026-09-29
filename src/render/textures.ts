@@ -165,16 +165,115 @@ export function perforationDarkMap(): Texture {
   });
 }
 
+/** Weave: diagonal twill ridges (6 per tile) crossed by a fine thread (24 per tile along v). */
+const WEAVE_N = 6;
+const WEAVE_SIZE = 128;
+const WEAVE_STRENGTH = 2.2;
+const weaveRidge: HeightFn = (u, v) => Math.sin((u * WEAVE_N + v * WEAVE_N) * Math.PI * 2) * 0.5 + 0.5;
+const weaveThread: HeightFn = (u, v) => Math.sin(v * WEAVE_N * 4 * Math.PI * 2) * 0.5 + 0.5;
+const weaveHeight: HeightFn = (u, v) => weaveRidge(u, v) * 0.8 + weaveThread(u, v) * 0.25;
+
 /** Woven strap: a tight twill so the lanyard reads as fabric at phone scale. */
 export function weaveNormal(): Texture {
-  return cached('weave', () => {
-    const n = 6;
-    const height: HeightFn = (u, v) => {
-      const a = Math.sin((u * n + v * n) * Math.PI * 2) * 0.5 + 0.5;
-      const b = Math.sin(v * n * 4 * Math.PI * 2) * 0.5 + 0.5;
-      return a * 0.8 + b * 0.25;
-    };
-    return dataTexture(heightToNormal(128, height, 2.2), false);
+  return cached('weave', () => dataTexture(heightToNormal(WEAVE_SIZE, weaveHeight, WEAVE_STRENGTH), false));
+}
+
+/** One periodic height term of a band-limited normal map. */
+interface WeaveTerm {
+  height: HeightFn;
+  weight: number;
+  /** Period along the term's gradient, in base texels. */
+  period: number;
+  /** Full strength while the period spans at least fade[1] texels of a level, gone at fade[0]. */
+  fade: [number, number];
+}
+
+/**
+ * A full mip chain (levels 1 to n) for a sum of periodic height terms. Each level is the
+ * base-resolution normal field box-filtered down, as the GPU would build it, except that each
+ * term is first faded by how many of that level's texels its period spans: a term too fine
+ * for a level is left out of it instead of folding into a coarser alias.
+ */
+function bandLimitedNormalMips(size: number, terms: WeaveTerm[], strength: number): HTMLCanvasElement[] {
+  // Per-term slopes at base resolution (central differences, as heightToNormal).
+  const slopes = terms.map(({ height, weight }) => {
+    const h = new Float32Array(size * size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) h[y * size + x] = height((x + 0.5) / size, (y + 0.5) / size) * weight;
+    }
+    const at = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)]!;
+    const dx = new Float32Array(size * size), dy = new Float32Array(size * size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        dx[y * size + x] = (at(x + 1, y) - at(x - 1, y)) * 0.5 * strength;
+        dy[y * size + x] = (at(x, y + 1) - at(x, y - 1)) * 0.5 * strength;
+      }
+    }
+    return { dx, dy };
+  });
+  const levels: HTMLCanvasElement[] = [];
+  for (let block = 2; block <= size; block *= 2) {
+    const gains = terms.map((t) => smooth(t.fade[0], t.fade[1], t.period / block));
+    const s = size / block;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = s;
+    const ctx = canvas.getContext('2d')!;
+    const img = ctx.createImageData(s, s);
+    for (let by = 0; by < s; by++) {
+      for (let bx = 0; bx < s; bx++) {
+        let sx = 0, sy = 0, sz = 0;
+        for (let y = by * block; y < (by + 1) * block; y++) {
+          for (let x = bx * block; x < (bx + 1) * block; x++) {
+            let dx = 0, dy = 0;
+            for (let t = 0; t < terms.length; t++) {
+              dx += slopes[t]!.dx[y * size + x]! * gains[t]!;
+              dy += slopes[t]!.dy[y * size + x]! * gains[t]!;
+            }
+            // Canvas y runs opposite to UV v (flipY), so +dy maps to +normal.y.
+            const len = Math.hypot(dx, dy, 1);
+            sx += -dx / len;
+            sy += dy / len;
+            sz += 1 / len;
+          }
+        }
+        const n = block * block;
+        const i = (by * s + bx) * 4;
+        img.data[i] = Math.round((sx / n * 0.5 + 0.5) * 255);
+        img.data[i + 1] = Math.round((sy / n * 0.5 + 0.5) * 255);
+        img.data[i + 2] = Math.round((sz / n * 0.5 + 0.5) * 255);
+        img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    levels.push(canvas);
+  }
+  return levels;
+}
+
+/**
+ * Dust-cover lining (checkpoint 4): the strap's weave with a band-limited mip chain, so the
+ * lining never shimmers as the lid closes. The GPU's box-filtered mips folded the 24-per-tile
+ * thread into a coarse diagonal alias and kept the ribs down to two-pixel stripes, and the
+ * anisotropic probes beat against them: the minified lining crawled into a hatch that flipped
+ * orientation mid-close. Here level 0 is the strap's weave exactly and level 1 keeps the thread
+ * (the woven look at desktop size); the ribs fade from five texels per period to gone at two
+ * and a half, so a shrinking or foreshortened lining settles to soft ribs, then plain cloth.
+ */
+export function weaveLiningNormal(): Texture {
+  return cached('weave-lining', () => {
+    const base = heightToNormal(WEAVE_SIZE, weaveHeight, WEAVE_STRENGTH);
+    const t = dataTexture(base, false);
+    const terms: WeaveTerm[] = [
+      // Ridges vary along u + v: measured across them, one period is 1 / (6√2) of a tile.
+      { height: weaveRidge, weight: 0.8, period: WEAVE_SIZE / (WEAVE_N * Math.SQRT2), fade: [2.5, 5] },
+      { height: weaveThread, weight: 0.25, period: WEAVE_SIZE / (WEAVE_N * 4), fade: [2, 3] },
+    ];
+    t.mipmaps = [base, ...bandLimitedNormalMips(WEAVE_SIZE, terms, WEAVE_STRENGTH)];
+    t.generateMipmaps = false;
+    // Isotropic: anisotropic probes along the foreshortened axis sample the ribs near their own
+    // spacing and beat into a hatch; trilinear lets the closing lid settle evenly.
+    t.anisotropy = 1;
+    return t;
   });
 }
 

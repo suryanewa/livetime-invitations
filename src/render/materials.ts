@@ -1,7 +1,7 @@
 import { Color, DoubleSide, FrontSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Texture, Vector2 } from 'three';
 import { ballMaterial } from './ballMaterial.ts';
 import { cardPrint, grooveDirections, holoPattern, labelPrint, strapPrint } from './print.ts';
-import { perforationDarkMap, perforationMaps, releaseCachedTexture, retainCachedTexture, ringNormal, stippleNormal, weaveNormal } from './textures.ts';
+import { perforationDarkMap, perforationMaps, releaseCachedTexture, retainCachedTexture, ringNormal, stippleNormal, weaveLiningNormal, weaveNormal } from './textures.ts';
 
 /**
  * Material naming and roughness convention (asset contract, Master §8):
@@ -30,7 +30,7 @@ export interface SurfaceSpec {
   sheenColor?: string;
   emissive?: string;
   emissiveIntensity?: number;
-  normal?: 'stipple' | 'perforation' | 'weave' | 'rings-pad' | 'rings-record' | 'rings-target';
+  normal?: 'stipple' | 'perforation' | 'weave' | 'weave-lining' | 'rings-pad' | 'rings-record' | 'rings-target';
   /** Unlit, exact colour (flames). Never tone mapped so they read as light sources. */
   unlit?: boolean;
   opacity?: number;
@@ -349,8 +349,9 @@ export const DIRECTIONS = {
     mat_veg_green: { color: '#5A9A4A', roughness: 0.45, clearcoat: 0.4, clearcoatRoughness: 0.25 },
     mat_veg_orange: { color: '#EE8A3C', roughness: 0.42, clearcoat: 0.4, clearcoatRoughness: 0.25 },
     mat_veg_red: { color: '#D0463A', roughness: 0.35, clearcoat: 0.6, clearcoatRoughness: 0.15 },
-    // Woven lining inside the dust cover (audio grille cloth): the open lid's tactile face.
-    mat_lid_fabric: { color: '#34363A', roughness: 0.92, normal: 'weave', normalScale: 1, sheen: 0.5, sheenColor: '#8a8f99' },
+    // Woven lining inside the dust cover (audio grille cloth): the open lid's tactile face. Its
+    // weave is band-limited (checkpoint 4) so it never shimmers into moiré as the lid closes.
+    mat_lid_fabric: { color: '#34363A', roughness: 0.92, normal: 'weave-lining', normalScale: 1, sheen: 0.5, sheenColor: '#8a8f99' },
   };
   DIRECTIONS.L2 = {
     ...L,
@@ -495,6 +496,7 @@ function buildMaterial(name: string, spec: SurfaceSpec): Material {
     const tex =
       spec.normal === 'stipple' ? stippleNormal()
       : spec.normal === 'weave' ? weaveNormal()
+      : spec.normal === 'weave-lining' ? weaveLiningNormal()
       : spec.normal === 'rings-pad' ? ringNormal(9)
       : spec.normal === 'rings-record' ? ringNormal(22)
       : spec.normal === 'rings-target' ? ringNormal(3)
