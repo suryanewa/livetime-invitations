@@ -94,6 +94,69 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 - Drawing buffer at the showcase stage (≈400 CSS px, DPR 1.5 → 600², MSAA 4×): ≈13 MiB. **Total ≈ 20 MiB** against the 48 MiB budget.
 - **Risk recorded:** at the master's 2.5 MP drawing-buffer ceiling, MSAA 4× alone would need ≈90 MiB. Embeds larger than ≈700 CSS px at DPR 1.5 should create the renderer without MSAA; this is a decision for Milestone 7 integration guidance.
 
+## Checkpoint 4 evidence (2026-09-29, all five scenes, premium L2)
+
+All figures were measured on the authoring Mac (M2 Pro, Chrome 153) from the committed tree during checkpoint 4. None of this is phone evidence. Checkpoint 4 was carried out by independent critical reviewers at Surya's request; their sign-offs are recorded as **pending Surya's confirmation**.
+
+### Checks
+
+| Check | Result |
+| --- | --- |
+| Typecheck | Clean |
+| Unit tests (Vitest) | 109 / 109 pass (13 files). Added since checkpoint 3: Sports seam-frame and net far-layer guards, Dinner settle, continuity, blend-safety and framing (8 % clearance over the real open bin, ≥42 % fill) |
+| Browser tests (Playwright, system Chrome) | 50 / 51 pass. The failure is `dinner.spec.ts` "Graphics loss shows the shared declined Dinner poster": Dinner's posters had not yet been copied into `assets/` (fixed by the Dinner capture; re-run below) |
+| Real-time sequence length (live showcase, `pnpm capture timing`, median of 3) | Business host 1.21 / accept 1.51 / decline 1.51 s · Party 1.21 / 1.61 / 1.41 · Birthday 1.31 / 1.41 / 1.51 · Sports 1.21 / 1.71 / 1.61 · Dinner 1.21 / 1.51 / 1.51 (each about 10 ms over the authored length: one animation frame to detect the end) |
+
+### Render cost per scene (lookdev, 358² @3×, including the shadow pass, contact shadows and the studio sweep)
+
+| Scene (ready pose) | Triangles | Draw calls | Budget |
+| --- | --- | --- | --- |
+| Business guest-ready / accepted (dark) | 53.4k / 53.5k | 32 / 34 | 60k / 40 |
+| Party guest-ready | 44.7k | 32 | 60k / 40 |
+| Birthday guest-ready (bin off stage) | 35.1k | 21 | 60k / 40 |
+| Sports guest-ready | 35.9k | 18 | 60k / 40 |
+| Dinner accepted (cloche beside the pasta, bin off stage) | 27.3k | 20 | 60k / 40 |
+
+The shared bin adds about 8.4k triangles and 5 draw calls while it is on stage (Birthday and Dinner decline). The Dinner builder measured its decline peak with the bin at 44.1k / 32.
+
+### Transfer and cold load
+
+| Asset | Raw | Gzip −9 |
+| --- | --- | --- |
+| business.glb | 720.6 KiB | 251.6 KiB |
+| party.glb | 608.3 KiB | 234.9 KiB |
+| birthday.glb | 561.7 KiB | 270.8 KiB |
+| sports.glb | 516.3 KiB | 203.0 KiB |
+| dinner.glb | 841.3 KiB | 405.4 KiB |
+| shared/disposal-bin.glb | 143.7 KiB | 61.4 KiB |
+
+Cold load from the production build (`pnpm build`, `pnpm preview`) on a throttled network (4 Mbps down, 100 ms latency, cache disabled; `pnpm capture network`, bytes from Chrome's `loadingFinished` events):
+
+| Scene | Controls usable | Render-ready | Transferred |
+| --- | --- | --- | --- |
+| Business | 0.93 s | 2.72 s | 1.00 MB |
+| Party | 0.91 s | 2.74 s | 0.89 MB |
+| Birthday | 0.91 s | 2.70 s | 0.99 MB |
+| Sports | 0.91 s | 2.19 s | 0.77 MB |
+| Dinner | 0.91 s | 3.20 s | 1.27 MB |
+
+Targets (Master §9): controls usable ≤2 s, render-ready ≤6 s, cold first scene ≤2.5 MiB. All five pass on this desktop simulation. `vite preview` serves the GLB files uncompressed, so these byte counts are the uncompressed worst case; a host that gzips `.glb` would transfer less.
+
+### Framing (Master §5: 60–75 % of stage width in the ready pose)
+
+| Scene | Measured | Status |
+| --- | --- | --- |
+| Business | 61.6 % | Pass (checkpoint 3) |
+| Party | 71.2 % | Pass (checkpoint 3) |
+| Birthday | 52.1 % | Accepted exception (Surya, checkpoint 3) |
+| Sports | 70.9 % (ball and board, geometric; locked to 60–75 % by a unit test) | Pass |
+| Dinner | 43.1 % (geometric, unit test) | **Recorded exception, pending Surya.** The open bin's flaps set the fixed frame. The fit now samples the bin's real open geometry with the full 8 % clearance: a hand-modelled flap outline had let the flaps reach within 2.3 % of the top edge, which a critical reviewer caught. A placement search over bin and cloche positions put the ceiling near 43–44 %. The dish is centred horizontally but sits in the lower third of the frame. Revision #3 in `docs/spec-revisions.md` |
+
+### Quality tiers
+
+The Low tier kept the objects' look only after a fix. Dropping the palm gobo at Low had brightened and cooled every object by 35–90 % per colour channel, because the cookie also dims and warms the key. Low now keeps a 192² copy of the gobo. Measured object brightness at Low against Normal: Sports +5 %, Party +10 %, Business +9 % (linear RGB means over the object pixels). The remaining difference is the missing shadow map.
+
+
 ## Checkpoint 3 evidence (2026-09-29, premium L2: Business, Party, Birthday)
 
 All figures measured on the authoring Mac (M2 Pro, Chrome 153) from the committed build at checkpoint 3. None of this is phone evidence.
