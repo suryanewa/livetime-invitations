@@ -40,11 +40,15 @@ export const BALL_AT = {
   guest: new Vector3(-0.55, BALL_R, 0.75),
   /** Made shot: settles below and slightly in front of the hoop. */
   made: new Vector3(0.3, BALL_R, 0.12),
-  /** Airball: lands and settles away to the hoop's left. */
-  missed: new Vector3(-0.85, BALL_R, -0.3),
+  /**
+   * Airball: rolled out past the hoop's left side, behind the backboard's plane, so the
+   * declined still sits clearly apart from guest-ready and made (≥1.2 ball diameters on
+   * screen). The airball flies in the vertical plane from the guest spot towards this spot.
+   */
+  missed: new Vector3(-0.77, BALL_R, -1.75),
 } as const;
 
-/** The miss passes this far left of the rim centre at rim height: an unmistakable airball. */
+/** Descending through rim height, the airball is this far screen-left of the rim centre. */
 export const MISS_OFFSET = 0.95;
 
 /**
@@ -55,5 +59,9 @@ export interface NetDeform {
   update(flare: number, stretch: number): void;
 }
 
-/** Complete motion bounds (box fallback; the scene also supplies silhouette frame points). */
+/**
+ * Motion bounds box: the key light aims at its centre and box-framed tools (lookdev) fit it, so
+ * it stays fixed with the approved look. The scene frames the camera with silhouette points of
+ * every path; the declined rest lies behind this box but well inside its framed view.
+ */
 export const SPORTS_BOUNDS = new Box3(new Vector3(-1.2, 0, -1.2), new Vector3(1.8, 2.9, 1.1));

@@ -8,7 +8,7 @@ import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.
 import { DURATIONS, frameFor, newFrame, sampleSequence, type SportsFrame } from './sequences.ts';
 
 /** Silhouette samples of every Sports path: the hoop, the pass, the made shot and the airball. */
-export function sportsFramePoints(): Vector3[] {
+export function sportsFramePoints(sequences: readonly SequenceName[] = ['host', 'accept', 'decline']): Vector3[] {
   const pts: Vector3[] = [];
   const sphere = (c: Vector3) => {
     for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) {
@@ -16,7 +16,7 @@ export function sportsFramePoints(): Vector3[] {
     }
   };
   const f = newFrame();
-  for (const seq of ['host', 'accept', 'decline'] as const) {
+  for (const seq of sequences) {
     for (let t = 0; t <= DURATIONS[seq] + 1e-9; t += 0.02) sphere(sampleSequence(seq, t, f).ballPos.clone());
   }
   sphere(BALL_AT.host);
@@ -31,6 +31,60 @@ export function sportsFramePoints(): Vector3[] {
   return pts;
 }
 
+// ── Interruption: blend (≤150 ms) unless the straight path would cross the hoop ──────
+const BOARD_BOX = new Box3(
+  new Vector3(HOOP_ROOT.x - BOARD.width / 2, BOARD.centerY - BOARD.height / 2, HOOP_ROOT.z + BOARD.front - BOARD.thickness),
+  new Vector3(HOOP_ROOT.x + BOARD.width / 2, BOARD.centerY + BOARD.height / 2, HOOP_ROOT.z + BOARD.front),
+);
+/** Rim tube centre radius (the model's torus) and the net's radius at depth fraction t (its lattice profile). */
+const RING_R = RIM.innerRadius + RIM.tube;
+const netRadius = (t: number) => RING_R + (NET.bottomRadius - RING_R) * (0.72 * t + 0.28 * t * t);
+/** Pole base plate height above the floor. */
+const POLE_BASE_H = 0.07;
+/** Surface gap the ball must keep from every hoop part along a blend. */
+export const BLEND_MARGIN = 0.05;
+
+/** Distance from point p to the nearest hoop surface: rim tube, net, backboard or pole. */
+export function hoopDistance(p: Vector3): number {
+  const r = Math.hypot(p.x - RIM_CENTER.x, p.z - RIM_CENTER.z);
+  const dy = p.y - RIM_CENTER.y;
+  let d = Math.hypot(r - RING_R, dy) - RIM.tube;
+  // The net is a surface of revolution: its nearest point lies in p's meridian plane.
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    d = Math.min(d, Math.hypot(r - netRadius(t), dy + NET.depth * t));
+  }
+  d = Math.min(d, BOARD_BOX.distanceToPoint(p));
+  const pr = Math.hypot(p.x - HOOP_ROOT.x, p.z - (HOOP_ROOT.z + POLE.z));
+  d = Math.min(d, Math.hypot(Math.max(0, pr - POLE.radius), Math.max(0, p.y - POLE.top)));
+  d = Math.min(d, Math.hypot(Math.max(0, pr - POLE.baseRadius), Math.max(0, p.y - POLE_BASE_H)));
+  return d;
+}
+
+/** Closest approach of the ball centre to the hoop along the straight blend from `from` to `to`. */
+export function blendClearance(from: Vector3, to: Vector3 = BALL_AT.guest, samples = 32): number {
+  const p = new Vector3();
+  let min = Infinity;
+  for (let i = 0; i <= samples; i++) min = Math.min(min, hoopDistance(p.lerpVectors(from, to, i / samples)));
+  return min;
+}
+
+/**
+ * Spec revision #9: blend through guest-ready wherever a straight blend is clean, and cut only
+ * where it would pass the ball through the rim, net, board or pole, or while the net is moving
+ * (a blend would snap it to rest).
+ */
+export function sportsInterruptCut(ball: Vector3, f: Pick<SportsFrame, 'netFlare' | 'netStretch'>): boolean {
+  return f.netFlare !== 0 || f.netStretch !== 0 || blendClearance(ball) < BALL_R + BLEND_MARGIN;
+}
+
+/**
+ * Contact-blob falloff height. With the key's shadow map on (Normal/High) the cast shadow already
+ * shows an airborne ball's height, so the blob only anchors contact and is gone within a
+ * third of a unit; without it (Low) the blob is the only shadow and fades slowly.
+ */
+export const BLOB_FALLOFF = { withKeyShadow: 0.35, alone: 1.6 } as const;
+
 export class SportsScene implements SceneInstance {
   readonly category = 'sports' as const;
   readonly root: Object3D;
@@ -41,6 +95,7 @@ export class SportsScene implements SceneInstance {
 
   private readonly frame = newFrame();
   private preset: BallPreset;
+  private shadowHeight = 0;
 
   constructor(readonly rig: SportsRig, config: Extract<SceneConfig, { category: 'sports' }>) {
     this.root = rig.root;
@@ -48,6 +103,10 @@ export class SportsScene implements SceneInstance {
     this.preset = config.ball;
     const n = rig.nodes;
     this.animatedNodes = [n.ball_authored!, n.ball_secondary!];
+    // The blob's opacity depends on whether this render has the key's shadow map: decided per draw.
+    rig.ballShadow.onBeforeRender = (renderer) => {
+      if (renderer.shadowMap.enabled) rig.ballShadow.setHeight(this.shadowHeight, BLOB_FALLOFF.withKeyShadow);
+    };
     this.pose('guest-ready');
   }
 
@@ -71,12 +130,9 @@ export class SportsScene implements SceneInstance {
     this.updateShadow(this.rig.nodes.ball_authored!.position);
   }
 
-  /** Near the hoop (or with the net moving), a straight blend would pass the ball through the rim or net. */
+  /** Cut only where a straight blend from the ball's current position would cross the hoop. */
   interruptCut(): boolean {
-    const f = this.frame;
-    const nearHoop = Math.hypot(f.ballPos.x - RIM_CENTER.x, f.ballPos.z - RIM_CENTER.z) < RIM.innerRadius + BALL_R + 0.5;
-    const airborne = f.ballPos.y > BALL_R + 0.05;
-    return (nearHoop && airborne) || f.netFlare !== 0 || f.netStretch !== 0;
+    return sportsInterruptCut(this.rig.nodes.ball_authored!.position, this.frame);
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
@@ -102,10 +158,12 @@ export class SportsScene implements SceneInstance {
   }
 
   private updateShadow(ball: Vector3): void {
-    // Tight and dark on the floor; wider and fainter as the ball rises, never stuck to it.
+    // Tight and dark on the floor; wider and fainter as the ball rises, never stuck to it. This is
+    // the Low-tier falloff; renders with the key's shadow map fade it faster (onBeforeRender).
     const s = this.rig.ballShadow;
     s.setFootprint(ball.x, ball.z);
-    s.setHeight(Math.max(0, ball.y - BALL_R), 1.6);
+    this.shadowHeight = Math.max(0, ball.y - BALL_R);
+    s.setHeight(this.shadowHeight, BLOB_FALLOFF.alone);
   }
 }
 

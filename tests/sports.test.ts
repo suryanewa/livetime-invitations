@@ -5,9 +5,12 @@ import { cameraDirection, fitCameraToBounds } from '../src/render/camera.ts';
 import { SEAM_FRAME } from '../src/render/ballMaterial.ts';
 import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, POLE, RIM, RIM_CENTER, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES } from '../models/sportsContract.ts';
 import { buildSportsGeometry } from '../models/sportsPremium.ts';
-import { CONTACT_AT, DURATIONS, frameFor, newFrame, sampleSequence, type SportsFrame } from '../src/scenes/sports/sequences.ts';
+import {
+  CONTACT_AT, DURATIONS, frameFor, GRAVITY, LANDINGS, MADE_LAND_AT, MISS_LAND_AT, MISS_POINT, NET_DRAG, NET_EXIT, NET_HOLD, newFrame, PASS_LAND_AT, RELEASE_AT, sampleSequence,
+  type SportsFrame,
+} from '../src/scenes/sports/sequences.ts';
 import { farLayerShade, NET_FAR_SHADE, NET_FLARE_WIDEN, NET_STRETCH } from '../models/sports.ts';
-import { sportsFramePoints } from '../src/scenes/sports/index.ts';
+import { BLEND_MARGIN, blendClearance, hoopDistance, sportsFramePoints, sportsInterruptCut } from '../src/scenes/sports/index.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
 const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
@@ -117,6 +120,165 @@ describe('Sports choreography', () => {
     }
     expect(bounces).toBe(1);
     expect(horizontal(BALL_AT.made, RIM_CENTER)).toBeLessThan(0.7);
+  });
+});
+
+/** Velocity and acceleration by central differences (1 ms). */
+const H = 1e-3;
+const pos = (seq: SequenceName, t: number) => at(seq, t).ballPos;
+const vel = (seq: SequenceName, t: number) => pos(seq, t + H).sub(pos(seq, t - H)).divideScalar(2 * H);
+const acc = (seq: SequenceName, t: number) => pos(seq, t + H).add(pos(seq, t - H)).sub(pos(seq, t).multiplyScalar(2)).divideScalar(H * H);
+const DOWN_G = () => new Vector3(0, -GRAVITY, 0);
+/** Ball centre in the shared camera's view plane (orthographic: equal to stage units). */
+const screen = (p: Vector3) => {
+  const camera = new OrthographicCamera();
+  fitCameraToBounds(camera, SPORTS_BOUNDS, 1, undefined, sportsFramePoints());
+  const q = p.clone().applyMatrix4(camera.matrixWorldInverse);
+  return new Vector3(q.x, q.y, 0);
+};
+
+describe('Sports ballistics: one gravity, no stalls, bounded net drag', () => {
+  it('the made ball keeps moving through the rim: no stall at the contact beat', () => {
+    const before = vel('accept', CONTACT_AT - 2 * H), after = vel('accept', CONTACT_AT + 2 * H);
+    // The ball enters the net with the arc's own velocity (it used to drop from −6 to 0 u/s in 1 ms).
+    expect(after.distanceTo(before)).toBeLessThan(0.2);
+    expect(before.y).toBeLessThan(-5);
+    // Through the net and down to the floor it never slows below the net's pass-through speed.
+    for (let t = CONTACT_AT; t < MADE_LAND_AT - 2 * H; t += H) expect(vel('accept', t).length()).toBeGreaterThan(0.45 * before.length());
+    // Per 60 fps frame it keeps covering ground after contact (it used to sit in the rim ~6 frames).
+    for (let i = 0; i < 6; i++) {
+      const t = CONTACT_AT + i / 60;
+      expect(pos('accept', t + 1 / 60).distanceTo(pos('accept', t))).toBeGreaterThan(0.05);
+    }
+  });
+
+  it('after release every flight falls under one gravity; only the net adds a bounded drag', () => {
+    expect(NET_DRAG).toBeLessThan(2.5 * GRAVITY);
+    const flights: [SequenceName, number, number][] = [['host', 0.2, PASS_LAND_AT], ['accept', RELEASE_AT, MADE_LAND_AT], ['decline', RELEASE_AT, MISS_LAND_AT]];
+    for (const [seq, t0, t1] of flights) {
+      for (let t = t0 + 2 * H; t <= t1 - 2 * H; t += H) {
+        const a = acc(seq, t);
+        const inNet = seq === 'accept' && t > CONTACT_AT - 2 * H && t < CONTACT_AT + NET_EXIT + 2 * H;
+        if (inNet) {
+          expect(a.clone().sub(DOWN_G()).length()).toBeLessThanOrEqual(NET_DRAG + 1e-3);
+          expect(a.length()).toBeLessThanOrEqual(GRAVITY + NET_DRAG);
+        } else {
+          // Free flight, the airball included past its miss point: exactly the shared gravity.
+          expect(a.distanceTo(DOWN_G())).toBeLessThan(0.05);
+        }
+      }
+    }
+  });
+
+  it('bounces and the catch hop fall under the same gravity', () => {
+    const hops: [SequenceName, number, number][] = [['host', PASS_LAND_AT, DURATIONS.host], ['accept', MADE_LAND_AT, DURATIONS.accept], ['decline', MISS_LAND_AT, DURATIONS.decline]];
+    for (const [seq, t0, t1] of hops) {
+      let airborne = 0;
+      for (let t = t0 + 2 * H; t <= t1 - 2 * H; t += H) {
+        if (Math.min(pos(seq, t - H).y, pos(seq, t).y, pos(seq, t + H).y) <= BALL_R + 1e-9) continue;
+        airborne++;
+        expect(acc(seq, t).y).toBeCloseTo(-GRAVITY, 1);
+      }
+      expect(airborne).toBeGreaterThan(50);
+    }
+  });
+
+  it('the gather hands the flight a moving ball: the release is not a step from rest', () => {
+    for (const seq of ['accept', 'decline'] as const) {
+      // One-sided velocities right at the release (10 µs steps).
+      const e = 1e-5;
+      const pre = pos(seq, RELEASE_AT - e).sub(pos(seq, RELEASE_AT - 2 * e)).divideScalar(e);
+      const post = pos(seq, RELEASE_AT + 2 * e).sub(pos(seq, RELEASE_AT + e)).divideScalar(e);
+      // Same horizontal velocity on both sides of the release, and already rising fast.
+      expect(Math.hypot(pre.x - post.x, pre.z - post.z)).toBeLessThan(0.2);
+      expect(pre.y).toBeGreaterThan(0.4 * post.y);
+      // Never parked mid-air: once off the floor it only speeds up until it leaves.
+      for (let t = RELEASE_AT - 0.08; t < RELEASE_AT - 0.01; t += 0.005) expect(vel(seq, t + 0.005).y).toBeGreaterThan(vel(seq, t).y);
+    }
+  });
+
+  it('landing times, landing spots and the net hold are derived from the curves', () => {
+    for (const [seq, landAt, land] of [['accept', MADE_LAND_AT, LANDINGS.made], ['decline', MISS_LAND_AT, LANDINGS.missed]] as const) {
+      expect(pos(seq, landAt).distanceTo(land)).toBeLessThan(1e-6);
+      expect(pos(seq, landAt - 0.01).y).toBeGreaterThan(BALL_R + 0.04);
+    }
+    // The net starts to swing back exactly when the made ball's top has left its bottom.
+    expect(pos('accept', CONTACT_AT + NET_HOLD).y + BALL_R).toBeCloseTo(RIM_CENTER.y - NET.depth, 6);
+    expect(at('accept', CONTACT_AT + NET_HOLD - 0.01).netFlare).toBe(1);
+    expect(at('accept', CONTACT_AT + NET_HOLD + 0.05).netFlare).toBeLessThan(1);
+    // Both balls land and then roll on towards their rest spots (no slide back).
+    expect(horizontal(BALL_AT.made, LANDINGS.made)).toBeGreaterThan(0.15);
+    expect(horizontal(BALL_AT.missed, LANDINGS.missed)).toBeGreaterThan(0.15);
+    expect(horizontal(BALL_AT.missed, BALL_AT.guest)).toBeGreaterThan(horizontal(LANDINGS.missed, BALL_AT.guest));
+  });
+});
+
+describe('Sports legibility: the airball is a shot, the declined pose is not the ready pose', () => {
+  it('the airball travels towards the hoop, passes rim height beside it and lands past the backboard', () => {
+    const guest = screen(BALL_AT.guest), miss = screen(MISS_POINT), rim = screen(RIM_CENTER);
+    expect(MISS_POINT.y).toBeCloseTo(RIM_CENTER.y, 6);
+    // On screen it heads for the rim, then passes it with a clear gap (ring radius + ball + margin).
+    expect(miss.x - guest.x).toBeGreaterThan(0.4);
+    expect(rim.x - miss.x).toBeGreaterThan(RIM.innerRadius + RIM.tube + BALL_R + 0.2);
+    // In the court it travels further than the made shot and comes down behind the board's plane.
+    expect(horizontal(LANDINGS.missed, BALL_AT.guest)).toBeGreaterThan(horizontal(RIM_CENTER, BALL_AT.guest));
+    expect(LANDINGS.missed.z).toBeLessThan(HOOP_ROOT.z + BOARD.front - BOARD.thickness);
+  });
+
+  it('the declined ball ends well apart from guest-ready, accepted and host-ready at phone scale', () => {
+    const declined = screen(pose('declined').ballPos);
+    for (const other of ['guest-ready', 'accepted', 'host-ready'] as const) {
+      const gap = declined.distanceTo(screen(pose(other).ballPos)) / (2 * BALL_R);
+      // At least 1.2 ball diameters in 2D (never a screen-x-only test): the silhouettes never touch.
+      expect(gap, other).toBeGreaterThanOrEqual(1.2);
+    }
+  });
+
+  it('the airball and the declined rest never widen the frame', () => {
+    for (const aspect of [0.75, 1, 1.5]) {
+      const fit = (seqs: readonly SequenceName[]) => {
+        const c = new OrthographicCamera();
+        fitCameraToBounds(c, SPORTS_BOUNDS, aspect, undefined, sportsFramePoints(seqs));
+        return [c.left, c.right, c.bottom, c.top];
+      };
+      const all = fit(['host', 'accept', 'decline']), without = fit(['host', 'accept']);
+      for (let i = 0; i < 4; i++) expect(all[i]).toBeCloseTo(without[i]!, 6);
+    }
+  });
+});
+
+describe('Sports change response: blend unless a straight blend crosses the hoop', () => {
+  const cut = (seq: SequenceName, t: number) => {
+    const f = at(seq, t);
+    return sportsInterruptCut(f.ballPos, f);
+  };
+
+  it('blends mid-flight and at rest, cuts at the rim and while the net moves', () => {
+    // The old cylinder rule cut from 0.39 s; the straight path back stays clear there.
+    for (let t = 0; t <= 0.75; t += 0.01) expect(cut('accept', t), `accept ${t.toFixed(2)}`).toBe(false);
+    expect(cut('accept', 0.5)).toBe(false);
+    // Above the rim the straight path back would clip the ring; inside the net it would cross it.
+    expect(cut('accept', 0.85)).toBe(true);
+    expect(cut('accept', CONTACT_AT + 0.1)).toBe(true);
+    // The airball never crosses the hoop, so a change always blends (both directions now agree).
+    for (let t = 0; t <= DURATIONS.decline; t += 0.01) expect(cut('decline', t), `decline ${t.toFixed(2)}`).toBe(false);
+    for (const p of ['guest-ready', 'accepted', 'declined'] as const) expect(sportsInterruptCut(pose(p).ballPos, pose(p))).toBe(false);
+  });
+
+  it('a blend never passes the ball through the rim, net, board or pole', () => {
+    for (const seq of ['accept', 'decline'] as const) {
+      for (let t = 0; t <= DURATIONS[seq]; t += 0.01) {
+        const f = at(seq, t);
+        if (sportsInterruptCut(f.ballPos, f)) continue;
+        // Dense re-check of the straight path (the decision samples it 32 times).
+        const p = new Vector3();
+        let min = Infinity;
+        for (let i = 0; i <= 200; i++) min = Math.min(min, hoopDistance(p.lerpVectors(f.ballPos, BALL_AT.guest, i / 200)));
+        expect(min, `${seq} ${t.toFixed(3)}`).toBeGreaterThan(BALL_R);
+      }
+    }
+    // And the clearance really measures the hoop: from inside the rim a blend is blocked.
+    expect(blendClearance(RIM_CENTER)).toBeLessThan(BALL_R + BLEND_MARGIN);
   });
 });
 
