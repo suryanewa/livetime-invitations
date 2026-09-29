@@ -331,9 +331,11 @@ function buildLid(lib: Lib, root: Object3D): void {
   const plan = planRoundedRect(hx, hz, R, CORNER_SEGS, 0, cz, notches);
   const yb = LID_YB, yt = LID_YT;
 
-  // Outer skin: rim, walls, a continuous top fillet and a crisp reveal that frames the top panel.
+  // Outer skin: rim, walls, a continuous top fillet and a crisp reveal that frames the top panel:
+  // 14 mm across and 4 mm deep with 45° walls, so it holds one continuous line at phone scale
+  // (checkpoint 4: the 8 × 2 mm groove broke into dashes there).
   const outer = sweep(plan, profile([
-    [-t, yb], [0, yb, 0.003], [0, yt, 0.022], [-0.05, yt], [-0.0515, yt - 0.002], [-0.0565, yt - 0.002], [-0.058, yt], [-0.066, yt],
+    [-t, yb], [0, yb, 0.003], [0, yt, 0.022], [-0.05, yt], [-0.054, yt - 0.004], [-0.06, yt - 0.004], [-0.064, yt], [-0.066, yt],
   ], 4));
   const top = cap(planContour(hx, hz, R, CORNER_SEGS, -0.066, 0, cz), yt, true);
   // Inner skin: walls, a soft inner corner, the slim frame and the lining pocket step.
