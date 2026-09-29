@@ -8,8 +8,8 @@
  * FIRST VIEWPORT: phone-width invitation (event, stage, controls) left; the collection rail
  *   and a collapsed Developer drawer right. Controls sit directly under the stage; in host
  *   mode the preset choice precedes the primary action because the host picks, then acts.
- * FORM: shaped directly from a precisely specified brief (the skill's allowance for precise
- *   requests; no concept roll was run, so no seed key exists).
+ * FORM: shaped directly from a precisely specified brief. Concept roll waived by user,
+ *   2026-09-28 (checkpoint 2: "keep the shell"), so no seed key exists.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review,
  *   the verdict, and DESIGN.md
  */
@@ -172,7 +172,8 @@ function mount() {
     config,
     mode,
     initialResponse,
-    direction: 'L',
+    direction: 'L2',
+    stage: { premium: true },
     reducedMotion: motionOverridden ? !motionOn : undefined,
     scenes,
     posterFor: posterUrl,

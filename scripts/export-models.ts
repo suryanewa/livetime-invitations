@@ -16,7 +16,12 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { dedup, prune, quantize, weld } from '@gltf-transform/functions';
 import { buildKeycardGeometry } from '../models/keycard.ts';
-import { DIRECTIONS, LOCKED_DIRECTION, type MaterialLibrary } from '../src/render/materials.ts';
+import { DIRECTIONS, type DirectionId, type MaterialLibrary } from '../src/render/materials.ts';
+import { createSimplifier, type Simplify } from '../models/simplify.ts';
+
+/** Direction exported to runtime GLB (the showcase's production look). */
+const EXPORT_DIRECTION: DirectionId = 'L2';
+let simplify: Simplify;
 
 // GLTFExporter uses FileReader for binary output; Node has Blob but not FileReader.
 class NodeFileReader {
@@ -39,7 +44,7 @@ class NodeFileReader {
 
 /** Library stand-in: named plain materials, no textures (runtime re-binds by name). */
 function exportLibrary(): MaterialLibrary {
-  const direction = DIRECTIONS[LOCKED_DIRECTION];
+  const direction = DIRECTIONS[EXPORT_DIRECTION];
   const cache = new Map<string, MeshStandardMaterial>();
   const make = (name: string) => {
     const spec = direction.surfaces[name];
@@ -59,7 +64,7 @@ function exportLibrary(): MaterialLibrary {
 }
 
 const SCENES: Record<string, () => Object3D> = {
-  business: () => buildKeycardGeometry({ lib: exportLibrary() }, 'light'),
+  business: () => buildKeycardGeometry({ lib: exportLibrary(), simplify }, 'light'),
 };
 
 async function exportScene(name: string) {
@@ -92,5 +97,6 @@ async function exportScene(name: string) {
   );
 }
 
+simplify = await createSimplifier();
 const targets = process.argv.slice(2);
 for (const name of targets.length ? targets : Object.keys(SCENES)) await exportScene(name);

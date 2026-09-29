@@ -32,6 +32,7 @@ import {
   wire,
   type ProfilePoint,
 } from './geometry.ts';
+import { buildPremiumClip, buildPremiumScanner, PREMIUM_STRAP_TOP } from './badgePremium.ts';
 import { LanyardStrand } from './lanyard.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
@@ -42,7 +43,7 @@ export const BUSINESS_NODES = [
   'lanyard_curve', 'scanner_root', 'scanner_pad', 'scanner_light', 'card_shadow',
 ] as const;
 
-export const CARD = { width: 0.86, height: 1.3, depth: 0.05, slotW: 0.24, slotH: 0.05, slotY: 1.3 / 2 - 0.083 };
+export const CARD = { width: 0.86, height: 1.3, depth: 0.034, slotW: 0.24, slotH: 0.05, slotY: 1.3 / 2 - 0.083 };
 /**
  * J-hook (direction L): back leg at z = HOOK.back, a horizontal run at y = HOOK.runY that
  * passes through the card slot, and a gate hinged at the run's front corner (HOOK.hinge).
@@ -173,6 +174,13 @@ export function buildKeycardGeometry(ctx: ModelContext, template: CardTemplate =
     const row = perforationRow(W - 0.14 - 0.14, 0.07);
     const perf = mesh('card_perforation', row.geometry, [lib.get('mat_signature'), lib.get('mat_card_light')], cardMesh);
     perf.position.set(0, -0.5, face);
+  } else if (st.card === 'print') {
+    // Premium (L2): the whole face is a laminated print (colour block, GUEST wordmark,
+    // portrait window, stripe); the perforation row stays real construction.
+    const pitch = 0.06;
+    const row = perforationRow(W - 0.14 - 2 * pitch, pitch);
+    const perf = mesh('card_perforation', row.geometry, [lib.get('mat_signature'), cardFace()], cardMesh);
+    perf.position.set(0, -0.565, face);
   } else {
     // Satin Enamel (locked): cobalt panel with a printed personal-ID layout, accent stripe,
     // whole-dot perforation row on the border, ink keyline edges.
@@ -200,7 +208,11 @@ export function buildKeycardGeometry(ctx: ModelContext, template: CardTemplate =
   }
 
   // Clip: body, crimp and a wire hook passing through the slot. Metal (A/L) or enamel (B).
+  const premium = dir.id === 'L2';
   const metalClip = st.clip === 'metal';
+  if (premium) {
+    buildPremiumClip(lib, clipPivot, HOOK);
+  } else {
   const clipBody = mesh('clip_body', roundedBox(0.11, 0.1, 0.056, metalClip ? 0.018 : 0.03), lib.get(metalClip ? 'mat_metal' : 'mat_accent'), clipPivot);
   clipBody.position.y = -0.04;
   const crimp = mesh('clip_crimp', roundedBox(0.13, 0.06, 0.04, metalClip ? 0.01 : 0.018), lib.get(metalClip ? 'mat_anodized' : 'mat_body_ink'), clipPivot);
@@ -234,6 +246,7 @@ export function buildKeycardGeometry(ctx: ModelContext, template: CardTemplate =
     hookPts.push(new Vector3(0, -0.14, -hz), new Vector3(0, -0.07, -hz));
     mesh('clip_hook', wire(hookPts, hr, 10), hookMat, clipPivot);
   }
+  }
 
   // ── Lanyard (curves are built at runtime by the rig) ─────────────────────
   const anchor = group('lanyard_anchor', root);
@@ -243,6 +256,16 @@ export function buildKeycardGeometry(ctx: ModelContext, template: CardTemplate =
   // ── Scanner ───────────────────────────────────────────────────────────────
   const scanner = group('scanner_root', root);
   scanner.position.copy(SCANNER_POS);
+  if (premium) {
+    const parts = buildPremiumScanner(ctx, scanner, SCANNER_FOOT);
+    const accept = mesh('scanner_symbol_accept', checkGeometry(0.1, 0.006), lib.get('mat_status_symbol'), parts.symbolParent);
+    const decline = mesh('scanner_symbol_decline', beveledPlate(0.09, 0.022, 0.006, 0.011, 0.002, 1), lib.get('mat_status_symbol'), parts.symbolParent);
+    accept.position.z = decline.position.z = 0.0055;
+    accept.visible = decline.visible = false;
+    group('card_shadow', root).position.set(HANG_PIVOT.x, 0.002, HANG_PIVOT.z);
+    group('scanner_shadow', root).position.set(SCANNER_POS.x + 0.05, 0.002, SCANNER_POS.z - 0.02);
+    return root;
+  }
   const body = group('scanner_housing', scanner);
   if (lean) body.position.y = SCANNER_FOOT;
   const SW = SCANNER_WIDTH;
@@ -363,7 +386,8 @@ export function bindLibraryMaterials(root: Object3D, lib: ModelContext['lib']): 
  */
 export function rigKeycard(root: Object3D, lib: ModelContext['lib'], template: CardTemplate = 'light'): KeycardRig {
   const dir = lib.direction;
-  const lean = dir.id === 'L';
+  const premiumRig = dir.id === 'L2';
+  const lean = dir.id === 'L' || premiumRig;
   const nodes = collectNodes(root, BUSINESS_NODES);
   const clipPivot = nodes.clip_pivot!;
   const anchor = nodes.lanyard_anchor!;
@@ -383,7 +407,7 @@ export function rigKeycard(root: Object3D, lib: ModelContext['lib'], template: C
     strands.forEach((s, i) => {
       const side = i === 0 ? -1 : 1;
       top.set(anchor.position.x + side * LANYARD_SPREAD, anchor.position.y, anchor.position.z);
-      attach.set(side * 0.03, 0.065, 0);
+      attach.set(side * 0.03, premiumRig ? PREMIUM_STRAP_TOP : 0.065, 0);
       clipPivot.localToWorld(attach);
       root.worldToLocal(attach);
       s.update(top, attach, facing, lean ? clipUp : undefined);

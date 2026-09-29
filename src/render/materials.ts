@@ -1,4 +1,5 @@
-import { Color, DoubleSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Vector2 } from 'three';
+import { Color, DoubleSide, FrontSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Vector2 } from 'three';
+import { cardPrint, strapPrint } from './print.ts';
 import { perforationDarkMap, perforationMaps, ringNormal, stippleNormal, weaveNormal } from './textures.ts';
 
 /**
@@ -8,7 +9,7 @@ import { perforationDarkMap, perforationMaps, ringNormal, stippleNormal, weaveNo
  * food 0.55–0.85. Metalness is 0 or 1 except anodised/painted metal.
  */
 
-export type DirectionId = 'A' | 'B' | 'L';
+export type DirectionId = 'A' | 'B' | 'L' | 'L2';
 
 /** The production direction locked at checkpoint 1 (B construction + A restraint). */
 export const LOCKED_DIRECTION: DirectionId = 'L';
@@ -29,6 +30,10 @@ export interface SurfaceSpec {
   opacity?: number;
   /** View-dependent unlit flame: hot core facing the camera, orange rim. */
   flame?: { core: string; rim: string };
+  /** Printed graphics generated at load (fidelity pass). */
+  print?: 'card-light' | 'card-dark' | 'strap';
+  anisotropy?: number;
+  iridescence?: number;
   normalScale?: number;
   perforated?: boolean | 'dark';
   doubleSide?: boolean;
@@ -59,7 +64,7 @@ export interface DirectionTokens {
   /** Construction choices per object, so models never infer style from the signature. */
   style: {
     cake: 'piped' | 'drip';
-    card: 'band' | 'panel' | 'panel-id';
+    card: 'band' | 'panel' | 'panel-id' | 'print';
     clip: 'metal' | 'enamel';
     scanner: 'ring' | 'pill' | 'window';
     cloche: 'metal' | 'enamel';
@@ -98,7 +103,8 @@ const food: Record<string, SurfaceSpec> = {
   mat_veg_red: { color: '#D0463A', roughness: 0.5 },
 };
 
-export const DIRECTIONS: Record<DirectionId, DirectionTokens> = {
+// L2 is derived from L right after this literal.
+export const DIRECTIONS = {
   A: {
     id: 'A',
     name: 'Satin Studio',
@@ -258,7 +264,49 @@ export const DIRECTIONS: Record<DirectionId, DirectionTokens> = {
       ...food,
     },
   },
-};
+} satisfies Record<Exclude<DirectionId, 'L2'>, DirectionTokens> as unknown as Record<DirectionId, DirectionTokens>;
+
+/**
+ * L2 — fidelity candidate (checkpoint 2 rework): the locked L identity with premium surfaces:
+ * laminated printed cards, chrome hardware, printed woven strap, glass reader face, soft
+ * buttercream sheen, glazed tray. Same palette, silhouettes and signature.
+ */
+{
+  const L = DIRECTIONS.L;
+  const up: Record<string, SurfaceSpec> = {
+    mat_body: { color: '#EEE7DA', roughness: 0.4, clearcoat: 0.3, clearcoatRoughness: 0.35 },
+    mat_body_alt: { color: '#DBD4C7', roughness: 0.42, clearcoat: 0.25, clearcoatRoughness: 0.35 },
+    mat_body_ink: { color: '#16181B', roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.06 },
+    mat_edge: { color: '#A39D93', roughness: 0.45 },
+    mat_status: { color: '#0F1013', roughness: 0.3, emissive: '#000000', emissiveIntensity: 0 },
+    mat_metal: { color: '#E4E3E0', roughness: 0.14, metalness: 1 },
+    mat_metal_dark: { color: '#8A8C8F', roughness: 0.2, metalness: 1 },
+    mat_anodized: { color: '#F0663F', roughness: 0.26, metalness: 1 },
+    mat_cloche: { color: '#DAD6CF', roughness: 0.3, metalness: 1, anisotropy: 0.7 },
+    mat_card_light: { color: '#FFFFFF', roughness: 0.45, clearcoat: 1, clearcoatRoughness: 0.1, print: 'card-light' },
+    mat_card_dark: { color: '#FFFFFF', roughness: 0.45, clearcoat: 1, clearcoatRoughness: 0.1, print: 'card-dark' },
+    mat_fabric: { color: '#FFFFFF', roughness: 0.82, print: 'strap', normal: 'weave', normalScale: 0.9, sheen: 0.7, sheenColor: '#b9c4e8', doubleSide: true },
+    mat_pad: { color: '#101214', roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.08 },
+    mat_print: { color: '#9EA2A8', roughness: 0.4 },
+    mat_tray: { color: '#2C47A6', roughness: 0.38, clearcoat: 0.8, clearcoatRoughness: 0.12 },
+    mat_frosting_vanilla: { color: '#F6ECDB', roughness: 0.55, sheen: 0.35, sheenColor: '#fff6e8' },
+    mat_frosting_cocoa: { color: '#5B3627', roughness: 0.48, sheen: 0.3, sheenColor: '#8a5a44' },
+    mat_glaze_vanilla: { color: '#FFF9EE', roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.15 },
+    mat_glaze_cocoa: { color: '#3A2219', roughness: 0.18, clearcoat: 0.8, clearcoatRoughness: 0.1 },
+    mat_candle_1: { color: '#F2603B', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.2 },
+    mat_candle_2: { color: '#2C47A6', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.2 },
+    mat_candle_3: { color: '#E8A93A', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.2 },
+    mat_plate: { color: '#F7F2E9', roughness: 0.22, clearcoat: 0.8, clearcoatRoughness: 0.08 },
+  };
+  DIRECTIONS.L2 = {
+    ...L,
+    id: 'L2',
+    name: 'Satin Enamel · premium',
+    summary: 'The locked L identity with premium surfaces and a sunlit studio: laminated printed badges, chrome hardware, printed woven straps, glass reader faces, buttercream sheen, glazed ceramics.',
+    style: { ...L.style, card: 'print' },
+    surfaces: { ...L.surfaces, ...up },
+  };
+}
 
 function flameMaterial(name: string, core: string, rim: string): ShaderMaterial {
   return new ShaderMaterial({
@@ -310,13 +358,13 @@ function buildMaterial(name: string, spec: SurfaceSpec): Material {
       depthWrite: spec.opacity === undefined,
     });
   }
-  const needsPhysical = (spec.clearcoat ?? 0) > 0 || (spec.sheen ?? 0) > 0;
+  const needsPhysical = (spec.clearcoat ?? 0) > 0 || (spec.sheen ?? 0) > 0 || (spec.anisotropy ?? 0) > 0 || (spec.iridescence ?? 0) > 0;
   const params = {
     name,
     color: new Color(spec.color),
     roughness: spec.roughness,
     metalness: spec.metalness ?? 0,
-    side: spec.doubleSide ? DoubleSide : undefined,
+    side: spec.doubleSide ? DoubleSide : FrontSide,
   };
   const m = needsPhysical ? new MeshPhysicalMaterial(params) : new MeshStandardMaterial(params);
   if (m instanceof MeshPhysicalMaterial) {
@@ -327,6 +375,20 @@ function buildMaterial(name: string, spec: SurfaceSpec): Material {
       m.sheenColor = new Color(spec.sheenColor ?? '#ffffff');
       m.sheenRoughness = 0.6;
     }
+    if (spec.anisotropy) m.anisotropy = spec.anisotropy;
+    if (spec.iridescence) m.iridescence = spec.iridescence;
+  }
+  if (spec.print) {
+    const tex = spec.print === 'strap' ? strapPrint() : cardPrint(spec.print === 'card-light' ? 'light' : 'dark');
+    if (spec.print !== 'strap') {
+      // Card caps use world UVs in scene units: map the card rectangle onto the print.
+      tex.repeat.set(1 / 0.86, 1 / 1.3);
+      tex.offset.set(0.5, 0.5);
+    } else {
+      // Strap UVs run in weave tiles (0.06 units); one print tile spans the strap width.
+      tex.repeat.set(0.6, 0.3);
+    }
+    m.map = tex;
   }
   if (spec.emissive) {
     m.emissive = new Color(spec.emissive);

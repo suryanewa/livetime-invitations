@@ -19,7 +19,7 @@ import { FixedStepper } from '../motion/spring.ts';
 import { hasWebGL2 } from '../render/createRenderer.ts';
 import { type DirectionId, MaterialLibrary } from '../render/materials.ts';
 import { QualityMonitor, TIER_DPR, type Tier } from '../render/quality.ts';
-import { Stage } from '../render/stage.ts';
+import { Stage, type StageOptions } from '../render/stage.ts';
 
 /**
  * Embeddable invitation controller (Master §7). Three independent dimensions — resource,
@@ -33,6 +33,8 @@ export type PosterResolver = (category: Category, preset: string, pose: Canonica
 export interface InvitationOptions extends CreateInvitationOptions {
   scenes: SceneRegistry;
   direction?: DirectionId;
+  /** Studio options (premium lighting, projection). */
+  stage?: Omit<StageOptions, 'canvas' | 'preserveDrawingBuffer'>;
   posterFor?: PosterResolver;
   /** Human-readable description of each pose for the text fallback when a poster fails. */
   describePose?: (category: Category, pose: CanonicalPose) => string;
@@ -252,7 +254,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
 
     try {
       if (!stage) {
-        stage = Stage.create();
+        stage = Stage.create(options.stage ?? {});
         if (!stage) {
           setResource('fallback', 'webgl-unavailable');
           return;
@@ -278,6 +280,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       stage.setContent(instance.root, instance.bounds);
       resize();
       library().setLowDetail(quality.tier === 'low');
+      stage.premium?.setShadows(quality.tier === 'normal' || quality.tier === 'high');
       let shaderError = false;
       stage.renderer.debug.onShaderError = () => {
         shaderError = true;
@@ -417,6 +420,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       return;
     }
     library().setLowDetail(next === 'low');
+    stage?.premium?.setShadows(next === 'normal' || next === 'high');
     resize();
     redraw();
     options.onResourceState?.({ state: resource, reason: 'reduced-quality' });
@@ -659,6 +663,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
         void loadScene();
       } else {
         library().setLowDetail(tier === 'low');
+        stage?.premium?.setShadows(tier === 'normal' || tier === 'high');
         resize();
         redraw();
         requestFrame();

@@ -59,7 +59,7 @@ Setup evidence only. It is not visual approval.
 ### Independent reviews (2026-09-28)
 
 - **UI finish review** (Impeccable protocol, fresh agent): disposition *fix*, 8 material findings. All were applied: saving/error states no longer look stored, the landscape answer sits above the fold, selected segments are ≥3:1, the VoiceOver toggle label is fixed, the sample event is labelled, green is reserved for saved acceptance, and the Developer summary wraps at 320–420 px. A verdict pass on the recaptures follows.
-- **Adversarial code review** (4 dimension reviewers, each checked by an independent skeptic): 42 confirmed findings with overlaps, about 25 distinct. All were fixed except one spec interpretation escalated to Surya (lanyard anchor above the frame). The high-severity ones were:
+- **Adversarial code review** (4 dimension reviewers, each checked by an independent skeptic): 42 confirmed findings with overlaps, about 25 distinct. All were fixed except one spec interpretation escalated to Surya (lanyard anchor above the frame). Resolved at checkpoint 2 (2026-09-28): the strap keeps exiting the top of the frame. The high-severity ones were:
   - disposed renderers kept their WebGL contexts alive through shared texture caches;
   - early-scan contact reused a stale drag offset and teleported the card through the floor.
 - Checks added for the fixes: attach clearance, drag geometry, context-warning assertion, two regression browser tests.

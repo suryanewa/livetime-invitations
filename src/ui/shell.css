@@ -125,6 +125,9 @@ body {
 .lt-stage__poster.is-hidden {
   opacity: 0;
   pointer-events: none;
+  /* True crossfade: the poster stays opaque under the canvas until the canvas has faded in,
+     so the stage background never shows through mid-transition. */
+  transition: opacity 0ms linear var(--lt-entrance, 240ms);
 }
 
 .lt-stage__canvas {

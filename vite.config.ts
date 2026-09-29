@@ -12,6 +12,7 @@ export default defineConfig({
       input: {
         showcase: resolve(import.meta.dirname, 'index.html'),
         study: resolve(import.meta.dirname, 'study.html'),
+        lookdev: resolve(import.meta.dirname, 'lookdev.html'),
       },
     },
   },

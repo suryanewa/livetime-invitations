@@ -340,7 +340,23 @@ async function capturePerf() {
   await browser.close();
 }
 
+async function captureLookdev() {
+  await mkdir(outDir, { recursive: true });
+  const browser = await launch();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+  page.on('console', (m) => m.type() === 'error' && console.error('[page]', m.text()));
+  await page.goto(`${base}/lookdev.html`);
+  await page.waitForSelector('body[data-ready="true"]', { timeout: 120_000 });
+  const results = await page.evaluate(() => (window as any).__lookdev);
+  for (const [name, r] of Object.entries(results as Record<string, { url: string; triangles: number; calls: number; ms: number }>)) {
+    await saveDataUrl(join(outDir, `${name}.png`), r.url);
+    console.log(`${name}: ${r.triangles} tris · ${r.calls} calls · ${r.ms.toFixed(2)} ms`);
+  }
+  await browser.close();
+}
+
 if (mode === 'study') await captureStudy();
+else if (mode === 'lookdev') await captureLookdev();
 else if (mode === 'perf') await capturePerf();
 else if (mode === 'ui') await captureUi();
 else if (mode === 'thumbs') await captureThumbs();

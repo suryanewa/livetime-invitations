@@ -2,7 +2,7 @@ import '../ui/shell.css';
 import './study.css';
 import { Vector3 } from 'three';
 import { buildBasketballBlockout, buildDishBlockout, buildRecordPlayerBlockout } from '../../models/blockouts.ts';
-import { buildCake, TRAY_TOP } from '../../models/cake.ts';
+import { buildCake, CAKE_METRICS } from '../../models/cake.ts';
 import { buildKeycard, CARD, CARD_OFFSET_Y, HANG_PIVOT, SCANNER_POS, type KeycardModel } from '../../models/keycard.ts';
 import type { BuiltModel } from '../../models/types.ts';
 import { CAMERA_ANGLES } from '../render/camera.ts';
@@ -29,7 +29,7 @@ const SUBJECT_LABEL: Record<Subject, string> = { cake: 'Cake', keycard: 'Badge',
 const DIRS = ['L', 'A', 'B'] as const;
 const dirLabel = (d: DirectionId) => (d === 'L' ? 'L — Satin Enamel (locked)' : `${d} — ${DIRECTIONS[d].name}`);
 
-const libraries: Record<DirectionId, MaterialLibrary> = { A: new MaterialLibrary('A'), B: new MaterialLibrary('B'), L: new MaterialLibrary('L') };
+const libraries: Record<DirectionId, MaterialLibrary> = { A: new MaterialLibrary('A'), B: new MaterialLibrary('B'), L: new MaterialLibrary('L'), L2: new MaterialLibrary('L2') };
 
 function build(subject: Subject, dir: DirectionId): BuiltModel {
   const ctx = { lib: libraries[dir] };
@@ -200,7 +200,7 @@ async function main() {
     const url = frameShots[`cake-${dir}`]!;
     const [x, y] = project(stage, new Vector3(0.35, 0.06, 1.15), 358, 358, 3);
     crops.append(await crop(url, x, y, 120, `${dir} · Tray band detail`));
-    const [cx, cy] = project(stage, new Vector3(0.36, TRAY_TOP + 0.98, 0.12), 358, 358, 3);
+    const [cx, cy] = project(stage, new Vector3(0.36, CAKE_METRICS.standard.trayTop + 0.98, 0.12), 358, 358, 3);
     crops.append(await crop(url, cx, cy, 120, `${dir} · Candle, flame and frosting edge`));
     m.dispose();
   }

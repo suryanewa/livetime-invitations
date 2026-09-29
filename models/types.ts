@@ -4,6 +4,8 @@ import type { ContactShadow } from '../src/render/contactShadow.ts';
 
 export interface ModelContext {
   lib: MaterialLibrary;
+  /** Optional decimation for SDF parts (dev pages and export inject it; runtime never builds). */
+  simplify?: (g: import('three').BufferGeometry, ratio: number, error?: number) => import('three').BufferGeometry;
 }
 
 export interface BuiltModel {

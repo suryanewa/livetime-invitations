@@ -65,3 +65,43 @@ export function fitCameraToBounds(
   camera.bottom = cy - halfH;
   camera.updateProjectionMatrix();
 }
+
+/**
+ * Long-lens perspective variant (fidelity pass): same azimuth/elevation, subtle depth.
+ * Distance is solved so the projected motion bounds fit with the same clearance.
+ */
+export function fitPerspectiveToBounds(
+  camera: import('three').PerspectiveCamera,
+  bounds: Box3,
+  aspect: number,
+  clearance = FRAMING_CLEARANCE,
+): void {
+  const center = bounds.getCenter(new Vector3());
+  const dir = cameraDirection();
+  camera.clearViewOffset();
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+  const limit = 1 - 2 * clearance;
+  const fits = (d: number) => {
+    camera.position.copy(center).addScaledVector(dir, d);
+    camera.lookAt(center);
+    camera.updateMatrixWorld();
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      corner.set(i & 1 ? bounds.max.x : bounds.min.x, i & 2 ? bounds.max.y : bounds.min.y, i & 4 ? bounds.max.z : bounds.min.z).project(camera);
+      minX = Math.min(minX, corner.x); maxX = Math.max(maxX, corner.x);
+      minY = Math.min(minY, corner.y); maxY = Math.max(maxY, corner.y);
+    }
+    return { ok: maxX - minX <= 2 * limit && maxY - minY <= 2 * limit, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+  };
+  let lo = 1, hi = 200;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid).ok) hi = mid;
+    else lo = mid;
+  }
+  const r = fits(hi);
+  // Recentre: shift the view so the projected bounds sit in the middle of the frame.
+  camera.setViewOffset(1000 * aspect, 1000, (r.cx * 1000 * aspect) / 2, (-r.cy * 1000) / 2, 1000 * aspect, 1000);
+  camera.updateProjectionMatrix();
+}
