@@ -28,12 +28,27 @@ export function markNoShadowCast(...meshes: Object3D[]): void {
   for (const m of meshes) m.userData.noShadowCast = true;
 }
 
+/**
+ * Re-applies the proxy material after loading. Each loaded scene gets its own instance (kept on
+ * `root.userData`): a module-shared material collects a dispose listener from every renderer
+ * that compiles it, which kept each torn-down renderer (and its context) alive. The rig frees it
+ * with `disposeShadowProxies`.
+ */
 export function applyShadowProxies(root: Object3D): void {
+  let material: MeshBasicMaterial | null = null;
   root.traverse((o) => {
     const m = o as Mesh;
     if (m.isMesh && m.userData.shadowProxy) {
-      m.material = shadowProxyMaterial();
+      material ??= new MeshBasicMaterial({ name: 'fx_shadow_proxy', colorWrite: false, depthWrite: false });
+      m.material = material;
       m.renderOrder = -1;
     }
   });
+  if (material) root.userData.shadowProxyMaterial = material;
+}
+
+/** Frees the scene's proxy material (the renderer's listener on it goes with it). */
+export function disposeShadowProxies(root: Object3D): void {
+  (root.userData.shadowProxyMaterial as MeshBasicMaterial | undefined)?.dispose();
+  delete root.userData.shadowProxyMaterial;
 }

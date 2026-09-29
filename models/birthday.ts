@@ -3,7 +3,7 @@ import { ContactShadow } from '../src/render/contactShadow.ts';
 import { BIN_POS, BIN_YAW, birthdayBounds, CAKE } from './birthdayContract.ts';
 import { buildCakeGeometry, CAKE_NODES, type CakePreset } from './cake.ts';
 import { BIN, buildDisposalBin } from './disposalBin.ts';
-import { applyShadowProxies } from './shadowProxy.ts';
+import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
 /**
@@ -140,6 +140,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
       binShadow.dispose();
       texture.dispose();
       wispMaterial.dispose();
+      disposeShadowProxies(root);
       for (const c of candles) {
         c.flameMaterial.dispose();
         (c.wisp.material as Material).dispose();
