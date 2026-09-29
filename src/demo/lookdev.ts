@@ -2,6 +2,8 @@ import '../ui/shell.css';
 import './study.css';
 import { buildCake } from '../../models/cake.ts';
 import { buildKeycard } from '../../models/keycard.ts';
+import { buildRecordPlayerBlockout } from '../../models/blockouts.ts';
+import { buildRecordPlayer } from '../../models/recordPlayer.ts';
 import type { BuiltModel } from '../../models/types.ts';
 import { MaterialLibrary, type DirectionId } from '../render/materials.ts';
 import { Stage, type StageOptions } from '../render/stage.ts';
@@ -54,7 +56,20 @@ const SUBJECTS: Subject[] = [
       return { model, dispose: () => model.dispose() };
     },
   },
+  {
+    key: 'record',
+    label: 'Record player · guest-ready (Party)',
+    build(lib) {
+      // Only L2 has the production model; the current column shows L's study blockout.
+      const model = lib.direction.id === 'L2' ? buildRecordPlayer({ lib, simplify }, 'coral') : buildRecordPlayerBlockout({ lib });
+      return { model, dispose: () => model.dispose() };
+    },
+  },
 ];
+
+/** `?only=record` renders one subject (faster iteration). */
+const only = new URLSearchParams(location.search).get('only');
+if (only) SUBJECTS.splice(0, SUBJECTS.length, ...SUBJECTS.filter((x) => x.key === only));
 
 const results: Record<string, { url: string; triangles: number; calls: number; ms: number }> = {};
 

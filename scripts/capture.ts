@@ -10,7 +10,8 @@ import { chromium, type Page } from 'playwright-core';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const mode = process.argv[2] ?? 'study';
-const base = process.argv[3] ?? 'http://127.0.0.1:5199';
+// argv[3] is a base URL (http…) or, for lookdev, a subject filter.
+const base = process.argv[3]?.startsWith('http') ? process.argv[3] : 'http://127.0.0.1:5199';
 const outDir = join(import.meta.dirname, '..', 'outputs', mode);
 
 async function saveDataUrl(file: string, dataUrl: string) {
@@ -345,7 +346,9 @@ async function captureLookdev() {
   const browser = await launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
   page.on('console', (m) => m.type() === 'error' && console.error('[page]', m.text()));
-  await page.goto(`${base}/lookdev.html`);
+  // `pnpm capture lookdev record` renders one subject.
+  const only = process.argv[3]?.startsWith('http') ? undefined : process.argv[3];
+  await page.goto(`${base}/lookdev.html${only ? `?only=${only}` : ''}`);
   await page.waitForSelector('body[data-ready="true"]', { timeout: 120_000 });
   const results = await page.evaluate(() => (window as any).__lookdev);
   for (const [name, r] of Object.entries(results as Record<string, { url: string; triangles: number; calls: number; ms: number }>)) {

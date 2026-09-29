@@ -222,3 +222,87 @@ export function holoPattern(size = 256): Texture {
   c.fill();
   return finish(canvas);
 }
+
+/**
+ * Record label art (circle UVs, 0–1 across the label disc). Deliberately asymmetric — an
+ * off-centre wedge and a printed side mark — so a quarter turn of the record reads at a
+ * glance, even foreshortened at the family's 15° elevation.
+ */
+export function labelPrint(preset: 'coral' | 'cobalt', size = 512): Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const c = canvas.getContext('2d')!;
+  const ground = preset === 'coral' ? PRINT_COLORS.coral : PRINT_COLORS.cobalt;
+  const accent = preset === 'coral' ? PRINT_COLORS.cobaltDeep : PRINT_COLORS.coral;
+  const r = size / 2;
+  c.fillStyle = ground;
+  c.fillRect(0, 0, size, size);
+  // Wedge: a quarter sector in the accent colour, with a butter sliver beside it.
+  c.fillStyle = accent;
+  c.beginPath();
+  c.moveTo(r, r);
+  c.arc(r, r, r, -Math.PI * 0.62, -Math.PI * 0.12);
+  c.closePath();
+  c.fill();
+  c.fillStyle = PRINT_COLORS.butter;
+  c.beginPath();
+  c.moveTo(r, r);
+  c.arc(r, r, r, -Math.PI * 0.12, -Math.PI * 0.04);
+  c.closePath();
+  c.fill();
+  // Fine printed rings.
+  c.strokeStyle = PRINT_COLORS.cream;
+  c.globalAlpha = 0.85;
+  c.lineWidth = size * 0.008;
+  for (const rr of [0.93, 0.88]) {
+    c.beginPath();
+    c.arc(r, r, r * rr, 0, Math.PI * 2);
+    c.stroke();
+  }
+  c.globalAlpha = 1;
+  // Side mark: a bold "A" on the lower half, plus unreadable title bars (no fake metadata).
+  drawWord(c, 'A', r - size * 0.07, r + size * 0.14, size * 0.2, PRINT_COLORS.cream, 0.2, 0);
+  c.fillStyle = PRINT_COLORS.cream;
+  for (const [i, len] of [[0, 0.3], [1, 0.2]] as const) {
+    c.beginPath();
+    c.roundRect(r - (len * size) / 2, r - size * 0.28 + i * size * 0.06, len * size, size * 0.028, size * 0.014);
+    c.fill();
+  }
+  // Spindle hole shadow ring.
+  c.fillStyle = 'rgba(0,0,0,0.35)';
+  c.beginPath();
+  c.arc(r, r, size * 0.05, 0, Math.PI * 2);
+  c.fill();
+  return finish(canvas);
+}
+
+/**
+ * Tangential anisotropy directions for vinyl (disc UVs 0–1): RG = groove direction in
+ * tangent space, B = strength. Gives the classic concentric sheen that stays put while the
+ * record turns — the groove read without any fine geometry to shimmer.
+ */
+export function grooveDirections(size = 256): Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const c = canvas.getContext('2d')!;
+  const img = c.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = (x + 0.5) / size - 0.5, v = 0.5 - (y + 0.5) / size;
+      const len = Math.hypot(u, v) || 1;
+      // Tangent to the circle through (u, v).
+      const tx = -v / len, ty = u / len;
+      const rad = Math.hypot(u, v) * 2;
+      const strength = rad > 0.4 && rad < 0.97 ? 1 : 0.15;
+      const i = (y * size + x) * 4;
+      img.data[i] = (tx * 0.5 + 0.5) * 255;
+      img.data[i + 1] = (ty * 0.5 + 0.5) * 255;
+      img.data[i + 2] = strength * 255;
+      img.data[i + 3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+  const t = new CanvasTexture(canvas);
+  t.minFilter = LinearMipmapLinearFilter;
+  return t;
+}

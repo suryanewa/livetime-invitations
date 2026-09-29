@@ -1,5 +1,5 @@
 import { Color, DoubleSide, FrontSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Vector2 } from 'three';
-import { cardPrint, holoPattern, strapPrint } from './print.ts';
+import { cardPrint, grooveDirections, holoPattern, labelPrint, strapPrint } from './print.ts';
 import { perforationDarkMap, perforationMaps, ringNormal, stippleNormal, weaveNormal } from './textures.ts';
 
 /**
@@ -31,7 +31,9 @@ export interface SurfaceSpec {
   /** View-dependent unlit flame: hot core facing the camera, orange rim. */
   flame?: { core: string; rim: string };
   /** Printed graphics generated at load (fidelity pass). */
-  print?: 'card-light' | 'card-dark' | 'strap';
+  print?: 'card-light' | 'card-dark' | 'strap' | 'label-coral' | 'label-cobalt';
+  /** Vinyl: tangential anisotropy (concentric groove sheen) from disc UVs. */
+  grooves?: boolean;
   anisotropy?: number;
   iridescence?: number;
   /** Holographic foil: iridescence driven by a sunburst thickness pattern (fidelity pass 2). */
@@ -304,6 +306,15 @@ export const DIRECTIONS = {
     mat_candle_2: { color: '#2C47A6', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.2 },
     mat_candle_3: { color: '#E8A93A', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.2 },
     mat_plate: { color: '#F7F2E9', roughness: 0.22, clearcoat: 0.8, clearcoatRoughness: 0.08 },
+    // Party (fidelity v1.1): glossy vinyl with a concentric groove sheen, printed labels,
+    // brushed platter, satin dust cover.
+    mat_vinyl: { color: '#141416', roughness: 0.3, clearcoat: 0.5, clearcoatRoughness: 0.12, anisotropy: 0.85, grooves: true },
+    mat_label_coral: { color: '#FFFFFF', roughness: 0.5, print: 'label-coral' },
+    mat_label_cobalt: { color: '#FFFFFF', roughness: 0.5, print: 'label-cobalt' },
+    mat_metal_brushed: { color: '#D3D1CC', roughness: 0.32, metalness: 1, anisotropy: 0.6 },
+    mat_lid: { color: '#DBD4C7', roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.18 },
+    // Woven lining inside the dust cover (audio grille cloth): the open lid's tactile face.
+    mat_lid_fabric: { color: '#34363A', roughness: 0.92, normal: 'weave', normalScale: 1, sheen: 0.5, sheenColor: '#8a8f99' },
   };
   DIRECTIONS.L2 = {
     ...L,
@@ -415,9 +426,12 @@ function buildMaterial(name: string, spec: SurfaceSpec): Material {
       m.sheenRoughness = 0.6;
     }
     if (spec.anisotropy) m.anisotropy = spec.anisotropy;
+    if (spec.grooves) m.anisotropyMap = grooveDirections();
     if (spec.iridescence) m.iridescence = spec.iridescence;
   }
-  if (spec.print) {
+  if (spec.print === 'label-coral' || spec.print === 'label-cobalt') {
+    m.map = labelPrint(spec.print === 'label-coral' ? 'coral' : 'cobalt');
+  } else if (spec.print) {
     const tex = spec.print === 'strap' ? strapPrint() : cardPrint(spec.print === 'card-light' ? 'light' : 'dark');
     if (spec.print !== 'strap') {
       // Card caps use world UVs in scene units: map the card rectangle onto the print.

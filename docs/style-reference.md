@@ -25,7 +25,7 @@ Source of truth: `src/render/studio.ts` (light, sweep, cookie, shadow filter), `
 - **Glass faces** (`mat_body_ink`): near-black, clearcoat 1 / 0.06, set into machined pockets with a polished champagne bezel (`mat_bezel #D8CDBA`, metal, r 0.18).
 - **Hardware**: bright chrome (`mat_metal`, r 0.14), turned/cast forms; static parts that share a material are merged into one draw.
 - **Buttercream / glaze / ceramics**: sheen on frosting, clearcoat on glazes and the cobalt stand.
-- **Status light** (Business): the window lights green/red with a **dark glyph** (LED-display contrast), an additive halo on the glass and a coloured point-light spill that tints the card at the scan beat. The light always exists (intensity 0 idle) so status changes never recompile shaders.
+- **Status light** (Business): the window lights green/red with a **dark glyph** (LED-display contrast) and a coloured point-light spill that tints the card at the scan beat. No halo or bloom (Master §5). The light always exists (intensity 0 idle) so status changes never recompile shaders.
 
 ### Construction
 
