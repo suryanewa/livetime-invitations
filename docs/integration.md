@@ -76,6 +76,10 @@ Defaults: the approved look (direction `L2`, premium studio), the user's `prefer
 
 `replay()` replays visuals only (never a request). `resetVisual()` returns to the resting pose for the current mode and intent.
 
+### One invitation per controller
+
+A controller and its response adapter belong to exactly one invitation identity (one event, one guest). Its request ids, ordering and saved state are only meaningful for that identity. To show a different invitation, call `dispose()` and create a new controller with that invitation's config and `initialResponse`; never reuse a controller or adapter across invitations.
+
 ## Responses: idempotency and ordering
 
 The guest's choice is recorded before any animation and is independent of graphics: it works with a poster, with WebGL unavailable, or mid-animation.

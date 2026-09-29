@@ -344,62 +344,105 @@ async function captureUi() {
  * accept/decline cycles on a visible page; frame intervals sampled only during active playback.
  * Also a 4× CPU-throttled run, labelled SIMULATION — never mobile evidence.
  */
+/**
+ * Frame cadence per scene (Master §9 measurement protocol, desktop only): one warm-up pair, then
+ * 10 alternating accept/decline cycles on a visible page; samples only while a sequence plays.
+ * `pnpm capture perf [scene]` measures one scene; without it, all five at 1× and 4× CPU.
+ */
 async function capturePerf() {
   await mkdir(outDir, { recursive: true });
   const browser = await launch();
+  const only = process.argv[3] && !process.argv[3].startsWith('http') ? process.argv[3] : null;
+  const scenes = only ? [only] : ['business', 'party', 'birthday', 'sports', 'dinner'];
   const results: Record<string, unknown> = {};
-  for (const throttle of [1, 4]) {
+  for (const scene of scenes) {
+    for (const throttle of [1, 4]) {
+      const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
+      const cdp = await page.context().newCDPSession(page);
+      await page.goto(`${base}/?scene=${scene}`);
+      await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
+      if (throttle > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
+      await page.getByRole('button', { name: 'Guest', exact: true }).click();
+      const samples = await page.evaluate(async () => {
+        const sc = (window as any).__showcase;
+        const intervals: number[] = [];
+        let last = 0;
+        let running = true;
+        const loop = (t: number) => {
+          const v = sc.state.visual as string;
+          const active = v.endsWith('playing');
+          if (active && last) intervals.push(t - last);
+          last = active ? t : 0;
+          if (running) requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+        const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        sc.controller.chooseResponse('accept');
+        await wait(2100);
+        sc.controller.chooseResponse('decline');
+        await wait(2100);
+        intervals.length = 0;
+        for (let i = 0; i < 10; i++) {
+          sc.controller.chooseResponse(i % 2 ? 'decline' : 'accept');
+          await wait(2100);
+        }
+        running = false;
+        return { intervals, info: { dpr: devicePixelRatio, tier: sc.state.tier, render: sc.controller.renderInfo() } };
+      });
+      const iv = samples.intervals.sort((a, b) => a - b);
+      const pct = (p: number) => iv[Math.min(iv.length - 1, Math.ceil((p / 100) * iv.length) - 1)]!;
+      const summary = {
+        scene,
+        label: throttle === 1 ? 'M2 Pro · Chrome 153 · 390×844 @3x · Normal tier' : `SIMULATION: ${throttle}× CPU throttle (not device evidence)`,
+        frames: iv.length,
+        p50: +pct(50).toFixed(2),
+        p95: +pct(95).toFixed(2),
+        p99: +pct(99).toFixed(2),
+        max: +iv[iv.length - 1]!.toFixed(2),
+        over50ms: iv.filter((x) => x > 50).length,
+        tier: samples.info.tier,
+        gpu: samples.info.render,
+      };
+      console.log(JSON.stringify(summary));
+      results[`${scene}-throttle${throttle}`] = { ...summary, raw: iv };
+      await page.close();
+    }
+  }
+  await writeFile(join(outDir, only ? `frame-times-${only}.json` : 'frame-times.json'), JSON.stringify(results, null, 2));
+  await browser.close();
+}
+
+/**
+ * Cold loading on a throttled network (Master §9 target: DOM controls usable ≤ 2 s and
+ * render-ready ≤ 6 s at 4 Mbps / 100 ms RTT). Cache disabled; timings from navigation start.
+ * Uses the dev server, so JavaScript is unbundled and slower than a production build.
+ */
+async function captureNetwork() {
+  await mkdir(outDir, { recursive: true });
+  const browser = await launch();
+  const target = process.argv[3]?.startsWith('http') ? process.argv[3] : 'http://127.0.0.1:5198';
+  const results: unknown[] = [];
+  for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
     const cdp = await page.context().newCDPSession(page);
-    await page.goto(`${base}/`);
-    await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
-    if (throttle > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
-    await page.getByRole('button', { name: 'Guest', exact: true }).click();
-    const samples = await page.evaluate(async () => {
-      const sc = (window as any).__showcase;
-      const intervals: number[] = [];
-      let last = 0;
-      let running = true;
-      const loop = (t: number) => {
-        const v = sc.state.visual as string;
-        const active = v.endsWith('playing');
-        if (active && last) intervals.push(t - last);
-        last = active ? t : 0;
-        if (running) requestAnimationFrame(loop);
-      };
-      requestAnimationFrame(loop);
-      const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-      // Warm-up (not recorded separately: shader compile already happened at load).
-      sc.controller.chooseResponse('accept');
-      await wait(1900);
-      sc.controller.chooseResponse('decline');
-      await wait(1900);
-      intervals.length = 0;
-      for (let i = 0; i < 10; i++) {
-        sc.controller.chooseResponse(i % 2 ? 'decline' : 'accept');
-        await wait(1900);
-      }
-      running = false;
-      const info = { dpr: devicePixelRatio, tier: sc.state.tier };
-      return { intervals, info };
-    });
-    const iv = samples.intervals.sort((a, b) => a - b);
-    const pct = (p: number) => iv[Math.min(iv.length - 1, Math.ceil((p / 100) * iv.length) - 1)]!;
-    const summary = {
-      label: throttle === 1 ? 'M2 Pro · Chrome 153 · 390×844 @3x · Normal tier' : `SIMULATION: ${throttle}× CPU throttle (not device evidence)`,
-      frames: iv.length,
-      p50: +pct(50).toFixed(2),
-      p95: +pct(95).toFixed(2),
-      p99: +pct(99).toFixed(2),
-      max: +iv[iv.length - 1]!.toFixed(2),
-      over50ms: iv.filter((x) => x > 50).length,
-      tier: samples.info.tier,
-    };
-    console.log(JSON.stringify(summary));
-    results[`throttle${throttle}`] = { ...summary, raw: iv };
+    await cdp.send('Network.enable');
+    await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+    await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 100, downloadThroughput: (4 * 1024 * 1024) / 8, uploadThroughput: (1 * 1024 * 1024) / 8 });
+    let bytes = 0;
+    cdp.on('Network.loadingFinished', (e: { encodedDataLength: number }) => { bytes += e.encodedDataLength; });
+    const t0 = Date.now();
+    await page.goto(`${target}/?scene=${scene}`, { waitUntil: 'commit' });
+    await page.getByRole('button', { name: 'Guest', exact: true }).waitFor({ state: 'visible', timeout: 30_000 });
+    const controls = Date.now() - t0;
+    // Render-ready: the live canvas has drawn its first frame and replaced the poster.
+    await page.locator('.lt-stage__canvas.is-visible').waitFor({ state: 'attached', timeout: 60_000 });
+    const ready = Date.now() - t0;
+    const row = { scene, controlsUsableMs: controls, renderReadyMs: ready, transferredBytes: bytes };
+    console.log(JSON.stringify(row));
+    results.push(row);
     await page.close();
   }
-  await writeFile(join(outDir, 'frame-times.json'), JSON.stringify(results, null, 2));
+  await writeFile(join(outDir, 'cold-load.json'), JSON.stringify(results, null, 2));
   await browser.close();
 }
 
@@ -423,6 +466,7 @@ async function captureLookdev() {
 if (mode === 'study') await captureStudy();
 else if (mode === 'lookdev') await captureLookdev();
 else if (mode === 'perf') await capturePerf();
+else if (mode === 'network') await captureNetwork();
 else if (mode === 'ui') await captureUi();
 else if (mode === 'thumbs') await captureThumbs();
 else if (mode === 'business' || mode === 'party' || mode === 'birthday' || mode === 'sports' || mode === 'dinner') await captureScene(mode);

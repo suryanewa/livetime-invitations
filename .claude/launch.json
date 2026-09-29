@@ -4,9 +4,20 @@
     {
       "name": "showcase",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
+      "runtimeArgs": [
+        "dev"
+      ],
       "port": 5199,
       "url": "http://127.0.0.1:5199"
+    },
+    {
+      "name": "preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "preview"
+      ],
+      "port": 5198,
+      "url": "http://127.0.0.1:5198"
     }
   ]
 }
