@@ -299,7 +299,8 @@ export const DIRECTIONS = {
     mat_status_symbol: { color: '#121416', roughness: 0.5, emissive: '#000000', emissiveIntensity: 0 },
     mat_metal: { color: '#E4E3E0', roughness: 0.14, metalness: 1 },
     mat_metal_dark: { color: '#8A8C8F', roughness: 0.2, metalness: 1 },
-    mat_anodized: { color: '#F0663F', roughness: 0.26, metalness: 1 },
+    // Dyed anodised aluminium: partly metallic so the coral holds in shade instead of going brick.
+    mat_anodized: { color: '#FF7650', roughness: 0.3, metalness: 0.7, clearcoat: 0.4, clearcoatRoughness: 0.2 },
     mat_cloche: { color: '#DAD6CF', roughness: 0.3, metalness: 1, anisotropy: 0.7 },
     mat_card_light: { color: '#FFFFFF', roughness: 0.45, clearcoat: 1, clearcoatRoughness: 0.1, print: 'card-light' },
     mat_card_dark: { color: '#FFFFFF', roughness: 0.45, clearcoat: 1, clearcoatRoughness: 0.1, print: 'card-dark' },
@@ -508,6 +509,9 @@ export class MaterialLibrary {
     if (!m) {
       m = this.build(name);
       this.materials.set(name, m);
+      // Built while Low is active (e.g. a preset swapped in late): simplify it now, so it
+      // shares the Low programs of its siblings instead of compiling a full-detail variant.
+      if (this.lowDetail) this.simplify(m);
     }
     return m;
   }
@@ -533,6 +537,16 @@ export class MaterialLibrary {
   }
 
   private lowDetail = false;
+
+  private simplify(m: Material): void {
+    const std = m as MeshStandardMaterial & { sheen?: number };
+    if (!(std instanceof MeshStandardMaterial) || this.saved.has(m)) return;
+    this.saved.set(m, { normalMap: std.normalMap, sheen: std.sheen ?? 0, envMapIntensity: std.envMapIntensity });
+    std.normalMap = null;
+    if (std instanceof MeshPhysicalMaterial) std.sheen = 0;
+    std.envMapIntensity = 0.8;
+    std.needsUpdate = true;
+  }
   private readonly saved = new Map<Material, { normalMap: unknown; sheen: number; envMapIntensity: number }>();
 
   /**
@@ -546,16 +560,14 @@ export class MaterialLibrary {
       const std = m as MeshStandardMaterial & { sheen?: number };
       if (!(std instanceof MeshStandardMaterial)) continue;
       if (enabled) {
-        this.saved.set(m, { normalMap: std.normalMap, sheen: std.sheen ?? 0, envMapIntensity: std.envMapIntensity });
-        std.normalMap = null;
-        if (std instanceof MeshPhysicalMaterial) std.sheen = 0;
-        std.envMapIntensity = 0.8;
+        this.simplify(m);
       } else {
         const prev = this.saved.get(m);
         if (!prev) continue;
         std.normalMap = prev.normalMap as MeshStandardMaterial['normalMap'];
         if (std instanceof MeshPhysicalMaterial) std.sheen = prev.sheen;
         std.envMapIntensity = prev.envMapIntensity;
+        this.saved.delete(m);
       }
       std.needsUpdate = true;
     }

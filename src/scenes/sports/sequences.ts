@@ -13,6 +13,10 @@ export const DURATIONS = { host: 1.2, accept: 1.7, decline: 1.6 } as const;
 
 /** The made shot passes the rim centre, moving down, exactly at this beat (net contact). */
 export const CONTACT_AT = 0.95;
+/** The net stays fully open this long after contact: until the ball has left its bottom. */
+export const NET_HOLD = 0.22;
+/** Fraction of the drop after which the made ball starts drifting to its landing spot. */
+const MADE_DRIFT_FROM = 0.8;
 
 export interface SportsFrame {
   ballPos: Vector3;
@@ -146,11 +150,12 @@ function shot(t: number, out: SportsFrame, made: boolean): void {
   if (t < 0.2) prep(t, dir, p);
   else if (t < CONTACT_AT) path.at(seg(t, 0.2, CONTACT_AT), p);
   else if (t < landAt) {
-    // From the rim (made) or beside it (miss) down to the floor: the net slows a made ball.
+    // From the rim (made) or beside it (miss) down to the floor. A made ball drops straight
+    // down the net's axis (the net slows it) and only drifts once it has cleared the net.
     const s = seg(t, CONTACT_AT, landAt);
     const from = made ? RIM_CENTER : MISS_POINT;
     const drop = made ? s * s * (0.35 + 0.65 * s) : s * s;
-    p.lerpVectors(from, land, made ? 1 - (1 - s) ** 2 : s);
+    p.lerpVectors(from, land, made ? smoothstep(seg(s, MADE_DRIFT_FROM, 1)) : s);
     p.y = from.y + (BALL_R - from.y) * drop;
   } else {
     // One small bounce, then roll to rest.
@@ -162,12 +167,13 @@ function shot(t: number, out: SportsFrame, made: boolean): void {
   }
   // Outcomes continue from the pass's final orientation (the guest-ready pose).
   orientation(made ? SPINS.accept : SPINS.decline, t, out.ballRot).multiply(GUEST_ROT);
-  // The net answers only the made shot, starting exactly at contact.
+  // The net answers only the made shot, starting exactly at contact: it opens as the ball
+  // enters, stays open while the ball passes through, then swings back and settles.
   if (made && t >= CONTACT_AT) {
     const k = t - CONTACT_AT;
-    const env = Math.sin(Math.PI * Math.min(1, k / 0.18)) * (k < 0.18 ? 1 : 0);
-    out.netFlare = k < 0.18 ? env : dampedSettle(k - 0.18, -0.18, 3, 0.6, 0.45);
-    out.netStretch = k < 0.18 ? env * 0.8 : dampedSettle(k - 0.18, -0.12, 3, 0.6, 0.45);
+    const open = smoothstep(Math.min(1, k / 0.06));
+    out.netFlare = k < NET_HOLD ? open : dampedSettle(k - NET_HOLD, 1, 2.2, 0.55, 0.4);
+    out.netStretch = 0.8 * (k < NET_HOLD ? open : dampedSettle(k - NET_HOLD, 1, 2.2, 0.55, 0.4));
   } else {
     out.netFlare = 0;
     out.netStretch = 0;

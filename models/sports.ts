@@ -1,7 +1,8 @@
-import { type BufferAttribute, type Mesh, type Object3D } from 'three';
+import { type BufferAttribute, type BufferGeometry, Float32BufferAttribute, Matrix4, type Mesh, type Object3D, Vector3 } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
-import { BALL_R, NET, POLE, SPORTS_BOUNDS, SPORTS_NODES, type BallPreset, type NetDeform } from './sportsContract.ts';
+import { BALL_R, NET, POLE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES, type BallPreset, type NetDeform } from './sportsContract.ts';
 import { buildSportsGeometry } from './sportsPremium.ts';
+import { applyShadowProxies } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
 export * from './sportsContract.ts';
@@ -28,16 +29,45 @@ export type SportsModel = SportsRig & BuiltModel;
  * Radial net deformation on the net's own vertices (net space: y = 0 at the rim, negative
  * downward). Lower rows widen with `flare` and the whole net lengthens with `stretch`, so the
  * swish reads without cloth simulation. Works on any net geometry the model provides.
+ *
+ * GLB export quantises positions (normalised Int16 plus a node scale/offset), so the net is
+ * first rebuilt as float geometry in net space: dequantised vertices, the node transforms baked
+ * in, the net node reset to RIM_LOCAL. Deforming the raw quantised array would wrap and tear.
  */
-function netDeform(net: Object3D): NetDeform {
-  const meshes: { attr: BufferAttribute; base: Float32Array }[] = [];
+export function netDeform(net: Object3D): NetDeform {
+  const hoop = net.parent!;
+  hoop.updateWorldMatrix(true, true);
+  const toHoop = new Matrix4().copy(hoop.matrixWorld).invert();
+  const meshes: { attr: BufferAttribute; base: Float32Array; geometry: BufferGeometry }[] = [];
+  const v = new Vector3();
+  const m4 = new Matrix4();
   net.traverse((o) => {
     const m = o as Mesh;
     if (!m.isMesh) return;
-    const attr = m.geometry.getAttribute('position') as BufferAttribute;
-    meshes.push({ attr, base: new Float32Array(attr.array as Float32Array) });
+    m4.multiplyMatrices(toHoop, m.matrixWorld);
+    const src = m.geometry.getAttribute('position') as BufferAttribute;
+    const base = new Float32Array(src.count * 3);
+    for (let i = 0; i < src.count; i++) {
+      v.fromBufferAttribute(src, i).applyMatrix4(m4).sub(RIM_LOCAL);
+      base[i * 3] = v.x; base[i * 3 + 1] = v.y; base[i * 3 + 2] = v.z;
+    }
+    const attr = new Float32BufferAttribute(base.slice(), 3);
+    m.geometry.setAttribute('position', attr);
+    m.geometry.deleteAttribute('normal');
+    m.geometry.computeVertexNormals();
     m.frustumCulled = false;
+    meshes.push({ attr, base, geometry: m.geometry });
   });
+  // Baked: the net node sits at the rim centre and every mesh under it is untransformed.
+  net.traverse((o) => {
+    if (o === net) return;
+    o.position.set(0, 0, 0);
+    o.quaternion.identity();
+    o.scale.set(1, 1, 1);
+  });
+  net.position.copy(RIM_LOCAL);
+  net.quaternion.identity();
+  net.scale.set(1, 1, 1);
   let last = { flare: 0, stretch: 0 };
   return {
     update(flare, stretch) {
@@ -48,9 +78,9 @@ function netDeform(net: Object3D): NetDeform {
         for (let i = 0; i < a.length; i += 3) {
           const x = base[i]!, y = base[i + 1]!, z = base[i + 2]!;
           const d = Math.min(1, Math.max(0, -y / NET.depth));
-          const widen = 1 + flare * 0.32 * d ** 1.3;
+          const widen = 1 + flare * NET_FLARE_WIDEN * d ** 1.3;
           a[i] = x * widen;
-          a[i + 1] = y * (1 + stretch * 0.3);
+          a[i + 1] = y < 0 ? y * (1 + stretch * NET_STRETCH) : y;
           a[i + 2] = z * widen;
         }
         attr.needsUpdate = true;
@@ -59,8 +89,13 @@ function netDeform(net: Object3D): NetDeform {
   };
 }
 
+/** Deformation gains (shared with the choreography's clearance checks). */
+export const NET_FLARE_WIDEN = 0.32;
+export const NET_STRETCH = 0.3;
+
 export function rigSports(root: Object3D, lib: ModelContext['lib'], preset: BallPreset = 'orange'): SportsRig {
   const dir = lib.direction;
+  applyShadowProxies(root);
   const nodes = collectNodes(root, SPORTS_NODES);
   const replace = (name: string, shadow: ContactShadow) => {
     const placeholder = root.getObjectByName(name)!;

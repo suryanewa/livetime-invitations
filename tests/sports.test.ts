@@ -5,6 +5,7 @@ import { fitCameraToBounds } from '../src/render/camera.ts';
 import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, POLE, RIM, RIM_CENTER, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES } from '../models/sportsContract.ts';
 import { buildSportsGeometry } from '../models/sportsPremium.ts';
 import { CONTACT_AT, DURATIONS, frameFor, newFrame, sampleSequence, type SportsFrame } from '../src/scenes/sports/sequences.ts';
+import { NET_FLARE_WIDEN, NET_STRETCH } from '../models/sports.ts';
 import { sportsFramePoints } from '../src/scenes/sports/index.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
@@ -85,6 +86,24 @@ describe('Sports choreography', () => {
     expect(at('accept', CONTACT_AT - 0.001).netFlare).toBe(0);
     expect(at('accept', CONTACT_AT + 0.06).netFlare).toBeGreaterThan(0.5);
     expect(at('accept', DURATIONS.accept).netFlare).toBe(0);
+  });
+
+  it('the made ball passes through the net without touching it (flared net envelope)', () => {
+    for (let i = Math.round(CONTACT_AT * 1000); i <= 1700; i++) {
+      const f = at('accept', i / 1000);
+      const p = f.ballPos;
+      const depth = NET.depth * (1 + f.netStretch * NET_STRETCH);
+      const below = RIM_CENTER.y - p.y; // how far the ball centre is under the rim
+      // Any part of the ball inside the net's height range must fit its radius there.
+      for (const dy of [-BALL_R, -BALL_R / 2, 0, BALL_R / 2, BALL_R]) {
+        const d = below - dy;
+        if (d <= 0 || d >= depth) continue;
+        const frac = d / depth;
+        const radius = (RIM.innerRadius + (NET.bottomRadius - RIM.innerRadius) * frac) * (1 + f.netFlare * NET_FLARE_WIDEN * frac ** 1.3);
+        const halfChord = Math.sqrt(Math.max(0, BALL_R * BALL_R - dy * dy));
+        expect(horizontal(p, RIM_CENTER) + halfChord).toBeLessThan(radius + 1e-6);
+      }
+    }
   });
 
   it('the made ball lands after leaving the net, bounces once and settles below/beside the hoop', () => {
