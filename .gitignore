@@ -5,3 +5,7 @@ outputs/
 *.log
 .vite/
 .impeccable/review/
+
+# Local run artefacts
+test-results/
+scripts/_scratch/

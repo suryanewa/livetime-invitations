@@ -17,20 +17,23 @@ export { PREMIUM_TIERS };
 export const STAND_TOP = CAKE.trayTop;
 
 /** Widest part of the cake with its piped borders (lower tier + shell border). */
-export const CAKE_RADIUS = PREMIUM_TIERS.lower.radius + 0.06;
+export const CAKE_RADIUS = PREMIUM_TIERS.lower.radius + 0.095;
 
-/** Cake + candles, from the cake's underside to the candle tops. */
-export const CAKE_TOTAL_HEIGHT = CAKE.cakeHeight - CAKE.candleInsert + CAKE.candleHeight;
+/** Cake + candles + wicks, from the cake's underside to the wick tips (flames out). */
+export const CAKE_TOTAL_HEIGHT = CAKE.cakeHeight - CAKE.candleInsert + CAKE.candleHeight + 0.045;
+
+/** Carry height of the cake's underside while it glides from the stand to the bin. */
+export const CARRY_HEIGHT = 1.42;
 
 /**
  * Bin resting position (bin_root origin), behind-left of the stand and ≥ 1.95 from its axis so
  * the plate (radius 1.0) never touches the bin (radius 0.9). It is turned to face the stand so
  * the cake enters between the butterfly flaps (they hinge along the bin's local z axis).
  */
-export const BIN_POS = new Vector3(-1.0, 0, -1.65);
+export const BIN_POS = new Vector3(-1.04, 0, -1.72);
 export const BIN_YAW = Math.atan2(-BIN_POS.x, -BIN_POS.z);
 /** Slide-in start: off-frame to the left, along the same line. */
-export const BIN_START = new Vector3(-3.7, 0, -1.65);
+export const BIN_START = new Vector3(-3.8, 0, -1.72);
 
 /** The backdrop cove starts behind the bin for this scene (studio sweep wall z). */
 export const WALL_Z = -4.3;
@@ -51,9 +54,10 @@ export const CANDLE_HOVER = 0.5;
 export function birthdayBounds(): Box3 {
   const b = new Box3(new Vector3(-CAKE.trayRadius, 0, -CAKE.trayRadius), new Vector3(CAKE.trayRadius, STAND_TOP + CAKE_TOTAL_HEIGHT + 0.14, CAKE.trayRadius));
   // The bin is turned; its radius bounds any yaw, flaps add their outward lean.
-  const r = BIN_BOUNDS.max.x;
+  const r = Math.hypot(BIN_BOUNDS.max.x, BIN_BOUNDS.max.z);
   b.union(new Box3(new Vector3(BIN_POS.x - r, 0, BIN_POS.z - r), new Vector3(BIN_POS.x + r, BIN_BOUNDS.max.y, BIN_POS.z + r)));
-  const apexTop = BIN.rimTop + RIM_CLEARANCE + CAKE_TOTAL_HEIGHT;
-  b.expandByPoint(new Vector3(BIN_POS.x, apexTop, BIN_POS.z));
+  // Carried: lifted to CARRY_HEIGHT near the stand, lowered to the rim clearance over the bin.
+  b.expandByPoint(new Vector3(BIN_POS.x * 0.2, CARRY_HEIGHT + CAKE_TOTAL_HEIGHT, BIN_POS.z * 0.2));
+  b.expandByPoint(new Vector3(BIN_POS.x, BIN.rimTop + RIM_CLEARANCE + CAKE_TOTAL_HEIGHT, BIN_POS.z));
   return b;
 }

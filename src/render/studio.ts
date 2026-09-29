@@ -1,5 +1,6 @@
 import {
   BufferAttribute,
+  BufferGeometry,
   CanvasTexture,
   Color,
   DirectionalLight,
@@ -11,7 +12,6 @@ import {
   Object3D,
   PCFShadowMap,
   ShaderChunk,
-  PlaneGeometry,
   RepeatWrapping,
   type Scene,
   SpotLight,
@@ -34,6 +34,8 @@ export const STUDIO = {
   bounce: { color: '#FFE8D2', intensity: 0.14, position: [3, 1.2, 4] as const },
   sweep: { color: '#EAE3D6', roughness: 0.93 },
   shadow: { mapSize: 1024, radius: 6, bias: -0.0004, normalBias: 0.012 },
+  /** Default backdrop wall (objects reach z ≈ −1.2). */
+  wallZ: -3.2,
 } as const;
 
 /**
@@ -200,14 +202,13 @@ export function plasterTextures(size = 512): { normal: Texture; albedo: Texture 
 
 /**
  * Seamless cove sweep: floor that curves up into a back wall, so objects sit in a real
- * space and their shadows (and the gobo) land on something.
+ * space and their shadows (and the gobo) land on something. Scenes whose motion reaches far
+ * back (the Birthday bin) push the wall back so the cove never meets an object.
  */
-export function createSweep(color: string = STUDIO.sweep.color): Mesh {
+export function sweepGeometry(wallZ: number = STUDIO.wallZ): BufferGeometry {
   const width = 16, depth = 7, height = 8, radius = 1.6, segs = 24;
   // Profile in (z, y): front edge → floor → cove arc → wall top.
   const profile: [number, number][] = [];
-  // Wall far enough back that the cove never swallows a tray or scanner (objects reach z ≈ −1.2).
-  const wallZ = -3.2;
   profile.push([depth, 0], [wallZ + radius, 0]);
   for (let i = 1; i < segs; i++) {
     const a = (i / segs) * (Math.PI / 2);
@@ -229,11 +230,16 @@ export function createSweep(color: string = STUDIO.sweep.color): Mesh {
     const a = r * cols, b = a + cols;
     idx.push(a, a + 1, b, a + 1, b + 1, b);
   }
-  const g = new PlaneGeometry();
+  const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
   g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2));
   g.setIndex(idx);
   g.computeVertexNormals();
+  return g;
+}
+
+export function createSweep(color: string = STUDIO.sweep.color, wallZ: number = STUDIO.wallZ): Mesh {
+  const g = sweepGeometry(wallZ);
   const plaster = plasterTextures();
   const m = new MeshStandardMaterial({ name: 'mat_sweep', color: new Color(color), roughness: STUDIO.sweep.roughness, metalness: 0, map: plaster.albedo, normalMap: plaster.normal });
   m.normalScale.set(0.55, 0.55);
@@ -273,6 +279,8 @@ export interface PremiumStudio {
   sweep: Mesh;
   /** Shadows and gobo on (Normal/High) or off (Low/Static). */
   setShadows(enabled: boolean): void;
+  /** Move the backdrop wall (rebuilds the sweep geometry only when it changes). */
+  setWall(wallZ?: number): void;
   dispose(): void;
 }
 
@@ -306,10 +314,20 @@ export function createPremiumStudio(renderer: WebGLRenderer, scene: Scene, targe
   };
   setShadows(true);
 
+  let wall: number = STUDIO.wallZ;
+  const setWall = (wallZ: number = STUDIO.wallZ) => {
+    if (wallZ === wall) return;
+    wall = wallZ;
+    sweep.geometry.dispose();
+    sweep.geometry = sweepGeometry(wallZ);
+    renderer.shadowMap.needsUpdate = true;
+  };
+
   return {
     key,
     sweep,
     setShadows,
+    setWall,
     dispose() {
       scene.remove(key, fill, bounce, sweep);
       key.map?.dispose();

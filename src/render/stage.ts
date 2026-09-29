@@ -1,4 +1,4 @@
-import { Box3, Color, Mesh, Object3D, type OrthographicCamera, PerspectiveCamera, Scene, type WebGLRenderer } from 'three';
+import { Box3, Color, Mesh, Object3D, type OrthographicCamera, PerspectiveCamera, Scene, type Vector3, type WebGLRenderer } from 'three';
 import { cameraDirection, createStageCamera, fitCameraToBounds, fitPerspectiveToBounds } from './camera.ts';
 import { createPremiumStudio, type PremiumStudio } from './studio.ts';
 import { createRenderer, sizeRenderer } from './createRenderer.ts';
@@ -72,18 +72,26 @@ export class Stage {
     return this.renderer.domElement;
   }
 
-  setContent(object: Object3D | null, bounds?: Box3): void {
+  setContent(object: Object3D | null, bounds?: Box3, studio?: { wallZ?: number }, framePoints?: readonly Vector3[]): void {
+    this.framePoints = framePoints;
     if (this.content) this.scene.remove(this.content);
     this.content = object;
     if (object) {
       this.scene.add(object);
       if (bounds) this.bounds.copy(bounds);
       if (this.premium) {
+        this.premium.setWall(studio?.wallZ);
         object.traverse((o) => {
           const m = o as Mesh;
           if (!m.isMesh) return;
           const transparent = Array.isArray(m.material) ? false : (m.material as { transparent?: boolean }).transparent;
-          m.castShadow = !transparent && !m.name.endsWith('_shadow') && castsVisibleShadow(m);
+          if (m.userData.shadowProxy) {
+            // Invisible low-poly stand-in: casts for the dense mesh it replaces, receives nothing.
+            m.castShadow = true;
+            m.receiveShadow = false;
+            return;
+          }
+          m.castShadow = !transparent && !m.name.endsWith('_shadow') && !m.userData.noShadowCast && castsVisibleShadow(m);
           m.receiveShadow = !transparent;
         });
         this.bounds.getCenter(this.aim.position);
@@ -106,11 +114,13 @@ export class Stage {
     this.fit();
   }
 
+  private framePoints: readonly Vector3[] | undefined;
+
   private fit(): void {
     if (this.bounds.isEmpty()) return;
     const aspect = this.cssWidth / this.cssHeight;
     if (this.camera instanceof PerspectiveCamera) fitPerspectiveToBounds(this.camera, this.bounds, aspect);
-    else fitCameraToBounds(this.camera, this.bounds, aspect);
+    else fitCameraToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints);
   }
 
   render(): void {

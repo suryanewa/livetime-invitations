@@ -133,6 +133,12 @@ const SCENE_CAPTURE = {
     sharedDeclined: true,
     clips: { host: 1.5, accept: 1.9, decline: 1.7, change: 2.6 },
   },
+  birthday: {
+    presets: [['vanilla', '{ category: "birthday", cake: "vanilla" }'], ['cocoa', '{ category: "birthday", cake: "cocoa" }']],
+    // Declined shows the empty stand and the closed bin: identical for both frostings.
+    sharedDeclined: true,
+    clips: { host: 1.6, accept: 1.7, decline: 1.8, change: 2.6 },
+  },
 } as const;
 
 /**
@@ -175,6 +181,10 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
 
   await setPreset(plan.presets[0][1]);
   await waitReady();
+  // Freeze natural time: from here only tick() advances the page clock, so recordings show
+  // authored timing exactly (install() alone lets real time keep flowing between frames).
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  await tick(1000);
 
   // Posters + review stills for every preset (reduced motion snaps to exact canonical poses).
   for (const [key, literal] of plan.presets) {
@@ -393,7 +403,7 @@ else if (mode === 'lookdev') await captureLookdev();
 else if (mode === 'perf') await capturePerf();
 else if (mode === 'ui') await captureUi();
 else if (mode === 'thumbs') await captureThumbs();
-else if (mode === 'business' || mode === 'party') await captureScene(mode);
+else if (mode === 'business' || mode === 'party' || mode === 'birthday') await captureScene(mode);
 else if (mode === 'skeleton') await captureSkeleton();
 else if (mode === 'motion') await captureMotion();
 else throw new Error(`Unknown capture mode ${mode}`);

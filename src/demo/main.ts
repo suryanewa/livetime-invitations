@@ -28,6 +28,7 @@ import { collectionThumb } from './collection.ts';
 
 const scenes: SceneRegistry = {
   party: () => import('../scenes/party/index.ts').then((m) => m.partyScene),
+  birthday: () => import('../scenes/birthday/index.ts').then((m) => m.birthdayScene),
   business: () => import('../scenes/business/index.ts').then((m) => m.businessScene),
 };
 

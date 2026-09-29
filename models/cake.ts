@@ -1,4 +1,4 @@
-import { Box3, BufferAttribute, BufferGeometry, type MeshStandardMaterial, SphereGeometry, Vector3 } from 'three';
+import { Box3, BufferAttribute, BufferGeometry, CylinderGeometry, type Mesh, type MeshStandardMaterial, type Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import type { DirectionId } from '../src/render/materials.ts';
@@ -18,7 +18,8 @@ import {
   tierBody,
   wickGeometry,
 } from './cakeParts.ts';
-import { cylinderBand, group, lathe, mesh } from './geometry.ts';
+import { cylinderBand, group, lathe, mergeParts, mesh } from './geometry.ts';
+import { applyShadowProxies, markNoShadowCast, markShadowProxy } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
 export type CakePreset = 'vanilla' | 'cocoa';
@@ -275,8 +276,8 @@ function buildStandardCake(ctx: ModelContext, preset: CakePreset): BuiltModel {
 
 // ── Premium construction (L2) ────────────────────────────────────────────────
 
-const FLAME_SCALE = 0.8;
-const STAND_FOOT = 0.42;
+export const FLAME_SCALE = 0.8;
+export const STAND_FOOT = 0.42;
 
 /**
  * Two-tier vintage-piped cake on a turned cobalt pedestal (fidelity pass). The lower tier
@@ -287,9 +288,12 @@ const STAND_FOOT = 0.42;
  *
  * Draw calls: stand, band, frosting, glaze, pearls, 3 candles, 3 wicks, 3 flames, shadow.
  */
-function buildPremiumCake(ctx: ModelContext, preset: CakePreset): BuiltModel {
+/**
+ * Premium cake geometry and named nodes only (exported to GLB). Runtime parts — contact
+ * shadow, unique flame materials, wisps, preset swaps — are added by the Birthday rig.
+ */
+export function buildCakeGeometry(ctx: ModelContext, preset: CakePreset = 'vanilla'): Object3D {
   const { lib } = ctx;
-  const dir = lib.direction;
   const { trayTop, trayRadius, cakeHeight, candleHeight, candleInsert, sockets } = PREMIUM;
   const { lower, upper, glaze: glazeT } = PREMIUM_TIERS;
 
@@ -300,6 +304,9 @@ function buildPremiumCake(ctx: ModelContext, preset: CakePreset): BuiltModel {
   const tray = mesh('tray', stand.body, lib.get('mat_tray'), root);
   const band = mesh('tray_signature', cylinderBand(stand.band.radius, stand.band.height, stand.band.height, 144), lib.get('mat_signature'), tray);
   band.position.y = stand.band.y;
+  markNoShadowCast(tray, band);
+  // Low-poly stand silhouette casts the stand's shadow (the turned profile is 5.5k triangles).
+  markShadowProxy(mesh('tray_shadow_proxy', lathe([[0, 0], [STAND_FOOT, 0], [STAND_FOOT * 0.55, 0.12], [0.075, 0.3], [0.075, trayTop - 0.1], [trayRadius, trayTop - 0.03], [trayRadius, trayTop], [0, trayTop]], 32, 0), lib.get('mat_tray'), root));
 
   const cakeAuthored = group('cake_authored', root);
   cakeAuthored.position.y = trayTop;
@@ -337,11 +344,11 @@ function buildPremiumCake(ctx: ModelContext, preset: CakePreset): BuiltModel {
     instances(starDrop({ radius: 0.034, height: 0.034, flutes: 5, radial: 15, rows: 4, twist: 1.1, curl: 0.05 }), rosetteAt),
     instances(starDrop({ radius: 0.058, height: 0.086, flutes: 6, radial: 24, rows: 7, twist: 1.5, curl: 0.25 }), crownAt),
   ]);
-  mesh('cake_body', frostingGeo, frosting, cakeSecondary);
+  const cakeBody = mesh('cake_body', frostingGeo, frosting, cakeSecondary);
 
   // Poured glaze on the upper tier.
   const drips = dripLayout(14, upper.radius, 0.21, 5);
-  mesh('cake_drip', glazeCap({ radius: upper.radius, top, fillet: 0.05, thickness: glazeT, base: 0.03, drips }), glazeMat, cakeSecondary);
+  const cakeDrip = mesh('cake_drip', glazeCap({ radius: upper.radius, top, fillet: 0.05, thickness: glazeT, base: 0.03, drips }), glazeMat, cakeSecondary);
 
   // Sugar pearls: between the crown drops, under each garland rosette and each garland's low point.
   const pearlPts: Vector3[] = [];
@@ -359,7 +366,15 @@ function buildPremiumCake(ctx: ModelContext, preset: CakePreset): BuiltModel {
     q.y = p.y - 0.04;
     pearlPts.push(q);
   }
-  mesh('cake_pearls', pearls(pearlPts, 0.016), pearlMat, cakeSecondary);
+  const cakePearls = mesh('cake_pearls', pearls(pearlPts, 0.016), pearlMat, cakeSecondary);
+  markNoShadowCast(cakeBody, cakeDrip, cakePearls);
+  // Two stacked cylinders plus the candles cast the cake's shadow: ≈400 triangles, not 26k.
+  const proxyParts = [
+    { geometry: new CylinderGeometry(lower.radius + 0.03, lower.radius + 0.05, H1, 28), position: [0, H1 / 2, 0] as [number, number, number] },
+    { geometry: new CylinderGeometry(upper.radius + 0.01, upper.radius + 0.02, upper.height + glazeT, 24), position: [0, H1 + (upper.height + glazeT) / 2, 0] as [number, number, number] },
+    ...sockets.map(([x, z]) => ({ geometry: new CylinderGeometry(0.034, 0.034, candleHeight, 8), position: [x, top - candleInsert + candleHeight / 2, z] as [number, number, number] })),
+  ];
+  markShadowProxy(mesh('cake_shadow_proxy', mergeParts(proxyParts), frosting, cakeSecondary));
 
   // Candles: fixed three, inserted to a consistent depth through the glaze.
   const candleR = 0.034;
@@ -369,7 +384,9 @@ function buildPremiumCake(ctx: ModelContext, preset: CakePreset): BuiltModel {
     candle.position.set(x, top - candleInsert, z);
     const wax = mesh(`candle_${id}_wax`, spiralCandle(candleR, candleHeight), lib.get(`mat_candle_${i + 1}`), candle);
     wax.rotation.y = i * 1.3;
-    mesh('wick', wickGeometry(0.052, 0.0062), lib.get('mat_wick'), candle).position.y = candleHeight - 0.012;
+    const wick = mesh(`wick_${id}`, wickGeometry(0.052, 0.0062), lib.get('mat_wick'), candle);
+    wick.position.y = candleHeight - 0.012;
+    markNoShadowCast(wax, wick);
 
     const flame = group(`flame_${id}`, candle);
     flame.position.y = candleHeight + 0.028;
@@ -377,11 +394,29 @@ function buildPremiumCake(ctx: ModelContext, preset: CakePreset): BuiltModel {
     const outer = mesh(
       `flame_${id}_mesh`,
       lathe([[0, 0], [0.026, 0.016, 0.02], [0.036, 0.048, 0.03], [0.02, 0.105, 0.025], [0, 0.16]], 14, 4),
-      lib.unique('mat_flame_outer'),
+      lib.get('mat_flame_outer'),
       flame,
     );
     outer.renderOrder = 2;
   });
+
+  group('cake_shadow', root).position.set(0, 0.002, 0);
+  return root;
+}
+
+/** Premium cake for tooling (lookdev, study): geometry plus a contact shadow and unique flames. */
+function buildPremiumCake(ctx: ModelContext, preset: CakePreset): BuiltModel {
+  const { lib } = ctx;
+  const dir = lib.direction;
+  const { trayTop, trayRadius, candleHeight, candleInsert } = PREMIUM;
+  const top = PREMIUM.cakeHeight;
+  const root = buildCakeGeometry(ctx, preset);
+  applyShadowProxies(root);
+  root.traverse((o) => {
+    const m = o as Mesh;
+    if (m.isMesh && /^flame_\d\d_mesh$/.test(m.name)) m.material = lib.unique('mat_flame_outer');
+  });
+  root.getObjectByName('cake_shadow')?.removeFromParent();
 
   // Contact shadow sized from the foot; the soft layer spreads to the plate's footprint.
   const shadow = new ContactShadow({

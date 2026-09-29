@@ -313,6 +313,8 @@ export const DIRECTIONS = {
     mat_label_cobalt: { color: '#FFFFFF', roughness: 0.5, print: 'label-cobalt' },
     mat_metal_brushed: { color: '#D3D1CC', roughness: 0.32, metalness: 1, anisotropy: 0.6 },
     mat_lid: { color: '#DBD4C7', roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.18 },
+    // Shared disposal bin: charcoal powder-coat (satin, light clearcoat).
+    mat_bin: { color: '#34373A', roughness: 0.48, clearcoat: 0.25, clearcoatRoughness: 0.4 },
     // Woven lining inside the dust cover (audio grille cloth): the open lid's tactile face.
     mat_lid_fabric: { color: '#34363A', roughness: 0.92, normal: 'weave', normalScale: 1, sheen: 0.5, sheenColor: '#8a8f99' },
   };

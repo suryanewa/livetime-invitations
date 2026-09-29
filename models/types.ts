@@ -1,4 +1,4 @@
-import type { Box3, Object3D } from 'three';
+import type { Box3, Material, Mesh, Object3D } from 'three';
 import type { MaterialLibrary } from '../src/render/materials.ts';
 import type { ContactShadow } from '../src/render/contactShadow.ts';
 
@@ -32,5 +32,15 @@ export function disposeGeometry(root: Object3D): void {
   root.traverse((o) => {
     const g = (o as { geometry?: { dispose(): void } }).geometry;
     g?.dispose();
+  });
+}
+
+/** Rebind GLB placeholder materials to the live library by name (names the library lacks stay). */
+export function bindMaterialsByName(root: Object3D, lib: MaterialLibrary): void {
+  root.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.isMesh) return;
+    const swap = (mat: Material) => (lib.direction.surfaces[mat.name] ? lib.get(mat.name) : mat);
+    m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material);
   });
 }

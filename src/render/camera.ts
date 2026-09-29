@@ -33,6 +33,7 @@ export function fitCameraToBounds(
   bounds: Box3,
   aspect: number,
   clearance = FRAMING_CLEARANCE,
+  points?: readonly Vector3[],
 ): void {
   const center = bounds.getCenter(new Vector3());
   const dir = cameraDirection();
@@ -42,14 +43,18 @@ export function fitCameraToBounds(
 
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   const inv = camera.matrixWorldInverse;
-  for (let i = 0; i < 8; i++) {
-    corner.set(
-      i & 1 ? bounds.max.x : bounds.min.x,
-      i & 2 ? bounds.max.y : bounds.min.y,
-      i & 4 ? bounds.max.z : bounds.min.z,
-    ).applyMatrix4(inv);
+  const add = (p: Vector3) => {
+    corner.copy(p).applyMatrix4(inv);
     minX = Math.min(minX, corner.x); maxX = Math.max(maxX, corner.x);
     minY = Math.min(minY, corner.y); maxY = Math.max(maxY, corner.y);
+  };
+  if (points?.length) {
+    // Silhouette samples of every authored path: a box's corners overstate round objects
+    // (a disc's corners project ≈28 % wider than the disc) and turned ones even more.
+    for (const p of points) add(p);
+  } else {
+    const c = new Vector3();
+    for (let i = 0; i < 8; i++) add(c.set(i & 1 ? bounds.max.x : bounds.min.x, i & 2 ? bounds.max.y : bounds.min.y, i & 4 ? bounds.max.z : bounds.min.z));
   }
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;

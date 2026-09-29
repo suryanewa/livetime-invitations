@@ -277,7 +277,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       scene = instance;
       // A preset chosen while the asset was loading wins over the one the load started with.
       instance.setConfig(config);
-      stage.setContent(instance.root, instance.bounds);
+      stage.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints);
       resize();
       library().setLowDetail(quality.tier === 'low');
       stage.premium?.setShadows(quality.tier === 'normal' || quality.tier === 'high');

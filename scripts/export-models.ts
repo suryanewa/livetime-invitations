@@ -19,6 +19,8 @@ import { buildKeycardGeometry } from '../models/keycard.ts';
 import { DIRECTIONS, type DirectionId, type MaterialLibrary } from '../src/render/materials.ts';
 import { createSimplifier, type Simplify } from '../models/simplify.ts';
 import { buildRecordPlayerGeometry } from '../models/recordPremium.ts';
+import { buildCakeGeometry } from '../models/cake.ts';
+import { buildDisposalBin } from '../models/disposalBin.ts';
 
 /** Direction exported to runtime GLB (the showcase's production look). */
 const EXPORT_DIRECTION: DirectionId = 'L2';
@@ -67,7 +69,12 @@ function exportLibrary(): MaterialLibrary {
 const SCENES: Record<string, () => Object3D> = {
   business: () => buildKeycardGeometry({ lib: exportLibrary(), simplify }, 'light'),
   party: () => buildRecordPlayerGeometry({ lib: exportLibrary(), simplify }, 'coral'),
+  birthday: () => buildCakeGeometry({ lib: exportLibrary(), simplify }, 'vanilla'),
+  bin: () => buildDisposalBin({ lib: exportLibrary(), simplify }),
 };
+
+/** Output path per target (shared props live outside any one scene). */
+const OUTPUT: Record<string, string[]> = { bin: ['shared', 'disposal-bin.glb'] };
 
 async function exportScene(name: string) {
   const root = SCENES[name]!();
@@ -86,7 +93,7 @@ async function exportScene(name: string) {
     quantize({ pattern: /^(POSITION|NORMAL)$/, quantizePosition: 14, quantizeNormal: 10 }),
   );
   const out = await io.writeBinary(doc);
-  const file = join(import.meta.dirname, '..', 'assets', 'scenes', name, `${name}.glb`);
+  const file = OUTPUT[name] ? join(import.meta.dirname, '..', 'assets', ...OUTPUT[name]!) : join(import.meta.dirname, '..', 'assets', 'scenes', name, `${name}.glb`);
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, out);
 

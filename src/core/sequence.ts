@@ -1,4 +1,4 @@
-import type { Box3, Object3D, WebGLRenderer, Camera } from 'three';
+import type { Box3, Object3D, WebGLRenderer, Camera, Vector3 } from 'three';
 import type { MaterialLibrary } from '../render/materials.ts';
 import type { CanonicalPose, Category, SceneConfig, SequenceName } from './types.ts';
 
@@ -41,6 +41,10 @@ export interface SceneInstance {
   readonly durations: Readonly<Record<SequenceName, number>>;
   /** Nodes whose local transforms the interruption blend may interpolate. */
   readonly animatedNodes: readonly Object3D[];
+  /** Optional studio adjustments (premium stage), e.g. a deeper backdrop for far-back motion. */
+  readonly studio?: { wallZ?: number };
+  /** Optional silhouette samples of every authored path for a tighter camera fit than the box. */
+  readonly framePoints?: readonly Vector3[];
 
   /** Swap preset materials/visibility. Called only at canonical poses. */
   setConfig(config: SceneConfig): void;

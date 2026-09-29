@@ -122,4 +122,4 @@ export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | '
   },
 };
 
-export const LIVE_CATEGORIES: readonly Category[] = ['party', 'business'];
+export const LIVE_CATEGORIES: readonly Category[] = ['party', 'birthday', 'business'];
