@@ -28,15 +28,20 @@ import {
  */
 
 export const STUDIO = {
-  key: { color: '#fff6ec', intensity: 13, position: [-4.2, 7.8, 5.4] as const, angle: 0.6, penumbra: 0.7, decay: 0 },
-  fill: { sky: '#f4f2ee', ground: '#cfc6b8', intensity: 0.42 },
-  bounce: { color: '#fff1e2', intensity: 0.14, position: [3, 1.2, 4] as const },
-  sweep: { color: '#E4DDD1', roughness: 0.95 },
+  // Late-afternoon sun: warm key, cool sky fill, warm bounce off the plaster.
+  key: { color: '#FFF1DE', intensity: 15, position: [-4.2, 7.8, 5.4] as const, angle: 0.6, penumbra: 0.7, decay: 0 },
+  fill: { sky: '#E3E9EF', ground: '#D6C7B2', intensity: 0.3 },
+  bounce: { color: '#FFE8D2', intensity: 0.14, position: [3, 1.2, 4] as const },
+  sweep: { color: '#EAE3D6', roughness: 0.93 },
   shadow: { mapSize: 1024, radius: 6, bias: -0.0004, normalBias: 0.012 },
 } as const;
 
-/** Soft foliage shadow cookie: overlapping palm-like fronds, blurred, mostly open light. */
-export function foliageCookie(size = 512): Texture {
+/**
+ * Sun-through-palms cookie. Two depths of foliage: a far layer, heavily blurred and faint, and
+ * a near layer of tapered, drooping palm leaflets with a crisper edge (a real shadow sharpens
+ * as the leaf nears the surface). Fronds enter from the edges so the objects sit in open sun.
+ */
+export function foliageCookie(size = 768): Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
@@ -45,39 +50,56 @@ export function foliageCookie(size = 512): Texture {
   // Deterministic pseudo-random fronds so every render (and poster) matches.
   let seed = 7;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  ctx.filter = `blur(${Math.max(2, Math.round(size / 260))}px)`;
-  ctx.fillStyle = 'rgba(40, 32, 26, 0.72)';
-  const frond = (cx: number, cy: number, len: number, angle: number) => {
+  const leaflet = (len: number, width: number) => {
+    // Lanceolate: widest a third of the way out, tapering to a fine tip.
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(len * 0.3, -width, len, 0);
+    ctx.quadraticCurveTo(len * 0.3, width * 0.8, 0, 0);
+    ctx.fill();
+  };
+  const frond = (cx: number, cy: number, len: number, angle: number, droop: number) => {
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(angle);
-    for (let i = 0; i < 14; i++) {
-      const t = i / 14;
-      const leafLen = len * (0.35 + 0.3 * Math.sin(Math.PI * t));
+    const n = 24;
+    // Midrib arcs (droop) so the frond reads as a living leaf, not a comb.
+    const rib = (t: number) => [t * len, droop * len * t * t] as const;
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      const [x, y] = rib(t);
+      const [x2, y2] = rib(Math.min(1, t + 0.01));
+      const heading = Math.atan2(y2 - y, x2 - x);
+      const leafLen = len * (0.46 * Math.sin(Math.PI * Math.min(1, t * 1.15)) + 0.06);
       for (const side of [-1, 1]) {
         ctx.save();
-        ctx.translate(t * len, 0);
-        ctx.rotate(side * (0.5 + 0.25 * rand()));
-        ctx.beginPath();
-        ctx.ellipse(leafLen / 2, 0, leafLen / 2, len * 0.018, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.translate(x, y);
+        ctx.rotate(heading + side * (0.62 + 0.3 * t + 0.12 * (rand() - 0.5)));
+        leaflet(leafLen, len * 0.028);
         ctx.restore();
       }
     }
-    ctx.lineWidth = len * 0.01;
-    ctx.strokeStyle = 'rgba(40, 32, 26, 0.65)';
+    ctx.lineWidth = len * 0.012;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(len, 0);
+    for (let i = 1; i <= 20; i++) ctx.lineTo(...rib(i / 20));
     ctx.stroke();
     ctx.restore();
   };
-  // Fronds enter from the frame edges so the centre (the objects) stays mostly open light.
-  frond(size * -0.04, size * 0.1, size * 0.55, 0.3);
-  frond(size * 1.04, size * 0.04, size * 0.5, 2.55);
-  frond(size * 1.02, size * 0.9, size * 0.42, 3.7);
-  frond(size * 0.05, size * 0.98, size * 0.4, -0.85);
-  frond(size * 0.5, size * -0.06, size * 0.36, 1.75);
+  // Far layer: large, faint, very soft.
+  ctx.filter = `blur(${Math.round(size / 70)}px)`;
+  ctx.fillStyle = ctx.strokeStyle = 'rgba(52, 40, 30, 0.42)';
+  frond(size * 1.1, size * 0.35, size * 0.75, 2.9, 0.18);
+  frond(size * -0.1, size * 0.62, size * 0.7, -0.35, -0.12);
+  frond(size * 0.62, size * 1.1, size * 0.6, -1.9, 0.15);
+  // Near layer: crisper leaflets.
+  ctx.filter = `blur(${Math.max(1, Math.round(size / 300))}px)`;
+  ctx.fillStyle = ctx.strokeStyle = 'rgba(40, 30, 22, 0.86)';
+  frond(size * 0.02, size * 0.12, size * 0.6, 0.35, 0.16);
+  frond(size * 0.98, size * 0.08, size * 0.58, 2.6, -0.14);
+  frond(size * 1.03, size * 0.92, size * 0.46, 3.75, 0.12);
+  frond(size * 0.02, size * 1.02, size * 0.44, -0.8, -0.1);
   ctx.filter = 'none';
   const tex = new CanvasTexture(canvas);
   tex.colorSpace = SRGBColorSpace;
@@ -86,45 +108,94 @@ export function foliageCookie(size = 512): Texture {
   return tex;
 }
 
-/** Fine paper tooth for the sweep: a very low-amplitude normal map. */
-function paperNormal(size = 256): Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-  const img = ctx.createImageData(size, size);
+/**
+ * Limewash plaster for the sweep (tileable, procedural): periodic multi-octave value noise for
+ * the trowelled relief, sparse pits, and a matching albedo mottle. Returns a normal map and a
+ * near-white colour map (multiplied by the sweep colour).
+ */
+export function plasterTextures(size = 512): { normal: Texture; albedo: Texture } {
   let seed = 11;
   const rand = () => ((seed = (seed * 48271) % 2147483647) / 2147483647);
-  const h = new Float32Array(size * size).map(() => rand());
-  // Two box-blur passes give a soft, fibrous tooth.
-  for (let pass = 0; pass < 2; pass++) {
-    const out = new Float32Array(size * size);
+  const h = new Float32Array(size * size);
+  const low = new Float32Array(size * size);
+  const octave = (cells: number, amp: number, into: Float32Array) => {
+    const g = new Float32Array(cells * cells).map(() => rand());
+    const at = (x: number, y: number) => g[((y + cells) % cells) * cells + ((x + cells) % cells)]!;
+    const step = size / cells;
     for (let y = 0; y < size; y++) {
+      const gy = y / step, y0 = Math.floor(gy), fy = gy - y0, sy = fy * fy * (3 - 2 * fy);
       for (let x = 0; x < size; x++) {
-        let s = 0;
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) s += h[((y + dy + size) % size) * size + ((x + dx + size) % size)]!;
-        out[y * size + x] = s / 9;
+        const gx = x / step, x0 = Math.floor(gx), fx = gx - x0, sx = fx * fx * (3 - 2 * fx);
+        const a = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * sx;
+        const b = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * sx;
+        into[y * size + x]! += (a + (b - a) * sy) * amp;
       }
     }
-    h.set(out);
-  }
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = (h[y * size + ((x + 1) % size)]! - h[y * size + ((x - 1 + size) % size)]!) * 2.2;
-      const dy = (h[((y + 1) % size) * size + x]! - h[((y - 1 + size) % size) * size + x]!) * 2.2;
-      const len = Math.hypot(dx, dy, 1);
-      const i = (y * size + x) * 4;
-      img.data[i] = ((-dx / len) * 0.5 + 0.5) * 255;
-      img.data[i + 1] = ((dy / len) * 0.5 + 0.5) * 255;
-      img.data[i + 2] = ((1 / len) * 0.5 + 0.5) * 255;
-      img.data[i + 3] = 255;
+  };
+  octave(4, 1.0, low);
+  octave(8, 0.55, low);
+  h.set(low);
+  octave(32, 0.22, h);
+  octave(64, 0.12, h);
+  octave(128, 0.07, h);
+  // Pits: small soft dents, as in hand-applied plaster.
+  const pits = new Float32Array(size * size);
+  for (let k = 0; k < 520; k++) {
+    const cx = rand() * size, cy = rand() * size, r = 0.8 + rand() * rand() * 3.2, d = 0.25 + rand() * 0.35;
+    const R = Math.ceil(r * 2);
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        const q = (dx * dx + dy * dy) / (r * r);
+        if (q > 4) continue;
+        const i = (((Math.floor(cy) + dy + size) % size) * size + ((Math.floor(cx) + dx + size) % size));
+        pits[i] = Math.max(pits[i]!, d * Math.exp(-q * 1.6));
+      }
     }
   }
-  ctx.putImageData(img, 0, 0);
-  const tex = new CanvasTexture(canvas);
-  tex.colorSpace = NoColorSpace;
-  tex.wrapS = tex.wrapT = RepeatWrapping;
-  tex.repeat.set(10, 10);
-  return tex;
+  for (let i = 0; i < h.length; i++) h[i] = h[i]! - pits[i]! * 0.5;
+
+  const canvasOf = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    return c;
+  };
+  const nc = canvasOf(), ac = canvasOf();
+  const nctx = nc.getContext('2d')!, actx = ac.getContext('2d')!;
+  const nimg = nctx.createImageData(size, size), aimg = actx.createImageData(size, size);
+  const H = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)]!;
+  let lo = Infinity, hi = -Infinity;
+  for (const v of low) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (H(x + 1, y) - H(x - 1, y)) * 3.2;
+      const dy = (H(x, y + 1) - H(x, y - 1)) * 3.2;
+      const len = Math.hypot(dx, dy, 1);
+      const i = (y * size + x) * 4;
+      nimg.data[i] = ((-dx / len) * 0.5 + 0.5) * 255;
+      nimg.data[i + 1] = ((dy / len) * 0.5 + 0.5) * 255;
+      nimg.data[i + 2] = ((1 / len) * 0.5 + 0.5) * 255;
+      nimg.data[i + 3] = 255;
+      // Limewash mottle: broad clouding plus darker pit floors.
+      const m = (low[y * size + x]! - lo) / (hi - lo);
+      const v = 255 * (1 - 0.07 * m - 0.1 * pits[y * size + x]!);
+      aimg.data[i] = v;
+      aimg.data[i + 1] = v * 0.995;
+      aimg.data[i + 2] = v * 0.985;
+      aimg.data[i + 3] = 255;
+    }
+  }
+  nctx.putImageData(nimg, 0, 0);
+  actx.putImageData(aimg, 0, 0);
+  const normal = new CanvasTexture(nc);
+  normal.colorSpace = NoColorSpace;
+  const albedo = new CanvasTexture(ac);
+  albedo.colorSpace = SRGBColorSpace;
+  for (const t of [normal, albedo]) {
+    t.wrapS = t.wrapT = RepeatWrapping;
+    t.repeat.set(2.2, 2.2);
+    t.anisotropy = 4;
+  }
+  return { normal, albedo };
 }
 
 /**
@@ -163,8 +234,9 @@ export function createSweep(color: string = STUDIO.sweep.color): Mesh {
   g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2));
   g.setIndex(idx);
   g.computeVertexNormals();
-  const m = new MeshStandardMaterial({ name: 'mat_sweep', color: new Color(color), roughness: STUDIO.sweep.roughness, metalness: 0, normalMap: paperNormal() });
-  m.normalScale.set(0.35, 0.35);
+  const plaster = plasterTextures();
+  const m = new MeshStandardMaterial({ name: 'mat_sweep', color: new Color(color), roughness: STUDIO.sweep.roughness, metalness: 0, map: plaster.albedo, normalMap: plaster.normal });
+  m.normalScale.set(0.55, 0.55);
   const mesh = new Mesh(g, m);
   mesh.name = 'studio_sweep';
   mesh.receiveShadow = true;
@@ -245,6 +317,7 @@ export function createPremiumStudio(renderer: WebGLRenderer, scene: Scene, targe
       sweep.geometry.dispose();
       const m = sweep.material as MeshStandardMaterial;
       m.normalMap?.dispose();
+      m.map?.dispose();
       m.dispose();
     },
   };

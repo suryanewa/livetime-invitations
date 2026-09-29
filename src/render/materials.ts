@@ -1,5 +1,5 @@
 import { Color, DoubleSide, FrontSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Vector2 } from 'three';
-import { cardPrint, strapPrint } from './print.ts';
+import { cardPrint, holoPattern, strapPrint } from './print.ts';
 import { perforationDarkMap, perforationMaps, ringNormal, stippleNormal, weaveNormal } from './textures.ts';
 
 /**
@@ -34,6 +34,8 @@ export interface SurfaceSpec {
   print?: 'card-light' | 'card-dark' | 'strap';
   anisotropy?: number;
   iridescence?: number;
+  /** Holographic foil: iridescence driven by a sunburst thickness pattern (fidelity pass 2). */
+  holo?: boolean;
   normalScale?: number;
   perforated?: boolean | 'dark';
   doubleSide?: boolean;
@@ -277,8 +279,13 @@ export const DIRECTIONS = {
     mat_body: { color: '#EEE7DA', roughness: 0.4, clearcoat: 0.3, clearcoatRoughness: 0.35 },
     mat_body_alt: { color: '#DBD4C7', roughness: 0.42, clearcoat: 0.25, clearcoatRoughness: 0.35 },
     mat_body_ink: { color: '#16181B', roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.06 },
-    mat_edge: { color: '#A39D93', roughness: 0.45 },
+    // White PVC core: the thin bright line round a laminated card's edge.
+    mat_edge: { color: '#F1EDE6', roughness: 0.5 },
+    mat_holo: { color: '#FFFFFF', roughness: 0.22, metalness: 0.85, holo: true },
+    mat_bezel: { color: '#D8CDBA', roughness: 0.18, metalness: 1 },
     mat_status: { color: '#0F1013', roughness: 0.3, emissive: '#000000', emissiveIntensity: 0 },
+    // Dark glyph on the lit window (LED-display contrast in any light).
+    mat_status_symbol: { color: '#121416', roughness: 0.5, emissive: '#000000', emissiveIntensity: 0 },
     mat_metal: { color: '#E4E3E0', roughness: 0.14, metalness: 1 },
     mat_metal_dark: { color: '#8A8C8F', roughness: 0.2, metalness: 1 },
     mat_anodized: { color: '#F0663F', roughness: 0.26, metalness: 1 },
@@ -346,6 +353,37 @@ function flameMaterial(name: string, core: string, rim: string): ShaderMaterial 
   });
 }
 
+/**
+ * Holographic foil (fidelity pass 2): a metallic rainbow sunburst whose hue rotates with the
+ * surface's angle to the viewer, so colour sweeps across the seal as the card swings. A small
+ * emissive lift keeps it alive in shade. Standard material + a hue rotation, no extra pass.
+ */
+function holoFoil(name: string, spec: SurfaceSpec): Material {
+  const tex = holoPattern();
+  const m = new MeshStandardMaterial({
+    name, color: new Color(spec.color), roughness: spec.roughness, metalness: spec.metalness ?? 0.85,
+    map: tex, emissive: new Color('#ffffff'), emissiveMap: tex, emissiveIntensity: 0.22,
+  });
+  m.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        vec3 holoHue(vec3 c, float a) {
+          const vec3 k = vec3(0.57735);
+          float ca = cos(a);
+          return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - ca);
+        }`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        vec3 holoView = isOrthographic ? vec3(0.0, 0.0, 1.0) : normalize(vViewPosition);
+        vec3 holoN = normalize(vNormal);
+        float holoShift = 7.0 * (holoN.x * 0.7 + holoN.y * 0.45) + 2.5 * dot(holoN, holoView);
+        diffuseColor.rgb = holoHue(diffuseColor.rgb, holoShift);`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance = holoHue(totalEmissiveRadiance, holoShift);`);
+  };
+  m.customProgramCacheKey = () => 'holo-foil-v1';
+  return m;
+}
+
 function buildMaterial(name: string, spec: SurfaceSpec): Material {
   if (spec.flame) return flameMaterial(name, spec.flame.core, spec.flame.rim);
   if (spec.unlit) {
@@ -358,6 +396,7 @@ function buildMaterial(name: string, spec: SurfaceSpec): Material {
       depthWrite: spec.opacity === undefined,
     });
   }
+  if (spec.holo) return holoFoil(name, spec);
   const needsPhysical = (spec.clearcoat ?? 0) > 0 || (spec.sheen ?? 0) > 0 || (spec.anisotropy ?? 0) > 0 || (spec.iridescence ?? 0) > 0;
   const params = {
     name,

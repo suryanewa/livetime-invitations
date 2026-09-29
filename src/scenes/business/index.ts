@@ -1,4 +1,4 @@
-import { Box3, type Camera, Plane, Quaternion, Raycaster, Vector2, Vector3, type Object3D, type WebGLRenderer } from 'three';
+import { Box3, type Camera, type MeshBasicMaterial, Plane, Quaternion, Raycaster, Vector2, Vector3, type Object3D, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/business/business.glb?url';
 import { bindLibraryMaterials, CARD, rigKeycard, type CardTemplate, type KeycardRig } from '../../../models/keycard.ts';
@@ -9,6 +9,9 @@ import type { MaterialLibrary } from '../../render/materials.ts';
 import { clampDragTarget, touchesScanner } from './drag.ts';
 import { DURATIONS, SCAN_AT, STATUS_COLOURS } from './poses.ts';
 import { frameFor, newFrame, sampleSequence, type BusinessFrame } from './sequences.ts';
+
+/** Premium status bloom: halo opacity on the glass and the colour spill onto the card. */
+const GLOW = { halo: 0.34, spill: 0.8 };
 
 /** Release/cancel blend onto the scanner approach (sub-spec: 350–600 ms). */
 const RELEASE_BLEND = 0.45;
@@ -191,10 +194,22 @@ export class BusinessScene implements SceneInstance {
     } else {
       m.color.set(STATUS_COLOURS[lit]);
       m.emissive.set(STATUS_COLOURS[lit]);
-      m.emissiveIntensity = 0.9;
+      // Premium: the halo carries the bloom, so the window stays deep enough for the glyph.
+      m.emissiveIntensity = this.rig.glow ? 0.85 : 0.9;
     }
     this.rig.symbols.accept.visible = lit === 'accept';
     this.rig.symbols.decline.visible = lit === 'decline';
+    const glow = this.rig.glow;
+    if (glow) {
+      const halo = glow.halo.material as MeshBasicMaterial;
+      glow.halo.visible = lit !== 'off';
+      glow.spill.intensity = lit === 'off' ? 0 : GLOW.spill;
+      if (lit !== 'off') {
+        halo.color.set(STATUS_COLOURS[lit]);
+        halo.opacity = GLOW.halo;
+        glow.spill.color.set(STATUS_COLOURS[lit]);
+      }
+    }
   }
 
   /**

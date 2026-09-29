@@ -1,4 +1,10 @@
 import {
+  SRGBColorSpace,
+  PointLight,
+  PlaneGeometry,
+  MeshBasicMaterial,
+  CanvasTexture,
+  AdditiveBlending,
   Box3,
   type BufferGeometry,
   CircleGeometry,
@@ -101,6 +107,27 @@ function outline(w: number, h: number, r: number, stroke: number): ShapeGeometry
   return new ShapeGeometry(s, 12);
 }
 
+export interface StatusGlow {
+  halo: Mesh;
+  spill: PointLight;
+}
+
+/** Soft radial falloff for the status halo. */
+function glowTexture(size = 128): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const c = canvas.getContext('2d')!;
+  const g = c.createRadialGradient(size / 2, size / 2, size * 0.08, size / 2, size / 2, size / 2);
+  g.addColorStop(0, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.22)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = g;
+  c.fillRect(0, 0, size, size);
+  const t = new CanvasTexture(canvas);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
 export interface KeycardRig {
   root: Object3D;
   nodes: Record<string, Object3D>;
@@ -112,6 +139,8 @@ export interface KeycardRig {
   statusMaterial: MeshStandardMaterial;
   symbolMaterial: MeshStandardMaterial;
   symbols: { accept: Object3D; decline: Object3D };
+  /** Premium status bloom and light spill (null outside L2). */
+  glow: StatusGlow | null;
   /** Hinged hook gate (null in study directions that have none). */
   gate: Object3D | null;
   setTemplate(template: CardTemplate): void;
@@ -181,6 +210,9 @@ export function buildKeycardGeometry(ctx: ModelContext, template: CardTemplate =
     const row = perforationRow(W - 0.14 - 2 * pitch, pitch);
     const perf = mesh('card_perforation', row.geometry, [lib.get('mat_signature'), cardFace()], cardMesh);
     perf.position.set(0, -0.565, face);
+    // Holographic security seal: colour sweeps across it as the card swings.
+    const seal = mesh('card_seal', new CircleGeometry(0.068, 48), lib.get('mat_holo'), cardMesh);
+    seal.position.set(0.28, -0.405, face + 0.0007);
   } else {
     // Satin Enamel (locked): cobalt panel with a printed personal-ID layout, accent stripe,
     // whole-dot perforation row on the border, ink keyline edges.
@@ -428,6 +460,29 @@ export function rigKeycard(root: Object3D, lib: ModelContext['lib'], template: C
     sym.visible = false;
   }
 
+  // Premium: the lit window blooms (additive halo on the glass) and spills its colour onto
+  // whatever is close — the card at the scan beat. Both idle at zero; the light always exists
+  // so switching status never recompiles shaders.
+  let glow: StatusGlow | null = null;
+  if (premiumRig) {
+    const win = nodes.scanner_light!;
+    const halo = new Mesh(new PlaneGeometry(0.44, 0.36), new MeshBasicMaterial({
+      name: 'fx_status_glow', map: glowTexture(), transparent: true, opacity: 0, depthWrite: false,
+      blending: AdditiveBlending, toneMapped: false,
+    }));
+    halo.name = 'scanner_glow';
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.set(win.position.x, win.position.y + 0.003, win.position.z);
+    halo.renderOrder = 2;
+    halo.castShadow = false;
+    win.parent!.add(halo);
+    const spill = new PointLight('#ffffff', 0, 1.3, 2);
+    spill.name = 'scanner_spill';
+    spill.position.set(win.position.x, win.position.y + 0.12, win.position.z);
+    win.parent!.add(spill);
+    glow = { halo, spill };
+  }
+
   const replaceShadow = (name: string, shadow: ContactShadow) => {
     const placeholder = root.getObjectByName(name)!;
     shadow.position.copy(placeholder.position);
@@ -473,6 +528,7 @@ export function rigKeycard(root: Object3D, lib: ModelContext['lib'], template: C
     statusMaterial,
     symbolMaterial,
     symbols: { accept, decline },
+    glow,
     gate: root.getObjectByName('clip_gate') ?? null,
     setTemplate,
     dispose() {
@@ -481,6 +537,14 @@ export function rigKeycard(root: Object3D, lib: ModelContext['lib'], template: C
       scannerShadow.dispose();
       statusMaterial.dispose();
       symbolMaterial.dispose();
+      if (glow) {
+        const m = glow.halo.material as MeshBasicMaterial;
+        m.map?.dispose();
+        m.dispose();
+        glow.halo.geometry.dispose();
+        glow.halo.removeFromParent();
+        glow.spill.removeFromParent();
+      }
     },
   };
 }

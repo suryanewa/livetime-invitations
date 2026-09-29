@@ -20,7 +20,7 @@ function castsVisibleShadow(m: Mesh): boolean {
   if (!g.boundingBox) g.computeBoundingBox();
   extent.copy(g.boundingBox!);
   const x = extent.max.x - extent.min.x, y = extent.max.y - extent.min.y, z = extent.max.z - extent.min.z;
-  return Math.min(x, y, z) > 0.008 && Math.max(x, y, z) > 0.05;
+  return Math.min(x, y, z) > 0.015 && Math.max(x, y, z) > 0.05;
 }
 
 export interface StageOptions {
@@ -62,7 +62,7 @@ export class Stage {
     if (options.premium) {
       // The sunlit spot becomes the key; the old directional key and some IBL step back.
       this.rig.lights[0].intensity = 0;
-      this.scene.environmentIntensity = 0.62;
+      this.scene.environmentIntensity = 0.52;
       this.scene.add(this.aim);
       this.premium = createPremiumStudio(renderer, this.scene, this.aim);
     }

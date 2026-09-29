@@ -181,3 +181,44 @@ export function strapPrint(size = 256): Texture {
   }
   return finish(canvas, true);
 }
+
+/**
+ * Holographic seal artwork: a rainbow sunburst crossed with fine rings and a small star at the
+ * centre. The material rotates its hue with viewing angle, so this is only the starting point.
+ */
+export function holoPattern(size = 256): Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const c = canvas.getContext('2d')!;
+  const img = c.createImageData(size, size);
+  const hsl = (h: number, sat: number, l: number): [number, number, number] => {
+    const k = (n: number) => (n + h * 12) % 12;
+    const a = sat * Math.min(l, 1 - l);
+    const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return [f(0) * 255, f(8) * 255, f(4) * 255];
+  };
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x / size - 0.5, dy = y / size - 0.5;
+      const r = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+      const burst = 0.5 + 0.5 * Math.cos(a * 16);
+      const rings = 0.5 + 0.5 * Math.cos(r * 90);
+      const hue = (((a / (2 * Math.PI)) * 2 + r * 2.2 + 0.08 * rings) % 1 + 1) % 1;
+      const [R, G, B] = hsl(hue, 0.42, 0.7 + 0.12 * burst - 0.05 * rings);
+      const i = (y * size + x) * 4;
+      img.data[i] = R; img.data[i + 1] = G; img.data[i + 2] = B; img.data[i + 3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+  // Centre star, embossed look (lighter).
+  c.fillStyle = 'rgba(255,255,255,0.55)';
+  c.beginPath();
+  for (let k = 0; k < 10; k++) {
+    const rr = (k % 2 ? 0.06 : 0.15) * size, ang = (k / 10) * Math.PI * 2 - Math.PI / 2;
+    const px = size / 2 + Math.cos(ang) * rr, py = size / 2 + Math.sin(ang) * rr;
+    if (k === 0) c.moveTo(px, py); else c.lineTo(px, py);
+  }
+  c.closePath();
+  c.fill();
+  return finish(canvas);
+}

@@ -1,3 +1,47 @@
+# Style reference — direction L2 "Satin Enamel · premium" · v1.1
+
+**v1.1 (2026-09-29).** Surya approved the premium pass at checkpoint 2b ("go with premium… high fidelity and masterful texturing, lighting and scene work"), with the orthographic camera and the two-tier cake. L2 keeps L's identity (palette, silhouettes, one enamel insert, the perforation row) and upgrades surfaces, construction, light and finish. v1.0 (below) still defines the palette and object rules unless a v1.1 rule replaces them.
+
+Source of truth: `src/render/studio.ts` (light, sweep, cookie, shadow filter), `src/render/materials.ts` (`DIRECTIONS.L2`), `src/render/print.ts` (printed art, holo foil), `models/badgePremium.ts`, `models/cakeParts.ts`, `src/ui/shell.css` (stage finish).
+
+### Studio (all scenes)
+
+| Setting | Value |
+| --- | --- |
+| Camera | Orthographic 3/4, unchanged (az 20°, el 15°) |
+| Key | Spot `#FFF1DE` × 15, decay 0, from (−4.2, 7.8, 5.4), angle 0.6, penumbra 0.7 — late-afternoon sun |
+| Gobo | Procedural palm cookie (768²): far layer blurred and faint, near layer of tapered drooping leaflets, crisper. Fronds enter from the edges; objects sit in open sun |
+| Soft shadows | PCF 1024², radius 6, patched to 16 fixed Vogel taps (no dither noise, no extra draw calls). Decals and parts < 1.5 cm thick skip the shadow pass |
+| Fill / bounce | Hemisphere sky `#E3E9EF` / ground `#D6C7B2` × 0.3 (cool sky, warm ground); bounce `#FFE8D2` × 0.14 |
+| Environment | L's procedural softbox PMREM at 0.52 (reflections for glass, clearcoat, chrome) |
+| Backdrop | Seamless cove sweep `#EAE3D6`, limewash plaster: tileable relief normal (multi-octave + pits) and matching albedo mottle, 512², repeat 2.2 |
+| Finish | CSS over poster and canvas: warm radial vignette (multiply, 12%) + fractal film grain (overlay, 16%). Zero GPU cost; hidden in forced-colours |
+| Low tier | Shadow map and gobo shadows off (contact shadows remain); materials simplified as before |
+
+### Surfaces
+
+- **Laminated print** for cards: printed art (canvas, original geometric glyphs, no fonts), clearcoat 1 / 0.1. White PVC core on the card edge (`mat_edge #F1EDE6`).
+- **One delight material per object**, used once: the badge's holographic seal (metallic rainbow sunburst whose hue rotates with viewing angle, so colour sweeps as the card swings).
+- **Glass faces** (`mat_body_ink`): near-black, clearcoat 1 / 0.06, set into machined pockets with a polished champagne bezel (`mat_bezel #D8CDBA`, metal, r 0.18).
+- **Hardware**: bright chrome (`mat_metal`, r 0.14), turned/cast forms; static parts that share a material are merged into one draw.
+- **Buttercream / glaze / ceramics**: sheen on frosting, clearcoat on glazes and the cobalt stand.
+- **Status light** (Business): the window lights green/red with a **dark glyph** (LED-display contrast), an additive halo on the glass and a coloured point-light spill that tints the card at the scan beat. The light always exists (intensity 0 idle) so status changes never recompile shaders.
+
+### Construction
+
+SDF modelling (surface nets, gradient normals, Newton projection) for continuous-fillet housings, decimated by meshoptimizer at export only; parametric lathes/sweeps elsewhere. Continuous fillets, crisp reveals, real drilled holes, shadow-gap feet.
+
+### Budgets (per scene, measured incl. the shadow pass)
+
+| Scene | Triangles | Draw calls | Budget |
+| --- | --- | --- | --- |
+| Business guest-ready / accepted | 53.4k / 53.5k | 33 / 35 | 60k / 40 |
+| Cake (lookdev, before bin) | 65.5k | 25 | **over** — M4 adds a low-poly shadow proxy for the frosting |
+
+Texture memory added by L2 ≈ 11 MiB (card prints 2 × 2.9, cookie 2.3, plaster 2.8, holo/strap/glow < 0.5) plus a 1024² shadow map (4–8 MiB).
+
+---
+
 # Style reference — direction L "Satin Enamel" · v1.0
 
 Locked 2026-09-28 at checkpoint 1 by Surya: **B + A restraint, keeping A's coloured candles and A's covered dish.** One consolidated refinement pass applied from the independent panel's findings (`docs/visual-study.md`). This file owns the production look for all five scenes; scenes never pick their own look.

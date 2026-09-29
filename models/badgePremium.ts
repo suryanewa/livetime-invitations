@@ -4,8 +4,10 @@ import {
   CatmullRomCurve3,
   CircleGeometry,
   CylinderGeometry,
+  ExtrudeGeometry,
   Object3D,
   RingGeometry,
+  Shape,
   Vector3,
 } from 'three';
 import { beveledPlate, group, lathe, mergeParts, mesh, roundedBox, wire } from './geometry.ts';
@@ -121,11 +123,34 @@ export function buildPremiumScanner(ctx: ModelContext, scanner: Object3D, lift: 
     { geometry: new RingGeometry(padR - 0.004, padR, 72), rotationX: flat, position: [0, 0, 0] },
   ]), lib.get('mat_print'), face);
   pad.position.set(-0.1, 0.0004, 0);
+  // Polished champagne bezel: a thin metal frame where the glass meets the machined pocket,
+  // catching one bright line of light like a finished device.
+  const bezelShape = roundedRectShape(GLASS.hu - 0.0005, GLASS.hv - 0.0005, GLASS.r - 0.0005);
+  bezelShape.holes.push(roundedRectShape(GLASS.hu - 0.0095, GLASS.hv - 0.0095, GLASS.r - 0.0095));
+  const bezelGeo = new ExtrudeGeometry(bezelShape, { depth: 0.009, bevelEnabled: true, bevelThickness: 0.0012, bevelSize: 0.0012, bevelSegments: 2, curveSegments: 10 });
+  bezelGeo.rotateX(flat);
+  const bezel = mesh('scanner_bezel', bezelGeo, lib.get('mat_bezel'), face);
+  bezel.position.y = -0.0102;
   // Status window: a rounded display area on the glass that lights with the glyph.
   const win = mesh('scanner_light', beveledPlate(0.2, 0.15, 0.004, 0.04, 0.0015, 2), lib.get('mat_status'), face);
   win.rotation.x = flat;
   win.position.set(0.24, 0.0012, 0);
   return { pad, light: win, symbolParent: win };
+}
+
+function roundedRectShape(hx: number, hy: number, r: number): Shape {
+  const sh = new Shape();
+  const q = Math.PI / 2;
+  sh.moveTo(-hx + r, -hy);
+  sh.lineTo(hx - r, -hy);
+  sh.absarc(hx - r, -hy + r, r, -q, 0, false);
+  sh.lineTo(hx, hy - r);
+  sh.absarc(hx - r, hy - r, r, 0, q, false);
+  sh.lineTo(-hx + r, hy);
+  sh.absarc(-hx + r, hy - r, r, q, 2 * q, false);
+  sh.lineTo(-hx, -hy + r);
+  sh.absarc(-hx + r, -hy + r, r, 2 * q, 3 * q, false);
+  return sh;
 }
 
 /**
@@ -147,26 +172,28 @@ export function buildPremiumClip(lib: Lib, clipPivot: Object3D, hook: { back: nu
     new Vector3(0, runY, hinge - 0.02),
     new Vector3(0, runY, hinge),
   ], false, 'catmullrom', 0.2);
-  mesh('clip_hook', wire(spine.getPoints(48), radius, 12), metal, clipPivot);
-  const knuckle = mesh('clip_gate_knuckle', lathe([[0, -0.018], [radius * 1.3, -0.018, 0.004], [radius * 1.3, 0.018, 0.004], [0, 0.018]], 20, 3), metal, clipPivot);
-  knuckle.rotation.z = Math.PI / 2;
-  knuckle.position.set(0, runY, hinge);
-  const gate = group('clip_gate', clipPivot);
-  gate.position.set(0, runY, hinge);
-  mesh('clip_gate_leg', wire([new Vector3(0, 0, 0), new Vector3(0, gateLength * 0.5, 0.004), new Vector3(0, gateLength, 0)], radius * 0.85, 10), metal, gate);
-  // Swivel barrel (turned, filleted) with a coral anodised band.
-  const barrel = mesh('clip_body', lathe([[0, -0.02], [0.019, -0.02, 0.004], [0.021, -0.012, 0.003], [0.021, 0.012, 0.003], [0.017, 0.02, 0.004], [0, 0.02]], 32, 3), metal, clipPivot);
-  barrel.position.y = -0.038;
-  const band = mesh('clip_crimp', new CylinderGeometry(0.0222, 0.0222, 0.008, 32), lib.get('mat_anodized'), clipPivot);
-  band.position.y = -0.036;
-  // Stem and D-ring the strap wraps.
-  mesh('clip_stem', lathe([[0, 0], [0.008, 0, 0.002], [0.007, 0.022, 0.002], [0, 0.022]], 16, 2), metal, clipPivot).position.y = -0.018;
+  // Static turned/cast parts share one material, so they merge into one draw: spine claw,
+  // gate knuckle, swivel barrel, stem and the D-ring the strap wraps.
+  const knuckle = lathe([[0, -0.018], [radius * 1.3, -0.018, 0.004], [radius * 1.3, 0.018, 0.004], [0, 0.018]], 20, 3);
+  knuckle.rotateZ(Math.PI / 2);
   const ring = new CatmullRomCurve3([
     new Vector3(0, 0.004, 0), new Vector3(0.04, 0.006, 0), new Vector3(0.05, 0.028, 0),
     new Vector3(0.036, 0.046, 0), new Vector3(-0.036, 0.046, 0), new Vector3(-0.05, 0.028, 0),
     new Vector3(-0.04, 0.006, 0),
   ], true, 'catmullrom', 0.5);
-  mesh('clip_ring', wire(ring.getPoints(40), 0.0065, 8), metal, clipPivot);
+  mesh('clip_body', mergeParts([
+    { geometry: wire(spine.getPoints(48), radius, 12) },
+    { geometry: knuckle, position: [0, runY, hinge] },
+    { geometry: lathe([[0, -0.02], [0.019, -0.02, 0.004], [0.021, -0.012, 0.003], [0.021, 0.012, 0.003], [0.017, 0.02, 0.004], [0, 0.02]], 32, 3), position: [0, -0.038, 0] },
+    { geometry: lathe([[0, 0], [0.008, 0, 0.002], [0.007, 0.022, 0.002], [0, 0.022]], 16, 2), position: [0, -0.018, 0] },
+    { geometry: wire(ring.getPoints(40), 0.0065, 8) },
+  ]), metal, clipPivot);
+  const gate = group('clip_gate', clipPivot);
+  gate.position.set(0, runY, hinge);
+  mesh('clip_gate_leg', wire([new Vector3(0, 0, 0), new Vector3(0, gateLength * 0.5, 0.004), new Vector3(0, gateLength, 0)], radius * 0.85, 10), metal, gate);
+  // Coral anodised band on the swivel barrel.
+  const band = mesh('clip_crimp', new CylinderGeometry(0.0222, 0.0222, 0.008, 32), lib.get('mat_anodized'), clipPivot);
+  band.position.y = -0.036;
   // Stitched fitting: the folded strap over the ring's top bar, with a stitch box.
   const fitting = group('strap_fitting', clipPivot);
   mesh('strap_fold', roundedBox(0.086, 0.085, 0.022, 0.009, 3), lib.get('mat_fabric'), fitting).position.y = 0.088;
