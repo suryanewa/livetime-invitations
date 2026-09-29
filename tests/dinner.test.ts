@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { Box3, Color, MeshStandardMaterial, type Object3D, Vector3 } from 'three';
+import { Box3, Color, MeshStandardMaterial, type Object3D, OrthographicCamera, Vector3 } from 'three';
+import { fitCameraToBounds } from '../src/render/camera.ts';
+import { dinnerFramePoints } from '../src/scenes/dinner/index.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import {
   COVER, COVER_BESIDE, COVER_CLEARANCE, COVER_SEATED, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_NODES, DINNER_RIM_CLEARANCE, DISH_HEIGHT, FOOD, PLATE,
@@ -155,5 +157,24 @@ describe('Dinner settle', () => {
       }
     }
     expect(peak).toBeGreaterThan(0.005);
+  });
+});
+
+describe('Dinner framing (Master §5, recorded disposal exception)', () => {
+  it('the covered dish fills at least 44 % of the stage width in the ready pose', () => {
+    // The open bin's flaps set the fixed frame; a placement search put the ceiling near 45 %.
+    const camera = new OrthographicCamera();
+    fitCameraToBounds(camera, dinnerBounds(), 1, undefined, dinnerFramePoints());
+    const inv = camera.matrixWorldInverse;
+    let min = Infinity, max = -Infinity;
+    for (let i = 0; i < 64; i++) {
+      const a = (i / 64) * Math.PI * 2;
+      const q = new Vector3(Math.cos(a) * PLATE.radius, 0, Math.sin(a) * PLATE.radius).applyMatrix4(inv);
+      min = Math.min(min, q.x);
+      max = Math.max(max, q.x);
+    }
+    const fill = (max - min) / (camera.right - camera.left);
+    expect(fill).toBeGreaterThanOrEqual(0.44);
+    expect(fill).toBeLessThanOrEqual(0.75);
   });
 });
