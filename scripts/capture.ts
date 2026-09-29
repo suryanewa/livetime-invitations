@@ -457,6 +457,58 @@ async function captureNetwork() {
   await browser.close();
 }
 
+/**
+ * Real-time sequence lengths in the live showcase (no virtual clock): from the call to the
+ * visual state reaching the final pose, polled every animation frame. Three runs each; median.
+ */
+async function captureTiming() {
+  const out = join(import.meta.dirname, '..', 'outputs', 'perf');
+  await mkdir(out, { recursive: true });
+  const browser = await launch();
+  const results: Record<string, Record<string, number>> = {};
+  for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 1000 } });
+    await page.goto(`${base}/?scene=${scene}`);
+    await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
+    const row: Record<string, number> = {};
+    for (const [name, setup, action, done] of [
+      ['host', 'c.setMode("host"); c.resetVisual();', 'c.prepareHost()', 'guest-ready'],
+      // Answer once, then time replays: each snaps to guest-ready and plays the outcome in full.
+      ['accept', 'c.setMode("guest"); c.chooseResponse("accept");', 'c.replay()', 'accepted-pose'],
+      ['decline', 'c.setMode("guest"); c.chooseResponse("decline");', 'c.replay()', 'declined-pose'],
+    ] as const) {
+      const runs: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        runs.push(await page.evaluate(async ([setupSrc, actionSrc, doneState]) => {
+          const sc = (window as any).__showcase;
+          const c = sc.controller;
+          new Function('c', setupSrc)(c);
+          await new Promise((r) => setTimeout(r, 2600));
+          return new Promise<number>((resolve) => {
+            const t0 = performance.now();
+            new Function('c', actionSrc)(c);
+            let seenPlaying = false;
+            const poll = () => {
+              const v = sc.state.visual as string;
+              if (v.endsWith('playing')) seenPlaying = true;
+              if (seenPlaying && v === doneState) resolve(performance.now() - t0);
+              else requestAnimationFrame(poll);
+            };
+            requestAnimationFrame(poll);
+          });
+        }, [setup, action, done] as const));
+      }
+      runs.sort((a, b) => a - b);
+      row[name] = +(runs[1]! / 1000).toFixed(3);
+    }
+    console.log(scene, JSON.stringify(row));
+    results[scene] = row;
+    await page.close();
+  }
+  await writeFile(join(out, 'sequence-timing.json'), JSON.stringify(results, null, 2));
+  await browser.close();
+}
+
 async function captureLookdev() {
   await mkdir(outDir, { recursive: true });
   const browser = await launch();
@@ -478,6 +530,7 @@ if (mode === 'study') await captureStudy();
 else if (mode === 'lookdev') await captureLookdev();
 else if (mode === 'perf') await capturePerf();
 else if (mode === 'network') await captureNetwork();
+else if (mode === 'timing') await captureTiming();
 else if (mode === 'ui') await captureUi();
 else if (mode === 'thumbs') await captureThumbs();
 else if (mode === 'business' || mode === 'party' || mode === 'birthday' || mode === 'sports' || mode === 'dinner') await captureScene(mode);
