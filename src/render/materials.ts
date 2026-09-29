@@ -1,4 +1,5 @@
 import { Color, DoubleSide, FrontSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Texture, Vector2 } from 'three';
+import { ballMaterial } from './ballMaterial.ts';
 import { cardPrint, grooveDirections, holoPattern, labelPrint, strapPrint } from './print.ts';
 import { perforationDarkMap, perforationMaps, releaseCachedTexture, retainCachedTexture, ringNormal, stippleNormal, weaveNormal } from './textures.ts';
 
@@ -37,6 +38,8 @@ export interface SurfaceSpec {
   flame?: { core: string; rim: string };
   /** Printed graphics generated at load (fidelity pass). */
   print?: 'card-light' | 'card-dark' | 'strap' | 'label-coral' | 'label-cobalt';
+  /** Basketball leather and shader seams (src/render/ballMaterial.ts). */
+  ball?: 'orange' | 'cream';
   /** Vinyl: tangential anisotropy (concentric groove sheen) from disc UVs. */
   grooves?: boolean;
   anisotropy?: number;
@@ -321,6 +324,17 @@ export const DIRECTIONS = {
     mat_lid: { color: '#DBD4C7', roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.18 },
     // Shared disposal bin: charcoal powder-coat (satin, light clearcoat).
     mat_bin: { color: '#34373A', roughness: 0.48, clearcoat: 0.25, clearcoatRoughness: 0.4 },
+    // Sports (M5): leather basketballs (shader seams), cotton net.
+    mat_ball_orange: { color: '#E36A2C', roughness: 0.62, sheen: 0.4, sheenColor: '#FFB27A', ball: 'orange' },
+    mat_ball_cream: { color: '#EFE4CD', roughness: 0.6, sheen: 0.35, sheenColor: '#FFF4E0', ball: 'cream' },
+    mat_net: { color: '#F4EFE6', roughness: 0.85, sheen: 0.3, sheenColor: '#FFFFFF', doubleSide: true },
+    // Dinner (M6): glossy, appetising food; the cloche stays brushed (no mirror reflections).
+    mat_pasta: { color: '#F0CB74', roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.4 },
+    mat_sauce: { color: '#C23F28', roughness: 0.3, clearcoat: 0.7, clearcoatRoughness: 0.15 },
+    mat_basil: { color: '#3E7B43', roughness: 0.5, sheen: 0.4, sheenColor: '#9FD18F' },
+    mat_veg_green: { color: '#5A9A4A', roughness: 0.45, clearcoat: 0.4, clearcoatRoughness: 0.25 },
+    mat_veg_orange: { color: '#EE8A3C', roughness: 0.42, clearcoat: 0.4, clearcoatRoughness: 0.25 },
+    mat_veg_red: { color: '#D0463A', roughness: 0.35, clearcoat: 0.6, clearcoatRoughness: 0.15 },
     // Woven lining inside the dust cover (audio grille cloth): the open lid's tactile face.
     mat_lid_fabric: { color: '#34363A', roughness: 0.92, normal: 'weave', normalScale: 1, sheen: 0.5, sheenColor: '#8a8f99' },
   };
@@ -418,6 +432,7 @@ function buildMaterial(name: string, spec: SurfaceSpec): Material {
     });
   }
   if (spec.holo) return holoFoil(name, spec);
+  if (spec.ball) return ballMaterial(name, spec);
   const needsPhysical = (spec.clearcoat ?? 0) > 0 || (spec.sheen ?? 0) > 0 || (spec.anisotropy ?? 0) > 0 || (spec.iridescence ?? 0) > 0;
   const params = {
     name,

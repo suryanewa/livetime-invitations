@@ -2,9 +2,11 @@ import '../ui/shell.css';
 import './study.css';
 import { buildCake } from '../../models/cake.ts';
 import { buildKeycard } from '../../models/keycard.ts';
-import { buildRecordPlayerBlockout } from '../../models/blockouts.ts';
 import { buildRecordPlayer } from '../../models/recordPlayer.ts';
 import { buildBirthday } from '../../models/birthday.ts';
+import { buildSports } from '../../models/sports.ts';
+import { buildDinner } from '../../models/dinner.ts';
+import { buildBasketballBlockout, buildDishBlockout, buildRecordPlayerBlockout } from '../../models/blockouts.ts';
 import type { BuiltModel } from '../../models/types.ts';
 import { MaterialLibrary, type DirectionId } from '../render/materials.ts';
 import { Stage, type StageOptions } from '../render/stage.ts';
@@ -76,6 +78,29 @@ const SUBJECTS: Subject[] = [
       }
       const model = buildBirthday({ lib, simplify }, 'vanilla');
       model.nodes.bin_root!.visible = false;
+      return { model, dispose: () => model.dispose() };
+    },
+  },
+  {
+    key: 'sports',
+    label: 'Sports · guest-ready (ball, hoop, net)',
+    build(lib) {
+      const model = lib.direction.id === 'L2' ? buildSports({ lib, simplify }, 'orange') : buildBasketballBlockout({ lib });
+      return { model, dispose: () => model.dispose() };
+    },
+  },
+  {
+    key: 'dinner',
+    label: 'Dinner · accepted (cloche beside the uncovered pasta)',
+    build(lib) {
+      if (lib.direction.id !== 'L2') {
+        const model = buildDishBlockout({ lib });
+        return { model, dispose: () => model.dispose() };
+      }
+      const model = buildDinner({ lib, simplify }, 'pasta');
+      model.nodes.bin_root!.visible = false;
+      const cover = model.nodes.cover_authored!;
+      cover.position.set(1.28, 0, 0.28);
       return { model, dispose: () => model.dispose() };
     },
   },
