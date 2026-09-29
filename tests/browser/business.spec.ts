@@ -132,6 +132,69 @@ test('Graphics loss falls back to a poster and responses still work', async ({ p
   await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /light-accepted/);
 });
 
+test('The lit status window keeps its colour: no clipping, no hotspot, green and red differ in hue and value', async ({ page }) => {
+  await ready(page);
+  await guest(page);
+  await page.getByRole('button', { name: /Motion/ }).click();
+  expect((await state(page)).reducedMotion).toBe(true);
+  // Window and glass boxes as fractions of the square stage (fixed camera and bounds).
+  const measure = () => page.evaluate(async () => {
+    const url = (window as any).__showcase.controller.captureStill(540, 1, 'image/png') as string;
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const g = c.getContext('2d')!;
+    g.drawImage(img, 0, 0);
+    const { data, width, height } = g.getImageData(0, 0, c.width, c.height);
+    const inBox = (x: number, y: number, b: number[]) => x >= b[0]! * width && x <= b[2]! * width && y >= b[1]! * height && y <= b[3]! * height;
+    const WIN = [0.675, 0.67, 0.752, 0.732], GLASS = [0.52, 0.62, 0.78, 0.77];
+    const lit: number[][] = [];
+    let hot = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const px = [data[i]!, data[i + 1]!, data[i + 2]!];
+        const hi = Math.max(...px), sat = hi - Math.min(...px);
+        if (inBox(x, y, WIN)) {
+          if (sat > 60) lit.push(px);
+        } else if (inBox(x, y, GLASS) && hi >= 230 && sat > 60) hot++;
+      }
+    }
+    const median = [0, 1, 2].map((k) => lit.map((p) => p[k]!).sort((a, b) => a - b)[lit.length >> 1]!);
+    return { median, max: Math.max(...lit.map((p) => Math.max(...p))), count: lit.length, hot };
+  });
+  // Relative luminance, and the same under deuteranopia (Machado 2009, severity 1).
+  const lin = (v: number) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const lum = ([r, g, b]: number[]) => 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  const deut = (px: number[]) => {
+    const [r, g, b] = px.map(lin) as [number, number, number];
+    return lum([0.367322 * r + 0.860646 * g - 0.227968 * b, 0.280085 * r + 0.672501 * g + 0.047413 * b, -0.01182 * r + 0.04294 * g + 0.968881 * b]);
+  };
+
+  await page.getByRole('button', { name: 'Accept' }).click();
+  await expect.poll(async () => (await state(page)).visual).toBe('accepted-pose');
+  const accept = await measure();
+  await page.getByRole('button', { name: 'Decline' }).click();
+  await expect.poll(async () => (await state(page)).visual).toBe('declined-pose');
+  const decline = await measure();
+
+  for (const [label, m] of [['accept', accept], ['decline', decline]] as const) {
+    expect(m.count, label).toBeGreaterThan(300);
+    // No channel clips: the window reads as its token, not as mint or pink.
+    expect(m.max, label).toBeLessThanOrEqual(245);
+    // No specular hotspot from the spill light on the glass beside the window.
+    expect(m.hot, label).toBeLessThanOrEqual(5);
+  }
+  expect(accept.median[1]! - accept.median[0]!).toBeGreaterThan(90);
+  expect(decline.median[0]! - decline.median[1]!).toBeGreaterThan(90);
+  const ratio = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  expect(ratio(lum(accept.median.map(lin)), lum(decline.median.map(lin)))).toBeGreaterThanOrEqual(2);
+  expect(ratio(deut(accept.median), deut(decline.median))).toBeGreaterThanOrEqual(1.75);
+});
+
 test('An initially saved response shows its final pose without a new submission', async ({ page }) => {
   await ready(page, '/?saved=decline');
   const s = await state(page);

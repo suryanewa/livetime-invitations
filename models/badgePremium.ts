@@ -106,8 +106,10 @@ export function buildPremiumScanner(ctx: ModelContext, scanner: Object3D, lift: 
   for (let i = 0; i < 9; i++) floors.push({ geometry: new CircleGeometry(0.016, 16), position: [(i - 4) * 0.07, 0.19, HZ - 0.058] });
   mesh('scanner_signature', mergeParts(floors), lib.get('mat_rubber'), body);
 
+  // Ink foot: the reader's dark base line, its silhouette element at 3:1 or more against the
+  // stage (family rule; Dinner's plate foot and the bin's foot ring use the same ink).
   const foot = simplify(meshSDF(footSDF(), new Box3(new Vector3(-HX, 0, -HZ), new Vector3(HX, 0.04, HZ)), { cell: 0.01 }), 0.15, 0.0006);
-  mesh('scanner_foot', foot, lib.get('mat_body_shadow'), scanner).position.y = -0.004;
+  mesh('scanner_foot', foot, lib.get('mat_body_ink'), scanner).position.y = -0.004;
 
   // Face frame for decals: local +Y = face normal, +Z = down-slope, origin just above the glass.
   const face = group('scanner_face', body);

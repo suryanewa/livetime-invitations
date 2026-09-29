@@ -96,6 +96,12 @@ function host(t: number, out: BusinessFrame): void {
 const p0 = new Vector3(), c1 = new Vector3(), c2 = new Vector3(), p1 = new Vector3();
 const travel = new Vector3(), toRest = new Vector3();
 const normalPress = new Vector3(0, -0.69, -0.724);
+/**
+ * The card leaves the pad from rest: the scan settle is finished by then, and the move eases
+ * in (EASE.lift), so it never starts at speed. Starting slightly before 1.2 keeps its peak
+ * near the approach's peak (about 8 u/s) while it still lands on the rest pose at 1.5.
+ */
+const DEPART_AT = 1.14;
 
 function outcome(t: number, out: BusinessFrame): void {
   frameFor('guest-ready', out);
@@ -117,31 +123,32 @@ function outcome(t: number, out: BusinessFrame): void {
     e.set(-0.06, 0, -0.1);
     qa.setFromEuler(e);
     out.rot.slerpQuaternions(qa, scanQ, EASE.travel(seg(t, 0.2, 0.7)));
-  } else if (t < 1.2) {
-    // Contact press (0.70–0.85), scan hold and small settle (0.85–1.20).
+  } else if (t < DEPART_AT) {
+    // Contact press (0.70–0.85), scan hold and small settle (0.85–1.14, exactly 0 by then).
     out.pivot.copy(POSE.scan.pivot);
     out.rot.copy(scanQ);
     const press = Math.sin(Math.PI * seg(t, 0.7, 0.86)) * 0.022;
     out.pivot.addScaledVector(normalPress, press);
-    const settle = t < 0.86 ? 0.012 * smoothstep(seg(t, 0.7, 0.86)) : dampedSettle(t - 0.86, 0.012, 3, 0.55, 0.34);
+    const settle = t < 0.86 ? 0.012 * smoothstep(seg(t, 0.7, 0.86)) : dampedSettle(t - 0.86, 0.012, 3, 0.55, DEPART_AT - 0.86);
     e.set(settle, 0, settle * 0.5);
     qb.setFromEuler(e);
     out.rot.multiply(qb);
   } else {
-    // Card leaves the pad and comes to rest beside it; line tension settles.
-    const s = EASE.land(seg(t, 1.2, 1.5));
+    // Card leaves the pad from rest and comes to rest beside it; line tension settles.
+    const s = EASE.lift(seg(t, DEPART_AT, 1.5));
     toRest.lerpVectors(POSE.scan.pivot, POSE.rest.pivot, s);
     toRest.y += Math.sin(Math.PI * s) * 0.06;
     out.pivot.copy(toRest);
-    out.rot.slerpQuaternions(scanQ, restQ, EASE.travel(seg(t, 1.2, 1.46)));
+    out.rot.slerpQuaternions(scanQ, restQ, EASE.travel(seg(t, DEPART_AT, 1.46)));
   }
   // Anchors (off-frame) trail the clip horizontally, so the strap visibly follows.
   const lagT = Math.max(0, t - ANCHOR_LAG);
-  // The last leg finishes at t = 1.5 so the final frame equals the canonical pose exactly.
+  // The last leg starts from rest just after the clip's and finishes at t = 1.5, so the strap
+  // trails the card and the final frame equals the canonical pose exactly.
   const trailing = lagT < 0.15 ? POSE.ready.pivot.x
     : lagT < 0.7 ? lerp(POSE.ready.pivot.x, POSE.scan.pivot.x, EASE.travel(seg(lagT, 0.15, 0.7)))
     : lagT < 1.1 ? POSE.scan.pivot.x
-    : lerp(POSE.scan.pivot.x, POSE.rest.pivot.x, EASE.land(seg(lagT, 1.1, 1.4)));
+    : lerp(POSE.scan.pivot.x, POSE.rest.pivot.x, EASE.lift(seg(lagT, 1.1, 1.4)));
   out.anchorX = trailing;
   out.anchorY = out.pivot.y + ANCHOR_RISE;
   out.status = t >= SCAN_AT ? 'lit' : 'off';

@@ -76,9 +76,10 @@ function roundedPolygon(points: ProfilePoint[], segments = 6): Shape {
   return s;
 }
 
-export function checkGeometry(size: number, depth: number): ExtrudeGeometry {
+/** Check glyph; `stroke` is the arm width as a fraction of `size` (depth is the extrusion). */
+export function checkGeometry(size: number, depth: number, stroke = 0.18): ExtrudeGeometry {
   const s = new Shape();
-  const w = size * 0.18;
+  const w = size * stroke;
   s.moveTo(-0.5 * size, 0.02 * size);
   s.lineTo(-0.16 * size, -0.32 * size);
   s.lineTo(0.52 * size, 0.36 * size);
@@ -105,6 +106,15 @@ function outline(w: number, h: number, r: number, stroke: number): ShapeGeometry
 export interface StatusGlow {
   spill: PointLight;
 }
+
+/** Premium glyph on the lit window: ink that reads at phone scale. */
+export const STATUS_GLYPH = { color: '#000000', roughness: 1 } as const;
+/**
+ * Spill light offset along the reading-face normal from the window. At this distance the
+ * light's reflection falls off the glass and its bezel (no hotspot beside the window) while
+ * it still tints the card at the scan beat.
+ */
+export const STATUS_SPILL_LIFT = 0.6;
 
 export interface KeycardRig {
   root: Object3D;
@@ -268,8 +278,14 @@ export function buildKeycardGeometry(ctx: ModelContext, template: CardTemplate =
   scanner.position.copy(SCANNER_POS);
   if (premium) {
     const parts = buildPremiumScanner(ctx, scanner, SCANNER_FOOT);
-    const accept = mesh('scanner_symbol_accept', checkGeometry(0.1, 0.006), lib.get('mat_status_symbol'), parts.symbolParent);
-    const decline = mesh('scanner_symbol_decline', beveledPlate(0.09, 0.022, 0.006, 0.011, 0.002, 1), lib.get('mat_status_symbol'), parts.symbolParent);
+    // Glyphs sized for a phone: at least 10 CSS px wide on a 288 px stage, strokes above 2 CSS px
+    // on a 328 px stage, and centred in the window.
+    const check = checkGeometry(0.125, 0.006, 0.23);
+    check.computeBoundingBox();
+    const mid = check.boundingBox!.getCenter(new Vector3());
+    check.translate(-mid.x, -mid.y, 0);
+    const accept = mesh('scanner_symbol_accept', check, lib.get('mat_status_symbol'), parts.symbolParent);
+    const decline = mesh('scanner_symbol_decline', beveledPlate(0.125, 0.032, 0.006, 0.016, 0.002, 1), lib.get('mat_status_symbol'), parts.symbolParent);
     accept.position.z = decline.position.z = 0.0055;
     accept.visible = decline.visible = false;
     group('card_shadow', root).position.set(HANG_PIVOT.x, 0.002, HANG_PIVOT.z);
@@ -443,10 +459,13 @@ export function rigKeycard(root: Object3D, lib: ModelContext['lib'], template: C
   // switching status never recompiles shaders.
   let glow: StatusGlow | null = null;
   if (premiumRig) {
+    // Ink glyph: black and fully rough, so neither the spill nor the key light greys it.
+    symbolMaterial.color.set(STATUS_GLYPH.color);
+    symbolMaterial.roughness = STATUS_GLYPH.roughness;
     const win = nodes.scanner_light!;
     const spill = new PointLight('#ffffff', 0, 1.3, 2);
     spill.name = 'scanner_spill';
-    spill.position.set(win.position.x, win.position.y + 0.12, win.position.z);
+    spill.position.set(win.position.x, win.position.y + STATUS_SPILL_LIFT, win.position.z);
     win.parent!.add(spill);
     glow = { spill };
   }
