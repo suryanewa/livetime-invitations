@@ -142,7 +142,7 @@ A cold first scene is the runtime JavaScript (≈195 KB gz at Milestone 2; re-me
 | --- | --- | --- |
 | Business | 61.6 % (card and reader footprint projected with the shared camera fit; lanyard excluded) | Pass, near the low edge |
 | Party | 71.2 % on the guest-ready poster (was 78 %; bounds widened, locked by a unit test) | Pass |
-| Birthday | 52.1 % on the guest-ready poster | **Below range**, decision pending at checkpoint 3: the camera must fit the literal cake-to-bin path, and a bin deep enough to swallow the cake with its candles sets the frame height |
+| Birthday | 52.1 % on the guest-ready poster | **Accepted exception** (Surya, checkpoint 3, 2026-09-29): the camera must fit the literal cake-to-bin path, and a bin deep enough to swallow the cake with its candles sets the frame height. Applies to the two disposal scenes (Birthday, Dinner) |
 
 ### GPU memory (calculated, not driver readings)
 
@@ -151,5 +151,4 @@ The material library now owns its textures and frees them on every category swit
 ### Still open
 
 - iPhone 17 Max session (Business, Party, Birthday at Normal and Low): frame times, cold shader compile, shimmer, legibility, compositor cost of the CSS finish.
-- Birthday framing decision (above).
 - A remaining tonearm lift step of about 0.5° in a single frame when a guest changes from accepting to declining while the stylus is on the record (the interruption blend lifts the arm from its captured pose; removing it needs a director-level lift-before-swing). Judged invisible at phone scale; recorded rather than fixed.

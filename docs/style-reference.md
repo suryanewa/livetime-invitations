@@ -23,6 +23,10 @@ Source of truth: `src/render/studio.ts` (key, fill, sweep, cookie, shadow filter
 
 The premium studio's real-time soft shadows (one 1024² map, 16-tap PCF, gobo cookie) and physical materials (clearcoat, sheen, anisotropy, the holo foil) are the revised Normal-tier definition. Master §9 defines Normal as "simple PBR; baked contact detail; no postprocessing". Its revision clause covers budgets set at the Business milestone, so this is recorded as an explicit revision of the tier itself, with the reasons: the WebGL frame still has no postprocessing (no extra passes); the CSS vignette and grain are compositor layers outside the renderer, their cost unmeasured and listed for the phone session. This follows following the premium look Surya approved at checkpoint 2b. It is pending phone measurement on the reference device (iPhone 17 Max, Safari). If Normal misses the frame-interval target there, the quality monitor drops to Low (defined above) as it would for any tier.
 
+### Checkpoint 3 decisions (2026-09-29)
+
+Surya approved Party (premium record player) and Birthday (two-tier cake and the shared charcoal pedal bin), so the disposal treatment is locked for Dinner. The disposal scenes may frame their object below 60 % of stage width (Birthday 52 %), because the camera fits the whole literal cake-to-bin path. Sports and Dinner get the same premium treatment as the first three scenes.
+
 ### Surfaces
 
 - **Laminated print** for cards: printed art (canvas, original geometric glyphs, no fonts), clearcoat 1 / 0.1. White PVC core on the card edge (`mat_edge #F1EDE6`).
