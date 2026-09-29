@@ -43,6 +43,11 @@ const set = (out: DinnerFrame, plate: Vector3, cover: Vector3, tilt: number) => 
 const REVEAL_DIR = new Vector3(COVER_BESIDE.x - COVER_SEATED.x, 0, COVER_BESIDE.z - COVER_SEATED.z).normalize();
 /** Direction the host's cover travels as it comes in to seat. */
 const COVER_DIR = new Vector3(COVER_SEATED.x - COVER_POISED.x, 0, COVER_SEATED.z - COVER_POISED.z).normalize();
+/** The poised cover tips its plate-side edge down (small-angle lean about up × the plate direction). */
+const poisedLean = (out: DinnerFrame, k: number) => {
+  out.coverTilt = -COVER_POISED_TILT * k * COVER_DIR.x;
+  out.coverTiltX = COVER_POISED_TILT * k * COVER_DIR.z;
+};
 
 /**
  * The optional secondary settle (sub-spec: at most 1°): a heavy cover rocks once on its rim and
@@ -60,7 +65,10 @@ function settle(out: DinnerFrame, u: number, dir: Vector3, rest: Vector3): void 
 }
 
 export function frameFor(pose: CanonicalPose, out: DinnerFrame): DinnerFrame {
-  if (pose === 'host-ready') set(out, ORIGIN, COVER_POISED, COVER_POISED_TILT);
+  if (pose === 'host-ready') {
+    set(out, ORIGIN, COVER_POISED, 0);
+    poisedLean(out, 1);
+  }
   else if (pose === 'accepted') set(out, ORIGIN, COVER_BESIDE, 0);
   else if (pose === 'declined') set(out, DISH_IN_BIN, DISH_IN_BIN.clone().add(COVER_SEATED), 0);
   else set(out, ORIGIN, COVER_SEATED, 0);
@@ -83,7 +91,7 @@ function host(t: number, out: DinnerFrame): void {
     // Food visible, cover poised: a small preparatory rise.
     out.coverPos.copy(COVER_POISED);
     out.coverPos.y += 0.03 * EASE.lift(seg(t, 0, 0.2));
-    out.coverTilt = COVER_POISED_TILT;
+    poisedLean(out, 1);
   } else if (t < 0.9) {
     // Align over the food, levelling as it comes, and lower in one continuous weighted move:
     // the height passes the safe skirt height exactly as the cover centres (0.60 s) without
@@ -91,7 +99,7 @@ function host(t: number, out: DinnerFrame): void {
     const s = ALIGN(seg(t, 0.2, 0.6));
     const from = COVER_POISED.clone().setY(COVER_POISED.y + 0.03);
     out.coverPos.set(lerp(from.x, ABOVE_SEAT.x, s), coverLowering(t, from.y), lerp(from.z, ABOVE_SEAT.z, s));
-    out.coverTilt = lerp(COVER_POISED_TILT, 0, s);
+    poisedLean(out, 1 - s);
   } else {
     // A gentle settle on the rim into guest-ready.
     settle(out, seg(t, 0.9, 1.2), COVER_DIR, COVER_SEATED);

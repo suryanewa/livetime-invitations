@@ -114,9 +114,10 @@ export class DinnerScene implements SceneInstance {
     n.cover_authored!.visible = f.dishVisible;
     // The dish shadow follows the plate and softens as it is carried up and away.
     const shadow = this.rig.dishShadow;
-    shadow.visible = f.dishVisible;
     shadow.setFootprint(f.platePos.x, f.platePos.z);
     shadow.setHeight(f.platePos.y, 1.4);
+    // setHeight decides visibility from its fade; the hidden dish must stay hidden after it.
+    if (!f.dishVisible) shadow.visible = false;
     // The cloche's own shadow fades in as it leaves the plate and lands beside it (as it rises
     // off the plate it is still over the dish's shadow, so it is held back there).
     const off = Math.hypot(f.coverPos.x - f.platePos.x, f.coverPos.z - f.platePos.z);

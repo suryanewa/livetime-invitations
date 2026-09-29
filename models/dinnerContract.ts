@@ -45,8 +45,11 @@ export const DISH_HEIGHT = PLATE.well + COVER_TOP;
  */
 export const COVER_SEATED = new Vector3(0, PLATE.well, 0);
 export const COVER_BESIDE = new Vector3(-1.2, 0, -0.95);
-/** Host-ready: the cover poised beside and above the plate, tipped towards it. */
-export const COVER_POISED = new Vector3(1.05, 0.62, 0.18);
+/**
+ * Host-ready: the cover poised above its resting place (behind-left), tipped towards the plate,
+ * so covering is the reverse of the guest's uncovering (Dinner acceptance criteria).
+ */
+export const COVER_POISED = new Vector3(-0.95, 0.62, -0.75);
 export const COVER_POISED_TILT = 0.32;
 
 /**
@@ -69,9 +72,12 @@ export const DISH_IN_BIN = new Vector3(DINNER_BIN_POS.x, BIN.floor, DINNER_BIN_P
 
 /** Complete motion bounds (box fallback; the scene also supplies silhouette frame points). */
 export function dinnerBounds(): Box3 {
-  const b = new Box3(new Vector3(-PLATE.radius, 0, -PLATE.radius), new Vector3(Math.max(COVER_BESIDE.x, COVER_POISED.x) + COVER.radius + 0.02, COVER_POISED.y + COVER_TOP + 0.1, PLATE.radius + 0.1));
-  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-    b.expandByPoint(new Vector3(COVER_BESIDE.x + dx * (COVER.radius + 0.02), COVER_TOP, COVER_BESIDE.z + dz * (COVER.radius + 0.02)));
+  // The plate, the covered dish's height, and both cover rest places as full discs.
+  const b = new Box3(new Vector3(-PLATE.radius, 0, -PLATE.radius), new Vector3(PLATE.radius, DISH_HEIGHT, PLATE.radius + 0.1));
+  for (const c of [COVER_BESIDE, COVER_POISED]) {
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      b.expandByPoint(new Vector3(c.x + dx * (COVER.radius + 0.02), c.y + COVER_TOP + 0.1, c.z + dz * (COVER.radius + 0.02)));
+    }
   }
   const r = Math.hypot(BIN_BOUNDS.max.x, BIN_BOUNDS.max.z);
   b.union(new Box3(new Vector3(DINNER_BIN_POS.x - r, 0, DINNER_BIN_POS.z - r), new Vector3(DINNER_BIN_POS.x + r, BIN_BOUNDS.max.y, DINNER_BIN_POS.z + r)));
