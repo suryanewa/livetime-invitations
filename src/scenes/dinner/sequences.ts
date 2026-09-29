@@ -75,7 +75,6 @@ export function newFrame(): DinnerFrame {
 
 // ── Host: 1.2 s ───────────────────────────────────────────────────────────────
 const ALIGN = cubicBezier(0.4, 0, 0.3, 1);
-const LOWER = cubicBezier(0.45, 0, 0.2, 1);
 function host(t: number, out: DinnerFrame): void {
   frameFor('guest-ready', out);
   if (t < 0.2) {
@@ -83,36 +82,46 @@ function host(t: number, out: DinnerFrame): void {
     out.coverPos.copy(COVER_POISED);
     out.coverPos.y += 0.03 * EASE.lift(seg(t, 0, 0.2));
     out.coverTilt = COVER_POISED_TILT;
-  } else if (t < 0.6) {
-    // Align over the food, levelling as it comes, skirt always above the food.
-    const s = ALIGN(seg(t, 0.2, 0.6));
-    out.coverPos.lerpVectors(COVER_POISED.clone().setY(COVER_POISED.y + 0.03), ABOVE_SEAT, s);
-    out.coverTilt = lerp(COVER_POISED_TILT, 0, s);
   } else if (t < 0.9) {
-    // Lower with a controlled, weighted motion and seat precisely at 0.90 s.
-    out.coverPos.lerpVectors(ABOVE_SEAT, COVER_SEATED, LOWER(seg(t, 0.6, 0.9)));
-    out.coverTilt = 0;
+    // Align over the food, levelling as it comes, and lower in one continuous weighted move:
+    // the height passes the safe skirt height exactly as the cover centres (0.60 s) without
+    // stopping, then decelerates to seat precisely at 0.90 s.
+    const s = ALIGN(seg(t, 0.2, 0.6));
+    const from = COVER_POISED.clone().setY(COVER_POISED.y + 0.03);
+    out.coverPos.set(lerp(from.x, ABOVE_SEAT.x, s), coverLowering(t, from.y), lerp(from.z, ABOVE_SEAT.z, s));
+    out.coverTilt = lerp(COVER_POISED_TILT, 0, s);
   } else {
     // A gentle settle on the rim into guest-ready.
     settle(out, seg(t, 0.9, 1.2), COVER_DIR, COVER_SEATED);
   }
 }
 
+/** Cubic Hermite on [0, 1] with end values and end slopes (slopes in value per unit u). */
+function hermite(u: number, p0: number, m0: number, p1: number, m1: number): number {
+  const u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
+}
+/** Host cover height 0.20–0.90 s: through SAFE_SKIRT at 0.60 s at LOWER_SPEED, seated at rest. */
+const LOWER_SPEED = -1.1;
+function coverLowering(t: number, fromY: number): number {
+  if (t < 0.6) return hermite(seg(t, 0.2, 0.6), fromY, 0, SAFE_SKIRT, LOWER_SPEED * 0.4);
+  return hermite(seg(t, 0.6, 0.9), SAFE_SKIRT, LOWER_SPEED * 0.3, COVER_SEATED.y, 0);
+}
+
 // ── Accept: 1.5 s ─────────────────────────────────────────────────────────────
 const REVEAL = cubicBezier(0.35, 0, 0.3, 1);
+/** Separation then lift in one curve: slow off the plate (≈0.07 at 0.20 s), no zero-velocity joint. */
+const RISE = cubicBezier(0.85, 0, 0.35, 1);
 function accept(t: number, out: DinnerFrame): void {
   frameFor('guest-ready', out);
   const c = out.coverPos;
-  if (t < 0.2) {
-    // Rises just enough to separate from the plate.
-    c.copy(COVER_SEATED);
-    c.y += 0.06 * EASE.lift(seg(t, 0, 0.2));
-  } else if (t < 0.85) {
-    // One continuous action: up clear of the food first, then across and down beside it.
+  if (t < 0.85) {
+    // One continuous action: it separates from the plate (about 7 cm by 0.20 s), keeps rising
+    // clear of the food with no stop, then travels across and down beside it.
     const s = seg(t, 0.2, 0.85);
-    const across = REVEAL(seg(s, 0.3, 1));
+    const across = t < 0.2 ? 0 : REVEAL(seg(s, 0.3, 1));
     c.set(lerp(COVER_SEATED.x, COVER_BESIDE.x, across), 0, lerp(COVER_SEATED.z, COVER_BESIDE.z, across));
-    const up = COVER_SEATED.y + 0.06 + (SAFE_SKIRT + 0.22 - COVER_SEATED.y - 0.06) * EASE.lift(seg(s, 0, 0.45));
+    const up = COVER_SEATED.y + (SAFE_SKIRT + 0.22 - COVER_SEATED.y) * RISE(seg(t, 0, 0.52));
     c.y = s < 0.55 ? up : lerp(up, COVER_BESIDE.y, smoothstep(seg(s, 0.55, 1)));
     // Leading edge dips a little along the path (small-angle lean about up × path).
     const lean = 0.12 * Math.sin(Math.PI * across);
@@ -134,6 +143,7 @@ const FLAP_CLOSE = cubicBezier(0.45, 0, 0.35, 1);
 /** One continuous move along the transfer path: eases off the floor, travels, lowers in gently. */
 const TRANSFER = cubicBezier(0.33, 0, 0.3, 1);
 const FLAP_GAP = 0.03;
+const BIN_ENTER = cubicBezier(0.2, 0.55, 0.3, 1);
 
 /**
  * The approved transfer path in the vertical plane from the plate to the bin: straight up, across
@@ -179,8 +189,10 @@ function decline(t: number, out: DinnerFrame): void {
   frameFor('guest-ready', out);
   // 0–0.25: the bin slides into the margin and opens.
   out.binVisible = t > 0;
-  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, EASE.travel(seg(t, 0, 0.24)));
-  if (t < 0.95) out.flaps = FLAP_OPEN(seg(t, 0.08, 0.25));
+  // Its speed peaks off-screen and it decelerates across the visible part (no dark mass
+  // slamming across the frame in a few frames).
+  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(t, 0, 0.26)));
+  if (t < 0.95) out.flaps = FLAP_OPEN(seg(t, 0.1, 0.27));
   else if (t < 1.2) out.flaps = lerp(1, FLAP_GAP, FLAP_CLOSE(seg(t, 0.95, 1.2)));
   else out.flaps = lerp(FLAP_GAP, 0, EASE.land(seg(t, 1.2, 1.4)));
   // 0.25–0.95: the covered dish, as one unit, rises clear, crosses over the rim between the
@@ -192,6 +204,15 @@ function decline(t: number, out: DinnerFrame): void {
   out.coverPos.copy(dish).add(COVER_SEATED);
   // Once the flaps have closed over it, the hidden dish stops rendering.
   out.dishVisible = t < 1.2;
+}
+
+/**
+ * Whether a straight interruption blend back to the seated cover is clean from this frame: the
+ * cover is still (nearly) centred and above the safe skirt height, so its skirt clears the food.
+ */
+export function coverBlendSafe(f: DinnerFrame): boolean {
+  const offset = Math.hypot(f.coverPos.x - COVER_SEATED.x, f.coverPos.z - COVER_SEATED.z);
+  return offset <= 0.05 || (offset <= 0.2 && f.coverPos.y >= SAFE_SKIRT);
 }
 
 export function sampleSequence(sequence: SequenceName, t: number, out: DinnerFrame): DinnerFrame {

@@ -9,7 +9,7 @@ import {
 } from '../models/dinnerContract.ts';
 import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 import { BIN, buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
-import { DURATIONS, frameFor, newFrame, sampleSequence, SETTLE_TILT, type DinnerFrame } from '../src/scenes/dinner/sequences.ts';
+import { coverBlendSafe, DURATIONS, frameFor, newFrame, SAFE_SKIRT, sampleSequence, SETTLE_TILT, type DinnerFrame } from '../src/scenes/dinner/sequences.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
 const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
@@ -185,5 +185,25 @@ describe('Dinner framing (Master §5, recorded disposal exception)', () => {
     const fill = (max - min) / (camera.right - camera.left);
     expect(fill).toBeGreaterThanOrEqual(0.42);
     expect(fill).toBeLessThanOrEqual(0.75);
+  });
+});
+
+describe('Dinner motion continuity (checkpoint 4)', () => {
+  it('the reveal separates about 7 cm by 0.20 s and never stops before it is set down', () => {
+    const lift = at('accept', 0.2).coverPos.y - COVER_SEATED.y;
+    expect(lift).toBeGreaterThan(0.04);
+    expect(lift).toBeLessThan(0.1);
+    for (let i = 10; i < 850; i += 5) expect(at('accept', (i + 5) / 1000).coverPos.distanceTo(at('accept', i / 1000).coverPos)).toBeGreaterThan(1e-4);
+  });
+
+  it('the host cover never hovers still between aligning and lowering', () => {
+    for (let i = 250; i < 895; i += 5) expect(at('host', (i + 5) / 1000).coverPos.distanceTo(at('host', i / 1000).coverPos)).toBeGreaterThan(1e-4);
+    expect(at('host', 0.6).coverPos.y).toBeCloseTo(SAFE_SKIRT, 6);
+  });
+
+  it('an answer change blends while the cover is still over the food and high, and cuts once it is aside', () => {
+    expect(coverBlendSafe(at('accept', 0.3))).toBe(true);
+    expect(coverBlendSafe(at('accept', 0.46))).toBe(true);
+    expect(coverBlendSafe(at('accept', 0.7))).toBe(false);
   });
 });

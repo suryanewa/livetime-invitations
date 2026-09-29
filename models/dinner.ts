@@ -44,7 +44,7 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
     return shadow;
   };
   const dishShadow = replace('dish_shadow', new ContactShadow({
-    name: 'dish_shadow', shape: 'round', width: PLATE.radius * 2, depth: PLATE.radius * 2, spread: [1.08, 1.3], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,
+    name: 'dish_shadow', shape: 'round', width: PLATE.radius * 2, depth: PLATE.radius * 2, spread: [1.45, 1.7], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,
   }));
   const binShadow = replace('bin_shadow', new ContactShadow({
     name: 'bin_shadow', shape: 'round', width: BIN.radius * 1.9, depth: BIN.radius * 1.9, spread: [1.15, 1.5], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,

@@ -11,7 +11,7 @@ import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { smoothstep } from '../../motion/curves.ts';
-import { DURATIONS, frameFor, newFrame, sampleSequence, type DinnerFrame } from './sequences.ts';
+import { coverBlendSafe, DURATIONS, frameFor, newFrame, sampleSequence, type DinnerFrame } from './sequences.ts';
 
 /**
  * Silhouette samples of every Dinner path: dish, poised and resting cover and the carry. The
@@ -84,7 +84,7 @@ export class DinnerScene implements SceneInstance {
    */
   interruptCut(): boolean {
     const f = this.frame;
-    const coverAside = Math.hypot(f.coverPos.x - COVER_SEATED.x, f.coverPos.z - COVER_SEATED.z) > 0.05;
+    const coverAside = !coverBlendSafe(f);
     return f.binVisible || !f.dishVisible || f.platePos.lengthSq() > 1e-6 || coverAside;
   }
 

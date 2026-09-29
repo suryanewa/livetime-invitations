@@ -101,7 +101,8 @@ export function foliageCookie(size = 768): Texture {
   ctx.fillStyle = ctx.strokeStyle = 'rgba(40, 30, 22, 0.86)';
   frond(size * 0.02, size * 0.12, size * 0.6, 0.35, 0.16);
   frond(size * 0.98, size * 0.08, size * 0.58, 2.6, -0.14);
-  frond(size * 1.03, size * 0.92, size * 0.46, 3.75, 0.12);
+  // (A fourth near frond from the lower right was removed at checkpoint 4: its tip landed on
+  // the front floor as a grey streak under the objects.)
   frond(size * 0.02, size * 1.02, size * 0.44, -0.8, -0.1);
   ctx.filter = 'none';
   const tex = new CanvasTexture(canvas);
