@@ -3,7 +3,8 @@
  * The component owns its stage surface; no automatic dark-mode recolouring in v1.
  */
 :root {
-  --lt-stage: #f4f1eb;
+  /* Measured from the rendered studio backdrop (posters), so stage, fallback and render match. */
+  --lt-stage: #f8e4c8;
   --lt-text: #202320;
   --lt-text-2: #585c57;
   --lt-muted: #dcddd5;
@@ -337,6 +338,8 @@ body {
   }
 }
 
+/* Reduced motion comes from the OS or from the host page's own Motion Off toggle, which sets
+   data-motion="off" on an ancestor (the showcase uses <html>); both stop the same CSS motion. */
 @media (prefers-reduced-motion: reduce) {
   .lt-spinner {
     animation: none;
@@ -346,6 +349,16 @@ body {
   .lt-stage__canvas {
     transition: none !important;
   }
+}
+
+[data-motion='off'] .lt-spinner {
+  animation: none;
+  border-top-color: var(--lt-text-2);
+}
+
+[data-motion='off'] .lt-stage__poster,
+[data-motion='off'] .lt-stage__canvas {
+  transition: none !important;
 }
 
 .lt-status-actions {
@@ -407,6 +420,11 @@ body {
     animation: none;
     stroke-dashoffset: 0;
   }
+}
+
+[data-motion='off'] .lt-status[data-tone] svg path {
+  animation: none;
+  stroke-dashoffset: 0;
 }
 
 .lt-footnote {

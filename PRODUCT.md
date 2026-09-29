@@ -30,14 +30,15 @@ The guest chooses first and the motion expresses that choice. No gesture, aim, m
 
 - One live WebGL2 canvas per page; posters and HTML controls work without graphics.
 - Three independent state dimensions: resource, visual, persistence. Graphics never block a response.
+- Party offers a finite song choice from already-cleared metadata (demo fixtures in the showcase): a **Song** segmented control sits above the **Record label** preset in the host panel, and a **song line** under the stage (a small "Song" key, then the title) names the chosen track in HTML for host and guest, because the label art is decorative. Changing the song resets the preview, as changing the label does; changing the label keeps the song. Missing or unknown metadata shows "Selected track" and never breaks the scene. Nothing plays or streams.
 - Finite curated presets only. Excluded: real RSVP storage, auth, event creation, sending invitations, music streaming, uploads, a general editor, audio in v1, the generic envelope, Livetime brand identity and logo work.
 - Physical-device coverage is limited to one iPhone 17 Max (Safari). Low-end iOS and Android are recorded gaps.
 
 ## Brand Commitments
 
 - Livetime's broader identity (logo, naming, brand palette) is **out of scope**. The showcase must not invent a Livetime logo or brand graphics.
-- The invitation objects follow the locked style reference (`docs/style-reference.md`, direction L "Satin Enamel").
-- Interface tokens are study inputs, not an approved brand palette: stage `#F4F1EB`, text `#202320`, muted `#DCDDD5`, accent `#FF714A` (never for UI text or focus on white), status green `#176B42` / red `#A62D36`, focus `#2F54C9`, system sans.
+- The invitation objects follow the locked style reference (`docs/style-reference.md`, direction L2 "Satin Enamel · premium", v1.1: L's identity with the premium surfaces and sunlit studio approved at checkpoint 2b).
+- Interface tokens are study inputs, not an approved brand palette: stage `#F8E4C8` (the rendered studio backdrop, so poster, fallback and canvas match), text `#202320`, muted `#DCDDD5`, accent `#FF714A` (never for UI text or focus on white), status green `#176B42` / red `#A62D36`, focus `#2F54C9`, system sans.
 
 ## Evidence on Hand
 

@@ -42,8 +42,6 @@ export const ARM = {
  * silent clip reads as playing.
  */
 export const SPIN = {
-  /** Peak angular speed (rad/s). */
-  omega: 6.9,
   /** Total rotation at the end of acceptance: −(2π + 0.9); negative is clockwise from above. */
   total: -(2 * Math.PI + 0.9),
 };

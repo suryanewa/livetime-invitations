@@ -7,6 +7,8 @@ import { createStudioRig, type StudioRig } from './lighting.ts';
 import { releaseCachedTextureGpu } from './textures.ts';
 
 export const STAGE_COLOR = '#F4F1EB';
+/** Premium studio: the rendered plaster colour (behind anything the sweep does not cover). */
+export const PREMIUM_STAGE_COLOR = '#F8E4C8';
 
 const extent = new Box3();
 /**
@@ -26,7 +28,7 @@ function castsVisibleShadow(m: Mesh): boolean {
 export interface StageOptions {
   canvas?: HTMLCanvasElement;
   preserveDrawingBuffer?: boolean;
-  /** Fidelity pass: sunlit gobo key with soft shadows and a paper sweep. */
+  /** Fidelity pass: sunlit gobo key with soft shadows and a paper sweep (the approved look). */
   premium?: boolean;
   projection?: 'orthographic' | 'perspective';
   fov?: number;
@@ -60,9 +62,13 @@ export class Stage {
     this.rig = createStudioRig(renderer, this.scene);
     this.camera = options.projection === 'perspective' ? new PerspectiveCamera(options.fov ?? 18, 1, 0.5, 200) : createStageCamera();
     if (options.premium) {
-      // The sunlit spot becomes the key; the old directional key and some IBL step back.
-      this.rig.lights[0].intensity = 0;
+      // The sunlit spot becomes the key; some IBL steps back and the old directional key leaves
+      // the scene (zeroing it would still cost a light slot in every shader). L's hemisphere
+      // fill stays: it is part of the approved look.
+      const [key] = this.rig.lights;
+      this.scene.remove(key, key.target);
       this.scene.environmentIntensity = 0.52;
+      this.scene.background = new Color(PREMIUM_STAGE_COLOR);
       this.scene.add(this.aim);
       this.premium = createPremiumStudio(renderer, this.scene, this.aim);
     }

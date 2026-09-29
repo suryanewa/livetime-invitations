@@ -271,7 +271,10 @@ async function captureThumbs() {
   console.log('thumbnails →', dest);
 }
 
-/** Showcase UI across the supported viewport matrix, with overflow and target-size checks. */
+/**
+ * Showcase UI across the supported viewport matrix for every live scene (outputs named
+ * `<scene>-<case>-…`), with overflow and target-size checks in host and guest modes.
+ */
 async function captureUi() {
   await mkdir(outDir, { recursive: true });
   const browser = await launch();
@@ -282,11 +285,8 @@ async function captureUi() {
     { name: 'landscape-844x390', width: 844, height: 390, dsf: 3 },
     { name: 'zoom200-1440', width: 720, height: 500, dsf: 2 },
   ];
-  for (const c of cases) {
-    const page = await browser.newPage({ viewport: { width: c.width, height: c.height }, deviceScaleFactor: c.dsf });
-    await page.goto(`${base}/`);
-    await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
-    const report = await page.evaluate(() => {
+  const audit = (page: Page) =>
+    page.evaluate(() => {
       const overflow = document.documentElement.scrollWidth > window.innerWidth + 1;
       const small = [...document.querySelectorAll('button, summary, [role="button"]')]
         .filter((el) => (el as HTMLElement).offsetParent !== null)
@@ -295,14 +295,24 @@ async function captureUi() {
         .map(({ el, r }) => `${(el.textContent ?? '').trim().slice(0, 24)} ${Math.round(r.width)}×${Math.round(r.height)}`);
       return { overflow, small };
     });
-    console.log(`${c.name}: overflow=${report.overflow} small-targets=${JSON.stringify(report.small)}`);
-    await page.screenshot({ path: join(outDir, `${c.name}-host.png`), fullPage: true });
-    // Guest flow: accept → saved.
-    await page.getByRole('button', { name: 'Guest', exact: true }).click();
-    await page.getByRole('button', { name: 'Accept' }).click();
-    await page.waitForTimeout(2200);
-    await page.screenshot({ path: join(outDir, `${c.name}-guest-accepted.png`), fullPage: true });
-    await page.close();
+  for (const scene of ['business', 'party', 'birthday'] as const) {
+    for (const c of cases) {
+      const name = `${scene}-${c.name}`;
+      const page = await browser.newPage({ viewport: { width: c.width, height: c.height }, deviceScaleFactor: c.dsf });
+      await page.goto(`${base}/?scene=${scene}`);
+      await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
+      const host = await audit(page);
+      console.log(`${name} host: overflow=${host.overflow} small-targets=${JSON.stringify(host.small)}`);
+      await page.screenshot({ path: join(outDir, `${name}-host.png`), fullPage: true });
+      // Guest flow: accept → saved.
+      await page.getByRole('button', { name: 'Guest', exact: true }).click();
+      await page.getByRole('button', { name: 'Accept' }).click();
+      await page.waitForTimeout(2200);
+      const guest = await audit(page);
+      console.log(`${name} guest: overflow=${guest.overflow} small-targets=${JSON.stringify(guest.small)}`);
+      await page.screenshot({ path: join(outDir, `${name}-guest-accepted.png`), fullPage: true });
+      await page.close();
+    }
   }
   // Error state with Retry (fail mode), and reduced motion.
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, reducedMotion: 'reduce' });
@@ -313,7 +323,7 @@ async function captureUi() {
   await page.getByRole('button', { name: 'Guest', exact: true }).click();
   await page.getByRole('button', { name: 'Decline' }).click();
   await page.waitForTimeout(1400);
-  await page.screenshot({ path: join(outDir, 'phone-390-error-reduced.png'), fullPage: true });
+  await page.screenshot({ path: join(outDir, 'business-phone-390-error-reduced.png'), fullPage: true });
   await browser.close();
 }
 

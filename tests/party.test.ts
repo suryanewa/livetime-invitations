@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { Box3, Color, MeshStandardMaterial, type Object3D, Vector3 } from 'three';
+import { Box3, Color, type Mesh, MeshStandardMaterial, type Object3D, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
-import { LID, PLATTER, PLATTER_TOP, RECORD, RECORD_TOP, stylusAt, TONEARM, tonearmYawFor } from '../models/recordContract.ts';
+import {
+  LID, PARTY_BOUNDS, PARTY_NODES, PLATTER, PLATTER_TOP, RECORD, RECORD_TOP, stylusAt, TONEARM, tonearmYawFor,
+} from '../models/recordContract.ts';
+import type { RecordPlayerRig } from '../models/recordPlayer.ts';
 import { buildRecordPlayerGeometry } from '../models/recordPremium.ts';
+import { PartyScene } from '../src/scenes/party/index.ts';
 import { ARM, DURATIONS, LEVEL_BY, PLAY_AT, SPIN } from '../src/scenes/party/poses.ts';
 import { blendLift, frameFor, newFrame, sampleSequence, type PartyFrame } from '../src/scenes/party/sequences.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
@@ -127,7 +131,19 @@ describe('Party choreography', () => {
     const mid = at('decline', 0.65).lid - at('decline', 0.55).lid;
     const late = at('decline', 1.0).lid - at('decline', 0.9).lid;
     expect(late).toBeLessThan(mid);
-    expect(at('decline', 1.4).lid).toBe(0);
+    // One continuous close, no stop-and-go: the lid keeps moving until contact, and its speed
+    // rises to a single peak and then only falls.
+    const speed = (t: number) => at('decline', t + 0.0005).lid - at('decline', t - 0.0005).lid;
+    let peak = 0.2005;
+    for (let t = 0.2005; t < 1.3; t += 0.001) if (speed(t) > speed(peak)) peak = t;
+    for (let t = 0.2015; t < 1.28; t += 0.001) {
+      expect(speed(t)).toBeGreaterThan(0);
+      if (t <= peak) expect(speed(t)).toBeGreaterThanOrEqual(speed(t - 0.001) - 1e-12);
+      else expect(speed(t)).toBeLessThanOrEqual(speed(t - 0.001) + 1e-12);
+    }
+    // Contact exactly at 1.30 s, held to the end.
+    expect(at('decline', 1.29).lid).toBeLessThan(0);
+    for (const t of [1.3, 1.35, 1.4]) expect(at('decline', t).lid).toBe(0);
   });
 });
 
@@ -153,13 +169,51 @@ function worldBox(o: Object3D): Box3 {
   return new Box3().setFromObject(o, true);
 }
 
+/**
+ * World-space samples of every triangle under `o`, no more than `step` apart along any edge,
+ * so a 1.4 cm wall cannot slip between them (vertices alone leave the wide flat faces unsampled).
+ */
+function surfacePoints(o: Object3D, step = 0.01): Vector3[] {
+  o.updateWorldMatrix(true, true);
+  const out: Vector3[] = [];
+  const a = new Vector3(), b = new Vector3(), c = new Vector3();
+  o.traverse((node) => {
+    const m = node as Mesh;
+    if (!m.isMesh) return;
+    const pos = m.geometry.getAttribute('position');
+    const index = m.geometry.index;
+    const count = index ? index.count : pos.count;
+    const vertex = (v: Vector3, i: number) => v.fromBufferAttribute(pos, index ? index.getX(i) : i).applyMatrix4(m.matrixWorld);
+    for (let i = 0; i < count; i += 3) {
+      vertex(a, i); vertex(b, i + 1); vertex(c, i + 2);
+      const n = Math.max(1, Math.ceil(Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) / step));
+      for (let u = 0; u <= n; u++) {
+        for (let v = 0; v <= n - u; v++) out.push(new Vector3().addScaledVector(a, (n - u - v) / n).addScaledVector(b, u / n).addScaledVector(c, v / n));
+      }
+    }
+  });
+  return out;
+}
+
 describe('Party model contract', () => {
-  const root = buildRecordPlayerGeometry({ lib: plainLibrary() }, 'coral');
+  const lib = plainLibrary();
+  const root = buildRecordPlayerGeometry({ lib }, 'coral');
   const get = (n: string) => root.getObjectByName(n)!;
 
+  /** Pose the built hierarchy from a choreography frame, as PartyScene does the loaded one. */
+  const apply = (f: PartyFrame) => {
+    get('record_authored').position.copy(f.recordPos);
+    get('record_authored').rotation.set(f.recordTilt, 0, 0);
+    get('record_secondary').rotation.set(f.wobble, f.spin, 0);
+    get('platter').rotation.set(0, f.spin, 0);
+    get('tonearm_pivot').rotation.set(0, f.armYaw, 0);
+    get('tonearm_lift').rotation.set(f.armPitch, 0, 0);
+    get('lid_hinge').rotation.set(f.lid, 0, 0);
+    root.updateMatrixWorld(true);
+  };
+
   it('the closed dust cover encloses the record and parked tonearm with clearance', () => {
-    get('lid_hinge').rotation.x = LID.closed;
-    get('tonearm_pivot').rotation.y = TONEARM.parkedYaw;
+    apply(pose('declined'));
     const lid = worldBox(get('lid_mesh'));
     const arm = worldBox(get('tonearm_mesh'));
     const record = worldBox(get('record_authored'));
@@ -174,9 +228,122 @@ describe('Party model contract', () => {
     }
   });
 
+  it('the swinging dust cover never cuts through the platter, record or tonearm', () => {
+    // Shell in lid_mesh space (x across, z forward from the hinge, y up): the built outer skin
+    // less a cavity open underneath, with walls and top LID.wall thick.
+    const shell = (get('lid_shell') as Mesh).geometry;
+    shell.computeBoundingBox();
+    const outer = shell.boundingBox!.clone();
+    expect(outer.max.x - outer.min.x).toBeCloseTo(LID.width, 4);
+    expect(outer.max.y - outer.min.y).toBeCloseTo(LID.height, 4);
+    expect(outer.max.z - outer.min.z).toBeCloseTo(LID.length, 4);
+    const cavity = new Box3(outer.min.clone().add(new Vector3(LID.wall, -1, LID.wall)), outer.max.clone().subScalar(LID.wall));
+    const lidMesh = get('lid_mesh');
+    const local = new Vector3();
+    const cuts = (points: Vector3[]) => {
+      const toLid = lidMesh.matrixWorld.clone().invert();
+      return points.filter((p) => {
+        local.copy(p).applyMatrix4(toLid);
+        return outer.containsPoint(local) && !cavity.containsPoint(local);
+      }).length;
+    };
+    const parts = () => ['platter', 'record_authored', 'tonearm_pivot'].flatMap((n) => surfacePoints(get(n)));
+
+    // Decline closes over the guest-ready arrangement (seated record, parked arm): sweep it.
+    apply(pose('guest-ready'));
+    const ready = parts();
+    expect(ready.length).toBeGreaterThan(10_000);
+    const steps = 132;
+    for (let i = 0; i <= steps; i++) {
+      get('lid_hinge').rotation.x = LID.open + (LID.closed - LID.open) * (i / steps);
+      root.updateMatrixWorld(true);
+      expect(cuts(ready), `lid at ${get('lid_hinge').rotation.x.toFixed(3)} rad`).toBe(0);
+    }
+    // The open cover also clears the presented record and the playing arm.
+    for (const p of ['host-ready', 'accepted'] as const) {
+      apply(pose(p));
+      expect(cuts(parts()), p).toBe(0);
+    }
+  });
+
   it('the open lid, hovering record and playing arm stay inside the motion bounds', () => {
-    get('lid_hinge').rotation.x = LID.open;
-    const bounds = new Box3(new Vector3(-1.07, -0.01, -1.01), new Vector3(1.07, 1.87, 0.81));
-    expect(bounds.containsBox(worldBox(root))).toBe(true);
+    // Tight envelope of the authored motion; PARTY_BOUNDS adds framing margin on x only.
+    const motion = new Box3(new Vector3(-1.07, -0.01, -1.01), new Vector3(1.07, 1.87, 0.81));
+    const framed = PARTY_BOUNDS.clone().expandByScalar(0.01);
+    const check = (label: string) => {
+      const box = worldBox(root);
+      expect(motion.containsBox(box), label).toBe(true);
+      expect(framed.containsBox(box), label).toBe(true);
+    };
+    for (const p of ['host-ready', 'guest-ready', 'accepted', 'declined'] as const) {
+      apply(pose(p));
+      check(p);
+    }
+    for (const seq of ['host', 'accept', 'decline'] as const) {
+      for (let t = 0; t <= DURATIONS[seq]; t += 0.05) {
+        apply(at(seq, t));
+        check(`${seq} ${t.toFixed(2)} s`);
+      }
+    }
+  });
+
+  it('an interruption during the arm lift never drops the arm in one frame, and never drags it', () => {
+    const scene = new PartyScene(
+      {
+        root, nodes: Object.fromEntries(PARTY_NODES.map((n) => [n, get(n)])), recordShadow: { setHeight() {} },
+        statusMaterial: new MeshStandardMaterial(), bounds: PARTY_BOUNDS.clone(), setLabel() {}, dispose() {},
+      } as unknown as RecordPlayerRig,
+      lib,
+      { category: 'party', label: 'coral', songId: 'sample-track-a' },
+    );
+    const yawNode = get('tonearm_pivot'), liftNode = get('tonearm_lift');
+    // Decline in the first 0.4 s of Accept: the director interpolates the animated nodes
+    // towards guest-ready (≈1 ms steps over its 150 ms blend) and calls refresh() each step.
+    for (let t = 0.01; t <= 0.4; t += 0.01) {
+      scene.sample('accept', t);
+      const yaw0 = yawNode.rotation.y, pitch0 = liftNode.rotation.x;
+      let prev = pitch0;
+      for (let k = 0; k <= 1; k += 1 / 150) {
+        yawNode.rotation.y = yaw0 + (ARM.parked - yaw0) * k;
+        liftNode.rotation.x = pitch0 * (1 - k);
+        scene.refresh();
+        const pitch = liftNode.rotation.x, label = `t ${t.toFixed(2)} k ${k.toFixed(3)}`;
+        // Never below the director's interpolated pitch (negative is up): no one-frame drop.
+        expect(pitch, label).toBeLessThanOrEqual(pitch0 * (1 - k) + 1e-12);
+        // The only step is the lift the yaw needs at the interruption itself (the stylus must
+        // clear before the arm swings); from there the arm moves continuously.
+        expect(Math.abs(pitch - prev), label).toBeLessThanOrEqual(k === 0 ? Math.abs(blendLift(yaw0)) + 1e-12 : 0.002);
+        const tip = stylusAt(yawNode.rotation.y, pitch);
+        if (Math.hypot(tip.x - PLATTER.x, tip.z - PLATTER.z) < RECORD.radius && Math.abs(yawNode.rotation.y - ARM.cue) > 0.01) {
+          expect(tip.y).toBeGreaterThan(RECORD_TOP + 0.005);
+        }
+        prev = pitch;
+      }
+    }
+  });
+});
+
+describe('Party framing (Master §5)', () => {
+  it('the record player fills 60–75 % of the stage width in the ready pose', async () => {
+    const { OrthographicCamera } = await import('three');
+    const { fitCameraToBounds } = await import('../src/render/camera.ts');
+    const { PARTY_BOUNDS, PLAYER } = await import('../models/recordContract.ts');
+    const camera = new OrthographicCamera();
+    fitCameraToBounds(camera, PARTY_BOUNDS, 1);
+    // The player's own footprint (body box) projected with the fitted camera.
+    const inv = camera.matrixWorldInverse;
+    let min = Infinity, max = -Infinity;
+    for (const x of [-PLAYER.width / 2, PLAYER.width / 2]) {
+      for (const z of [-PLAYER.depth / 2, PLAYER.depth / 2]) {
+        for (const y of [0, PLAYER.deck]) {
+          const p = new Vector3(x, y, z).applyMatrix4(inv);
+          min = Math.min(min, p.x);
+          max = Math.max(max, p.x);
+        }
+      }
+    }
+    const fill = (max - min) / (camera.right - camera.left);
+    expect(fill).toBeGreaterThanOrEqual(0.6);
+    expect(fill).toBeLessThanOrEqual(0.75);
   });
 });

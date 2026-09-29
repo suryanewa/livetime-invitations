@@ -135,17 +135,17 @@
       "stage": {
         "role": "neutral",
         "displayName": "Stage Linen",
-        "canonical": "#F4F1EB",
-        "oklch": "oklch(95.9% 0.009 84.6)",
+        "canonical": "#F8E4C8",
+        "oklch": "oklch(92.8% 0.043 76.3)",
         "tonalRamp": [
-          "#0D0B07",
-          "#272520",
-          "#44423D",
-          "#63615C",
-          "#85827D",
-          "#A7A59F",
-          "#CCC9C3",
-          "#F1EEE8"
+          "#120900",
+          "#31220A",
+          "#4F3F27",
+          "#6F5E46",
+          "#917F66",
+          "#B5A287",
+          "#DAC6AB",
+          "#FFECD1"
         ]
       },
       "surface": {
@@ -248,7 +248,7 @@
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Event meta (tabular numerals, breaks only at separators), collection lede (max 44ch)."
+        "purpose": "Event meta (tabular numerals, breaks only at separators), the Party song title, collection lede (max 44ch)."
       },
       "body-sm": {
         "displayName": "Body small",
@@ -256,7 +256,7 @@
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Fieldset legends naming a control group and small segmented controls; 400 for notes and the drawer hint."
+        "purpose": "Fieldset legends naming a control group and small segmented controls; 400 for notes, the drawer hint and the Party song line's \"Song\" key."
       },
       "caption": {
         "displayName": "Caption",
@@ -345,7 +345,7 @@
       {
         "name": "narrow",
         "value": "max-width: 420px",
-        "purpose": "Card padding 14px / radius 24px, host actions stack, brand descriptor hidden, drawer hint wraps."
+        "purpose": "Card padding 14px (radius stays 28px), host actions stack, brand descriptor hidden, drawer hint wraps."
       },
       {
         "name": "landscape-narrow",
@@ -375,8 +375,8 @@
       "kind": "button",
       "refersTo": "button-primary",
       "description": "The one filled action per panel (host's prepare action). Ink fill, 52px, 14px radius.",
-      "html": "<button class=\"ds-btn-primary\" type=\"button\">Attach card</button> <button class=\"ds-btn-primary\" type=\"button\" disabled>Attach card</button>",
-      "css": ".ds-btn-primary { min-height: 52px; padding: 0 16px; border-radius: 14px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 1rem; font-weight: 600; background: var(--lt-text, #202320); color: #fff; border: 1.5px solid var(--lt-text, #202320); cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out; } .ds-btn-primary:hover { background: #33372f; } .ds-btn-primary:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-btn-primary:disabled { background: var(--lt-line-strong, #6f736d); border-color: var(--lt-line-strong, #6f736d); cursor: progress; }"
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Attach card</button> <button class=\"ds-btn-primary\" type=\"button\" aria-disabled=\"true\">Attach card</button>",
+      "css": ".ds-btn-primary { min-height: 52px; padding: 0 16px; border-radius: 14px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 1rem; font-weight: 600; background: var(--lt-text, #202320); color: #fff; border: 1.5px solid var(--lt-text, #202320); cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out; } .ds-btn-primary:hover { background: var(--sc-ink-soft, #3a3d39); } .ds-btn-primary:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-btn-primary:disabled, .ds-btn-primary[aria-disabled='true'] { background: var(--lt-line-strong, #6f736d); border-color: var(--lt-line-strong, #6f736d); cursor: progress; }"
     },
     {
       "name": "Secondary Button",
@@ -392,7 +392,7 @@
       "refersTo": "segmented-track",
       "description": "The single pattern for every finite choice: Track Stone recess, 3px inset, white selected thumb with an inset keyline. Small variant for developer settings.",
       "html": "<div class=\"ds-seg\" role=\"group\" aria-label=\"Card template\"><button type=\"button\" aria-pressed=\"true\">Light card</button><button type=\"button\" aria-pressed=\"false\">Dark card</button></div><div class=\"ds-seg ds-seg--small\" role=\"group\" aria-label=\"Simulated save\"><button type=\"button\" aria-pressed=\"true\">Normal <small>250 ms</small></button><button type=\"button\" aria-pressed=\"false\">Slow <small>3 s</small></button><button type=\"button\" aria-pressed=\"false\">Fail</button></div>",
-      "css": ".ds-seg { display: flex; padding: 3px; gap: 2px; border-radius: 13px; background: var(--sc-track, #eeece6); max-width: 100%; margin-bottom: 12px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-seg button { flex: 1 1 auto; min-height: 44px; min-width: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 0.9375rem; font-weight: 600; color: var(--lt-text-2, #585c57); cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out, color 120ms ease-out, box-shadow 120ms ease-out; } .ds-seg button small { font-weight: 500; color: var(--lt-text-2, #585c57); margin-left: 4px; font-variant-numeric: tabular-nums; } .ds-seg button:hover { color: var(--lt-text, #202320); } .ds-seg button:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-seg button[aria-pressed='true'] { background: #fff; color: var(--lt-text, #202320); box-shadow: inset 0 0 0 1px var(--lt-line-strong, #6f736d), 0 1px 2px rgba(32,35,32,0.12), 0 2px 8px -4px rgba(32,35,32,0.2); } .ds-seg--small button { font-size: 0.8125rem; padding: 0 12px; }"
+      "css": ".ds-seg { display: flex; padding: 3px; gap: 2px; border-radius: 13px; background: var(--sc-track, #eeece6); max-width: 100%; margin-bottom: 12px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-seg button { flex: 1 1 auto; min-height: 44px; min-width: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 0.9375rem; font-weight: 600; color: var(--lt-text-2, #585c57); cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out, color 120ms ease-out, box-shadow 120ms ease-out; } .ds-seg button small { font-weight: 500; color: var(--lt-text-2, #585c57); margin-left: 4px; font-variant-numeric: tabular-nums; } .ds-seg button:hover { color: var(--lt-text, #202320); } .ds-seg button:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-seg button[aria-pressed='true'] { background: #fff; color: var(--lt-text, #202320); box-shadow: inset 0 0 0 1px var(--lt-line-strong, #6f736d), 0 1px 2px rgba(32,35,32,0.12), 0 2px 8px -4px rgba(32,35,32,0.2); } .ds-seg--small button { font-size: 0.8125rem; padding: 0 12px; } .ds-seg--wrap { flex-wrap: wrap; }"
     },
     {
       "name": "Response Choices",
@@ -424,7 +424,7 @@
       "refersTo": "card-invitation",
       "description": "The only lifted surface: event title and meta, the 1:1 Stage Linen stage, then the active panel. One per page.",
       "html": "<article class=\"ds-card\"><header><h1 class=\"ds-card__title\">Partner Summit — Welcome Reception</h1><p class=\"ds-card__meta\"><span>Thu, Nov 12 · 6:30 PM</span><span aria-hidden=\"true\"> · </span><span>Hudson Yards, New York</span><span aria-hidden=\"true\"> · </span><span>Sample event</span></p></header><div class=\"ds-stage\" role=\"img\" aria-label=\"Stage placeholder\"></div></article>",
-      "css": ".ds-card { display: grid; gap: 16px; padding: 20px; max-width: 440px; border-radius: 28px; background: #fff; border: 1px solid rgba(32,35,32,0.07); box-shadow: 0 1px 2px rgba(32,35,32,0.05), 0 18px 48px -28px rgba(32,35,32,0.32); font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); color: var(--lt-text, #202320); line-height: 1.4; } .ds-card__title { margin: 0; font-family: var(--lt-font-display, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 1.5rem; line-height: 1.15; font-weight: 650; letter-spacing: -0.018em; text-wrap: balance; } .ds-card__meta { margin: 6px 0 0; font-size: 0.9375rem; color: var(--lt-text-2, #585c57); font-variant-numeric: tabular-nums; text-wrap: pretty; } .ds-card__meta span { white-space: nowrap; } .ds-stage { width: 100%; aspect-ratio: 1 / 1; border-radius: 20px; background: var(--lt-stage, #f4f1eb); overflow: hidden; }"
+      "css": ".ds-card { display: grid; gap: 16px; padding: 20px; max-width: 440px; border-radius: 28px; background: #fff; border: 1px solid rgba(32,35,32,0.07); box-shadow: 0 1px 2px rgba(32,35,32,0.05), 0 18px 48px -28px rgba(32,35,32,0.32); font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); color: var(--lt-text, #202320); line-height: 1.4; } .ds-card__title { margin: 0; font-family: var(--lt-font-display, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 1.5rem; line-height: 1.15; font-weight: 650; letter-spacing: -0.018em; text-wrap: balance; } .ds-card__meta { margin: 6px 0 0; font-size: 0.9375rem; color: var(--lt-text-2, #585c57); font-variant-numeric: tabular-nums; text-wrap: pretty; } .ds-card__meta span { white-space: nowrap; } .ds-stage { width: 100%; aspect-ratio: 1 / 1; border-radius: 20px; background: var(--lt-stage, #f8e4c8); overflow: hidden; }"
     },
     {
       "name": "Collection Rail Item",
@@ -432,7 +432,7 @@
       "refersTo": "rail-item",
       "description": "Row button with a 60px Stage Linen thumbnail, name over object line, right tag. Selected row is white with a hairline; unavailable rows are aria-disabled and desaturated.",
       "html": "<ul class=\"ds-rail\"><li><button class=\"ds-rail__item\" type=\"button\" aria-pressed=\"false\" aria-disabled=\"true\"><span class=\"ds-rail__thumb\"></span><span class=\"ds-rail__text\"><span class=\"ds-rail__name\">Dinner</span><span class=\"ds-rail__obj\">Covered dish</span></span><span class=\"ds-rail__tag\">In production</span></button></li><li><button class=\"ds-rail__item\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-rail__thumb\"></span><span class=\"ds-rail__text\"><span class=\"ds-rail__name\">Business</span><span class=\"ds-rail__obj\">Keycard</span></span><span class=\"ds-rail__tag\">Showing</span></button></li></ul>",
-      "css": ".ds-rail { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 420px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-rail__item { width: 100%; min-height: 72px; padding: 6px 14px 6px 6px; display: grid; grid-template-columns: 60px 1fr auto; align-items: center; gap: 14px; text-align: left; font: inherit; font-size: 1rem; line-height: 1.4; color: var(--lt-text, #202320); background: transparent; border: 1px solid transparent; border-radius: 16px; cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out; } .ds-rail__thumb { width: 60px; height: 60px; border-radius: 12px; background: var(--lt-stage, #f4f1eb); } .ds-rail__item:hover { background: #f4f2ed; } .ds-rail__item:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-rail__item[aria-pressed='true'] { background: #fff; border-color: var(--sc-line, #e6e3dc); box-shadow: 0 1px 2px rgba(32,35,32,0.05); } .ds-rail__item[aria-disabled='true'] { cursor: default; } .ds-rail__item[aria-disabled='true']:hover { background: transparent; } .ds-rail__item[aria-disabled='true'] .ds-rail__thumb { filter: saturate(0.55); opacity: 0.8; } .ds-rail__text { display: grid; gap: 2px; min-width: 0; } .ds-rail__name { font-weight: 650; } .ds-rail__obj { font-size: 0.875rem; color: var(--lt-text-2, #585c57); } .ds-rail__tag { font-size: 0.75rem; font-weight: 600; color: var(--lt-text-2, #585c57); white-space: nowrap; } .ds-rail__item[aria-pressed='true'] .ds-rail__tag { color: var(--lt-text, #202320); }"
+      "css": ".ds-rail { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 420px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-rail__item { width: 100%; min-height: 72px; padding: 6px 14px 6px 6px; display: grid; grid-template-columns: 60px 1fr auto; align-items: center; gap: 14px; text-align: left; font: inherit; font-size: 1rem; line-height: 1.4; color: var(--lt-text, #202320); background: transparent; border: 1px solid transparent; border-radius: 16px; cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out; } .ds-rail__thumb { width: 60px; height: 60px; border-radius: 12px; background: var(--lt-stage, #f8e4c8); } .ds-rail__item:hover { background: #f4f2ed; } .ds-rail__item:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-rail__item[aria-pressed='true'] { background: #fff; border-color: var(--sc-line, #e6e3dc); box-shadow: 0 1px 2px rgba(32,35,32,0.05); } .ds-rail__item[aria-disabled='true'] { cursor: default; } .ds-rail__item[aria-disabled='true']:hover { background: transparent; } .ds-rail__item[aria-disabled='true'] .ds-rail__thumb { filter: saturate(0.55); opacity: 0.8; } .ds-rail__text { display: grid; gap: 2px; min-width: 0; } .ds-rail__name { font-weight: 650; } .ds-rail__obj { font-size: 0.875rem; color: var(--lt-text-2, #585c57); } .ds-rail__tag { font-size: 0.75rem; font-weight: 600; color: var(--lt-text-2, #585c57); white-space: nowrap; } .ds-rail__item[aria-pressed='true'] .ds-rail__tag { color: var(--lt-text, #202320); }"
     },
     {
       "name": "Developer Drawer",
@@ -445,7 +445,7 @@
   ],
   "narrative": {
     "northStar": "The Instrument Beside the Object",
-    "overview": "The 3D invitation object is the hero; everything in HTML is a precise, quiet instrument placed next to it. The interface is built from warm neutrals, olive-black ink and one segmented-control grammar, so the eye lands on the stage square first and the controls second. Nothing in the chrome is decorative except a single perforation-dot rule under the top bar, borrowed from the objects' own family mark. The page is one lifted invitation card, a collection rail and a collapsed Developer drawer. It is deliberately not a dashboard of cards.\n\nDensity is compact but never cramped: a 12 to 16px type ramp carried mostly by weight, 44px minimum targets everywhere, and 52px targets for the decisions that matter (the host's primary action, Accept and Decline). Colour is almost absent from the interface. Ink is the only filled action colour. Pine green and garnet appear only to report a response the app has confirmed, and always alongside a glyph and words.\n\nThe objects' look (satin bodies, enamel inserts, the perforation construction rule, lighting and shadows) is owned by `docs/style-reference.md` (direction L \"Satin Enamel\"). This file covers the interface around the stage. It never restyles the objects.",
+    "overview": "The 3D invitation object is the hero; everything in HTML is a precise, quiet instrument placed next to it. The interface is built from warm neutrals, olive-black ink and one segmented-control grammar, so the eye lands on the stage square first and the controls second. Nothing in the chrome is decorative except a single perforation-dot rule under the top bar, borrowed from the objects' own family mark. The page is one lifted invitation card, a collection rail and a collapsed Developer drawer. It is deliberately not a dashboard of cards.\n\nDensity is compact but never cramped: a 12 to 16px type ramp carried mostly by weight, 44px minimum targets everywhere, and 52px targets for the decisions that matter (the host's primary action, Accept and Decline). Colour is almost absent from the interface. Ink is the only filled action colour. Pine green and garnet appear only to report a response the app has confirmed, and always alongside a glyph and words.\n\nThe objects' look (satin bodies, enamel inserts, the perforation construction rule, lighting and shadows) is owned by `docs/style-reference.md` (direction L2 \"Satin Enamel · premium\", v1.1). This file covers the interface around the stage. It never restyles the objects.",
     "keyCharacteristics": [
       "One phone-width column holds the event, the square stage and the controls, in that order, inside one white card.",
       "A warm tonal stack (page, stage, track, hairline, white) instead of borders and shadows.",

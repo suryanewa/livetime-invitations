@@ -2,7 +2,7 @@
  * DIRECTION CONTRACT (showcase shell)
  * THESIS: the object is the hero; the interface is a precise instrument beside it. Refuses
  *   the dashboard-of-cards demo page.
- * OWN-WORLD: warm white page, #F4F1EB stage, ink type, segmented controls on a #EEECE6 track,
+ * OWN-WORLD: warm white page, #F8E4C8 stage, ink type, segmented controls on a #EEECE6 track,
  *   one perforation-dot rule echoing the objects' signature. System sans (pinned by spec).
  * STORY: host prepares the card → previews as guest → guest answers → simulated save status.
  * FIRST VIEWPORT: phone-width invitation (event, stage, controls) left; the collection rail
@@ -61,7 +61,7 @@ app.innerHTML = `
           <div class="sc-panel" data-panel="host">
             <fieldset class="sc-field" data-bind="songs-field" hidden>
               <legend>Song</legend>
-              <div class="sc-seg" data-bind="songs"></div>
+              <div class="sc-seg sc-seg--wrap" data-bind="songs"></div>
             </fieldset>
             <fieldset class="sc-field">
               <legend data-bind="preset-legend">Card template</legend>
@@ -254,6 +254,8 @@ function renderStatic() {
   syncPresets();
 
   const rail = $('[data-bind="rail"]');
+  // Choosing a scene rebuilds the rail; keyboard focus returns to the item just pressed.
+  const railFocused = rail.contains(document.activeElement);
   rail.replaceChildren(
     ...(['party', 'birthday', 'sports', 'dinner', 'business'] as Category[]).map((c) => {
       const li = document.createElement('li');
@@ -282,6 +284,7 @@ function renderStatic() {
       return li;
     }),
   );
+  if (railFocused) rail.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
 }
 
 function syncPresets() {
@@ -302,13 +305,17 @@ function render(state: InvitationState) {
   const prepare = $<HTMLButtonElement>('[data-action="prepare"]');
   const playing = state.visual === 'host-playing';
   prepare.textContent = hostPrepared ? `${HOST_ACTION[category]} again` : HOST_ACTION[category];
-  prepare.disabled = playing;
+  // aria-disabled, not disabled: a disabled button would drop keyboard focus mid-sequence.
+  prepare.setAttribute('aria-disabled', String(playing));
   $<HTMLButtonElement>('[data-action="preview"]').dataset.emphasis = hostPrepared ? 'true' : 'false';
   guest.update(state);
 
   const graphics = $('[data-bind="graphics"]');
   const unavailable = state.resource === 'fallback' || state.canRetryGraphics;
+  // Hiding the notice must not drop keyboard focus to the page: hand it to the scene's control.
+  const hadFocus = !unavailable && !graphics.hidden && graphics.contains(document.activeElement);
   graphics.hidden = !unavailable;
+  if (hadFocus) (mode === 'host' ? $<HTMLButtonElement>('[data-action="prepare"]') : $<HTMLButtonElement>('[data-panel="guest"] button'))?.focus();
   $('[data-bind="graphics-text"]').textContent =
     state.resource === 'fallback'
       ? 'Showing a still image. Your response still works.'
@@ -331,12 +338,22 @@ function render(state: InvitationState) {
 $$<HTMLButtonElement>('.sc-mode button').forEach((b) =>
   b.addEventListener('click', () => controller?.setMode(b.dataset.mode as Mode)),
 );
-$('[data-action="prepare"]').addEventListener('click', () => controller?.prepareHost());
-$('[data-action="preview"]').addEventListener('click', () => controller?.setMode('guest'));
+$('[data-action="prepare"]').addEventListener('click', () => {
+  // Ignored while the host sequence plays (the button is aria-disabled then).
+  if (controller?.getState().visual === 'host-playing') return;
+  controller?.prepareHost();
+});
+$('[data-action="preview"]').addEventListener('click', () => {
+  controller?.setMode('guest');
+  // This button's panel just hid; keep keyboard focus in the flow on the first answer.
+  $<HTMLButtonElement>('[data-panel="guest"] [data-response="accept"]').focus();
+});
 
 const motionBtn = $<HTMLButtonElement>('[data-action="motion"]');
 function syncMotion() {
   motionBtn.setAttribute('aria-pressed', String(motionOn));
+  // Shell CSS motion (saving spinner, check draw) honours this as it does the OS setting.
+  document.documentElement.dataset.motion = motionOn ? 'on' : 'off';
   motionBtn.querySelector('.sc-motion__value')!.textContent = motionOn ? 'On' : 'Off';
 }
 motionBtn.addEventListener('click', () => {

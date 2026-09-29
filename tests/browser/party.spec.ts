@@ -19,6 +19,38 @@ async function ready(page: Page, url = '/?scene=party') {
   await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
 }
 
+const still = (page: Page) => page.evaluate(() => (window as any).__showcase.controller.captureStill(256, 1) as string);
+
+/** Decoded RGBA of a 256 px still capture. */
+async function pixels(page: Page, url: string): Promise<number[]> {
+  return page.evaluate(async (u) => {
+    const img = new Image();
+    img.src = u;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const x = c.getContext('2d')!;
+    x.drawImage(img, 0, 0);
+    return Array.from(x.getImageData(0, 0, 256, 256).data);
+  }, url);
+}
+
+/** Mean absolute RGB difference between two still captures (0–255). */
+async function stillDiff(page: Page, a: string, b: string): Promise<number> {
+  const [pa, pb] = await Promise.all([pixels(page, a), pixels(page, b)]);
+  let sum = 0;
+  for (let i = 0; i < pa.length; i += 4) sum += Math.abs(pa[i]! - pb[i]!) + Math.abs(pa[i + 1]! - pb[i + 1]!) + Math.abs(pa[i + 2]! - pb[i + 2]!);
+  return sum / (256 * 256 * 3);
+}
+
+/** Pixels whose blue channel clearly dominates (the cobalt label; the studio is warm paper). */
+async function bluePixels(page: Page, url: string): Promise<number> {
+  const p = await pixels(page, url);
+  let n = 0;
+  for (let i = 0; i < p.length; i += 4) if (p[i + 2]! > p[i]! + 40 && p[i + 2]! > p[i + 1]! + 20) n++;
+  return n;
+}
+
 test('Party loads from the collection, and the chosen song shows in HTML through every mode', async ({ page }) => {
   await ready(page, '/');
   await page.locator('.sc-rail__item', { hasText: 'Party' }).click();
@@ -64,7 +96,7 @@ test('Accept plays to a still display pose (no idle spin); Decline closes the li
   await expect.poll(async () => (await state(page)).response.persistence).toBe('saved');
 });
 
-test('Rapid reversals end in the latest choice with no accumulated motion', async ({ page }) => {
+test('Rapid reversals end in the latest choice with no accumulated motion', async ({ page, context }) => {
   await ready(page);
   await page.getByRole('button', { name: 'Guest', exact: true }).click();
   for (const choice of ['Accept', 'Decline', 'Accept', 'Decline', 'Accept']) {
@@ -72,29 +104,79 @@ test('Rapid reversals end in the latest choice with no accumulated motion', asyn
     await page.waitForTimeout(120);
   }
   await expect.poll(async () => (await state(page)).visual, { timeout: 5000 }).toBe('accepted-pose');
-  // The settled frame must match the exact canonical pose (reduced motion snaps to it).
-  const diff = await page.evaluate(async () => {
+  const settled = await still(page);
+  const tier = await page.evaluate(() => (window as any).__showcase.state.tier as string);
+  // The settled frame must match a fresh page that opens directly on the accepted pose
+  // (same quality tier): no leftover spin, arm offset, lid angle or status state.
+  const fresh = await context.newPage();
+  await ready(fresh, '/?scene=party&saved=accept');
+  expect((await state(fresh)).visual).toBe('accepted-pose');
+  await fresh.evaluate((t) => {
     const s = (window as any).__showcase;
-    const a = s.controller.captureStill(256, 1) as string;
-    s.controller.setReducedMotion(true);
-    await new Promise((r) => setTimeout(r, 100));
-    const b = s.controller.captureStill(256, 1) as string;
-    const pixels = async (url: string) => {
-      const img = new Image();
-      img.src = url;
-      await img.decode();
-      const c = document.createElement('canvas');
-      c.width = c.height = 256;
-      const x = c.getContext('2d')!;
-      x.drawImage(img, 0, 0);
-      return x.getImageData(0, 0, 256, 256).data;
-    };
-    const [pa, pb] = await Promise.all([pixels(a), pixels(b)]);
-    let sum = 0;
-    for (let i = 0; i < pa.length; i += 4) sum += Math.abs(pa[i]! - pb[i]!) + Math.abs(pa[i + 1]! - pb[i + 1]!) + Math.abs(pa[i + 2]! - pb[i + 2]!);
-    return sum / (256 * 256 * 3);
+    if (s.state.tier !== t) s.controller.setQualityTier(t);
+  }, tier);
+  const canonical = await still(fresh);
+  await fresh.close();
+  expect(await stillDiff(page, settled, canonical)).toBeLessThan(0.5);
+});
+
+test('Cobalt label swaps the record label in 3D and in the poster, without a reload or request', async ({ page }) => {
+  await ready(page);
+  const coral = await still(page);
+  await page.getByRole('button', { name: 'Cobalt label' }).click();
+  await expect(page.getByRole('button', { name: 'Cobalt label' })).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(150);
+  expect((await state(page)).resource).toBe('ready');
+  const cobalt = await still(page);
+  const [before, after] = [await bluePixels(page, coral), await bluePixels(page, cobalt)];
+  expect(after).toBeGreaterThan(before + 150);
+  expect(await requests(page)).toBe(0);
+  await page.locator('.sc-dev summary').click();
+  await page.getByRole('button', { name: 'Simulate graphics loss' }).click();
+  await expect.poll(async () => (await state(page)).resource).toBe('fallback');
+  await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /cobalt-host-ready/);
+});
+
+test('A saved acceptance opens on the accepted pose without a new request', async ({ page }) => {
+  await ready(page, '/?scene=party&saved=accept');
+  const s = await state(page);
+  expect(s.visual).toBe('accepted-pose');
+  expect(s.response.intent).toBe('accept');
+  expect(s.response.persistence).toBe('saved');
+  await page.waitForTimeout(500);
+  expect(await requests(page)).toBe(0);
+  expect((await state(page)).visual).toBe('accepted-pose');
+  await expect(page.getByRole('button', { name: 'Accept' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('An unknown song id shows the "Selected track" fallback', async ({ page }) => {
+  await ready(page);
+  await page.evaluate(() => (window as any).__showcase.setConfig({ category: 'party', label: 'coral', songId: 'not-a-fixture' }));
+  await expect(page.locator('[data-bind="track-title"]')).toHaveText('Selected track');
+  expect((await state(page)).resource).toBe('ready');
+  await page.getByRole('button', { name: 'Guest', exact: true }).click();
+  await expect(page.locator('[data-bind="track-title"]')).toHaveText('Selected track');
+});
+
+test('Switching to Business and back disposes and rebuilds Party cleanly', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => {
+    if (m.type() === 'error' || /Too many active WebGL contexts|CONTEXT_LOST/i.test(m.text())) errors.push(m.text());
   });
-  expect(diff).toBeLessThan(0.5);
+  await ready(page);
+  for (const name of ['Business', 'Party', 'Business', 'Party']) {
+    await page.locator('.sc-rail__item', { hasText: name }).click();
+    await expect(page.locator('.sc-rail__item[aria-pressed="true"]')).toContainText(name);
+    await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
+  }
+  await expect(page.locator('[data-bind="preset-legend"]')).toHaveText('Record label');
+  expect(await page.locator('canvas').count()).toBe(1);
+  // The rebuilt scene still plays through to its pose.
+  await page.getByRole('button', { name: 'Guest', exact: true }).click();
+  await page.getByRole('button', { name: 'Accept' }).click();
+  await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('accepted-pose');
+  expect(errors).toEqual([]);
 });
 
 test('Graphics loss shows the matching Party poster and responses still work', async ({ page }) => {

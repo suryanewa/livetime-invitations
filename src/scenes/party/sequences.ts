@@ -106,15 +106,17 @@ function accept(t: number, out: PartyFrame): void {
 }
 
 // ── Decline: 1.4 s ────────────────────────────────────────────────────────────
-/** Light damped mechanism: gravity start, braking before contact. */
-const CLOSE = cubicBezier(0.5, 0, 0.3, 1);
-/** Soft-close creep: the last ≈1° is taken up by the damper, no bounce. */
-const SOFT_GAP = 0.02;
+/**
+ * Light damped mechanism as one continuous curve over 0.20–1.30 s: gravity start (constant
+ * acceleration from rest), a single speed peak, then braking that leaves ≈1° for the damper
+ * after 1.00 s and reaches contact at zero speed. Progress is the Beta(2, k) CDF (speed ∝
+ * u·(1−u)^(k−1)), so it never stops and restarts and never passes closed.
+ */
+const CLOSE_K = 4.5;
+const CLOSE = (u: number) => 1 - (1 - u) ** CLOSE_K * (1 + CLOSE_K * u);
 function decline(t: number, out: PartyFrame): void {
   frameFor('guest-ready', out);
-  if (t < 0.2) out.lid = LID_OPEN;
-  else if (t < 1) out.lid = lerp(LID_OPEN, LID_CLOSED - SOFT_GAP, CLOSE(seg(t, 0.2, 1)));
-  else out.lid = lerp(LID_CLOSED - SOFT_GAP, LID_CLOSED, EASE.land(seg(t, 1, 1.3)));
+  out.lid = lerp(LID_OPEN, LID_CLOSED, CLOSE(seg(t, 0.2, 1.3)));
   out.status = 'off';
 }
 

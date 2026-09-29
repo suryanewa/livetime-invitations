@@ -57,10 +57,38 @@ function dataTexture(canvas: HTMLCanvasElement, color: boolean, wrapV: Wrapping 
 }
 
 const cache = new Map<string, Texture>();
+const keyOf = new Map<Texture, string>();
+/** Holders (material libraries) per cached texture; the last release frees it. */
+const holds = new Map<Texture, number>();
 function cached(key: string, make: () => Texture): Texture {
   let t = cache.get(key);
-  if (!t) cache.set(key, (t = make()));
+  if (!t) {
+    cache.set(key, (t = make()));
+    keyOf.set(t, key);
+  }
   return t;
+}
+
+/** Take a hold on a cached map. False when the texture is not one this module caches. */
+export function retainCachedTexture(t: Texture): boolean {
+  if (!keyOf.has(t)) return false;
+  holds.set(t, (holds.get(t) ?? 0) + 1);
+  return true;
+}
+
+/** Drop a hold; the last one evicts the map and frees it, so the next use regenerates it. */
+export function releaseCachedTexture(t: Texture): void {
+  const n = holds.get(t);
+  if (n === undefined) return;
+  if (n > 1) {
+    holds.set(t, n - 1);
+    return;
+  }
+  holds.delete(t);
+  const key = keyOf.get(t);
+  keyOf.delete(t);
+  if (key !== undefined && cache.get(key) === t) cache.delete(key);
+  t.dispose();
 }
 
 const smooth = (e0: number, e1: number, x: number) => {
@@ -174,4 +202,6 @@ export function releaseCachedTextureGpu(): void {
 export function disposeTextureCache(): void {
   for (const t of cache.values()) t.dispose();
   cache.clear();
+  keyOf.clear();
+  holds.clear();
 }

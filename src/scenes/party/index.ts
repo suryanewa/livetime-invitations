@@ -44,10 +44,14 @@ export class PartyScene implements SceneInstance {
     this.apply(sampleSequence(sequence, t, this.frame));
   }
 
-  /** Interruption blends move nodes directly: raise the stylus in transit, sync the shadow. */
+  /**
+   * Interruption blends move nodes directly: raise the stylus in transit, sync the shadow.
+   * Keeps the more-lifted of the blended pitch and the yaw-derived lift (negative is up), so an
+   * arm caught mid-lift never drops in one frame and the stylus still never drags.
+   */
   refresh(): void {
     const n = this.rig.nodes;
-    this.lift.rotation.x = blendLift(n.tonearm_pivot!.rotation.y);
+    this.lift.rotation.x = Math.min(this.lift.rotation.x, blendLift(n.tonearm_pivot!.rotation.y));
     this.updateShadow(n.record_authored!.position.y - PLATTER_TOP);
   }
 

@@ -10,7 +10,7 @@ colors:
   decline: "#A62D36"
   focus: "#2F54C9"
   page: "#FBFAF7"
-  stage: "#F4F1EB"
+  stage: "#F8E4C8"
   surface: "#FFFFFF"
   track: "#EEECE6"
   hairline: "#E6E3DC"
@@ -95,7 +95,7 @@ components:
     padding: "0 16px"
     height: "52px"
   button-primary-hover:
-    backgroundColor: "#33372F"
+    backgroundColor: "{colors.ink-soft}"
   button-primary-disabled:
     backgroundColor: "{colors.line-strong}"
     textColor: "{colors.surface}"
@@ -200,7 +200,7 @@ The 3D invitation object is the hero; everything in HTML is a precise, quiet ins
 
 Density is compact but never cramped: a 12 to 16px type ramp carried mostly by weight, 44px minimum targets everywhere, and 52px targets for the decisions that matter (the host's primary action, Accept and Decline). Colour is almost absent from the interface. Ink is the only filled action colour. Pine green and garnet appear only to report a response the app has confirmed, and always alongside a glyph and words.
 
-The objects' look (satin bodies, enamel inserts, the perforation construction rule, lighting and shadows) is owned by `docs/style-reference.md` (direction L "Satin Enamel"). This file covers the interface around the stage. It never restyles the objects.
+The objects' look (satin bodies, enamel inserts, the perforation construction rule, lighting and shadows) is owned by `docs/style-reference.md` (direction L2 "Satin Enamel · premium", v1.1). This file covers the interface around the stage. It never restyles the objects.
 
 **Key Characteristics:**
 - One phone-width column holds the event, the square stage and the controls, in that order, inside one white card.
@@ -224,14 +224,14 @@ A near-monochrome warm-neutral palette with olive-black ink; the only saturated 
 
 ### Neutral
 - **Warm White** (#FBFAF7): the page ground and the root scrollbar track.
-- **Stage Linen** (#F4F1EB): the stage square behind the 3D object, and the fill behind collection thumbnails so posters and thumbs read as the same material.
+- **Stage Linen** (#F8E4C8): the stage square behind the 3D object, and the fill behind collection thumbnails so posters and thumbs read as the same material. It is the rendered colour of the premium studio's plaster backdrop under the warm key, measured from the posters, so the stage never shows a different colour while the poster, the fallback sentence or the canvas is up.
 - **Paper White** (#FFFFFF): lifted and interactive surfaces: the invitation card, buttons, selected segment thumbs, the selected rail row, the Developer drawer.
 - **Track Stone** (#EEECE6): the recessed track of every segmented control, and the "Simulated saves" badge.
 - **Hairline Sand** (#E6E3DC): container rules only: the drawer border, the selected rail row border, the state list dividers.
 - **Hover Wash** (#F7F6F2): hover fill on outlined white controls (choices, secondary button).
 - **Keyline Grey** (#6F736D): 1.5px outlines on white controls, the inset keyline of a selected segment, and the disabled primary fill. 4.8:1 on white, 4.1:1 on the track.
 - **Sage Graphite** (#585C57): secondary text: meta lines, lede, legends, notes, unselected segment labels, rail sublines and tags. 6.5:1 on the page, 5.8:1 on the track.
-- **Soft Ink** (#3A3D39): text on tinted fills: badge text, the graphics notice, the developer event log.
+- **Soft Ink** (#3A3D39): text on tinted fills (badge text, the graphics notice, the developer event log) and the primary button's hover fill.
 - **Perforation Taupe** (#CDC7BB): the dots of the perforation rule. Decorative and hidden from assistive tech; never used for text or boundaries.
 
 ### Named Rules
@@ -254,9 +254,9 @@ A near-monochrome warm-neutral palette with olive-black ink; the only saturated 
 - **Title** (650, 1rem, 1.4, -0.01em): the collection heading, rail row names, the drawer summary. The "Livetime" wordmark uses the same size at 700.
 - **Control** (600, 1rem): labels on 52px decision buttons (primary, secondary, Accept, Decline).
 - **Body strong** (600, 0.9375rem): segmented-control labels, the "Will you attend?" question, the status line, quiet links.
-- **Body** (400, 0.9375rem, 1.4): the event meta line (tabular numerals, breaking only at the " · " separators), the collection lede (max 44ch), the brand descriptor.
+- **Body** (400, 0.9375rem, 1.4): the event meta line (tabular numerals, breaking only at the " · " separators), the Party song title, the collection lede (max 44ch), the brand descriptor.
 - **Body small** (400, 0.875rem): rail object lines, the Motion toggle, the graphics notice.
-- **Label** (600, 0.8125rem): fieldset legends naming a control group, small segmented controls. The same size at 400 is used for notes and the drawer hint.
+- **Label** (600, 0.8125rem): fieldset legends naming a control group, small segmented controls. The same size at 400 is used for notes, the drawer hint and the "Song" key of the Party song line.
 - **Caption** (600, 0.75rem): the status badge and rail tags ("Showing", "Live", "In production").
 - **Mono** (400, 0.8125rem; 0.75rem in the log): developer state values and the integration event log.
 
@@ -273,11 +273,11 @@ The page is a warm-white field with a side gutter of `max(16px, safe-area insets
 
 **Two columns on desktop.** The main grid is `minmax(0, 440px)` for the invitation and `minmax(0, 420px)` for the side column, pushed apart with `space-between` and gaps of 40px (rows) and 56px (columns). At ≥1280px the columns become 480px and 400px with `space-around`. The side column starts 58px down, so the collection heading lines up with the top of the invitation card below the Host/Guest switch.
 
-**Inside the invitation column,** a 14px stack puts the mode switch first, then the card. Inside the card, on a 16px rhythm: title and meta, then the square stage, then the active panel. The host panel reads preset control, then a two-column action pair (10px gap), then a note. The guest panel reads question, then an equal-width Accept/Decline pair (10px gap), then a 44px status row.
+**Inside the invitation column,** a 14px stack puts the mode switch first, then the card. Inside the card, on a 16px rhythm: title and meta, then the square stage, then (Party only) the song line, then the active panel. The host panel reads preset control (Party: the Song control first, then Record label), then a two-column action pair (10px gap), then a note. The guest panel reads question, then an equal-width Accept/Decline pair (10px gap), then a 44px status row.
 
 **Responsive behaviour** (all observed in the review captures):
 - **≤900px:** one centred 480px column; the collection rail and the Developer drawer follow the card.
-- **≤420px:** the card padding drops to 14px and its radius to 24px; the host action pair stacks; the brand descriptor hides; the drawer hint wraps under its title.
+- **≤420px:** the card padding drops to 14px (the radius stays 28px); the host action pair stacks; the brand descriptor hides; the drawer hint wraps under its title.
 - **Short landscape** (landscape, height ≤540px, width ≥600px, which also catches 200% zoom on a laptop): the Host/Guest switch moves to the centre of the top bar, and the card becomes two columns. The stage square sits on the left, sized `min(100svh − 112px − safe areas, 48vw)`; title, controls and status sit on the right. The whole answer stays above the fold.
 - **Landscape ≤720px wide:** the brand descriptor hides.
 
@@ -302,7 +302,7 @@ The system is tonal first. Depth comes from the warm stack: the Warm White page,
 
 ## Shapes
 
-The corners are soft and nested, stepping up with the size of the container: 10px segment thumbs inside a 13px track (a 3px inset, so the curves stay concentric), 12px for 44px utility controls, quiet links and 60px rail thumbnails, 14px for 52px decision buttons and the graphics notice, 16px rail rows, 18px for the drawer, 20px for the stage square and 28px for the invitation card (24px at ≤420px). Pills (999px) are reserved for the status badge.
+The corners are soft and nested, stepping up with the size of the container: 10px segment thumbs inside a 13px track (a 3px inset, so the curves stay concentric), 12px for 44px utility controls, quiet links and 60px rail thumbnails, 14px for 52px decision buttons and the graphics notice, 16px rail rows, 18px for the drawer, 20px for the stage square and 28px for the invitation card at every width. Pills (999px) are reserved for the status badge.
 
 Outlines are 1.5px Keyline Grey on white controls, rising to 2px in the status colour for a pending choice. The stage is always a 1:1 square that clips its contents (`overflow: hidden`, isolated stacking), so the canvas, the poster and the text fallback share one silhouette.
 
@@ -315,8 +315,8 @@ The stage keeps the showcase's 20px radius; the shared component default (`--lt-
 ### Buttons
 Firm, calm and exactly sized; nothing bounces.
 - **Shape:** gently rounded (14px) at 52px tall for decisions; 12px at 44px for utilities.
-- **Primary:** Olive Ink fill, white 16px/600 label, 1.5px ink border, 0 16px padding. Used once per panel ("Attach card", then "Attach card again").
-- **Hover / Focus:** the primary deepens to #33372F and the secondary takes Hover Wash, over a 120ms ease-out colour transition. Focus is the global 3px Focus Cobalt outline at a 2px offset. While the host sequence plays, the primary disables to a Keyline Grey fill with a progress cursor.
+- **Primary:** Olive Ink fill, white 16px/600 label, 1.5px ink border, 0 16px padding. Used once per panel for the scene's host action ("Attach card", "Place record", "Place candles"), then "… again".
+- **Hover / Focus:** the primary shifts to Soft Ink (#3A3D39) and the secondary takes Hover Wash, over a 120ms ease-out colour transition. Focus is the global 3px Focus Cobalt outline at a 2px offset. While the host sequence plays, the primary takes `aria-disabled` (so keyboard focus stays on it) and a Keyline Grey fill with a progress cursor.
 - **Secondary:** white with a 1.5px Keyline Grey outline and an ink label. After the host prepares the card it gains emphasis (ink border plus a 1px inset ink keyline), pointing to the next step without competing with the primary.
 - **Pairing:** primary and secondary share a two-column grid with a 10px gap, at equal widths. They stack at ≤420px.
 - **Utility:** white, 44px, 12px radius, 14px/600 label ("Try 3D again", "Reset demo", "Simulate graphics loss"). This tier is reserved for the drawer and the graphics notice.
@@ -329,6 +329,10 @@ Firm, calm and exactly sized; nothing bounces.
 - **Style:** a 44px row under the choices. The left side is a polite live region (15px/600) that is rewritten only when its words change; the right side holds the quiet actions.
 - **States:** "Saving response…" with a 14px ring spinner (pale muted ring, ink arc, 800ms linear). "Accepted" or "Declined" in the status colour, with an 18px check or minus that draws itself in 360ms `cubic-bezier(0.16, 1, 0.3, 1)`; this is the shell's one authored motion moment. "Couldn't save your response." in ink with a circled alert glyph, plus a bordered "Try again".
 
+### Song Line (Party)
+- **Style:** a one-line paragraph between the stage and the panel, shown in host and guest modes whenever the Party scene is up: a 13px Sage Graphite "Song" key, then the title in 15px ink, baseline-aligned with an 8px gap.
+- **Why:** the record label art is decorative, so the chosen song is always named in HTML. Unknown or missing metadata reads "Selected track".
+
 ### Quiet Links
 - **Style:** transparent, ink, 15px/600, underlined (1px thickness, 3px offset), 44px target with 0 12px padding and a 16px leading glyph where needed ("Replay"). A faint warm fill on hover.
 - **Recovery variant:** "Try again" drops the underline and takes a 1.5px Keyline Grey border. Recovery is an action, so it never reads as a stray link.
@@ -337,15 +341,16 @@ Firm, calm and exactly sized; nothing bounces.
 - **Style:** a Track Stone recess (13px radius, 3px padding, 2px gap) holding transparent 44px options in 15px/600 Sage Graphite.
 - **State:** the selected option becomes a white 10px thumb with ink text, an inset Keyline Grey keyline and a small lift (see Elevation). Hover darkens the label to ink. Transitions run 120ms ease-out on background, colour and shadow. State is exposed through `aria-pressed` inside a labelled group.
 - **Small variant:** 13px labels with 0 12px padding, used for developer settings. Secondary figures ("250 ms", "3 s") sit in a 500-weight tabular `small`.
-- **Use:** every finite choice (Host/Guest mode, card template presets, simulated save mode, render quality). Inside a fieldset the control stretches to full width.
+- **Wrapping variant:** for long labels (the Party song titles) the options share a row while they fit and wrap onto further rows when they don't (they stack at 320–340px) instead of overflowing.
+- **Use:** every finite choice (Host/Guest mode, scene presets such as card template, record label and frosting, the Party song, simulated save mode, render quality). Inside a fieldset the control stretches to full width.
 
 ### Status Badge and Motion Toggle
 - **Badge:** a Track Stone pill, 28px tall, 12px/600 Soft Ink ("Simulated saves"). It is an honest-state label, not a button.
 - **Motion toggle:** a labelled toggle button ("Motion" in Sage Graphite 400, value "On"/"Off" in ink 700), 44px tall with a 12px radius. It follows the OS reduced-motion setting live until the viewer overrides it.
 
 ### Cards / Containers
-- **Invitation card:** Paper White, 28px radius (24px at ≤420px), 20px padding (14px at ≤420px), 16px internal gap, card-lift shadow and a 7% ink hairline border. There is exactly one per page.
-- **Stage:** a Stage Linen 1:1 square, 20px radius, full card width. A poster image cross-fades to the live canvas (180ms ease-out); if graphics fail, a centred 15px Sage Graphite sentence replaces it. The response never waits on the stage.
+- **Invitation card:** Paper White, 28px radius at every width, 20px padding (14px at ≤420px, 16px in short landscape), 16px internal gap, card-lift shadow and a 7% ink hairline border. There is exactly one per page.
+- **Stage:** a Stage Linen 1:1 square, 20px radius, full card width. A poster image cross-fades to the live canvas (180ms ease-out); if graphics fail, a centred 15px Sage Graphite sentence replaces it. The warm vignette and film grain over poster and canvas are part of the object look (`docs/style-reference.md` v1.1), not interface ornament. The response never waits on the stage.
 - **Graphics notice:** a 14px-radius warm strip under the panel, holding 14px Soft Ink text ("Showing a still image. Your response still works.") and a utility button. It is shown only when graphics are degraded.
 
 ### Collection Rail

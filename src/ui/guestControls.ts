@@ -84,8 +84,14 @@ export function createGuestControls(options: GuestControlsOptions): GuestControl
         lastText = text;
       }
       status.dataset.tone = persistence === 'saved' ? (intent ?? '') : persistence;
+      const focused = document.activeElement;
       retry.hidden = persistence !== 'error';
       replay.hidden = !intent || state.mode !== 'guest' || state.reducedMotion;
+      // A status action that hides itself (Try again once the save restarts) would drop
+      // keyboard focus to the page; hand it to the chosen answer instead (Master §10).
+      if ((focused === retry && retry.hidden) || (focused === replay && replay.hidden)) {
+        (intent === 'decline' ? decline : accept).focus();
+      }
     },
   };
 }

@@ -32,7 +32,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
 }
 
 .sc-brand {
@@ -53,10 +53,12 @@ body {
   color: var(--lt-text-2);
 }
 
+/* If the bar ever wraps (large text), the actions keep to the right edge of their row. */
 .sc-top-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 
 .sc-badge {
@@ -179,6 +181,11 @@ body {
   padding: 0 12px;
 }
 
+/* Long labels (Party songs) wrap to one full-width row each rather than overflow (~355 px). */
+.sc-seg--wrap {
+  flex-wrap: wrap;
+}
+
 /* ── Invitation card ─────────────────────────────────────────────────────── */
 .sc-card {
   display: grid;
@@ -281,7 +288,9 @@ body {
   background: var(--sc-ink-soft);
 }
 
-.sc-primary:disabled {
+/* aria-disabled (not disabled) while the host sequence plays, so keyboard focus stays put. */
+.sc-primary:disabled,
+.sc-primary[aria-disabled='true'] {
   background: #6f736d;
   border-color: #6f736d;
   cursor: progress;
@@ -307,7 +316,7 @@ body {
   display: flex;
   gap: 8px;
   align-items: baseline;
-  margin: 12px 0 0;
+  margin: 0;
   font-size: 0.9375rem;
   color: var(--lt-text);
 }
@@ -642,6 +651,22 @@ body {
   }
   .sc-rule {
     margin-bottom: 16px;
+  }
+}
+
+/* 320 px: brand, badge and Motion fit one row inside the 16 px gutter. */
+@media (max-width: 360px) {
+  /* Only the narrowest phones may wrap the bar (large text); elsewhere it stays one row. */
+  .sc-top {
+    flex-wrap: wrap;
+    column-gap: 8px;
+  }
+  .sc-top-actions {
+    gap: 6px;
+  }
+  .sc-motion {
+    padding: 0 10px;
+    gap: 6px;
   }
 }
 

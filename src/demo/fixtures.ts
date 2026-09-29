@@ -42,7 +42,8 @@ export const HOST_ACTION: Record<Category, string> = {
 
 /** Host preset group names and the reset note (the preset is a finite choice per scene). */
 export const PRESET_LEGEND: Record<Category, { legend: string; noun: string }> = {
-  party: { legend: 'Record label', noun: 'label' },
+  // Party's host panel also offers the song, which resets the preview too.
+  party: { legend: 'Record label', noun: 'song or label' },
   birthday: { legend: 'Frosting', noun: 'frosting' },
   sports: { legend: 'Ball', noun: 'ball' },
   dinner: { legend: 'Dish', noun: 'dish' },

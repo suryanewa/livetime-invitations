@@ -17,7 +17,7 @@ import type {
 import { VisualDirector } from './visualDirector.ts';
 import { FixedStepper } from '../motion/spring.ts';
 import { hasWebGL2 } from '../render/createRenderer.ts';
-import { type DirectionId, MaterialLibrary } from '../render/materials.ts';
+import { type DirectionId, LOCKED_DIRECTION, MaterialLibrary } from '../render/materials.ts';
 import { QualityMonitor, TIER_DPR, type Tier } from '../render/quality.ts';
 import { Stage, type StageOptions } from '../render/stage.ts';
 
@@ -32,8 +32,12 @@ export type PosterResolver = (category: Category, preset: string, pose: Canonica
 
 export interface InvitationOptions extends CreateInvitationOptions {
   scenes: SceneRegistry;
+  /** Material direction; defaults to the approved LOCKED_DIRECTION (L2, style-reference v1.1). */
   direction?: DirectionId;
-  /** Studio options (premium lighting, projection). */
+  /**
+   * Studio options (premium lighting, projection). Omitted, the stage uses the approved premium
+   * studio ({ premium: true }); options passed replace that default, so set premium explicitly.
+   */
   stage?: Omit<StageOptions, 'canvas' | 'preserveDrawingBuffer'>;
   posterFor?: PosterResolver;
   /** Human-readable description of each pose for the text fallback when a poster fails. */
@@ -88,12 +92,19 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   const clock = new PlaybackClock();
   const stepper = new FixedStepper();
   const libraries = new Map<DirectionId, MaterialLibrary>();
-  const direction: DirectionId = options.direction ?? 'A';
+  const direction: DirectionId = options.direction ?? LOCKED_DIRECTION;
   const library = () => {
     let lib = libraries.get(direction);
     if (!lib) libraries.set(direction, (lib = new MaterialLibrary(direction)));
     return lib;
   };
+  /** Free every material and texture; call only once the stage no longer shows them. */
+  function freeLibraries() {
+    for (const lib of libraries.values()) lib.dispose();
+    libraries.clear();
+  }
+  /** The category whose scene last drew from the library. */
+  let libraryCategory: Category | null = null;
 
   // ── DOM ────────────────────────────────────────────────────────────────────
   const root = options.mount;
@@ -225,6 +236,10 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     loadAbort?.abort();
     if (loadTimer) clearTimeout(loadTimer);
     releaseScene();
+    // A new category shares nothing with the old scene (now off the stage): free its materials
+    // and textures so the next scene builds only what it needs.
+    if (libraryCategory !== config.category) freeLibraries();
+    libraryCategory = config.category;
     canRetryGraphics = false;
 
     if (!hasWebGL2()) {
@@ -254,7 +269,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
 
     try {
       if (!stage) {
-        stage = Stage.create(options.stage ?? {});
+        stage = Stage.create(options.stage ?? { premium: true });
         if (!stage) {
           setResource('fallback', 'webgl-unavailable');
           return;
@@ -264,14 +279,19 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       const loader = options.scenes[config.category];
       if (!loader) throw new Error(`No scene registered for ${config.category}`);
       const module = await loader();
+      if (abort.signal.aborted || disposed) return;
+      const lib = library();
       const instance = await module.load({
         config,
-        library: library(),
+        library: lib,
         assetBase: options.assetBase ?? './assets',
         signal: abort.signal,
       });
       if (abort.signal.aborted || disposed) {
         instance.dispose();
+        // A load superseded by a category change may bind into a library already freed and
+        // dropped; free what it built there too.
+        if (libraries.get(direction) !== lib) lib.dispose();
         return;
       }
       scene = instance;
@@ -279,8 +299,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       instance.setConfig(config);
       stage.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints);
       resize();
-      library().setLowDetail(quality.tier === 'low');
-      stage.premium?.setShadows(quality.tier === 'normal' || quality.tier === 'high');
+      applyTierDetail(quality.tier);
       let shaderError = false;
       stage.renderer.debug.onShaderError = () => {
         shaderError = true;
@@ -334,6 +353,8 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     stage.dispose();
     canvas.remove();
     stage = null;
+    // Library materials and textures hold GPU resources of the renderer just disposed.
+    freeLibraries();
   }
 
   function onContextLost(event: Event) {
@@ -416,16 +437,27 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     if (!next) return;
     if (next === 'static') {
       releaseScene();
+      applyTierDetail(next);
       setResource('fallback', 'performance-static');
       return;
     }
-    library().setLowDetail(next === 'low');
-    stage?.premium?.setShadows(next === 'normal' || next === 'high');
+    applyTierDetail(next);
     resize();
     redraw();
     options.onResourceState?.({ state: resource, reason: 'reduced-quality' });
     emit();
     requestFrame();
+  }
+
+  /**
+   * Tier detail on the live stage and library: Low and Static drop the shadowed key (freeing its
+   * shadow map), the gobo and the plaster relief; Low also simplifies materials.
+   */
+  function applyTierDetail(tier: Tier) {
+    const full = tier === 'normal' || tier === 'high';
+    libraries.get(direction)?.setLowDetail(tier === 'low');
+    stage?.premium?.setShadows(full);
+    stage?.premium?.setLowDetail(!full);
   }
 
   /** A resize clears the drawing buffer; draw the current pose at once so no blank frame shows. */
@@ -656,14 +688,14 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
         loadAbort = null;
         if (loadTimer) clearTimeout(loadTimer);
         releaseScene();
+        applyTierDetail(tier);
         setResource('fallback', 'performance-static');
       } else if (resource !== 'ready') {
         if (contextLost) destroyStage();
         contextLost = false;
         void loadScene();
       } else {
-        library().setLowDetail(tier === 'low');
-        stage?.premium?.setShadows(tier === 'normal' || tier === 'high');
+        applyTierDetail(tier);
         resize();
         redraw();
         requestFrame();
@@ -690,9 +722,9 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       cancelAnimationFrame(raf);
       endPointer(true);
       releaseScene();
+      // Materials first, while the renderer that uploaded them is still alive.
+      freeLibraries();
       destroyStage();
-      for (const lib of libraries.values()) lib.dispose();
-      libraries.clear();
       resizeObserver?.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
       media?.removeEventListener('change', onMotionPreference);

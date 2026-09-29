@@ -66,8 +66,13 @@ export const LID = {
 /** Small status mark on the plinth front (lights when playing; never pulses). */
 export const STATUS_MARK = new Vector3(0.74, 0.11, PLAYER.depth / 2 + 0.003);
 
-/** Complete motion bounds: open lid, hovering record, parked and playing arm. */
-export const PARTY_BOUNDS = new Box3(new Vector3(-PLAYER.width / 2 - 0.02, 0, -1.0), new Vector3(PLAYER.width / 2 + 0.02, 1.86, PLAYER.depth / 2 + 0.05));
+/**
+ * Complete motion bounds: open lid, hovering record, parked and playing arm. x carries extra
+ * symmetric margin (motion needs only ±(width/2 + 0.02)) so the fitted ready pose shows the
+ * plinth at ≈72 % of stage width (Master §5: 60–75 %; its sharp 2.1 × 1.5 box projects to
+ * ≈73.7 %, the rounded corners read narrower).
+ */
+export const PARTY_BOUNDS = new Box3(new Vector3(-PLAYER.width / 2 - 0.13, 0, -1.0), new Vector3(PLAYER.width / 2 + 0.13, 1.86, PLAYER.depth / 2 + 0.05));
 
 /**
  * Yaw that puts the stylus on the groove at `radius` from the spindle (the arm's inner

@@ -4,6 +4,7 @@ import { buildCake } from '../../models/cake.ts';
 import { buildKeycard } from '../../models/keycard.ts';
 import { buildRecordPlayerBlockout } from '../../models/blockouts.ts';
 import { buildRecordPlayer } from '../../models/recordPlayer.ts';
+import { buildBirthday } from '../../models/birthday.ts';
 import type { BuiltModel } from '../../models/types.ts';
 import { MaterialLibrary, type DirectionId } from '../render/materials.ts';
 import { Stage, type StageOptions } from '../render/stage.ts';
@@ -62,6 +63,19 @@ const SUBJECTS: Subject[] = [
     build(lib) {
       // Only L2 has the production model; the current column shows L's study blockout.
       const model = lib.direction.id === 'L2' ? buildRecordPlayer({ lib, simplify }, 'coral') : buildRecordPlayerBlockout({ lib });
+      return { model, dispose: () => model.dispose() };
+    },
+  },
+  {
+    key: 'birthday',
+    label: 'Birthday scene · guest-ready (cake, stand, bin hidden)',
+    build(lib) {
+      if (lib.direction.id !== 'L2') {
+        const model = buildCake({ lib, simplify }, 'vanilla');
+        return { model, dispose: () => model.dispose() };
+      }
+      const model = buildBirthday({ lib, simplify }, 'vanilla');
+      model.nodes.bin_root!.visible = false;
       return { model, dispose: () => model.dispose() };
     },
   },

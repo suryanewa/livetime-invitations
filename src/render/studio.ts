@@ -23,8 +23,8 @@ import {
 /**
  * Premium studio (fidelity pass): a sunlit key with a soft-edged foliage gobo, a seamless
  * paper sweep that receives real soft shadows, and a quiet hemisphere fill. Everything is
- * procedural (no HDRI, no downloads). Low tier drops the shadowed key for the contact-shadow
- * rig; camera, silhouette and timing are unchanged.
+ * procedural (no HDRI, no downloads). Low tier drops the shadowed key, the gobo and the plaster
+ * relief for the contact-shadow rig; camera, silhouette and timing are unchanged.
  */
 
 export const STUDIO = {
@@ -277,8 +277,10 @@ function smoothPcf(): void {
 export interface PremiumStudio {
   key: SpotLight;
   sweep: Mesh;
-  /** Shadows and gobo on (Normal/High) or off (Low/Static). */
+  /** Shadows on (Normal/High) or off (Low/Static); off frees the shadow map. */
   setShadows(enabled: boolean): void;
+  /** Low/Static: drop the gobo cookie and the plaster relief (GPU copies freed); reversible. */
+  setLowDetail(enabled: boolean): void;
   /** Move the backdrop wall (rebuilds the sweep geometry only when it changes). */
   setWall(wallZ?: number): void;
   dispose(): void;
@@ -310,9 +312,31 @@ export function createPremiumStudio(renderer: WebGLRenderer, scene: Scene, targe
   const setShadows = (enabled: boolean) => {
     renderer.shadowMap.enabled = enabled;
     key.castShadow = enabled;
+    if (!enabled && key.shadow.map) {
+      // Free the depth target (and its depth texture); three rebuilds it when shadows return.
+      key.shadow.map.dispose();
+      key.shadow.map = null;
+    }
     renderer.shadowMap.needsUpdate = true;
   };
   setShadows(true);
+
+  const cookie = key.map!;
+  const sweepMaterial = sweep.material as MeshStandardMaterial;
+  const relief = sweepMaterial.normalMap!;
+  let lowDetail = false;
+  const setLowDetail = (enabled: boolean) => {
+    if (enabled === lowDetail) return;
+    lowDetail = enabled;
+    key.map = enabled ? null : cookie;
+    sweepMaterial.normalMap = enabled ? null : relief;
+    sweepMaterial.needsUpdate = true;
+    if (enabled) {
+      // The canvases stay, so the maps upload again on restore.
+      cookie.dispose();
+      relief.dispose();
+    }
+  };
 
   let wall: number = STUDIO.wallZ;
   const setWall = (wallZ: number = STUDIO.wallZ) => {
@@ -327,16 +351,16 @@ export function createPremiumStudio(renderer: WebGLRenderer, scene: Scene, targe
     key,
     sweep,
     setShadows,
+    setLowDetail,
     setWall,
     dispose() {
       scene.remove(key, fill, bounce, sweep);
-      key.map?.dispose();
+      cookie.dispose();
       key.shadow.map?.dispose();
       sweep.geometry.dispose();
-      const m = sweep.material as MeshStandardMaterial;
-      m.normalMap?.dispose();
-      m.map?.dispose();
-      m.dispose();
+      relief.dispose();
+      sweepMaterial.map?.dispose();
+      sweepMaterial.dispose();
     },
   };
 }

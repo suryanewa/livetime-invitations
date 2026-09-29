@@ -1,18 +1,23 @@
-import { Color, DoubleSide, FrontSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Vector2 } from 'three';
+import { Color, DoubleSide, FrontSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Texture, Vector2 } from 'three';
 import { cardPrint, grooveDirections, holoPattern, labelPrint, strapPrint } from './print.ts';
-import { perforationDarkMap, perforationMaps, ringNormal, stippleNormal, weaveNormal } from './textures.ts';
+import { perforationDarkMap, perforationMaps, releaseCachedTexture, retainCachedTexture, ringNormal, stippleNormal, weaveNormal } from './textures.ts';
 
 /**
  * Material naming and roughness convention (asset contract, Master §8):
  *   mat_<role>[_<preset>]  — scenes reference names only; the direction supplies values.
- * Roughness bands: satin bodies 0.40–0.55 · enamel bodies 0.62–0.75 · metal 0.25–0.40 ·
- * food 0.55–0.85. Metalness is 0 or 1 except anodised/painted metal.
+ * Roughness bands (A, B, L): satin bodies 0.40–0.55 · enamel bodies 0.62–0.75 · metal 0.25–0.40 ·
+ * food 0.55–0.85. L2's premium surfaces go glossier (style-reference v1.1): chrome 0.14, bezel
+ * 0.18, clearcoated glass, laminates and glazes. Metalness is 0 or 1 except anodised/painted
+ * metal and L2's holo foil.
  */
 
 export type DirectionId = 'A' | 'B' | 'L' | 'L2';
 
-/** The production direction locked at checkpoint 1 (B construction + A restraint). */
-export const LOCKED_DIRECTION: DirectionId = 'L';
+/**
+ * The approved production direction (style-reference v1.1): L's identity, locked at checkpoint 1
+ * (B construction + A restraint), with the premium L2 surfaces approved at checkpoint 2b.
+ */
+export const LOCKED_DIRECTION: DirectionId = 'L2';
 
 export interface SurfaceSpec {
   color: string;
@@ -271,7 +276,8 @@ export const DIRECTIONS = {
 } satisfies Record<Exclude<DirectionId, 'L2'>, DirectionTokens> as unknown as Record<DirectionId, DirectionTokens>;
 
 /**
- * L2 — fidelity candidate (checkpoint 2 rework): the locked L identity with premium surfaces:
+ * L2 — the approved production direction (checkpoint 2b, style-reference v1.1): the locked L
+ * identity with premium surfaces:
  * laminated printed cards, chrome hardware, printed woven strap, glass reader face, soft
  * buttercream sheen, glazed tray. Same palette, silhouettes and signature.
  */
@@ -324,6 +330,8 @@ export const DIRECTIONS = {
     name: 'Satin Enamel · premium',
     summary: 'The locked L identity with premium surfaces and a sunlit studio: laminated printed badges, chrome hardware, printed woven straps, glass reader faces, buttercream sheen, glazed ceramics.',
     style: { ...L.style, card: 'print' },
+    // The sunlit plaster renders peach; the stage token matches so poster, canvas and CSS agree.
+    ui: { ...L.ui, stage: '#F8E4C8' },
     surfaces: { ...L.surfaces, ...up },
   };
 }
@@ -465,9 +473,16 @@ function buildMaterial(name: string, spec: SurfaceSpec): Material {
   return m;
 }
 
+/**
+ * Builds and owns a direction's materials and every texture they use: generated prints, labels,
+ * holo and groove maps are freed on dispose; textures.ts's cached shared maps (normals,
+ * perforations) are released, and freed by textures.ts once no library holds them.
+ */
 export class MaterialLibrary {
   readonly direction: DirectionTokens;
   private readonly materials = new Map<string, Material>();
+  private readonly owned = new Set<Texture>();
+  private readonly shared = new Set<Texture>();
 
   constructor(direction: DirectionId) {
     this.direction = DIRECTIONS[direction];
@@ -476,19 +491,30 @@ export class MaterialLibrary {
   get(name: string): Material {
     let m = this.materials.get(name);
     if (!m) {
-      const spec = this.direction.surfaces[name];
-      if (!spec) throw new Error(`Unknown material ${name}`);
-      m = buildMaterial(name, spec);
+      m = this.build(name);
       this.materials.set(name, m);
     }
     return m;
   }
 
-  /** A private instance for materials that animate (status light, flames, fades). */
+  /**
+   * A private instance for materials that animate (status light, flames, fades). The caller
+   * disposes the material; its textures stay with the library.
+   */
   unique(name: string): Material {
+    return this.build(name);
+  }
+
+  private build(name: string): Material {
     const spec = this.direction.surfaces[name];
     if (!spec) throw new Error(`Unknown material ${name}`);
-    return buildMaterial(name, spec);
+    const m = buildMaterial(name, spec);
+    // Every map slot (map, normalMap, emissiveMap, anisotropyMap…) is an own property.
+    for (const value of Object.values(m)) {
+      if (!(value instanceof Texture) || this.owned.has(value) || this.shared.has(value)) continue;
+      (retainCachedTexture(value) ? this.shared : this.owned).add(value);
+    }
+    return m;
   }
 
   private lowDetail = false;
@@ -520,9 +546,15 @@ export class MaterialLibrary {
     }
   }
 
+  /** Free materials and textures. The library stays usable: get() rebuilds at full detail. */
   dispose(): void {
     for (const m of this.materials.values()) m.dispose();
+    for (const t of this.owned) t.dispose();
+    for (const t of this.shared) releaseCachedTexture(t);
     this.materials.clear();
+    this.owned.clear();
+    this.shared.clear();
     this.saved.clear();
+    this.lowDetail = false;
   }
 }
