@@ -42,6 +42,22 @@ const set = (out: DinnerFrame, plate: Vector3, cover: Vector3, tilt: number) => 
 };
 /** Horizontal direction from the seated cover to its resting place (the reveal's path). */
 const REVEAL_DIR = new Vector3(COVER_BESIDE.x - COVER_SEATED.x, 0, COVER_BESIDE.z - COVER_SEATED.z).normalize();
+/** Direction the host's cover travels as it comes in to seat. */
+const COVER_DIR = new Vector3(COVER_SEATED.x - COVER_POISED.x, 0, COVER_SEATED.z - COVER_POISED.z).normalize();
+
+/**
+ * The optional secondary settle (sub-spec: at most 1°): a heavy cover rocks once on its rim and
+ * comes to rest. It rocks on the edge, so the lifted side rises and the other side stays on the
+ * surface; the peak is about 0.6°, one cycle, well damped, never rubbery.
+ */
+export const SETTLE_TILT = 0.017;
+function settle(out: DinnerFrame, u: number, dir: Vector3, rest: Vector3): void {
+  const a = SETTLE_TILT * Math.sin(2 * Math.PI * u) * (1 - u) ** 2;
+  out.coverTilt = -a * dir.x;
+  out.coverTiltX = a * dir.z;
+  out.coverPos.copy(rest);
+  out.coverPos.y += COVER.radius * Math.abs(Math.sin(a));
+}
 
 export function frameFor(pose: CanonicalPose, out: DinnerFrame): DinnerFrame {
   if (pose === 'host-ready') set(out, ORIGIN, COVER_POISED, COVER_POISED_TILT);
@@ -74,10 +90,13 @@ function host(t: number, out: DinnerFrame): void {
     const s = ALIGN(seg(t, 0.2, 0.6));
     out.coverPos.lerpVectors(COVER_POISED.clone().setY(COVER_POISED.y + 0.03), ABOVE_SEAT, s);
     out.coverTilt = lerp(COVER_POISED_TILT, 0, s);
-  } else {
-    // Lower with a controlled, weighted motion and seat precisely at 0.90 s; hold.
+  } else if (t < 0.9) {
+    // Lower with a controlled, weighted motion and seat precisely at 0.90 s.
     out.coverPos.lerpVectors(ABOVE_SEAT, COVER_SEATED, LOWER(seg(t, 0.6, 0.9)));
     out.coverTilt = 0;
+  } else {
+    // A gentle settle on the rim into guest-ready.
+    settle(out, seg(t, 0.9, 1.2), COVER_DIR, COVER_SEATED);
   }
 }
 
@@ -101,8 +120,11 @@ function accept(t: number, out: DinnerFrame): void {
     const lean = 0.12 * Math.sin(Math.PI * across);
     out.coverTilt = -lean * REVEAL_DIR.x;
     out.coverTiltX = lean * REVEAL_DIR.z;
+  } else if (t < 1.3) {
+    // Sets down beside the plate and settles on its rim; the food stays centred and visible.
+    settle(out, seg(t, 0.85, 1.3), REVEAL_DIR, COVER_BESIDE);
   } else {
-    // Rests beside the plate; the food stays centred and fully visible.
+    // Final presentation.
     c.copy(COVER_BESIDE);
     out.coverTilt = 0;
   }

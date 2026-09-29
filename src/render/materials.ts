@@ -568,8 +568,9 @@ export class MaterialLibrary {
   private readonly saved = new Map<Material, { normalMap: unknown; sheen: number; envMapIntensity: number }>();
 
   /**
-   * Low tier (Master §9): simplified materials — no normal maps or sheen, softer environment
-   * response. Colours, silhouettes and timing are unchanged. Reversible.
+   * Low tier (Master §9): simplified materials — no normal maps or sheen; a softer environment
+   * response where a material has its own environment map (materials lit by scene.environment
+   * follow the scene intensity). Colours, silhouettes and timing are unchanged. Reversible.
    */
   setLowDetail(enabled: boolean): void {
     if (enabled === this.lowDetail) return;

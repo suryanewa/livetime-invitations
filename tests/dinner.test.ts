@@ -7,7 +7,7 @@ import {
 } from '../models/dinnerContract.ts';
 import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 import { BIN, buildDisposalBin } from '../models/disposalBin.ts';
-import { DURATIONS, frameFor, newFrame, sampleSequence, type DinnerFrame } from '../src/scenes/dinner/sequences.ts';
+import { DURATIONS, frameFor, newFrame, sampleSequence, SETTLE_TILT, type DinnerFrame } from '../src/scenes/dinner/sequences.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
 const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
@@ -57,8 +57,9 @@ describe('Dinner choreography', () => {
       for (let i = 0; i <= DURATIONS[seq] * 1000; i++) {
         const f = at(seq, i / 1000);
         const off = plan(f.coverPos, f.platePos);
-        const seatedish = off < 1e-6 && Math.abs(f.coverTilt) < 1e-6 && Math.abs(f.coverTiltX) < 1e-6;
-        if (seatedish) continue; // Level and centred: the food is inside the cavity (model test).
+        // Centred and level, or rocking on its rim on the well (≤1°): the food is inside the cavity (model test).
+        const seatedish = off < 1e-6 && Math.hypot(f.coverTilt, f.coverTiltX) <= SETTLE_TILT && skirtLow(f) >= COVER_SEATED.y - 1e-6;
+        if (seatedish) continue;
         // Over the food: the skirt clears the food envelope.
         if (off < COVER.radius + FOOD.radius) expect(skirtLow(f)).toBeGreaterThan(PLATE.well + FOOD.centreHeight + COVER_CLEARANCE - 1e-6);
         // Over the plate rim: the skirt clears the rim.
@@ -137,5 +138,22 @@ describe('Dinner model contract', () => {
     const bounds = dinnerBounds().expandByScalar(1e-6);
     expect(bounds.containsBox(box(bin))).toBe(true);
     expect(bounds.containsPoint(COVER_BESIDE.clone().add(new Vector3(COVER.radius, 0, 0)))).toBe(true);
+  });
+});
+
+describe('Dinner settle', () => {
+  it('the cover settles within 1° by rocking on its rim, never sinking into plate or floor', () => {
+    let peak = 0;
+    for (const [seq, from, to, rest] of [['host', 0.9, 1.2, COVER_SEATED], ['accept', 0.85, 1.3, COVER_BESIDE]] as const) {
+      for (let t = from; t <= to; t += 0.001) {
+        const f = at(seq, t);
+        const tilt = Math.hypot(f.coverTilt, f.coverTiltX);
+        peak = Math.max(peak, tilt);
+        expect(tilt).toBeLessThanOrEqual((1 * Math.PI) / 180);
+        expect(skirtLow(f)).toBeGreaterThanOrEqual(rest.y - 1e-6);
+        expect(plan(f.coverPos, rest)).toBeLessThan(1e-9);
+      }
+    }
+    expect(peak).toBeGreaterThan(0.005);
   });
 });

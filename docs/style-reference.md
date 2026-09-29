@@ -2,7 +2,7 @@
 
 **v1.1 (2026-09-29).** Surya approved the premium pass at checkpoint 2b ("go with premium… high fidelity and masterful texturing, lighting and scene work"), with the orthographic camera and the two-tier cake. L2 keeps L's identity (palette, silhouettes, one enamel insert, the perforation row) and upgrades surfaces, construction, light and finish. v1.0 (below) still defines the palette and object rules unless a v1.1 rule replaces them.
 
-Source of truth: `src/render/studio.ts` (key, fill, sweep, cookie, shadow filter, Low-tier detail), `src/render/lighting.ts` (L's hemisphere fill, kept under the premium key), `src/render/stage.ts` (shadow casters, backdrop wall), `src/render/camera.ts` (framing), `src/render/materials.ts` (`DIRECTIONS.L2`), `src/render/print.ts` (printed art, holo foil), `models/badgePremium.ts`, `models/cakeParts.ts`, `models/recordPremium.ts` + `models/recordParts.ts`, `models/disposalBin.ts`, `models/shadowProxy.ts`, `src/ui/shell.css` (stage finish).
+Source of truth: `src/render/studio.ts` (key, fill, sweep, cookie, shadow filter, Low-tier detail), `src/render/lighting.ts` (L's hemisphere fill, kept under the premium key), `src/render/stage.ts` (shadow casters, backdrop wall), `src/render/camera.ts` (framing), `src/render/materials.ts` (`DIRECTIONS.L2`), `src/render/print.ts` (printed art, holo foil), `models/badgePremium.ts`, `models/cakeParts.ts`, `models/recordPremium.ts` + `models/recordParts.ts`, `models/disposalBin.ts`, `models/shadowProxy.ts`, `models/sportsPremium.ts` + `models/sportsParts.ts`, `src/render/ballMaterial.ts`, `models/dinnerPremium.ts` + `models/dinnerParts.ts`, `src/ui/shell.css` (stage finish).
 
 ### Studio (all scenes)
 
@@ -17,7 +17,7 @@ Source of truth: `src/render/studio.ts` (key, fill, sweep, cookie, shadow filter
 | Environment | L's procedural softbox PMREM at 0.52 (reflections for glass, clearcoat, chrome) |
 | Backdrop | Seamless cove sweep `#EAE3D6`, limewash plaster: tileable relief normal (multi-octave + pits) and matching albedo mottle, 512², repeat 2.2. Under the warm key it renders as about `#F8E4C8` (measured from the posters); the HTML stage colour matches that, so poster, fallback and canvas agree. The wall sits at z −3.2 unless a scene moves it (see Birthday) |
 | Finish | CSS over poster and canvas: warm radial vignette (multiply, 12%) + fractal film grain (overlay, 16%). It adds nothing to the WebGL frame. Its cost in the browser compositor (two blended layers over a live canvas) has not been measured on desktop or on a phone. Hidden in forced-colours |
-| Low tier | Shadow map off (and its target freed), gobo cookie off, plaster normal map off; contact shadows remain. Library materials simplified as before (no normal maps or sheen, environment response 0.8) |
+| Low tier | Shadow map off (and its target freed), gobo cookie off, plaster normal map off; contact shadows remain. Library materials simplified as before (no normal maps or sheen). Environment response 0.8 applies only to materials with their own environment (the cloche); the rest follow the scene-wide 0.52 |
 
 ### Normal tier (revised)
 
@@ -57,6 +57,25 @@ SDF modelling (surface nets, gradient normals, Newton projection) for continuous
 - **Point-based framing:** a scene can supply silhouette sample points along every authored path (`framePoints`). The orthographic fit uses them instead of bounding-box corners, which overstate round objects (a disc's box corners project about 28% wider than the disc).
 - **Shared charcoal bin:** a charcoal powder-coated pedal bin (`mat_bin #34373A`, r 0.48, clearcoat 0.25) with an ink liner bucket and foot ring and a butterfly lid of two turned brushed-metal half-dome flaps hinged at the sides (about 100° open), so the open bin stays low in frame. It is sized so the cake with its candles drops fully below the rim before the flaps close: the disappearance is real occlusion, never a fade. Dinner's decline will reuse it (`assets/shared/disposal-bin.glb`).
 - **Coral pedal:** the bin's one enamel insert (`mat_accent`), turned off the front so it shows at the camera angle.
+
+### Sports: premium hoop and ball (M5, signed off by a critical reviewer at checkpoint 4)
+
+- **Backboard:** cream satin board (`mat_body`, measured (240, 218, 189) on the poster, matching the approved scanner face) with a chamfered edge and a glossy ink backer frame 12 mm proud all round. The chamfer and the frame form a V reveal, and the frame gives the board its ≥3:1 silhouette. Frame, bracket arm and pole read as one ink support.
+- **Target:** the coral enamel insert is a flush outline inlay (never filled) sitting 0.6 mm below the face in a 4 mm channel. An ink liner in the channel draws a dark hairline round it, and the corners are concentric. Its bottom edge sits exactly one pitch above the perforation row: 22 whole dots with more than one pitch of margin.
+- **Hardware:** a chrome bracket plate with ink screw heads, a coral anodised rim (hardware, like the record player's knob, so it is not a second enamel insert) and a smooth 64-segment ogee base with a chrome trim ring.
+- **Net:** tapering cotton cords (5.5 mm to 4.2 mm) with knots about 1.45× the cord and loops laced over the rim. Rows are taller at the top and shorter at the bottom. The **far layer is shaded to 0.8 through vertex colour** from the shared camera (`farLayerShade` in `models/sports.ts`, with `mat_net` using vertex colours), so the two layers read as depth rather than a crosshatch. The swish is a radial keyed deformation (`netDeform`: flare widens the lower rows, stretch lengthens the net). The net is rebuilt as float geometry in net space, because the quantised GLB positions would tear.
+- **Leather ball** (`src/render/ballMaterial.ts`): shader seams with `fwidth` anti-aliasing, Worley pebble grain (frequency 11, radius 0.46) that fades into roughness at small sizes, and curved seams 40° off the centre seam. A fixed seam frame (`SEAM_FRAME`) shows the classic "( + )" to the camera at guest-ready. A unit test fails if the camera or the host pass change without recomputing it.
+  - **Orange preset:** `#E36A2C` with ink seams.
+  - **Cream preset:** `#EFE4CD` with ink seams and a coral equator. A post-tone-map limb darkening (0.58 at the edge) takes the lit edge from about 1.05:1 to 1.3–1.5:1 against the stage. The ink seams (about 12:1) and the contact shadow carry the silhouette, as the approved light badge's cream border does.
+- **Delight:** the made shot's swish (net flare and rebound) and the leather ball's spin.
+- 20.5k visible triangles and 8 draw calls; lookdev 35.9k / 18 including the shadow pass; `sports.glb` 516 KiB raw, 223 KiB gzipped.
+
+### Dinner: premium covered dish (M6)
+
+- **Cloche:** satin brushed metal (`mat_cloche`, roughness 0.3, anisotropy 0.7) with its **own copy of the stage environment at 1.1** (`SurfaceSpec.ownEnv`, assigned by `Stage.assignOwnEnvironment`). In r186 a material lit by `scene.environment` takes the scene-wide 0.52 and ignores its own intensity, which rendered the dome gunmetal. It reads as satin silver and still never mirrors the room. The polished lip bead uses `mat_cloche_polished` (roughness 0.18); the knob is the coral enamel insert.
+- **Plate:** cream glazed ceramic with a softened clearcoat (0.4 / 0.3). A sharp clearcoat aliased into a dashed line along the thin rolled rim at phone DPR. The whole-dot perforation row runs on the rim wall, and an ink foot line gives the silhouette.
+- **Layout (checkpoint 4):** the bin stands behind the dish, a little left, at (−0.5, 0, −1.9), and slides in from the left margin behind the plate. The uncovered cloche rests behind-right at (0.8, 0, −1.33), so the food stays in front of it. The reveal leans the cloche along its path. The open bin's flaps (2.27 high), not the dish, set the fixed frame. This is the most compact literal disposal found in a search over bin and cloche placements (see the framing row in `docs/qualification.md`).
+- **Delight:** the reveal and the material response. The sub-spec excludes steam, particles and garnish motion.
 
 ### Budgets (per scene, measured incl. the shadow pass)
 
