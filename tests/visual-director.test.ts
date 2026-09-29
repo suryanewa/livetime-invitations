@@ -46,6 +46,27 @@ describe('VisualDirector', () => {
     expect(completed).toEqual(['accept']);
   });
 
+  it('a scene that asks for a cut changes answer without a blend, then plays the new outcome', () => {
+    const { v, d, completed } = setup();
+    let cut = true;
+    d.interruptCut = () => cut;
+    v.update(0);
+    v.setIntent('accept');
+    v.update(0.9);
+    d.calls.length = 0;
+    v.setIntent('decline');
+    // Cut: guest-ready is posed at once and the decline sequence starts from it (no blend frames).
+    expect(d.calls).toContain('pose:guest-ready');
+    expect(v.state).toBe('decline-playing');
+    expect(d.node.position.x).toBe(0);
+    v.update(0.9 + 0.1);
+    expect(d.node.position.x).toBeLessThan(0);
+    for (let t = 1; t <= 3; t += 1 / 60) v.update(t);
+    expect(v.state).toBe('declined-pose');
+    expect(completed).toEqual(['decline']);
+    cut = false;
+  });
+
   it('interrupting accept with decline blends through ready and cancels the old completion', () => {
     const { v, d, completed } = setup();
     v.update(0);

@@ -30,6 +30,8 @@ body {
   min-height: 64px;
   padding-top: env(safe-area-inset-top);
   display: flex;
+  /* Wraps only when the actions genuinely cannot fit (enlarged text); the brand flexes first. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
@@ -37,6 +39,8 @@ body {
 
 .sc-brand {
   margin: 0;
+  flex: 1 1 0;
+  min-width: min-content;
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -130,6 +134,8 @@ body {
 /* ── Segmented controls ──────────────────────────────────────────────────── */
 .sc-seg {
   display: inline-flex;
+  /* Options share one row while they fit; with enlarged text they wrap instead of overflowing. */
+  flex-wrap: wrap;
   padding: 3px;
   gap: 2px;
   border-radius: 13px;
@@ -656,9 +662,7 @@ body {
 
 /* 320 px: brand, badge and Motion fit one row inside the 16 px gutter. */
 @media (max-width: 360px) {
-  /* Only the narrowest phones may wrap the bar (large text); elsewhere it stays one row. */
   .sc-top {
-    flex-wrap: wrap;
     column-gap: 8px;
   }
   .sc-top-actions {

@@ -10,7 +10,7 @@ import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { birthdayFramePoints } from './framing.ts';
-import { DURATIONS, LEAN } from './poses.ts';
+import { DURATIONS, LEAN, ON_STAND } from './poses.ts';
 import { frameFor, newFrame, sampleSequence, type BirthdayFrame } from './sequences.ts';
 
 export class BirthdayScene implements SceneInstance {
@@ -49,6 +49,12 @@ export class BirthdayScene implements SceneInstance {
 
   sample(sequence: SequenceName, t: number): void {
     this.apply(sampleSequence(sequence, t, this.frame));
+  }
+
+  /** From the bin (or on the way), a straight blend back would pull the cake through the stand. */
+  interruptCut(): boolean {
+    const f = this.frame;
+    return f.binVisible || !f.cakeVisible || f.cakePos.distanceTo(ON_STAND) > 1e-3;
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {

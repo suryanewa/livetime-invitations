@@ -431,7 +431,9 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       quality.pause();
       stepper.reset();
     }
-    if (!director.isPlaying) applyQuality();
+    // Tier drops wait for a safe point (between sequences), except Static: from Low, a device
+    // still too slow completes the current intent as a poster right away (Master §9).
+    if (!director.isPlaying || quality.pending === 'static') applyQuality();
   }
 
   function applyQuality() {

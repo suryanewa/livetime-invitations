@@ -1,7 +1,7 @@
 import { Box3, type Camera, type Object3D, Vector3, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
-import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, POLE, RIM_CENTER, rigSports, type BallPreset, type SportsRig } from '../../../models/sports.ts';
+import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, POLE, RIM, RIM_CENTER, rigSports, type BallPreset, type SportsRig } from '../../../models/sports.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
@@ -69,6 +69,14 @@ export class SportsScene implements SceneInstance {
   refresh(): void {
     this.rig.net.update(0, 0);
     this.updateShadow(this.rig.nodes.ball_authored!.position);
+  }
+
+  /** Near the hoop (or with the net moving), a straight blend would pass the ball through the rim or net. */
+  interruptCut(): boolean {
+    const f = this.frame;
+    const nearHoop = Math.hypot(f.ballPos.x - RIM_CENTER.x, f.ballPos.z - RIM_CENTER.z) < RIM.innerRadius + BALL_R + 0.5;
+    const airborne = f.ballPos.y > BALL_R + 0.05;
+    return (nearHoop && airborne) || f.netFlare !== 0 || f.netStretch !== 0;
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {

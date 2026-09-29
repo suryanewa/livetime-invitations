@@ -65,6 +65,8 @@ export interface SceneInstance {
   takeSeek?(): number | null;
   /** Recompute derived state (strap curves, shadows) from current node transforms. */
   refresh?(): void;
+  /** Interruption would blend objects through each other: cut to guest-ready instead. */
+  interruptCut?(): boolean;
   /** Called once per rendered frame, after sampling and simulation, before drawing. */
   beforeRender?(): void;
   /** Warm shader programs for every material/preset variant before declaring ready. */

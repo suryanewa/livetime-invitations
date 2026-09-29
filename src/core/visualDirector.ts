@@ -22,6 +22,12 @@ export interface SceneDriver {
   takeSeek?(): number | null;
   /** Recompute derived state (strap curves, shadows) from the current node transforms. */
   refresh?(): void;
+  /**
+   * True when a straight blend from the current pose to guest-ready would pass one object
+   * through another (a cake inside the bin, a cloche beside the plate, a ball in the net).
+   * The interruption then cuts to guest-ready (Master §6 allows ≤150 ms, so zero is valid).
+   */
+  interruptCut?(): boolean;
 }
 
 export interface VisualHooks {
@@ -133,6 +139,14 @@ export class VisualDirector {
       return;
     }
     // Interrupt: blend through the canonical ready pose (≤150 ms), old completion cancelled.
+    // Where a straight blend is physically impossible the scene asks for a clean cut.
+    if (this.driver.interruptCut?.()) {
+      this.driver.settle?.();
+      this.driver.pose('guest-ready');
+      this.driver.refresh?.();
+      this.startSequence(sequence, this.lastNow);
+      return;
+    }
     this.driver.settle?.();
     const from = capture(this.driver.animatedNodes);
     this.driver.pose('guest-ready');

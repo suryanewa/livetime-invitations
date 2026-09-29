@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/dinner/dinner.glb?url';
 import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import {
-  COVER, COVER_BESIDE, COVER_POISED, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
+  COVER, COVER_BESIDE, COVER_POISED, COVER_SEATED, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
   type DinnerRig, type DishPreset,
 } from '../../../models/dinner.ts';
 import { BIN, flapAngles } from '../../../models/disposalBin.ts';
@@ -85,6 +85,16 @@ export class DinnerScene implements SceneInstance {
 
   sample(sequence: SequenceName, t: number): void {
     this.apply(sampleSequence(sequence, t, this.frame));
+  }
+
+  /**
+   * A cover lifted aside, or a dish on its way to the bin, would sweep through the plate rim
+   * or out of the bin on a straight blend: cut to the covered dish instead.
+   */
+  interruptCut(): boolean {
+    const f = this.frame;
+    const coverAside = Math.hypot(f.coverPos.x - COVER_SEATED.x, f.coverPos.z - COVER_SEATED.z) > 0.05;
+    return f.binVisible || !f.dishVisible || f.platePos.lengthSq() > 1e-6 || coverAside;
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
