@@ -253,6 +253,12 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
   await record('accept', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', plan.clips.accept);
   await record('decline', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("decline")', plan.clips.decline);
   await record('change', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', plan.clips.change, [0.5, '(s) => s.controller.chooseResponse("decline")']);
+  // The second preset plays both outcomes too (dark card, cobalt label, cocoa, cream ball, vegetables).
+  const [secondKey, secondLiteral] = plan.presets[1];
+  await setPreset(secondLiteral);
+  await waitReady();
+  await record(`accept-${secondKey}`, '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', plan.clips.accept);
+  await record(`decline-${secondKey}`, '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("decline")', plan.clips.decline);
 
   await browser.close();
   const { cp } = await import('node:fs/promises');
