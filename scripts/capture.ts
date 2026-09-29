@@ -147,8 +147,10 @@ const SCENE_CAPTURE = {
   },
   dinner: {
     presets: [['pasta', '{ category: "dinner", dish: "pasta" }'], ['vegetables', '{ category: "dinner", dish: "vegetables" }']],
-    // Declined shows the closed bin and the cleared place: identical for both dishes.
+    // Declined shows the closed bin and the cleared place, guest-ready the covered dish: both
+    // identical for either dish (verified byte-identical), so each is one shared poster.
     sharedDeclined: true,
+    sharedReady: true,
     clips: { host: 1.5, accept: 1.8, decline: 1.8, change: 2.6 },
   },
 } as const;
@@ -215,7 +217,8 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
       await call(action);
       await tick(400);
       const poster = await still(720, 1, 'image/webp', 0.86);
-      const file = plan.sharedDeclined && pose === 'declined' ? 'shared-declined' : `${key}-${pose}`;
+      const shared = (pose === 'declined' && plan.sharedDeclined) || (pose === 'guest-ready' && 'sharedReady' in plan && plan.sharedReady);
+      const file = shared ? `shared-${pose}` : `${key}-${pose}`;
       await saveDataUrl(join(stagedPosters, `${file}.webp`), poster!);
       if (pose !== 'host-ready') {
         const review = await still(540, 2);
