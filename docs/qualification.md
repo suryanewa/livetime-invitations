@@ -98,6 +98,18 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 
 All figures were measured on the authoring Mac (M2 Pro, Chrome 153) from the committed tree during checkpoint 4. None of this is phone evidence. Checkpoint 4 was carried out by independent critical reviewers at Surya's request; their sign-offs are recorded as **pending Surya's confirmation**.
 
+### Release environment (recorded 2026-09-29, Master §11)
+
+| Item | Version |
+| --- | --- |
+| Host | Apple M2 Pro, macOS 26.6 (build 25G5065a) |
+| Google Chrome (all automated checks) | 154.0.8037.58 (auto-updated during the day from 153; checkpoint 3 figures were taken on 153) |
+| Safari (installed, not automated) | 26.6 |
+| Firefox, Edge | Not installed |
+| Previous major browser versions | Not installable on this host (auto-updating Chrome, system Safari): recorded as unverified |
+| Node / pnpm | 24.5.0 / 11.0.4 |
+| three.js / playwright-core | 0.186.1 / 1.63.0 |
+
 ### Checks
 
 | Check | Result |
