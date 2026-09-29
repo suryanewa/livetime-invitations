@@ -15,6 +15,8 @@ interface Row {
   status: 'met' | 'partial' | 'unverified' | 'exception' | 'not met';
   evidence: string;
   note?: string;
+  /** Work this row still waits for (captures, measurements, release, surya, cp4-fix:<id>). */
+  pendingOn?: string[];
 }
 
 const root = join(import.meta.dirname, '..');
@@ -31,6 +33,7 @@ const DOCS: [string, string][] = [
 const STATUSES = ['met', 'exception', 'partial', 'unverified', 'not met'] as const;
 const cell = (s: string | undefined) => (s ?? '').replace(/\|/g, '\\|').replace(/\n+/g, ' ').trim();
 const docOf = (r: Row) => r.key.split('-')[0]!;
+const noteOf = (r: Row) => cell([r.note, r.pendingOn?.length ? `Pending: ${r.pendingOn.join(', ')}.` : ''].filter(Boolean).join(' '));
 
 const out: string[] = [
   '# Coverage table',
@@ -57,7 +60,7 @@ out.push(`| **All** | ${STATUSES.map((s) => data.rows.filter((r) => r.status ===
 out.push('## Open items (not met, partial, unverified)', '', '| Document | Section | Requirement | Status | Note |', '| --- | --- | --- | --- | --- |');
 for (const [key, title] of DOCS) {
   for (const r of data.rows.filter((x) => docOf(x) === key && (x.status === 'not met' || x.status === 'partial' || x.status === 'unverified'))) {
-    out.push(`| ${title} | ${cell(r.section)} | ${cell(r.requirement)} | ${r.status} | ${cell(r.note)} |`);
+    out.push(`| ${title} | ${cell(r.section)} | ${cell(r.requirement)} | ${r.status} | ${noteOf(r)} |`);
   }
 }
 out.push('');
@@ -65,7 +68,7 @@ out.push('');
 for (const [key, title] of DOCS) {
   out.push(`## ${title}`, '', '| Section | Requirement | Status | Evidence | Note |', '| --- | --- | --- | --- | --- |');
   for (const r of data.rows.filter((x) => docOf(x) === key)) {
-    out.push(`| ${cell(r.section)} | ${cell(r.requirement)} | ${r.status} | ${cell(r.evidence)} | ${cell(r.note)} |`);
+    out.push(`| ${cell(r.section)} | ${cell(r.requirement)} | ${r.status} | ${cell(r.evidence)} | ${noteOf(r)} |`);
   }
   out.push('');
 }
