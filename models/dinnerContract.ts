@@ -40,35 +40,39 @@ export const DISH_HEIGHT = PLATE.well + COVER_TOP;
 
 /**
  * Seated cover (skirt on the well) and the accepted rest pose beside the plate: set down
- * behind-right, so the food stays in front of it and the frame stays compact (checkpoint 4).
+ * behind-left, clear of the food on screen, so the food stays in front and the dish sits
+ * centred in the fixed frame (checkpoint 4 layout search over the real bin geometry).
  */
 export const COVER_SEATED = new Vector3(0, PLATE.well, 0);
-export const COVER_BESIDE = new Vector3(0.8, 0, -1.33);
+export const COVER_BESIDE = new Vector3(-1.2, 0, -0.95);
 /** Host-ready: the cover poised beside and above the plate, tipped towards it. */
 export const COVER_POISED = new Vector3(1.05, 0.62, 0.18);
 export const COVER_POISED_TILT = 0.32;
 
 /**
- * Bin placement (same approved treatment as Birthday): behind the dish and a little left,
- * clear of the plate by at least 5 cm, turned so the dish enters between the flaps. Directly
- * behind keeps the open bin inside the dish's own width on screen: the tall open flaps, not the
- * dish, set the frame, so this is the most compact literal disposal (checkpoint 4 framing).
+ * Bin placement (same approved treatment as Birthday): behind-left of the dish, clear of the
+ * plate by at least 5 cm, turned so the dish enters between the flaps. The tall open flaps, not
+ * the dish, set the fixed frame; a search over bin and cloche placements, fitted to the bin's
+ * real open geometry with 8 % clearance, found this near the most compact literal disposal
+ * (43 % ready-pose fill, dish centred; recorded exception in docs/spec-revisions.md).
  */
-export const DINNER_BIN_POS = new Vector3(-0.5, 0, -1.9);
+export const DINNER_BIN_POS = new Vector3(-0.7, 0, -1.7);
 export const DINNER_BIN_YAW = Math.atan2(-DINNER_BIN_POS.x, -DINNER_BIN_POS.z);
-/** Off-frame start: the bin slides in from the left margin, passing behind the plate. */
-export const DINNER_BIN_START = new Vector3(-3.9, 0, -1.9);
+/** Off-frame start: the bin slides in from the left margin. */
+export const DINNER_BIN_START = new Vector3(-3.9, 0, -1.7);
 export const DINNER_WALL_Z = -4.2;
 /** Underside clearance over the rim while the dish crosses it, and the carry height. */
 export const DINNER_RIM_CLEARANCE = 0.06;
-export const DINNER_CARRY = 1.42;
+export const DINNER_CARRY = 1.4;
 /** Plate underside when the dish rests on the liner floor. */
 export const DISH_IN_BIN = new Vector3(DINNER_BIN_POS.x, BIN.floor, DINNER_BIN_POS.z);
 
 /** Complete motion bounds (box fallback; the scene also supplies silhouette frame points). */
 export function dinnerBounds(): Box3 {
   const b = new Box3(new Vector3(-PLATE.radius, 0, -PLATE.radius), new Vector3(Math.max(COVER_BESIDE.x, COVER_POISED.x) + COVER.radius + 0.02, COVER_POISED.y + COVER_TOP + 0.1, PLATE.radius + 0.1));
-  b.expandByPoint(new Vector3(COVER_BESIDE.x, 0, COVER_BESIDE.z - COVER.radius - 0.02));
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+    b.expandByPoint(new Vector3(COVER_BESIDE.x + dx * (COVER.radius + 0.02), COVER_TOP, COVER_BESIDE.z + dz * (COVER.radius + 0.02)));
+  }
   const r = Math.hypot(BIN_BOUNDS.max.x, BIN_BOUNDS.max.z);
   b.union(new Box3(new Vector3(DINNER_BIN_POS.x - r, 0, DINNER_BIN_POS.z - r), new Vector3(DINNER_BIN_POS.x + r, BIN_BOUNDS.max.y, DINNER_BIN_POS.z + r)));
   b.expandByPoint(new Vector3(DINNER_BIN_POS.x, BIN.rimTop + DINNER_RIM_CLEARANCE + DISH_HEIGHT, DINNER_BIN_POS.z));

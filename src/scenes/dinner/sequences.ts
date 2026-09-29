@@ -2,9 +2,8 @@ import { Vector3 } from 'three';
 import { cubicBezier, EASE, lerp, seg, smoothstep } from '../../motion/curves.ts';
 import {
   COVER, COVER_BESIDE, COVER_POISED, COVER_POISED_TILT, COVER_SEATED, DINNER_BIN_POS, DINNER_BIN_START, DINNER_CARRY,
-  DINNER_RIM_CLEARANCE, DISH_IN_BIN, FOOD, PLATE,
+  DISH_IN_BIN, FOOD, PLATE,
 } from '../../../models/dinnerContract.ts';
-import { BIN } from '../../../models/disposalBin.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 
 /**
@@ -32,7 +31,6 @@ const ORIGIN = new Vector3(0, 0, 0);
 /** Height the skirt clears the food by whenever the cover moves over it. */
 export const SAFE_SKIRT = PLATE.well + FOOD.centreHeight + 0.08;
 const ABOVE_SEAT = new Vector3(0, SAFE_SKIRT, 0);
-const HOVER_OVER_BIN = new Vector3(DINNER_BIN_POS.x, BIN.rimTop + DINNER_RIM_CLEARANCE, DINNER_BIN_POS.z);
 
 const set = (out: DinnerFrame, plate: Vector3, cover: Vector3, tilt: number) => {
   out.platePos.copy(plate);
@@ -133,9 +131,49 @@ function accept(t: number, out: DinnerFrame): void {
 // ── Decline: 1.5 s ────────────────────────────────────────────────────────────
 const FLAP_OPEN = cubicBezier(0.3, 0, 0.2, 1);
 const FLAP_CLOSE = cubicBezier(0.45, 0, 0.35, 1);
-const DESCEND = cubicBezier(0.55, 0, 0.5, 1);
-const CARRY_ACROSS = cubicBezier(0.6, 0, 0.4, 1);
+/** One continuous move along the transfer path: eases off the floor, travels, lowers in gently. */
+const TRANSFER = cubicBezier(0.33, 0, 0.3, 1);
 const FLAP_GAP = 0.03;
+
+/**
+ * The approved transfer path in the vertical plane from the plate to the bin: straight up, across
+ * at DINNER_CARRY, straight down onto the liner floor, with rounded corners so the direction
+ * turns smoothly. The first corner is tight enough that the plate is above the rim before it
+ * reaches it; the second ends above the rim only once the plate is inside the opening.
+ */
+const REACH = Math.hypot(DINNER_BIN_POS.x, DINNER_BIN_POS.z);
+const LIFT_CORNER = 0.2;
+const DROP_CORNER = 0.12;
+const PATH = (() => {
+  type Piece = { length: number; at(u: number): [number, number] };
+  const line = (a: [number, number], b: [number, number]): Piece => ({
+    length: Math.hypot(b[0] - a[0], b[1] - a[1]),
+    at: (u) => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u],
+  });
+  const arc = (cx: number, cy: number, r: number, from: number, to: number): Piece => ({
+    length: Math.abs(to - from) * r,
+    at: (u) => { const a = from + (to - from) * u; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; },
+  });
+  const Y = DINNER_CARRY, a = LIFT_CORNER, b = DROP_CORNER, floor = DISH_IN_BIN.y;
+  const pieces: Piece[] = [
+    line([0, 0], [0, Y - a]),
+    arc(a, Y - a, a, Math.PI, Math.PI / 2),
+    line([a, Y], [REACH - b, Y]),
+    arc(REACH - b, Y - b, b, Math.PI / 2, 0),
+    line([REACH, Y - b], [REACH, floor]),
+  ];
+  const total = pieces.reduce((n, p) => n + p.length, 0);
+  /** Point at arc-length fraction s ∈ [0, 1]: [distance towards the bin, height]. */
+  return (s: number): [number, number] => {
+    let d = Math.min(Math.max(s, 0), 1) * total;
+    for (const p of pieces) {
+      if (d <= p.length) return p.at(p.length ? d / p.length : 0);
+      d -= p.length;
+    }
+    return [REACH, floor];
+  };
+})();
+
 const dish = new Vector3();
 function decline(t: number, out: DinnerFrame): void {
   frameFor('guest-ready', out);
@@ -145,14 +183,11 @@ function decline(t: number, out: DinnerFrame): void {
   if (t < 0.95) out.flaps = FLAP_OPEN(seg(t, 0.08, 0.25));
   else if (t < 1.2) out.flaps = lerp(1, FLAP_GAP, FLAP_CLOSE(seg(t, 0.95, 1.2)));
   else out.flaps = lerp(FLAP_GAP, 0, EASE.land(seg(t, 1.2, 1.4)));
-  // 0.25–0.95: the covered dish, as one unit, is lifted, carried over the rim and lowered in.
-  // It rises from the floor before it travels, so it is above the rim before it reaches the bin.
-  if (t < 0.25) dish.copy(ORIGIN);
-  else if (t < 0.74) {
-    const u = CARRY_ACROSS(seg(t, 0.36, 0.74));
-    dish.set(lerp(0, HOVER_OVER_BIN.x, u), 0, lerp(0, HOVER_OVER_BIN.z, u));
-    dish.y = t < 0.46 ? DINNER_CARRY * EASE.lift(seg(t, 0.25, 0.46)) : lerp(DINNER_CARRY, HOVER_OVER_BIN.y, smoothstep(seg(t, 0.46, 0.74)));
-  } else dish.lerpVectors(HOVER_OVER_BIN, DISH_IN_BIN, DESCEND(seg(t, 0.74, 0.95)));
+  // 0.25–0.95: the covered dish, as one unit, rises clear, crosses over the rim between the
+  // open flaps and is lowered onto the liner floor, in one continuous move (no stop over the bin).
+  const [d, y] = PATH(TRANSFER(seg(t, 0.25, 0.95)));
+  const k = d / REACH;
+  dish.set(DINNER_BIN_POS.x * k, y, DINNER_BIN_POS.z * k);
   out.platePos.copy(dish);
   out.coverPos.copy(dish).add(COVER_SEATED);
   // Once the flaps have closed over it, the hidden dish stops rendering.

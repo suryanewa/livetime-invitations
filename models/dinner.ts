@@ -1,6 +1,6 @@
 import { type Object3D } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
-import { DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
+import { COVER, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
 import { buildDinnerGeometry } from './dinnerPremium.ts';
 import { BIN, buildDisposalBin } from './disposalBin.ts';
 import { applyShadowProxies } from './shadowProxy.ts';
@@ -18,6 +18,8 @@ export interface DinnerRig {
   nodes: Record<string, Object3D>;
   shadows: ContactShadow[];
   dishShadow: ContactShadow;
+  /** The cloche's own floor shadow once it is set down beside the plate. */
+  coverShadow: ContactShadow;
   flapL: Object3D;
   flapR: Object3D;
   bounds: ReturnType<typeof dinnerBounds>;
@@ -48,6 +50,11 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
     name: 'bin_shadow', shape: 'round', width: BIN.radius * 1.9, depth: BIN.radius * 1.9, spread: [1.15, 1.5], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,
   }));
   nodes.dish_shadow = dishShadow;
+  const coverShadow = new ContactShadow({
+    name: 'cover_shadow', shape: 'round', width: COVER.radius * 2, depth: COVER.radius * 2, spread: [1.1, 1.35], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,
+  });
+  coverShadow.visible = false;
+  dishShadow.parent!.add(coverShadow);
 
   const setPreset = (next: DishPreset) => {
     nodes.food_pasta!.visible = next === 'pasta';
@@ -58,14 +65,16 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
   return {
     root,
     nodes,
-    shadows: [dishShadow, binShadow],
+    shadows: [dishShadow, coverShadow, binShadow],
     dishShadow,
+    coverShadow,
     flapL: root.getObjectByName('bin_flap_l')!,
     flapR: root.getObjectByName('bin_flap_r')!,
     bounds: dinnerBounds(),
     setPreset,
     dispose() {
       dishShadow.dispose();
+      coverShadow.dispose();
       binShadow.dispose();
     },
   };

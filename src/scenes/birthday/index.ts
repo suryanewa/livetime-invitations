@@ -1,11 +1,11 @@
-import { Box3, type Camera, type MeshBasicMaterial, type Object3D, type WebGLRenderer } from 'three';
+import { Box3, type Camera, type MeshBasicMaterial, type Object3D, type Vector3, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/birthday/birthday.glb?url';
 import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import { rigBirthday, type BirthdayRig } from '../../../models/birthday.ts';
-import { WALL_Z } from '../../../models/birthdayContract.ts';
+import { BIN_POS, BIN_YAW, WALL_Z } from '../../../models/birthdayContract.ts';
 import { FLAME_SCALE, type CakePreset } from '../../../models/cake.ts';
-import { flapAngles } from '../../../models/disposalBin.ts';
+import { flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
@@ -20,7 +20,7 @@ export class BirthdayScene implements SceneInstance {
   readonly durations = DURATIONS;
   readonly animatedNodes: Object3D[];
   readonly studio = { wallZ: WALL_Z };
-  readonly framePoints = birthdayFramePoints();
+  readonly framePoints: Vector3[];
 
   private readonly frame = newFrame();
   private preset: CakePreset;
@@ -34,6 +34,7 @@ export class BirthdayScene implements SceneInstance {
       n.cake_authored!, n.cake_secondary!, n.bin_root!, rig.flapL, rig.flapR,
       ...rig.candles.flatMap((c) => [c.candle, c.flame, c.wick]),
     ];
+    this.framePoints = [...birthdayFramePoints(), ...openBinFramePoints(n.bin_root!, BIN_POS, BIN_YAW)];
     this.pose('guest-ready');
   }
 

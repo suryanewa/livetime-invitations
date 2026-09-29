@@ -1,4 +1,4 @@
-import { Box3, CylinderGeometry, LatheGeometry, type Object3D, Shape, ShapeGeometry, Vector2, Vector3 } from 'three';
+import { Box3, type BufferAttribute, CylinderGeometry, LatheGeometry, Matrix4, type Mesh, type Object3D, Quaternion, Shape, ShapeGeometry, Vector2, Vector3 } from 'three';
 import { filletPolyline, group, lathe, mergeParts, mesh, roundedBox, type ProfilePoint } from './geometry.ts';
 import type { ModelContext } from './types.ts';
 
@@ -36,6 +36,35 @@ export const BIN_BOUNDS = new Box3(new Vector3(-1.16, 0, -0.99), new Vector3(1.1
 /** Rotation.z for each flap at opening fraction k (left lifts with +z, right with −z). */
 export function flapAngles(k: number): [number, number] {
   return [BIN.flapOpen * k, -BIN.flapOpen * k];
+}
+
+/**
+ * Framing samples of the bin with its flaps fully open, taken from the bin's own geometry (every
+ * vertex, placed at `position` turned by `yaw`): exact, so the camera fit keeps its clearance
+ * over the real flap tops (a hand-modelled flap outline sat 7 cm low). Contact-shadow planes and
+ * shadow proxies are skipped. The flaps are restored afterwards.
+ */
+export function openBinFramePoints(binRoot: Object3D, position: Vector3, yaw: number): Vector3[] {
+  const flaps = [binRoot.getObjectByName('bin_flap_l')!, binRoot.getObjectByName('bin_flap_r')!];
+  const saved = flaps.map((f) => f.rotation.z);
+  const open = flapAngles(1);
+  flaps.forEach((f, i) => (f.rotation.z = open[i]!));
+  binRoot.updateMatrixWorld(true);
+  const place = new Matrix4().compose(position, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw), new Vector3(1, 1, 1));
+  const toBin = binRoot.matrixWorld.clone().invert();
+  const m = new Matrix4();
+  const v = new Vector3();
+  const pts: Vector3[] = [];
+  binRoot.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh || mesh.name.endsWith('_shadow') || mesh.userData.shadowProxy) return;
+    m.multiplyMatrices(place, toBin).multiply(mesh.matrixWorld);
+    const attr = mesh.geometry.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i < attr.count; i++) pts.push(v.fromBufferAttribute(attr, i).applyMatrix4(m).clone());
+  });
+  flaps.forEach((f, i) => (f.rotation.z = saved[i]!));
+  binRoot.updateMatrixWorld(true);
+  return pts;
 }
 
 export function buildDisposalBin(ctx: ModelContext): Object3D {

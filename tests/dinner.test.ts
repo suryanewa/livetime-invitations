@@ -8,7 +8,7 @@ import {
   dinnerBounds,
 } from '../models/dinnerContract.ts';
 import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
-import { BIN, buildDisposalBin } from '../models/disposalBin.ts';
+import { BIN, buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { DURATIONS, frameFor, newFrame, sampleSequence, SETTLE_TILT, type DinnerFrame } from '../src/scenes/dinner/sequences.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
@@ -82,9 +82,12 @@ describe('Dinner choreography', () => {
       const p = f.platePos;
       const dx = p.x - DINNER_BIN_POS.x, dz = p.z - DINNER_BIN_POS.z;
       const d = Math.hypot(dx, dz), lx = dx * c + dz * s;
-      if (d < PLATE.radius + BIN.radius + 0.02 && d > 1e-6) expect(p.y).toBeGreaterThanOrEqual(BIN.rimTop + DINNER_RIM_CLEARANCE - 0.02);
+      // Over the rim (the plate reaches past the opening but not past the rim roll): clears it.
+      const overRim = d > BIN.opening - PLATE.radius - 0.01 && d < PLATE.radius + BIN.radius + 0.02;
+      if (overRim && p.y < BIN.rimTop + 0.3) expect(p.y).toBeGreaterThanOrEqual(BIN.rimTop + DINNER_RIM_CLEARANCE - 0.02);
       if (d < BIN.opening && p.y > BIN.rimTop) expect(Math.abs(lx) + PLATE.radius).toBeLessThan(BIN.hingeX - 0.02);
-      if (p.y < BIN.rimTop + 0.05 && d < BIN.radius + PLATE.radius) expect(d).toBeLessThan(1e-6);
+      // Below the rim the plate is inside the opening, centred to within its clearance.
+      if (p.y < BIN.rimTop + 0.05 && d < BIN.radius + PLATE.radius) expect(d).toBeLessThan(BIN.opening - PLATE.radius - 0.01);
       expect(f.coverPos.clone().sub(f.platePos).distanceTo(COVER_SEATED)).toBeLessThan(1e-9); // one unit
       if (i >= 300 && f.flaps < 1 - 1e-9 && closingAt === 2) closingAt = i / 1000;
     }
@@ -139,7 +142,9 @@ describe('Dinner model contract', () => {
     bin.getObjectByName('bin_flap_r')!.rotation.z = -BIN.flapOpen;
     const bounds = dinnerBounds().expandByScalar(1e-6);
     expect(bounds.containsBox(box(bin))).toBe(true);
-    expect(bounds.containsPoint(COVER_BESIDE.clone().add(new Vector3(COVER.radius, 0, 0)))).toBe(true);
+    for (const d of [new Vector3(COVER.radius, 0, 0), new Vector3(-COVER.radius, 0, 0), new Vector3(0, 0, -COVER.radius)]) {
+      expect(bounds.containsPoint(COVER_BESIDE.clone().add(d))).toBe(true);
+    }
   });
 });
 
@@ -161,10 +166,14 @@ describe('Dinner settle', () => {
 });
 
 describe('Dinner framing (Master §5, recorded disposal exception)', () => {
-  it('the covered dish fills at least 44 % of the stage width in the ready pose', () => {
+  it('the covered dish fills at least 42 % of the stage width in the ready pose; the open bin keeps 8 % clearance', () => {
     // The open bin's flaps set the fixed frame; a placement search put the ceiling near 45 %.
+    const bin = buildDisposalBin({ lib: plainLibrary() });
+    const binPts = openBinFramePoints(bin, DINNER_BIN_POS, DINNER_BIN_YAW);
     const camera = new OrthographicCamera();
-    fitCameraToBounds(camera, dinnerBounds(), 1, undefined, dinnerFramePoints());
+    fitCameraToBounds(camera, dinnerBounds(), 1, undefined, [...dinnerFramePoints(), ...binPts]);
+    const top = Math.max(...binPts.map((p) => p.clone().applyMatrix4(camera.matrixWorldInverse).y));
+    expect((camera.top - top) / (camera.top - camera.bottom)).toBeGreaterThanOrEqual(0.08 - 1e-6);
     const inv = camera.matrixWorldInverse;
     let min = Infinity, max = -Infinity;
     for (let i = 0; i < 64; i++) {
@@ -174,7 +183,7 @@ describe('Dinner framing (Master §5, recorded disposal exception)', () => {
       max = Math.max(max, q.x);
     }
     const fill = (max - min) / (camera.right - camera.left);
-    expect(fill).toBeGreaterThanOrEqual(0.44);
+    expect(fill).toBeGreaterThanOrEqual(0.42);
     expect(fill).toBeLessThanOrEqual(0.75);
   });
 });
