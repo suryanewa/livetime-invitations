@@ -16,7 +16,8 @@
     "test": "vitest run",
     "models": "node --experimental-transform-types --no-warnings scripts/export-models.ts",
     "capture": "node --experimental-transform-types --no-warnings scripts/capture.ts",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "package:release": "node --experimental-transform-types --no-warnings scripts/package-release.ts"
   },
   "dependencies": {
     "three": "0.186.1"
