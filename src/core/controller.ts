@@ -65,6 +65,8 @@ export interface InvitationHandle extends InvitationController {
   setQualityTier(tier: Tier): void;
   /** Tooling only (posters, review captures): render the current pose to an image URL. */
   captureStill(size: number, dpr?: number, type?: string, quality?: number): string | null;
+  /** Tooling only (resource checks): live GPU object counts, or null without a stage. */
+  renderInfo(): { geometries: number; textures: number; programs: number } | null;
 }
 
 export const LOAD_TIMEOUT_MS = 6000;
@@ -704,6 +706,12 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     },
 
     getState,
+
+    renderInfo() {
+      if (!stage) return null;
+      const info = stage.renderer.info;
+      return { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 };
+    },
 
     captureStill(size: number, dpr = 2, type = 'image/png', quality?: number) {
       if (!stage || !scene || resource !== 'ready') return null;
