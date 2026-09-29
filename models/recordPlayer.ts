@@ -10,6 +10,8 @@ export interface RecordPlayerRig {
   root: Object3D;
   nodes: Record<string, Object3D>;
   shadows: ContactShadow[];
+  /** Contact shadow under the record (tightens as it seats). */
+  recordShadow: ContactShadow;
   bounds: Box3;
   statusMaterial: MeshStandardMaterial;
   setLabel(label: RecordLabel): void;
@@ -70,6 +72,7 @@ export function rigRecordPlayer(root: Object3D, lib: ModelContext['lib'], label:
     root,
     nodes,
     shadows: [recordShadow, bodyShadow],
+    recordShadow,
     bounds: PARTY_BOUNDS.clone(),
     statusMaterial,
     setLabel,

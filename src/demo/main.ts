@@ -22,11 +22,12 @@ import { DEFAULT_CONFIGS } from '../core/types.ts';
 import { createGuestControls, ICONS } from '../ui/guestControls.ts';
 import type { Tier } from '../render/quality.ts';
 import { MockResponseAdapter, type MockMode, MOCK_DELAYS } from './mockAdapter.ts';
-import { CATEGORY_LABEL, EVENTS, HOST_ACTION, LIVE_CATEGORIES, OBJECT_LABEL, POSE_TEXT, PRESETS } from './fixtures.ts';
+import { CATEGORY_LABEL, EVENTS, HOST_ACTION, LIVE_CATEGORIES, OBJECT_LABEL, POSE_TEXT, PRESET_LEGEND, PRESETS, SONGS, songTitle } from './fixtures.ts';
 import { posterUrl } from './posters.ts';
 import { collectionThumb } from './collection.ts';
 
 const scenes: SceneRegistry = {
+  party: () => import('../scenes/party/index.ts').then((m) => m.partyScene),
   business: () => import('../scenes/business/index.ts').then((m) => m.businessScene),
 };
 
@@ -55,16 +56,21 @@ app.innerHTML = `
             <p class="sc-event__meta"><span data-bind="when"></span><span aria-hidden="true"> · </span><span data-bind="where"></span><span aria-hidden="true"> · </span><span class="sc-sample">Sample event</span></p>
           </header>
           <div class="sc-stage" data-bind="stage"></div>
+          <p class="sc-track" data-bind="track" hidden><span class="sc-track__k">Song</span> <span data-bind="track-title"></span></p>
           <div class="sc-panel" data-panel="host">
+            <fieldset class="sc-field" data-bind="songs-field" hidden>
+              <legend>Song</legend>
+              <div class="sc-seg" data-bind="songs"></div>
+            </fieldset>
             <fieldset class="sc-field">
-              <legend>Card template</legend>
+              <legend data-bind="preset-legend">Card template</legend>
               <div class="sc-seg" data-bind="presets"></div>
             </fieldset>
             <div class="sc-host-actions">
               <button class="sc-primary" type="button" data-action="prepare"></button>
               <button class="sc-secondary" type="button" data-action="preview">Preview as guest</button>
             </div>
-            <p class="sc-note">Changing the template resets the preview. Nothing is sent to guests from this page.</p>
+            <p class="sc-note" data-bind="host-note">Changing the template resets the preview. Nothing is sent to guests from this page.</p>
           </div>
           <div class="sc-panel" data-panel="guest" hidden></div>
           <div class="sc-graphics" data-bind="graphics" hidden>
@@ -118,8 +124,10 @@ app.innerHTML = `
 const $ = <T extends Element = HTMLElement>(sel: string) => app.querySelector<T>(sel)!;
 const $$ = <T extends Element = HTMLElement>(sel: string) => [...app.querySelectorAll<T>(sel)];
 
-let category: Category = 'business';
-let config: SceneConfig = DEFAULT_CONFIGS.business;
+/** ?scene=party opens a live scene directly (links, tests, captures). */
+const sceneParam = new URLSearchParams(location.search).get('scene') as Category | null;
+let category: Category = sceneParam && LIVE_CATEGORIES.includes(sceneParam) ? sceneParam : 'business';
+let config: SceneConfig = DEFAULT_CONFIGS[category];
 let mode: Mode = 'host';
 const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 let motionOn = !motionQuery.matches;
@@ -201,6 +209,9 @@ function renderStatic() {
   $('[data-bind="when"]').textContent = ev.when;
   $('[data-bind="where"]').textContent = ev.where;
   $('[data-action="prepare"]').textContent = HOST_ACTION[category];
+  const words = PRESET_LEGEND[category];
+  $('[data-bind="preset-legend"]').textContent = words.legend;
+  $('[data-bind="host-note"]').textContent = `Changing the ${words.noun} resets the preview. Nothing is sent to guests from this page.`;
 
   const presets = $('[data-bind="presets"]');
   presets.replaceChildren(
@@ -210,7 +221,28 @@ function renderStatic() {
       b.textContent = p.label;
       b.dataset.preset = presetOf(p.config);
       b.addEventListener('click', () => {
-        config = p.config;
+        // Party keeps the chosen song when the label changes.
+        config = config.category === 'party' && p.config.category === 'party' ? { ...p.config, songId: config.songId } : p.config;
+        hostPrepared = false;
+        controller?.setConfig(config);
+        syncPresets();
+      });
+      return b;
+    }),
+  );
+
+  // Party: finite song choice (demo fixtures) shown in HTML; the label art stays decorative.
+  const songsField = $('[data-bind="songs-field"]');
+  songsField.hidden = category !== 'party';
+  $('[data-bind="songs"]').replaceChildren(
+    ...SONGS.map((song) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = song.title;
+      b.dataset.song = song.id;
+      b.addEventListener('click', () => {
+        if (config.category !== 'party') return;
+        config = { ...config, songId: song.id };
         hostPrepared = false;
         controller?.setConfig(config);
         syncPresets();
@@ -254,6 +286,11 @@ function renderStatic() {
 function syncPresets() {
   const current = presetOf(config);
   $$<HTMLButtonElement>('[data-bind="presets"] button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === current)));
+  const songId = config.category === 'party' ? config.songId : undefined;
+  $$<HTMLButtonElement>('[data-bind="songs"] button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.song === songId)));
+  const track = $('[data-bind="track"]');
+  track.hidden = config.category !== 'party';
+  $('[data-bind="track-title"]').textContent = songTitle(songId);
 }
 
 function render(state: InvitationState) {
@@ -353,9 +390,12 @@ if (import.meta.env.DEV) {
     requests,
     events,
     setConfig(next: SceneConfig) {
+      const switched = next.category !== category;
       config = next;
+      category = next.category;
       controller?.setConfig(next);
-      syncPresets();
+      if (switched) renderStatic();
+      else syncPresets();
     },
   };
 }

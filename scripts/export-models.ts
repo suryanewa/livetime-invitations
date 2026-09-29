@@ -18,6 +18,7 @@ import { dedup, prune, quantize, weld } from '@gltf-transform/functions';
 import { buildKeycardGeometry } from '../models/keycard.ts';
 import { DIRECTIONS, type DirectionId, type MaterialLibrary } from '../src/render/materials.ts';
 import { createSimplifier, type Simplify } from '../models/simplify.ts';
+import { buildRecordPlayerGeometry } from '../models/recordPremium.ts';
 
 /** Direction exported to runtime GLB (the showcase's production look). */
 const EXPORT_DIRECTION: DirectionId = 'L2';
@@ -65,6 +66,7 @@ function exportLibrary(): MaterialLibrary {
 
 const SCENES: Record<string, () => Object3D> = {
   business: () => buildKeycardGeometry({ lib: exportLibrary(), simplify }, 'light'),
+  party: () => buildRecordPlayerGeometry({ lib: exportLibrary(), simplify }, 'coral'),
 };
 
 async function exportScene(name: string) {

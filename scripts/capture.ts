@@ -120,11 +120,31 @@ async function captureSkeleton() {
  * Playwright's fake clock steps requestAnimationFrame and performance.now exactly, so the
  * recordings show authored timing, not capture jitter.
  */
-async function captureBusiness() {
+/** Per-scene capture plan: presets (poster file keys), shared poses and clip lengths. */
+const SCENE_CAPTURE = {
+  business: {
+    presets: [['light', '{ category: "business", template: "light" }'], ['dark', '{ category: "business", template: "dark" }']],
+    sharedDeclined: false,
+    clips: { host: 1.5, accept: 1.8, decline: 1.8, change: 2.4 },
+  },
+  party: {
+    presets: [['coral', '{ category: "party", songId: "sample-track-a", label: "coral" }'], ['cobalt', '{ category: "party", songId: "sample-track-a", label: "cobalt" }']],
+    // The closed lid hides the record, so both labels share one declined poster.
+    sharedDeclined: true,
+    clips: { host: 1.5, accept: 1.9, decline: 1.7, change: 2.6 },
+  },
+} as const;
+
+/**
+ * Scene evidence: posters (runtime assets), review stills, the collection thumbnail and
+ * 60 fps recordings driven by a virtual clock, so recordings show authored timing.
+ */
+async function captureScene(category: keyof typeof SCENE_CAPTURE) {
+  const plan = SCENE_CAPTURE[category];
   const { execFileSync } = await import('node:child_process');
   await mkdir(outDir, { recursive: true });
   // Stage posters outside the watched tree; writing into assets/ mid-run makes Vite reload.
-  const posterDir = join(import.meta.dirname, '..', 'assets', 'scenes', 'business', 'posters');
+  const posterDir = join(import.meta.dirname, '..', 'assets', 'scenes', category, 'posters');
   const stagedPosters = join(outDir, 'posters');
   await mkdir(stagedPosters, { recursive: true });
   const browser = await launch();
@@ -151,13 +171,16 @@ async function captureBusiness() {
   };
   const still = (size: number, dpr: number, type = 'image/png', q?: number) =>
     call<string | null>('(s, a) => s.controller.captureStill(a[0], a[1], a[2], a[3])', size, dpr, type, q);
+  const setPreset = (literal: string) => call(`(s) => s.setConfig(${literal})`);
 
+  await setPreset(plan.presets[0][1]);
   await waitReady();
 
-  // Posters + review stills for both templates (reduced motion snaps to exact canonical poses).
-  for (const template of ['light', 'dark'] as const) {
+  // Posters + review stills for every preset (reduced motion snaps to exact canonical poses).
+  for (const [key, literal] of plan.presets) {
     await reset();
-    await call('(s, a) => s.setConfig({ category: "business", template: a[0] })', template);
+    await setPreset(literal);
+    await waitReady();
     await call('(s) => s.controller.setReducedMotion(true)');
     await tick(100);
     const poses: [string, string][] = [
@@ -170,16 +193,21 @@ async function captureBusiness() {
       await call(action);
       await tick(400);
       const poster = await still(720, 1, 'image/webp', 0.86);
-      await saveDataUrl(join(stagedPosters, `${template}-${pose}.webp`), poster!);
+      const file = plan.sharedDeclined && pose === 'declined' ? 'shared-declined' : `${key}-${pose}`;
+      await saveDataUrl(join(stagedPosters, `${file}.webp`), poster!);
       if (pose !== 'host-ready') {
         const review = await still(540, 2);
-        await saveDataUrl(join(outDir, `capture-${template}-${pose}.png`), review!);
+        await saveDataUrl(join(outDir, `capture-${key}-${pose}.png`), review!);
+      }
+      if (pose === 'guest-ready' && key === plan.presets[0][0]) {
+        const thumb = await still(192, 1, 'image/webp', 0.86);
+        await saveDataUrl(join(outDir, 'thumb.webp'), thumb!);
       }
     }
   }
 
-  // Recordings at 60 fps (light template, motion on).
-  await call('(s) => s.setConfig({ category: "business", template: "light" })');
+  // Recordings at 60 fps (first preset, motion on).
+  await setPreset(plan.presets[0][1]);
   const record = async (name: string, setup: string, action: string, seconds: number, mid?: [number, string]) => {
     await reset();
     await call('(s) => s.controller.setReducedMotion(false)');
@@ -199,15 +227,17 @@ async function captureBusiness() {
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '60', '-i', join(framesDir, 'f%04d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', mp4]);
     console.log('recording', mp4);
   };
-  await record('host', '(s) => { s.controller.setMode("host"); s.controller.resetVisual(); }', '(s) => s.controller.prepareHost()', 1.5);
-  await record('accept', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', 1.8);
-  await record('decline', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("decline")', 1.8);
-  await record('change', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', 2.4, [0.5, '(s) => s.controller.chooseResponse("decline")']);
+  await record('host', '(s) => { s.controller.setMode("host"); s.controller.resetVisual(); }', '(s) => s.controller.prepareHost()', plan.clips.host);
+  await record('accept', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', plan.clips.accept);
+  await record('decline', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("decline")', plan.clips.decline);
+  await record('change', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', plan.clips.change, [0.5, '(s) => s.controller.chooseResponse("decline")']);
 
   await browser.close();
   const { cp } = await import('node:fs/promises');
   await mkdir(posterDir, { recursive: true });
   await cp(stagedPosters, posterDir, { recursive: true });
+  const thumbDir = join(import.meta.dirname, '..', 'assets', 'ui', 'collection');
+  await cp(join(outDir, 'thumb.webp'), join(thumbDir, `${category}.webp`));
   console.log('Saved to', outDir, 'and posters to', posterDir);
 }
 
@@ -363,7 +393,7 @@ else if (mode === 'lookdev') await captureLookdev();
 else if (mode === 'perf') await capturePerf();
 else if (mode === 'ui') await captureUi();
 else if (mode === 'thumbs') await captureThumbs();
-else if (mode === 'business') await captureBusiness();
+else if (mode === 'business' || mode === 'party') await captureScene(mode);
 else if (mode === 'skeleton') await captureSkeleton();
 else if (mode === 'motion') await captureMotion();
 else throw new Error(`Unknown capture mode ${mode}`);

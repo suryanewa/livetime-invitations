@@ -40,10 +40,25 @@ export const HOST_ACTION: Record<Category, string> = {
   business: 'Attach card',
 };
 
+/** Host preset group names and the reset note (the preset is a finite choice per scene). */
+export const PRESET_LEGEND: Record<Category, { legend: string; noun: string }> = {
+  party: { legend: 'Record label', noun: 'label' },
+  birthday: { legend: 'Frosting', noun: 'frosting' },
+  sports: { legend: 'Ball', noun: 'ball' },
+  dinner: { legend: 'Dish', noun: 'dish' },
+  business: { legend: 'Card template', noun: 'template' },
+};
+
+/** Demo song metadata (fixtures only; production supplies already-cleared metadata). */
 export const SONGS = [
   { id: 'sample-track-a', title: 'Sample track A' },
   { id: 'sample-track-b', title: 'Sample track B' },
 ];
+
+/** Missing or unknown song metadata never breaks the scene (Party sub-spec). */
+export function songTitle(songId: string | undefined): string {
+  return SONGS.find((s) => s.id === songId)?.title ?? 'Selected track';
+}
 
 export interface PresetOption {
   label: string;
@@ -107,4 +122,4 @@ export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | '
   },
 };
 
-export const LIVE_CATEGORIES: readonly Category[] = ['business'];
+export const LIVE_CATEGORIES: readonly Category[] = ['party', 'business'];

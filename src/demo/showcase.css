@@ -302,6 +302,21 @@ body {
   box-shadow: inset 0 0 0 1px var(--lt-text);
 }
 
+/* Party: the chosen song in HTML (the record label art is decorative). */
+.sc-track {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 12px 0 0;
+  font-size: 0.9375rem;
+  color: var(--lt-text);
+}
+
+.sc-track__k {
+  font-size: 0.8125rem;
+  color: var(--lt-text-2);
+}
+
 .sc-note {
   margin: 0;
   font-size: 0.8125rem;
