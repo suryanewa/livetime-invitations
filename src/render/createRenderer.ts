@@ -14,16 +14,28 @@ export type RendererResult =
   | { ok: true; renderer: WebGLRenderer }
   | { ok: false; reason: 'webgl-unavailable' | 'shader-failure' };
 
+let webgl2: boolean | undefined;
+
+/**
+ * Probes once per page: each probe creates (and drops) a throwaway WebGL2 context, which costs
+ * milliseconds on phones, and every scene load asks. resetWebGL2Probe() forces a fresh probe.
+ */
 export function hasWebGL2(): boolean {
+  if (webgl2 !== undefined) return webgl2;
   try {
     const probe = document.createElement('canvas');
     const gl = probe.getContext('webgl2');
-    const ok = !!gl;
+    webgl2 = !!gl;
     gl?.getExtension('WEBGL_lose_context')?.loseContext();
-    return ok;
   } catch {
-    return false;
+    webgl2 = false;
   }
+  return webgl2;
+}
+
+/** Forget the probe result ("Try 3D again" after a WebGL-unavailable fallback probes anew). */
+export function resetWebGL2Probe(): void {
+  webgl2 = undefined;
 }
 
 /**
