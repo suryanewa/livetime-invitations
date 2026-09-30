@@ -169,6 +169,22 @@ These lookdev numbers are a static ready pose. The budget is judged on the **liv
 
 Birthday's decline is the tightest: 2k triangles under budget. Smoother bin flaps (48 segments) had pushed it to 61.4k, so the flaps now use 40 segments.
 
+### Frame cadence (desktop only, `pnpm capture perf <scene>`)
+
+Ten alternating accept/decline cycles after one warm-up pair, 390×844 @3×, Normal tier (DPR 1.5), on a visible page. Frames are sampled only while a sequence plays. Raw samples are in `outputs/perf/frame-times-<scene>.json`.
+
+| Scene | Frames | p50 | p95 | p99 | Max | >50 ms | 4× CPU throttle (simulation): p95 / max / >50 ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Business | 1,000 | 16.7 ms | 16.7 | 16.8 | 16.8 | 0 | 16.7 / 16.8 / 0 |
+| Party | 1,000 | 16.7 | 16.8 | 16.8 | 16.8 | 0 | 16.7 / 50.0 / 0 |
+| Birthday | 921 | 16.7 | 16.7 | 16.8 | 16.8 | 0 | 16.7 / 16.8 / 0 |
+| Sports | 1,092 | 16.7 | 16.7 | 16.8 | 16.8 | 0 | 16.7 / 16.8 / 0 |
+| Dinner | 905 | 16.7 | 16.7 | 16.8 | 33.3 | 0 | 16.8 / 16.8 / 0 |
+
+- **Sports:** a first Sports run with two review agents rendering in parallel logged one 66.6 ms frame; the rerun on the quieter machine (above) had none.
+- **Targets (Master §9):** p95 ≤ 20 ms, p99 ≤ 34 ms, no application stall over 50 ms. Met on this desktop.
+- **Not phone evidence:** the M2 Pro is locked to 60 Hz and much faster than the reference phones. CPU throttling does not stress the GPU. The iPhone 17 Max session is still pending, and low-end iOS and Android remain unverified.
+
 ### Transfer and cold load
 
 | Asset | Raw | Gzip −9 |
