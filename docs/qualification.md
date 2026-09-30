@@ -115,8 +115,8 @@ All figures were measured on the authoring Mac (M2 Pro; Chrome 153, then 154 aft
 | Check | Result |
 | --- | --- |
 | Typecheck | Clean |
-| Unit tests (Vitest) | 109 / 109 pass (13 files). Added since checkpoint 3: Sports seam-frame and net far-layer guards, Dinner settle, continuity, blend-safety and framing (8 % clearance over the real open bin, ≥42 % fill) |
-| Browser tests (Playwright, system Chrome) | 50 / 51 pass. The failure is `dinner.spec.ts` "Graphics loss shows the shared declined Dinner poster": Dinner's posters had not yet been copied into `assets/` (fixed by the Dinner capture; re-run below) |
+| Unit tests (Vitest) | 134 / 134 pass (16 files) on the final tree. Added since checkpoint 3: Sports seam-frame, net far-layer, motion continuity after contact, airball read, blend safety and flat-floor staging; Dinner settle, continuity, exact cloche clearance, blend safety and framing (8 % clearance over the real open bin, ≥42 % fill); poster completeness; Party lining weave; WebGL2 probe caching |
+| Browser tests (Playwright, system Chrome) | 69 / 69 pass on the final tree. Suites: Business, Party, Birthday, Sports, Dinner, collection, gallery, accessibility, idle, and resilience (graphics loss and restore, failed downloads, touch cancel, rotation, large text, unknown song, Static releasing the stage, 30 re-creations). An earlier run had 50 / 51, failing only because Dinner's posters were not yet in `assets/` |
 | Real-time sequence length (live showcase, `pnpm capture timing`, median of 3) | Business host 1.21 / accept 1.51 / decline 1.51 s · Party 1.21 / 1.61 / 1.41 · Birthday 1.31 / 1.41 / 1.51 · Sports 1.21 / 1.71 / 1.61 · Dinner 1.21 / 1.51 / 1.51 (each about 10 ms over the authored length: one animation frame to detect the end) |
 
 ### Checkpoint 4 collection review (independent critical reviewers, pending Surya's confirmation)
