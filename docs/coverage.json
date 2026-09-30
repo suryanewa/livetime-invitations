@@ -3320,9 +3320,8 @@
    "requirement": "Review silhouette, material, timing, interface clarity and performance separately",
    "status": "partial",
    "evidence": "M2: docs/qualification.md:59-65 records a separate UI-finish review and an adversarial code review across 4 dimensions. The client's checkpoint 2/2b reviews of the look and the clips are in docs/time-log.md. Checkpoint 4: docs/qualification.md:122-142 now records the collection review. There were five separate lenses (cohesion; phone-scale legibility and tiers; motion; interface and accessibility; runtime quality), each finding went to a skeptic, and 59 findings were raised: 54 confirmed, 5 rejected. Fixes were verified before merge. The Business fixes merged in abcda75 cover each dimension:\n- silhouette: the scanner's ink foot;\n- material: the laminate glare (spec-revisions #18) and the status-window emission;\n- timing: the departure from rest;\n- interface clarity: the glyph size and the showcase shell batch;\n- performance: the live-peak table and draw-call headroom (qualification.md:164, :242).",
-   "note": "The review record is incomplete. The Business batch row at docs/qualification.md:139 is still a placeholder ('<!--BUSINESS-->'), and so is the Engine row (:140), whose fixes are not merged yet. The reviewers' sign-offs are pending Surya's confirmation (docs/spec-revisions.md #12). The review page belongs to the release package, which is not built yet. The performance review covers desktop only.",
+   "note": "Every dimension was reviewed separately and every batch's outcome is recorded (docs/qualification.md, 'Checkpoint 4 collection review': Business and Engine rows filled after both merges, abcda75 and 66bafde). Still partial for two reasons: performance was reviewed on desktop only, because the iPhone session has not happened yet; and the reviewers' sign-offs are pending Surya's confirmation (docs/spec-revisions.md #12, #18, #19). Pending: surya.",
    "pendingOn": [
-    "release",
     "surya"
    ]
   },
