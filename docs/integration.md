@@ -98,7 +98,7 @@ State for your UI comes from `getState()` / `onStateChange`: `response.intent`, 
 
 - **Resource states**: `poster` (still image) → `loading` → `ready` (live 3D) or `fallback` (poster or text). After 6 s without readiness `canRetryGraphics` becomes true: offer "Try 3D again" (`retryGraphics()`). Context loss falls back to the poster and responses keep working.
 - **Reduced motion**: sequences snap to their final pose; no simulation runs; the drag handle hides. `setReducedMotion(enabled)` applies live.
-- **Quality tiers**: High, Normal, Low (no shadow map or plaster relief, a small copy of the gobo, simplified materials), Static (poster only). The controller steps down on sustained slow frames; `setQualityTier` forces a tier (tooling).
+- **Quality tiers**: High, Normal, Low (no shadow map or plaster relief, a small copy of the gobo, simplified materials), Static (poster only; the WebGL stage and its context are released, and rebuilt if a tier above Static is chosen again). The controller steps down on sustained slow frames and never steps back up on its own; `setQualityTier` forces a tier (tooling).
 - **Render on demand**: the loop stops when nothing moves and pauses in hidden tabs; the visual clock resumes without skipping.
 
 ## Assets
@@ -109,4 +109,4 @@ Sources for every model, material and texture are listed in `docs/asset-manifest
 
 ## Lifecycle
 
-`dispose()` stops the loop, removes the canvas, frees scene and material resources and releases the WebGL context. Browser tests create and dispose the controller 30 times and check that one canvas and no extra contexts remain.
+`dispose()` stops the loop, removes the canvas, frees scene and material resources and releases the WebGL context, dropping every reference to the renderer. Browser tests create and dispose the controller 30 times and check that one canvas and no extra contexts remain. A heap check after repeated remounts, remounts during a load, context-loss retries and Static round trips found exactly one live WebGL context.
