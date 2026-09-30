@@ -42,3 +42,11 @@ Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm tes
 ## Boundaries
 
 No real RSVP provider, public deployment or native-app integration is included. Performance and phone coverage are recorded in the qualification record, including what is still unverified.
+
+## Reconciling with the project records
+
+The Vault notes are the owning records, and this checkout received only a read-only snapshot of them. So nothing here edits the Vault. When the notes are next reconciled on the Mac Mini, link these from the engagement note:
+- **Implementation:** this repository, `~/Developer/projects/livetime-invitations` (local git; nothing pushed).
+- **Creative masters and release packages:** `~/Creative/Livetime/invitation-interactions/`. `release-<date>/` holds the source archive, runtime assets, showcase build, evidence, docs and a SHA-256 manifest. `study/` holds the approved style-lock references.
+- **Spec changes to fold into the Master Specification and the sub-specs:** `docs/spec-revisions.md`.
+- **Qualification and coverage:** `docs/qualification.md` and `docs/coverage.md`.
