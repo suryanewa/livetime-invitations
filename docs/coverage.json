@@ -1,19 +1,15 @@
 {
  "audited": "2026-09-30 (checkpoint 4 close-out: every pending row re-verified after the fixes, captures and measurements, each upgrade checked by an independent skeptic)",
- "commit": "9866254",
+ "commit": "7908069",
  "rows": [
   {
    "key": "master-a",
    "section": "1 Purpose and scope",
    "requirement": "A recognizable family of five polished web-based 3D invitation experiences",
    "status": "partial",
-   "evidence": "src/demo/main.ts:29-35 (five scene modules registered); src/demo/fixtures.ts:126 (LIVE_CATEGORIES lists all five); tests/browser/collection.spec.ts:56 'every category plays host, accept and decline to its canonical pose' (spec read, not run); docs/style-reference.md:100 (one look owns all five scenes), :3 (L2 premium approved by Surya at checkpoint 2b), :28 (Party and Birthday approved at checkpoint 3), :61 (Sports signed off by a critical reviewer at checkpoint 4; scratchpad/sports-polish-r1.json verdict.signoff=true); scratchpad/dinner-polish-r1.json and dinner-polish-r2.json (Dinner verdict.signoff=false); unit suites for all five scenes pass (pnpm -s vitest run this audit: 93/93 without Dinner, Dinner 14/14 on the current working tree)",
-   "note": "Four scenes have a recorded sign-off: three from Surya, and Sports from a critical reviewer, which still needs Surya's confirmation (docs/spec-revisions.md:18, row 12). Dinner is still in model polish after two review rounds without sign-off. The collection also does not read as one family yet: Dinner has no posters, and the Sports and Dinner rail thumbnails are still Milestone 2 study renders (git log: 9c70bfe; open findings cohesion-dinner-posters-thumb and interface-dinner-rail-thumbnail-offstyle). Downgraded from met because 'polished' needs a recorded review for all five scenes.",
+   "evidence": "src/demo/main.ts:29-35 (five scene modules), src/demo/fixtures.ts:126 (LIVE_CATEGORIES lists all five); tests/browser/collection.spec.ts:78 'every category plays host, accept and decline to its canonical pose' (passes in a full 69/69 browser run this audit); all 36 posters and 5 rail thumbnails in assets/ are the final captures (eac6dc3, 147ac9c, d7703b4, 635a376; byte-identical to outputs/<scene>/posters and thumb.webp); poster-vs-live parity at HEAD for all 40 preset x pose stills: mean 0.90-1.24/255, equal to WebP q0.86 re-encoding loss; docs/style-reference.md:3, :28 (Surya approved L2, Party, Birthday), :63 (Sports signed off by a critical reviewer); docs/qualification.md:141 (Dinner orchestrator fixes; 'a separate unveiling review (food shelved) drove the last round'), :229-236 (decisions for Surya); Dinner unveiling review 2026-09-29 16:02: SIGNOFF no; its fixes (ccd9b06, 5677666, 5c79358) not re-reviewed; docs/spec-revisions.md #3, #12, #17; unit 134/134",
+   "note": "The collection now reads as one family in the final captures. Dinner posters and production Dinner and Sports thumbnails closed cohesion-dinner-posters-thumb and interface-dinner-rail-thumbnail-offstyle, and the Dinner model is final (food shelved, #17). 'Polished' still lacks a recorded review for all five scenes. Business, Party and Birthday are approved by Surya. Sports was signed off by a critical reviewer and awaits Surya (#12). Dinner has no sign-off: the unveiling review said no, and its fixes have not been re-reviewed. Dinner's low placement (#3) and plate finish also await Surya.",
    "pendingOn": [
-    "dinner-model",
-    "captures",
-    "cp4-fix:cohesion-dinner-posters-thumb",
-    "cp4-fix:interface-dinner-rail-thumbnail-offstyle",
     "surya"
    ]
   },
@@ -76,59 +72,45 @@
    "section": "1 Purpose and scope",
    "requirement": "Business/keycard family: host preparation, guest-ready, acceptance, rejection, final poses and static alternatives",
    "status": "met",
-   "evidence": "tests/business.test.ts:21,26 (canonical endpoints; pass); tests/browser/business.spec.ts:122 (graphics loss shows the light-accepted poster), :135 (saved response opens on its final pose); assets/scenes/business/posters/: 8 WebP (light/dark x 4 poses); src/demo/fixtures.ts:94-99 (text fallback)",
-   "note": "The posters date from 15b9675 (02:54). They predate the palm-cookie change in 24c4296 (13:04), so the final poster pass may refresh them.",
-   "pendingOn": [
-    "captures"
-   ]
+   "evidence": "tests/business.test.ts:27, :32 (canonical endpoints; 134/134 unit pass this audit); tests/browser/business.spec.ts:122 (graphics loss falls back to a poster), :274 (saved response opens on its final pose), both passing in 69/69 this audit; assets/scenes/business/posters: 8 WebP (light/dark x host-ready, guest-ready, accepted, declined) from 635a376, after the Business fix merge abcda75, byte-identical to outputs/business/posters; live-vs-poster parity at HEAD 1.14-1.24/255 mean (WebP loss only); src/demo/fixtures.ts:94-99 (text fallback)",
+   "note": "The posters were refreshed after the frond removal and the Business motion and legibility batch. The scan pose (#18) and the 1.14 s departure (#19) change only the guest motion and await Surya's confirmation. They leave the states and the stills unchanged.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
    "section": "1 Purpose and scope",
    "requirement": "Party/record family: host preparation, guest-ready, acceptance, rejection, final poses and static alternatives",
-   "status": "partial",
-   "evidence": "Sequences and poses: tests/party.test.ts:24,29 (pass; 109/109 unit tests pass at c8a0c5e this audit); tests/browser/party.spec.ts:68, :76, :123, :182 (spec read, not run). Static alternatives: assets/scenes/party/posters/ has 7 WebP, last changed in c791b35 (04:16). Two later commits change what the live scene renders. 067d1b1 (05:23) retuned mat_anodized, which Party uses for body_knob and tonearm_accent (models/recordPremium.ts:124, :303). 24c4296 (13:04) removed the palm-cookie frond that darkened Party's bottom frame edge by 17-19% (src/render/studio.ts; finding cohesion-gobo-edge-smudge). The only recorded poster-vs-live comparison (checkpoint-4 technical review, mean difference 1.0-1.25/255, quoted in the technical-dinner-no-posters evidence) was taken before 24c4296. src/demo/fixtures.ts:100-105 holds the text fallback.",
-   "note": "The sequences, final poses and poster wiring are done and tested. The poster images still show the frond streak and the old coral, which the live render no longer has, so the canvas-to-poster swap will not match until the posters are recaptured. pendingOn: captures (skeptic: The static-alternative evidence is out of date. The posters predate two changes to how the scene renders, and no match check has been run since the frond change. The auditor's own note says they must be refreshed, so this row is not complete yet.)",
-   "pendingOn": [
-    "captures"
-   ]
+   "status": "met",
+   "evidence": "tests/party.test.ts:24, :29 (canonical endpoints; pass); tests/browser/party.spec.ts:68, :76, :123 (cobalt label in 3D and in the poster), :182 (graphics loss shows the matching poster), all passing in 69/69 this audit; assets/scenes/party/posters: 7 WebP recaptured in eac6dc3 (09-30 15:19), after the Party finish merge ddc573b and the frond removal 24c4296, byte-identical to outputs/party/posters; live-vs-poster parity at HEAD 0.99-1.22/255 mean for all 8 label x pose stills; src/demo/fixtures.ts:100-105 (text fallback)",
+   "note": "The earlier gap is closed: the posters no longer predate the anodised retune and the frond removal. They were recaptured from the final scene and match the live render within WebP compression.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
    "section": "1 Purpose and scope",
    "requirement": "Birthday/cake family: host preparation, guest-ready, acceptance, rejection, final poses and static alternatives",
-   "status": "partial",
-   "evidence": "Sequences and poses: tests/birthday.test.ts:33 (pass this audit); tests/browser/birthday.spec.ts:38, 53, 98 (spec read, not run). Static alternatives: assets/scenes/birthday/posters/ has 7 WebP, last changed in c791b35 (04:16). 24c4296 (13:04) removed the cookie frond that darkened Birthday's bottom edge by 17-19% (cohesion-gobo-edge-smudge). 2d98f6f (13:00) changed the camera-fit inputs: src/scenes/birthday/index.ts now adds openBinFramePoints to framePoints. The claim that 'Birthday's frame is unchanged' appears only in the commit message; tests/birthday.test.ts has no framing test. src/demo/fixtures.ts:106-111 holds the text fallback.",
-   "note": "The sequences and poses are complete and tested. The posters predate the lighting fix and the change to the fit inputs, and nothing re-checks that they match the live frame or look. pendingOn: captures (skeptic: The poster evidence is out of date: the live studio lighting has changed since, and so have Birthday's framing inputs, with no framing lock test. The static alternatives are not shown to match the current render.)",
-   "pendingOn": [
-    "captures"
-   ]
+   "status": "met",
+   "evidence": "tests/birthday.test.ts:33 (canonical endpoints; pass), :171 (open bin and cake arc inside the motion bounds); tests/browser/birthday.spec.ts:38, :53, :65, :86, :98 (graphics loss shows the shared declined poster), all passing in 69/69 this audit; assets/scenes/birthday/posters: 7 WebP from d7703b4 (09-30 15:52), after the 40-segment bin flaps (d89b086) and the frame-fit change, byte-identical to outputs/birthday/posters; live-vs-poster parity at HEAD 1.09-1.15/255 mean for all 8 stills; docs/qualification.md:217 (52.1 %, accepted exception); src/demo/fixtures.ts:106-111 (text fallback)",
+   "note": "The posters now come from the final lighting and frame, and the live render at HEAD matches them within WebP encoding loss. Birthday's fill is still locked only by the checkpoint 3 measurement, not by a unit test. The posters are rendered through the same live camera fit.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
    "section": "1 Purpose and scope",
    "requirement": "Sports/basketball family: host preparation, guest-ready, acceptance, rejection, final poses and static alternatives",
-   "status": "partial",
-   "evidence": "Sequences and poses: tests/sports.test.ts:29 (pass); tests/browser/sports.spec.ts:36, 44, 83. Static alternative at HEAD is text only: src/demo/fixtures.ts:112-117 via describePose (src/core/controller.ts:215-218), because assets/scenes/sports/ holds only sports.glb and src/demo/posters.ts:15-16 returns null. Eight posters are staged in outputs/sports/posters/ (orange/cream x host-ready, guest-ready, accepted, declined; 20.4-21.1 KB; 08:06)",
-   "note": "The remaining gap is copying the staged posters into assets/scenes/sports/posters, possibly after a re-capture for the 13:04 cookie change. docs/asset-manifest.md:52 already lists those files under assets/, so the manifest runs ahead of the repository.",
-   "pendingOn": [
-    "captures"
-   ]
+   "status": "met",
+   "evidence": "tests/sports.test.ts:33 (canonical endpoints), :229 (declined ends well apart from guest-ready), :287 (fill 60-75 %); tests/browser/sports.spec.ts:36, :44, :83, :105, all passing in 69/69 this audit; assets/scenes/sports/posters: 8 WebP (orange/cream x 4 poses) from 147ac9c (09-30 15:45), after b3ff610 (wall pushed back); src/demo/posters.ts:15-17 now resolves them; tests/posters.test.ts passes (every preset x pose); live-vs-poster parity at HEAD 1.02-1.07/255 mean; src/demo/fixtures.ts:112-117 (text fallback)",
+   "note": "The staged posters now ship in assets/, so Static, loading and failure show the Sports poster instead of a sentence. The Sports sign-off by a critical reviewer awaits Surya's confirmation (#12). That confirmation is about the look, not these states.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
    "section": "1 Purpose and scope",
    "requirement": "Dinner/covered dish family: host preparation, guest-ready, acceptance, rejection, final poses and static alternatives",
-   "status": "partial",
-   "evidence": "Sequences and poses: tests/dinner.test.ts:33 (pass on the current working tree); tests/browser/dinner.spec.ts:36, 44, 55, 74. Static alternative is text only (src/demo/fixtures.ts:118-123): assets/scenes/dinner/ has no posters. tests/browser/dinner.spec.ts:84-93 expects a /shared-declined/ poster that cannot resolve yet (not run). Open findings: interface-dinner-posters-missing, cohesion-dinner-posters-thumb, technical-dinner-no-posters",
-   "note": "The Dinner model is still in polish (dinner.glb, dinnerPremium.ts and dinnerParts.ts are modified or untracked). Posters must be captured from the final model.",
-   "pendingOn": [
-    "dinner-model",
-    "captures",
-    "cp4-fix:interface-dinner-posters-missing",
-    "cp4-fix:cohesion-dinner-posters-thumb",
-    "cp4-fix:technical-dinner-no-posters"
-   ]
+   "status": "met",
+   "evidence": "tests/dinner.test.ts:33 (canonical endpoints; pass); tests/browser/dinner.spec.ts:36, :44, :55, :74, :84 ('Graphics loss shows the shared declined Dinner poster'), all passing in 69/69 this audit; assets/scenes/dinner/posters: 6 WebP (pasta/vegetables host-ready and accepted; shared guest-ready and declined) from d7703b4, after the last Dinner model change ccd9b06 and the bin flaps; tests/posters.test.ts passes; live-vs-poster parity at HEAD 0.90-0.99/255 mean for all 8 dish x pose stills; docs/asset-manifest.md:54; src/demo/fixtures.ts:118-123; docs/spec-revisions.md #13, #14, #17",
+   "note": "The Dinner model is final for this production. Surya shelved the food (#17), so the round-3 pasta and vegetables stay as frozen placeholders, and the posters were captured from that model. interface-dinner-posters-missing, cohesion-dinner-posters-thumb and technical-dinner-no-posters are closed. The acceptance and decline follow revisions #13 and #14, which await Surya's confirmation. They change how the beats play, not whether the states exist.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -143,13 +125,10 @@
    "key": "master-a",
    "section": "1 Purpose and scope",
    "requirement": "Shared loading, error, reset and response states",
-   "status": "partial",
-   "evidence": "src/core/types.ts:37,48; src/core/controller.ts:198-223 (poster or text), :237-339 (loading/ready/fallback), :264-270 (6 s canRetryGraphics), :662-667 (resetVisual); src/ui/guestControls.ts:71-80; tests/browser/business.spec.ts:122, 203; tests/browser/resilience.spec.ts:44 (asset failure), :55 (context restore). Defect at HEAD: src/demo/main.ts:321-324 shows 'Showing a still image. Your response still works.' in host mode, where there is no response, and on Dinner, where no image exists; 'Try 3D again' appears twice (main.ts:81, :117). Open finding interface-graphics-notice-copy, reproduced in scratchpad/cp4/skeptic-interface/fallback.mjs",
-   "note": "All the states exist and are tested. The graphics-notice copy is misleading in two cases, so the row is downgraded until the fix lands and Dinner has posters.",
-   "pendingOn": [
-    "cp4-fix:interface-graphics-notice-copy",
-    "captures"
-   ]
+   "status": "met",
+   "evidence": "src/core/controller.ts:226-249 (poster until the canvas has drawn; text only when there is no poster), :272-293 (fallback reasons; the 6 s LOAD_TIMEOUT_MS sets canRetryGraphics), :751 (resetVisual); src/demo/main.ts:349-358 (the notice names what the stage shows and who it is for), :83 and :120 ('Try 3D again' vs 'Restore 3D (dev)'), :418-423 (reset); src/ui/guestControls.ts:71-80; tests/browser/business.spec.ts:71, :122, :342; resilience.spec.ts:44, :55; a11y.spec.ts:138, all passing in 69/69 this audit; posters for all five scenes (tests/posters.test.ts)",
+   "note": "The graphics-notice fix is merged and verified (fe92043 via eae932b). Hosts see 'Presets and preview still work'. A missing or failed poster gives 'The 3D scene isn’t available right now'. The two retry buttons have distinct names. Every scene now has posters, so 'Showing a still image' is true wherever a poster is shown.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -174,8 +153,8 @@
    "section": "2 Specification map and precedence",
    "requirement": "Changes to a shared rule belong in the Master specification",
    "status": "partial",
-   "evidence": "docs/spec-revisions.md:3 (a register of the deviations 'that the Master should absorb at reconciliation'; the Vault copy is canonical and this checkout holds a read-only snapshot); shared-rule rows at :9 (framing), :10 and :22 (quality tiers), :11-12 (stage finish and colour), :15 (interruption cut), :21 (settle); docs/style-reference.md:24, :28; the Master Specification is still 'Version: 1.0' draft (Master Specification.md:13)",
-   "note": "Shared-rule changes are now collected in one register instead of being spread across scene docs. None has been folded into the Master yet: reconciliation happens in the Vault, and several rows still await Surya's confirmation.",
+   "evidence": "docs/spec-revisions.md:3 (deviations 'that the Master should absorb at reconciliation'; the Vault copy is canonical and this checkout holds a read-only snapshot); the register now has 19 rows; shared-rule rows #3 (:9 framing), #4 and #16 (:10, :22 quality tiers), #5 and #6 (:11-12 stage finish and colour), #9 (:15 interruption cut), #15 (:21 settle); README.md:46-52 (f65f567: on the next Vault reconciliation, fold docs/spec-revisions.md into the Master and sub-specs; nothing here edits the Vault); the Vault snapshot's Master Specification.md:13 still reads 'Version: 1.0' (status draft)",
+   "note": "Shared-rule changes are collected in one register, and the README now says where they go. None has been folded into the Master yet, because that happens in the Vault. Rows #3 (Dinner), #12-#14, #18 and #19 still await Surya. A trial release package from f65f567 exists (~/Creative/Livetime/invitation-interactions/release-2026-09-30, 16:51), but it predates the final coverage table, so 'release' stays pending.",
    "pendingOn": [
     "release",
     "surya"
@@ -185,27 +164,19 @@
    "key": "master-a",
    "section": "3 Product boundary: included",
    "requirement": "Responsive standalone showcase",
-   "status": "partial",
-   "evidence": "index.html + src/demo/main.ts; docs/qualification.md:57, 109 (no overflow and no target under 44x44 at 320, 390, 844x390, 200% zoom and 1440 for Business, Party and Birthday); outputs/ui/ (those three scenes only); checkpoint-4 interface sweep of all five scenes, scratchpad/cp4/interface/layout/report.json (132 cases at 320/390/768/1024/1440, landscape, 200% zoom and 150% text): no overflow except Dinner at 320 px with 150% text (scrollWidth 332); tests/browser/resilience.spec.ts:92 (rotation), :105 (150% text, Party only; not run)",
-   "note": "Confirmed open findings on the shell: interface-meta-nowrap-overflow (horizontal scroll at 320 px with 150% text), interface-landscape-header-overlap (with enlarged text in short landscape, the Host/Guest switch covers the 'Simulated saves' badge) and interface-rail-offscreen-on-phones. All checks are desktop Chrome emulation; no real-phone layout check is recorded. The shell has not changed since c1839e8 (05:59), so the 11:45 sweep applies to HEAD. Downgraded from met.",
-   "pendingOn": [
-    "cp4-fix:interface-meta-nowrap-overflow",
-    "cp4-fix:interface-landscape-header-overlap",
-    "cp4-fix:interface-rail-offscreen-on-phones",
-    "captures"
-   ]
+   "status": "met",
+   "evidence": "index.html, src/demo/main.ts and src/demo/showcase.css. fe92043 puts the short-landscape header in flow, wraps the meta items whole and scrolls the stage into view on phones. docs/qualification.md:135 (shell batch merged and verified: layout survey of 204 cases, no overflow, overlap or target under 44 px). outputs/ui/ has 50 captures: five scenes x 320, 390, 844x390, 200 % zoom and 1440, each in host and guest (09-30 15:22, after the shell merge), from scripts/capture.ts:305-341 with its overflow and 44 px checks. tests/browser/resilience.spec.ts:92 (rotation), :105 (150 % text at 320 and 390) and a11y.spec.ts:100 (phone rail reveal) pass in 69/69 this audit. Shell verifier logs (cp4 showcase-shell-verify fix-land.txt, fix-meta.txt): from 667x375 to 932x430 at 100-150 % text the Host/Guest switch no longer covers the badge, and at 320 px with 150 % text the meta line no longer scrolls sideways",
+   "note": "The three open shell findings are fixed and verified: interface-meta-nowrap-overflow, interface-landscape-header-overlap and interface-rail-offscreen-on-phones. All layout checks are desktop Chrome emulation. The real-phone check belongs to the iPhone 17 Max session, which the release-matrix row tracks.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
    "section": "3 Product boundary: included",
    "requirement": "Category selection",
-   "status": "partial",
-   "evidence": "src/demo/main.ts:258-289 (collection rail, all five live); tests/browser/party.spec.ts:54, 161; tests/browser/a11y.spec.ts:90. Defect at HEAD: main.ts:277-284 switches category with controller.setConfig only, so the response ledger and mock adapter survive the switch. After accepting one event, the next event shows 'Accepted', Accept pressed and the accepted pose (open finding interface-response-carries-across-events, reproduced in scratchpad/cp4/skeptic-interface/carry.mjs and carry-dinner.png; confirmed by reading HEAD). On phones the rail sits about 1,000 px below the fold, and the stage it changes is off-screen (interface-rail-offscreen-on-phones)",
-   "note": "Selection itself works and is tested. Carrying one invitation's saved answer into another event breaks the one-identity-per-controller rule (docs/integration.md:79-81). Downgraded from met.",
-   "pendingOn": [
-    "cp4-fix:interface-response-carries-across-events",
-    "cp4-fix:interface-rail-offscreen-on-phones"
-   ]
+   "status": "met",
+   "evidence": "src/demo/main.ts:269-307 (collection rail, all five live); :291-302 (a rail choice disposes and mounts a fresh controller and adapter with no response, and announces the event); :311-318 (revealStage scrolls the card in on phones); docs/integration.md:81 (one invitation identity per controller); tests/browser/collection.spec.ts:56 ('the previous answer never carries over'), :22 (30 switches keep one canvas), party.spec.ts:54, :161, a11y.spec.ts:90, :100, all passing in 69/69 this audit; shell verifier behaviour log: after accepting Sports, Dinner opens unselected with nothing stored, and 25 rail switches keep one canvas",
+   "note": "Both findings are fixed and verified. A category switch is now a new invitation, so no saved answer carries over. On phones the stage scrolls into view and the event is announced politely, while focus stays on the rail item.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -247,13 +218,10 @@
    "key": "master-a",
    "section": "3 Product boundary: included",
    "requirement": "Accessible HTML interface",
-   "status": "partial",
-   "evidence": "src/ui/guestControls.ts:35-47 (native buttons, aria-pressed, role=status aria-live=polite); src/core/controller.ts:119-126 (poster, fallback text and canvas are aria-hidden); tests/browser/a11y.spec.ts:42, 50, 73, 90, 100 and tests/browser/business.spec.ts:145 (keyboard). Open finding interface-meta-sr-concatenation: the aria-hidden separators at main.ts:59 make the event meta read 'Thu, Nov 12 · 6:30 PMHudson Yards, New YorkSample event' (scratchpad/cp4/interface/a11y.txt:15); duplicate 'Try 3D again' button names (interface-graphics-notice-copy)",
-   "note": "Keyboard access is verified. No VoiceOver or NVDA session is recorded, and this production cannot run one, so screen-reader behaviour stays unverified.",
-   "pendingOn": [
-    "cp4-fix:interface-meta-sr-concatenation",
-    "cp4-fix:interface-graphics-notice-copy"
-   ]
+   "status": "met",
+   "evidence": "src/ui/guestControls.ts:37-42 (native buttons, aria-pressed, role=status aria-live=polite), :63-80; src/core/controller.ts:143, :146, :150 (poster, fallback text and canvas are aria-hidden); src/demo/showcase.css:261-263 (meta separators read as ', ' through CSS alt text); src/demo/main.ts:83, :120 (distinct button names); tests/browser/a11y.spec.ts:42, :50, :73, :90, :100, :118 (aria snapshot '6:30 PM, Hudson Yards, New York, Sample event'), :138, :157, and business.spec.ts:284 (keyboard), all passing in 69/69 this audit",
+   "note": "interface-meta-sr-concatenation and interface-graphics-notice-copy are fixed, and accessibility-tree tests cover both. Real screen-reader sessions (VoiceOver on iOS, NVDA) cannot run here. They stay unverified under the separate §10 screen-reader row.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -268,13 +236,10 @@
    "key": "master-a",
    "section": "3 Product boundary: included",
    "requirement": "Custom optimized 3D models",
-   "status": "partial",
-   "evidence": "Business, Party, Birthday: docs/asset-manifest.md:38, 42, 45, 48; docs/qualification.md:115-121, 129-134. Sports: docs/asset-manifest.md:50 (516.3 KiB raw / 203.0 KiB gz, 15 nodes, 8 primitives; re-measured this audit at 528,676 B raw and 207,864 B gzip -9); docs/style-reference.md:71 (20.5k visible triangles, 8 draw calls; lookdev 35.9k / 18); scratchpad/sports-polish-r1.json (reviewer count 20,540 / 8). Dinner: the working-tree dinner.glb (843,004 B raw, 404,399 B gzip -9; HEAD is 113,860 B) is being replaced; the only counts are interim ones in scratchpad/dinner-polish-r2.json (lookdev 28,438 triangles / 20 draw calls)",
-   "note": "Sports is now measured and signed off. docs/style-reference.md:71 gives 223 KiB gz for sports.glb, but the manifest and the file both measure 203 KiB. Dinner's triangle, draw-call and transfer figures are not recorded in the docs.",
-   "pendingOn": [
-    "dinner-model",
-    "measurements"
-   ]
+   "status": "met",
+   "evidence": "I re-measured the GLB sizes this audit; they match docs/qualification.md:190-197 and docs/asset-manifest.md:38, :42, :45, :48, :50, :53 exactly. Raw / gzip -9: business 720.8 / 251.5 KiB, party 608.3 / 234.7, birthday 561.7 / 270.8, sports 516.3 / 203.0, dinner 841.3 / 405.4, bin 155.7 / 63.8. Live per-frame render-cost peaks are all within 60k triangles / 40 draw calls (qualification.md:162-168): Business 57.1k / 39, Birthday decline 58.0k / 34, Dinner decline 45.3k / 33. Cold load from the production build at 4 Mbps / 100 ms: 0.80-1.30 MB, render-ready in 2.19-3.22 s (:199-209). The models are code-authored builders exported through gltf-transform (asset-manifest.md:20-22). The Dinner model last changed in ccd9b06 and is committed",
+   "note": "Dinner's model is final (food shelved, #17) and is now measured. Business sits at 39 of 40 draw calls (qualification.md:242). docs/style-reference.md:73 still gives 223 KiB gzipped for sports.glb, but the file and the manifest measure 203.0 KiB.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -298,23 +263,19 @@
    "key": "master-a",
    "section": "3 Product boundary: included",
    "requirement": "Final-pose posters",
-   "status": "partial",
-   "evidence": "assets/scenes/business/posters (8), party/posters (7), birthday/posters (7); Sports: 8 staged in outputs/sports/posters/, none in assets; Dinner: none; docs/asset-manifest.md:15, 40, 43, 49, 52",
-   "note": "Sports posters still need to be copied into assets, and Dinner posters wait for the final model. The existing posters predate the 13:04 palm-cookie change (24c4296), so the final pass for all five scenes should re-capture them.",
-   "pendingOn": [
-    "captures",
-    "dinner-model"
-   ]
+   "status": "met",
+   "evidence": "36 WebP posters at 720²: assets/scenes/business/posters (8), party (7), birthday (7), sports (8), dinner (6). All are the final captures, byte-identical to outputs/<scene>/posters. tests/posters.test.ts ('every curated preset has a poster for every canonical pose') passes. Poster-vs-live parity at HEAD for all 40 preset x pose stills: mean 0.90-1.24/255, the same as re-encoding the live frame as WebP q0.86. docs/asset-manifest.md:15, :40, :43, :49, :52, :54",
+   "note": "All five scenes ship posters captured after the last change that affects rendering. The later commits (060d9ab procedural textures, the depth-less PMREM copy in 66bafde) leave the pixels unchanged, and the parity check at HEAD confirms it.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
    "section": "3 Product boundary: included",
    "requirement": "Editable source files",
    "status": "met",
-   "evidence": "docs/asset-manifest.md:18-22 (the parametric TypeScript builders in models/ are the editable masters); models/*.ts tracked in git, now including models/sportsParts.ts and sportsPremium.ts; scripts/package-release.ts:2-8, :43 (the release source/ is a git archive of HEAD)",
-   "note": "In the working tree, models/dinnerParts.ts is untracked and dinnerPremium.ts is modified while Dinner polish is in flight. They must be committed before release packaging; otherwise the archive carries HEAD's older, self-contained Dinner builder.",
+   "evidence": "docs/asset-manifest.md:18-22 (the parametric TypeScript builders in models/ are the editable masters); git ls-files models/ lists all 26 builders, including models/dinnerParts.ts and dinnerPremium.ts (committed; the last Dinner change is ccd9b06); scripts/package-release.ts:46-49 (source/ is a git archive of HEAD), :70-80 (masters/ copy and MASTERS.md note)",
+   "note": "The Dinner files that were in flight are committed, so an archive of HEAD carries the final builders. 'release' stays pending: a trial package from f65f567 exists, but the final package will be built after the docs are closed.",
    "pendingOn": [
-    "dinner-model",
     "release"
    ]
   },
@@ -322,12 +283,10 @@
    "key": "master-a",
    "section": "3 Product boundary: included",
    "requirement": "Provenance manifest",
-   "status": "partial",
-   "evidence": "docs/asset-manifest.md:24-59 covers Business, Party, Birthday, the bin, textures, the CSS finish, and now the Sports production model (:50), the leather ball shader (:51) and Sports posters (:52)",
-   "note": "Remaining gaps: no row for the Dinner production model (only 'covered dish blockouts, Study only' at :53). :52 lists files under assets/scenes/sports/posters that are not there yet. :41 still says the Sports and Dinner thumbnails come from study models, and :48 still says 'Dinner decline later'.",
+   "status": "met",
+   "evidence": "docs/asset-manifest.md:26-61 now covers the Dinner production model (:53), the Dinner posters (:54), the Sports model (:50), the ball shader (:51) and the Sports posters (:52; all 8 files are now in assets/scenes/sports/posters). It says the rail thumbnails come from each scene's production capture (:41); they are byte-identical to outputs/<scene>/thumb.webp. It lists the shared bin for the Birthday and Dinner declines (:48). The GLB sizes in the manifest match the files byte for byte (measured this audit)",
+   "note": "The earlier gaps are closed. The poster byte ranges are stale because they come from earlier captures: :43 gives 28.7-29.0 KB for Party, but the files are 25.0-26.3 KB (shared declined 15.3 KB), and :54 gives 13.2-16.9 KB for Dinner, but the files are 13.6-17.5 KB. :16 still dates the sizes 2026-09-29. Provenance, licences and masters are correct. The sizes should be refreshed before the final package.",
    "pendingOn": [
-    "dinner-model",
-    "captures",
     "release"
    ]
   },
@@ -353,14 +312,10 @@
    "key": "master-a",
    "section": "3 Product boundary: included",
    "requirement": "Adaptive rendering",
-   "status": "partial",
-   "evidence": "Tier logic: src/render/quality.ts:22-60; src/core/controller.ts:434-454 (a Static drop applies at once from Low), :460-465; Low keeps a 192² gobo (src/render/studio.ts:345-350; docs/spec-revisions.md row 16); tests/quality.test.ts:20, 26, 39 (pass); tests/browser/resilience.spec.ts:18 (Party reaches Static on the coral-accepted poster; spec read). Gaps: Master §9 requires 'Static: matching poster', but at HEAD `git ls-files assets/scenes/sports assets/scenes/dinner` lists only the GLBs. src/demo/posters.ts:15-17 therefore returns null, and Static for Sports and Dinner shows a sentence, not a poster. Sports posters sit only in outputs/sports/posters/, and docs/asset-manifest.md:52 wrongly lists them under assets/. The checkpoint-4 measurement lowsw.mjs recorded the first switch to Low blocking the main thread for 40.5-94 ms (technical-low-tier-sync-compile), which exceeds the 50 ms stall target. Static keeps about 21-24 MiB of GPU allocations (technical-static-keeps-gpu).",
-   "note": "The step-down logic is implemented and unit-tested. For 2 of 5 scenes the Static tier has no poster. The first tier drop to Low causes a stall, and it happens on exactly the devices that are already too slow. No real-device measurement exists. pendingOn: captures, dinner-model, measurements, cp4-fix:technical-low-tier-sync-compile, cp4-fix:technical-static-keeps-gpu (skeptic: The evidence proves the tier state machine, not the tiers the spec requires. Static has no matching poster for Sports and Dinner at HEAD, and two confirmed defects remain open in the adaptive path.)",
-   "pendingOn": [
-    "measurements",
-    "cp4-fix:technical-low-tier-sync-compile",
-    "cp4-fix:technical-static-keeps-gpu"
-   ]
+   "status": "exception",
+   "evidence": "src/render/quality.ts:10-45 (tier DPR, 25 / 34 ms thresholds, step-down); src/core/controller.ts:501-518 (Static applies at once from Low and releases the stage), :528-542 (a tier switch compiles with compileAsync before the resize and redraw), :776-795 (setQualityTier); src/render/studio.ts:352-354 (Low keeps a 192² gobo); tests/quality.test.ts (pass); tests/browser/resilience.spec.ts:18 (too slow on Low ends in Static on the coral-accepted poster with one request), :182 (Static releases the WebGL stage; leaving it rebuilds), :281 (the first switch to Low waits for no program link), :160 (30 re-creations: 0 renderers in Static, 1 afterwards), all passing in 69/69 this audit; posters exist for all five scenes, so Static shows a matching poster everywhere (tests/posters.test.ts; parity check this audit); docs/qualification.md:172-186 (desktop cadence for all five scenes at 1x and 4x throttle: p95 16.7-16.8 ms, no frame over 50 ms), :221-223 (Low brightness within 5-10 % of Normal); docs/spec-revisions.md #4 (Normal includes real-time soft shadows), #16 (Low keeps the gobo; lost cast shadows and sub-pixel net cords are Low limits)",
+   "note": "technical-low-tier-sync-compile and technical-static-keeps-gpu are fixed in the engine batch (66bafde, verified). The tier definitions differ from Master §9 as recorded in revisions #4 and #16. The cadence was measured shortly before the engine merge (15:54-16:05) and is desktop evidence only. Tier behaviour on a real device depends on the iPhone 17 Max session, which the release-matrix row tracks.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -375,12 +330,10 @@
    "key": "master-a",
    "section": "3 Product boundary: included",
    "requirement": "WebGL failure handling",
-   "status": "partial",
-   "evidence": "Paths: src/core/controller.ts:247-258 (no WebGL2 or Static falls back), :305-320 (shader failure), :362-383 (context loss with one restoration attempt). Tests, all spec read and not run: tests/browser/business.spec.ts:122, :189; resilience.spec.ts:44 (Birthday asset failure shows vanilla-accepted), :55 (context restored once); party.spec.ts:182; birthday.spec.ts:98. Gaps: Master §9 says 'show a poster immediately' and, on context loss, 'current-intent poster'. HEAD has no poster files for Sports or Dinner (git ls-files lists only sports.glb and dinner.glb; src/demo/posters.ts:15-17 returns null). Both scenes therefore fall back to a sentence, while the notice at src/demo/main.ts:321-324 still says 'Showing a still image' (interface-graphics-notice-copy). tests/browser/dinner.spec.ts:92 expects a shared-declined Dinner poster that does not exist at HEAD. Open findings: technical-restore-warnings (about 38 WebGL warnings on restore) and technical-renderer-js-leak (one WebGLRenderer is retained per loss-plus-retry teardown).",
-   "note": "Detection, fallback and working responses are implemented and tested for Business, Party and Birthday. Sports and Dinner show text instead of a poster, the notice copy is wrong for them, and the Dinner browser test would fail at HEAD. pendingOn: captures, dinner-model, cp4-fix:interface-graphics-notice-copy, cp4-fix:technical-restore-warnings, cp4-fix:technical-renderer-js-leak (skeptic: The row claims shared failure handling. For 2 of the 5 scenes at HEAD the spec-required poster fallback is missing (Sports as well as Dinner, which the auditor's note left out), and a cited browser test cannot pass for Dinner.)",
-   "pendingOn": [
-    "cp4-fix:technical-restore-warnings"
-   ]
+   "status": "met",
+   "evidence": "src/core/controller.ts:272-285 (no WebGL2, Static and a lost context all fall back), :334-359 (shader failure), :401-450 (context loss disposes the stage while lost; one restoration attempt), :767-773 (retry re-probes WebGL2). Tests: business.spec.ts:122, :328; resilience.spec.ts:44, :55, :160, :200 (loss, restore, a second loss and 'Try 3D again' log no warnings); party.spec.ts:182; birthday.spec.ts:98; dinner.spec.ts:84; a11y.spec.ts:138. All pass in 69/69 this audit. docs/integration.md:112 records a heap check that found exactly one live WebGL context after remounts, loss retries and Static round trips",
+   "note": "All the earlier gaps are closed. Every scene now falls back to its current-intent poster, and the notice copy is right for both images and text. The restore warnings are gone, and teardown drops every renderer reference (66bafde, verified; plus the shadow-proxy material fix 29ede57).",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -396,8 +349,8 @@
    "section": "3 Product boundary: included",
    "requirement": "Touch support",
    "status": "unverified",
-   "evidence": "Pointer Events with pointercancel and lostpointercapture handling in src/core/controller.ts:541-592; tests/browser/resilience.spec.ts:75 (synthetic touch-type pointerdown/move/cancel on the grab target in desktop Chrome: no request, the scan completes; spec read, not run); resilience.spec.ts:92 (viewport rotation emulation)",
-   "note": "No real touch-screen session is recorded. The iPhone 17 Max session is still open (docs/qualification.md:88, :153), and synthetic events do not stand in for real touch.",
+   "evidence": "src/core/controller.ts:630-681 (Pointer Events with pointer capture, pointercancel and lostpointercapture handling); src/ui/shell.css:178, :197 (touch-action); tests/browser/resilience.spec.ts:75 (synthetic touch pointerdown/move/cancel on the grab target: no request, the scan completes), :92 (viewport rotation), sports.spec.ts:57, all passing in 69/69 in desktop Chrome this audit; docs/qualification.md:228 (the iPhone 17 Max session, including touch, is still open)",
+   "note": "Touch handling is implemented and tested with synthetic touch events in desktop Chrome. No real touch-screen session is recorded. That check needs Surya's iPhone session, and synthetic events cannot replace it.",
    "pendingOn": [
     "surya"
    ]
@@ -407,11 +360,10 @@
    "section": "3 Product boundary: included",
    "requirement": "Evidence from the release matrix",
    "status": "unverified",
-   "evidence": "docs/qualification.md:5-25 (only macOS Safari and Chrome available; iPhone 17 Max session pending; SE, 12, Pixel 6a, A53, Firefox and Edge unavailable), :85-88 and :125 (desktop-only frame cadence), :151-153 (still open)",
-   "note": "This is the recorded device gap. Firefox, Edge, Android, in-app browsers and low-end iOS cannot be checked by this production. Desktop cadence for all five scenes at 1x/4x is not yet measured either.",
+   "evidence": "docs/qualification.md:5-25 (device matrix: only the authoring Mac's Chrome and Safari and Surya's iPhone 17 Max are available); :101-111 (release environment: macOS 26.6, Chrome 154.0.8037.58, Safari 26.6 installed but not automated, no Firefox or Edge, previous major versions not installable); :172-186 (desktop frame cadence for all five scenes at 1x and 4x; outputs/perf/frame-times-<scene>.json); :199-209 (cold load, all five); :228 (still open)",
+   "note": "The desktop measurements are done, so 'measurements' is cleared. The matrix itself stays unverified. The iPhone 17 Max session (Surya) is still pending, and low-end iOS, Android, Firefox, Edge, in-app browsers and previous major versions cannot be checked on this host.",
    "pendingOn": [
-    "surya",
-    "measurements"
+    "surya"
    ]
   },
   {
@@ -500,12 +452,9 @@
    "section": "4 Shared experience: host",
    "requirement": "Review the object with event title/date supplied by the surrounding interface",
    "status": "met",
-   "evidence": "src/demo/main.ts:57-60, 209-213 (title, when and where from the EVENTS fixtures, outside the controller); src/demo/fixtures.ts:11-17; recorded interface review scratchpad/cp4/interface/a11y.txt:14-15 (h1 and meta present)",
-   "note": "Open findings interface-meta-sr-concatenation and interface-meta-nowrap-overflow affect how the meta line reads and wraps, not whether the details are supplied.",
-   "pendingOn": [
-    "cp4-fix:interface-meta-sr-concatenation",
-    "cp4-fix:interface-meta-nowrap-overflow"
-   ]
+   "evidence": "src/demo/main.ts:59-62 (h1 and meta outside the stage), :220-224 (title, date and place from the EVENTS fixtures); src/demo/fixtures.ts:11-17; src/demo/showcase.css:248-272 (meta items wrap whole; separators read as commas); tests/browser/a11y.spec.ts:118 (passes in 69/69); shell verifier meta survey (320-375 px, 100-200 % text, all five scenes: no clipping and no line starting with a separator)",
+   "note": "Both meta-line findings are fixed and verified: interface-meta-sr-concatenation and interface-meta-nowrap-overflow. The surrounding interface always supplied the event details.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -538,15 +487,10 @@
    "key": "master-a",
    "section": "4 Shared experience: guest",
    "requirement": "Read event details and see the ready object, or its poster if 3D is loading/unavailable",
-   "status": "partial",
-   "evidence": "src/core/controller.ts:198-223 (poster shown until the canvas has drawn; text fallback when there is no poster); tests/browser/business.spec.ts:122, 203; tests/browser/resilience.spec.ts:44 (vanilla-accepted poster after a GLB failure)",
-   "note": "Business, Party and Birthday show posters. Sports (posters staged but not in assets) and Dinner (no posters) fall back to a text description while loading, in Static and on failure.",
-   "pendingOn": [
-    "captures",
-    "dinner-model",
-    "cp4-fix:interface-dinner-posters-missing",
-    "cp4-fix:technical-dinner-no-posters"
-   ]
+   "status": "met",
+   "evidence": "src/core/controller.ts:226-249 (the poster shows until the canvas has drawn; text appears only if the poster fails); src/demo/posters.ts:15-17 resolves a poster for every preset and pose in all five scenes (tests/posters.test.ts, pass); tests/browser/business.spec.ts:122, resilience.spec.ts:44, :182, sports.spec.ts:83 and dinner.spec.ts:84 pass in 69/69 this audit; poster-vs-live parity at HEAD within WebP loss for all 40 stills",
+   "note": "Sports and Dinner now show posters while loading, in Static and on failure, which closes the Dinner poster findings (interface-dinner-posters-missing, technical-dinner-no-posters).",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -580,8 +524,8 @@
    "section": "4 Shared experience: guest",
    "requirement": "A Change response control remains available",
    "status": "met",
-   "evidence": "src/ui/guestControls.ts:63-66 (both answers stay enabled after a choice; only aria-pressed changes); tests/browser/business.spec.ts:50 (Decline while saving issues a newer request); tests/browser/sports.spec.ts:44",
-   "note": "There is no separate control labelled 'Change response': the other answer button is the change control. No confirmation of this reading is recorded (no mention in docs/ or DESIGN.md).",
+   "evidence": "src/ui/guestControls.ts:63-66 (both answers stay enabled after a choice; only aria-pressed changes); tests/browser/business.spec.ts:50 (Decline during saving issues a newer request), sports.spec.ts:44, both passing in 69/69 this audit",
+   "note": "There is no separate control labelled 'Change response': the other answer button is the change control. No confirmation of this reading is recorded in docs/, DESIGN.md or the README.",
    "pendingOn": [
     "surya"
    ]
@@ -608,12 +552,10 @@
    "key": "master-a",
    "section": "4 Shared experience: guest",
    "requirement": "Text must not present the intent as stored before it is saved",
-   "status": "partial",
-   "evidence": "src/ui/guestControls.ts:71-77 ('Saving response…' until saved); docs/qualification.md:61 (saving and error states no longer look stored); DESIGN.md:221. Defect at HEAD: after a guest answers one event, switching category keeps the ledger (src/demo/main.ts:277-284), so the new event shows the status 'Accepted' and a pressed Accept for an answer never given or saved for it (open finding interface-response-carries-across-events; reproduced in scratchpad/cp4/skeptic-interface/carry.mjs)",
-   "note": "Within one invitation the rule holds. Across category switches the showcase presents another event's saved answer as stored. Downgraded from met.",
-   "pendingOn": [
-    "cp4-fix:interface-response-carries-across-events"
-   ]
+   "status": "met",
+   "evidence": "src/ui/guestControls.ts:71-80 (shows 'Saving response…' until saved, and 'Accepted' or 'Declined' only once saved); src/demo/main.ts:291-302 (each category is a new invitation with a fresh controller and adapter and no initial response); tests/browser/collection.spec.ts:56, business.spec.ts:50, :71, all passing in 69/69 this audit",
+   "note": "The carry-over finding (interface-response-carries-across-events) is fixed and verified. The status text now reports only a save that happened for the invitation on screen.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -647,10 +589,9 @@
    "section": "1 Purpose and scope",
    "requirement": "Craft character: precision, material clarity, restraint and playful industrial character (Apple, Nothing and Teenage Engineering as references), developed as Livetime's own",
    "status": "partial",
-   "evidence": "docs/style-reference.md:3 (L2 premium approved by Surya at checkpoint 2b), :28 (Party and Birthday approved at checkpoint 3), :61 (Sports signed off by a critical reviewer; scratchpad/sports-polish-r1.json verdict.signoff=true); scratchpad/dinner-polish-r1.json and dinner-polish-r2.json (Dinner not signed off: 'not yet at the premium bar')",
-   "note": "No row covers the §1 craft-reference sentence. Four scenes have a recorded sign-off (Sports still needs Surya's confirmation, docs/spec-revisions.md:18); Dinner is still in polish.",
+   "evidence": "docs/style-reference.md:3 (Surya approved L2 premium at checkpoint 2b), :28 (Party and Birthday approved at checkpoint 3), :63 (Sports signed off by a critical reviewer); Dinner unveiling review (2026-09-29 16:02): 'The materials pass', but SIGNOFF no because the unveiling was 'not yet a premium moment'; its fixes (ccd9b06, 5677666, 5c79358) not re-reviewed; docs/qualification.md:229-236 (decisions for Surya); docs/spec-revisions.md #12, #17",
+   "note": "The craft direction is locked and approved for the whole collection. Four scenes have a recorded sign-off; Sports still awaits Surya's confirmation (#12). Dinner's model is final (food shelved, #17), but Dinner has no sign-off after its last round.",
    "pendingOn": [
-    "dinner-model",
     "surya"
    ]
   },
@@ -686,9 +627,10 @@
    "section": "1 Purpose and scope",
    "requirement": "Commercial boundary: the spec does not authorise additional uncompensated work beyond the discounted $600 introduction",
    "status": "partial",
-   "evidence": "docs/spec-revisions.md:17 (row 11): Surya chose the full premium level, projected at about 18 h wall-clock against the 15-hour fee calculation. docs/spec-revisions.md:18 (row 12): Surya asked that the plan be carried to completion overnight. docs/time-log.md:35-38, 56: actuals stop at 04:09 (about 12 h), with a forecast of 'roughly 18 h'. By git timestamps, work ran from 16:20 on 2026-09-28 (time-log start) to c8a0c5e at 13:09 on 2026-09-29, about 20 h 49 m of wall-clock, and Dinner model work is still in progress (dinner.glb modified 13:35).",
-   "note": "The recorded exception covers the premium decision at a projected 18 h. Actual wall-clock already exceeds that by about 3 h and is still rising. The time log is about 9 h behind. Nothing records whether Surya accepts the overrun or how it is compensated. pendingOn: surya, release (skeptic: The exception evidence is out of date and no longer covers current effort. The recorded deviation is bounded by an 18 h projection that the commit history shows has been passed. Row 12 authorises finishing the work but says nothing about effort or compensation.)",
+   "evidence": "docs/spec-revisions.md:17 (#11: Surya chose full premium, projected at about 18 h wall-clock), :18 (#12: finish overnight with critical reviewers); docs/time-log.md:41 (the last row opens at 15:25 on 2026-09-29 with no end time), :43-46 (actuals to 04:09, about 12 h), :64 (forecast of roughly 18 h); the time log last changed in 9324ec8 (09-29 16:37), while commits continue to a660a1a (09-30 16:57). Working wall-clock from the log's start and commit times: 09-28 16:20 to 09-29 08:14, 11:31 to 16:50, and 09-30 15:16 to 16:57. That excludes the recorded sleep and the overnight stretch with no commits, and comes to at least about 23 h",
+   "note": "The recorded exception covers the premium decision at a projected 18 h. Actual effort already exceeds that by at least about 5 h, and the time log does not yet include the checkpoint 4 fixes, final captures or packaging. Nothing records whether Surya accepts the overrun or how it is compensated.",
    "pendingOn": [
+    "surya",
     "release"
    ]
   },
@@ -706,11 +648,9 @@
    "section": "5 Visual system: art direction",
    "requirement": "One recognizable collection of small tactile objects with intentional construction",
    "status": "partial",
-   "evidence": "docs/style-reference.md:1-5,100,107 (one locked L2 look, the perforation rule); spec-revisions.md #1 and style-reference.md:28 (Surya approved L2 at checkpoint 2b, and Party and Birthday at checkpoint 3); scratchpad/sports-polish-r1.json (verdict.signoff true; a reviewer sign-off, pending Surya under spec-revisions.md #12); scratchpad/dinner-polish-r2.json (verdict.signoff FALSE: 'Family identity: pass', but 'not yet at the premium bar', with a gunmetal cloche, a dashed rim line, 38 % framing and sparse vegetables); scratchpad/cp4-partial.json: cohesion-dinner-posters-thumb REAL/major (no Dinner posters, and the M2-era thumbnail assets/ui/collection/dinner.webp 'breaks collection parity'), cohesion-dinner-composition REAL (the dish sits in the lower third and reads as a small detail at phone scale); both are still in cp4-open-findings.txt",
-   "note": "The Master's full clause includes 'readable silhouette at phone scale'. No phone check is recorded, and the checkpoint 4 cohesion review found Dinner reads as a small detail on the phone showcase. One of the five collection members is unsigned. The cloche material was re-tuned after the round 2 review but has not been re-reviewed, and the dish model is changing right now (uncommitted dinnerParts.ts and dinner.glb). pendingOn: dinner-model, cp4-fix:cohesion-dinner-posters-thumb, captures, surya. (skeptic: 'met' rested on sign-offs, but the Dinner reviewer explicitly did not sign off, and a confirmed major cohesion finding about collection parity is still open. The evidence does not show the collection is complete and recognizable as one set.)",
+   "evidence": "docs/style-reference.md:1-5, :111 (one locked L2 look; the perforation rule); spec-revisions.md #1 and style-reference.md:28 (Surya approved L2, Party and Birthday); :63 and #12 (Sports reviewer sign-off, pending Surya); scratchpad/dinner-polish-r2.json ('Family identity: pass'); Dinner unveiling review ('The materials pass'; SIGNOFF no); all five posters and production rail thumbnails in assets/ (assets/ui/collection/*.webp, 192², byte-identical to outputs/<scene>/thumb.webp) close cohesion-dinner-posters-thumb; I reviewed a contact sheet of the five guest-ready posters and thumbnails this audit: one studio, gobo, palette and perforation row across all five; spec-revisions.md #3 (Dinner's lower-third placement, pending Surya)",
+   "note": "The collection-parity break is fixed: Dinner has final posters and a production thumbnail. Two gaps remain. Dinner has no reviewer sign-off after its final round, and its lower-third composition (cohesion-dinner-composition) is a recorded exception awaiting Surya. Silhouette at phone scale is covered by the next row.",
    "pendingOn": [
-    "dinner-model",
-    "captures",
     "surya"
    ]
   },
@@ -719,10 +659,10 @@
    "section": "5 Visual system: art direction",
    "requirement": "Readable silhouette at phone scale",
    "status": "unverified",
-   "evidence": "docs/style-reference.md:107 (every object carries at least one silhouette element at 3:1 or better against the stage), :182 (320 px sign-off experiment); docs/qualification.md:153 (legibility still open for the iPhone 17 Max session); a checkpoint 4 legibility review at 390 px in desktop Chrome is in progress (scratchpad/cp4/fresh-legibility/contrast-390.txt: raw per-object contrast, no verdict recorded)",
-   "note": "Needs the phone session, a device check this production cannot run itself. Desktop 390 px renders are a stand-in, not phone evidence. The Dinner dish is still in polish: scratchpad/dinner-polish-r2.json flagged the plate rim line and the cloche tone at phone scale.",
+   "evidence": "docs/style-reference.md:111 (every object carries a silhouette element at 3:1 or better), :38 (Business scanner ink foot bead gives the 3:1 edge, checkpoint 4), :80 (Dinner plate ink foot line; clearcoat softened against rim dashing); the checkpoint 4 legibility review ran at 390 / 328 px in desktop Chrome, and its confirmed findings are fixed in verified batches (Business status clipping and scanner silhouette, Sports decline equal to ready, Party lining moiré and reveal dashes); Dinner unveiling review: cream plate, dot row and ink foot line read at 328 px, with no dashed speculars; docs/qualification.md:228 (legibility at arm's length on the iPhone 17 Max still open)",
+   "note": "Desktop emulation at phone widths passes, but it only stands in for a phone. The Dinner model is final (food shelved), so the only missing check is Surya's phone session.",
    "pendingOn": [
-    "dinner-model"
+    "surya"
    ]
   },
   {
@@ -747,12 +687,10 @@
    "key": "master-a",
    "section": "5 Visual system: art direction",
    "requirement": "Contact shadows anchor objects",
-   "status": "partial",
-   "evidence": "src/render/contactShadow.ts:94-144 (two-layer shadow that grows and fades with height); per-object shadows that follow their object: models/keycard.ts:461-470, models/recordPlayer.ts:47-54, models/birthday.ts:88-94, models/sports.ts:130-137, models/dinner.ts:46-57 with src/scenes/dinner/index.ts:115-126 (dish spread widened to [1.45, 1.7]; the cloche has its own shadow beside the plate); docs/style-reference.md:160; docs/asset-manifest.md:13; Business, Party and Birthday approved (style-reference.md:3,28); Sports signed off (style-reference.md:61)",
-   "note": "The checkpoint 4 cohesion review measured almost no visible ground shadow in Dinner (cohesion-dinner-ground-shadow). The fix is in main (2d98f6f, 24c4296), but nothing records a re-measurement or review of the fixed Dinner shadow. Dinner's sign-off after the model polish will serve as that check.",
-   "pendingOn": [
-    "dinner-model"
-   ]
+   "status": "met",
+   "evidence": "src/render/contactShadow.ts:97-154 (two-layer shadow that tightens at contact and fades with height); per-object shadows that follow their object in models/keycard.ts, recordPlayer.ts, birthday.ts, sports.ts and dinner.ts, including the cloche's own shadow; the Dinner ground-shadow fix in main (2d98f6f, 24c4296), plus ccd9b06 (stronger cloche contact line just outside the lip); I inspected the final Dinner posters (d7703b4) this audit: a visible soft shadow under the plate at guest-ready and accepted, and a soft shadow beneath the lifted cloche at host-ready; rough measure: the darkest plaster-coloured floor pixels near the dish reach about 50 % of plaster luminance (Birthday: 60 %); style-reference.md:3, :28, :63 (other scenes approved or signed off)",
+   "note": "The cohesion-dinner-ground-shadow fix is in main, and the final captures show it. No reviewer has re-checked the Dinner shadow separately; its look is part of Dinner's pending sign-off.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -777,11 +715,10 @@
    "section": "5 Visual system: art direction",
    "requirement": "Objects fill 60–75% of stage width in the ready pose (Birthday, Dinner)",
    "status": "exception",
-   "evidence": "docs/spec-revisions.md #3 (Birthday 52 %, approved by Surya at checkpoint 3; Dinner 43.1 %, recorded at checkpoint 4 pending Surya's confirmation); docs/qualification.md:145 (Birthday 52.1 %); docs/style-reference.md:28,77; commit 2d98f6f (Dinner fill 43.1 % with the dish centred, 8.0 % top clearance); tests/dinner.test.ts:169 (fill at least 42 % while the open bin keeps 8 % clearance)",
-   "note": "Dinner's fill is now measured. Its low placement in the frame (cohesion-dinner-composition: centred horizontally, lower third vertically) also waits on Surya. The qualification framing table has no Dinner row yet, although style-reference.md:77 points to one, and the test comment still says 'near 45 %'.",
+   "evidence": "docs/spec-revisions.md #3 (:9): Birthday 52 %, approved by Surya at checkpoint 3; Dinner 43.1 % and its low placement, recorded at checkpoint 4 and pending Surya. docs/qualification.md:217 (Birthday 52.1 %), :219 (Dinner 43.1 %, geometric and unit-tested, with 8 % clearance over the real open bin). tests/dinner.test.ts:186 (fill at least 42 % while the open bin keeps 8 % clearance; passes). docs/style-reference.md:28, :81",
+   "note": "The qualification framing table now has its Dinner row, so the documentation gap is closed and 'release' is cleared. Dinner's fill value and its lower-third placement still await Surya. The comment at tests/dinner.test.ts:187 still says 'near 45 %' where the docs say 43-44 %; this is a comment only.",
    "pendingOn": [
-    "surya",
-    "release"
+    "surya"
    ]
   },
   {
@@ -798,10 +735,10 @@
    "section": "5 Visual system: art direction",
    "requirement": "Satin body surfaces, selective metal and coloured inserts",
    "status": "met",
-   "evidence": "docs/style-reference.md:30-38,75-76 (laminates, chrome, satin cloche, glazed plate); src/render/materials.ts:21 (LOCKED_DIRECTION L2), :296-355 (L2 surfaces; cloche :313-315, plate :330); docs/asset-manifest.md:10 (L2 roughness and clearcoat values); client approval of L2 (spec-revisions.md #1)",
-   "note": "The cloche material was re-tuned (its own environment at 1.1) after the Dinner round 2 review. The Dinner dish is not signed off yet.",
+   "evidence": "docs/style-reference.md:30-40 (L2 surfaces), :79-80 (satin cloche with its own environment at 1.1; cream glazed plate with a softened clearcoat); src/render/materials.ts:21 (LOCKED_DIRECTION L2), :313-315 (cloche and polished lip), :330 (plate); docs/asset-manifest.md:10; spec-revisions.md #1 (Surya approved L2); Dinner unveiling review (2026-09-29 16:02): 'The materials pass' (satin silver dome that never mirrors the room; coral knob matching the family's anodised knobs; cream plate, dot row and ink foot line read at 328 px); git log shows no Dinner material change since that review (only motion, contact-line and bin changes)",
+   "note": "Dinner's materials were reviewed after the cloche retune and passed. One choice is still open for Surya: a cream plate or a cobalt enamel band (docs/qualification.md:230).",
    "pendingOn": [
-    "dinner-model"
+    "surya"
    ]
   },
   {
@@ -809,10 +746,10 @@
    "section": "5 Visual system: art direction",
    "requirement": "One repeated micro-detail in a limited area, never degrading food recognition or screen legibility",
    "status": "met",
-   "evidence": "docs/style-reference.md:107 (one row of whole-dot perforations, only on manufactured supports, never on food), :47 (Party 25 dots), :64 (Sports 22 dots), :76 (Dinner plate rim wall); visible in outputs/business/capture-light-guest-ready.png, outputs/party/capture-coral-guest-ready.png, outputs/sports/capture-orange-guest-ready.png, outputs/lookdev/dinner-premium-ortho.png",
-   "note": "The Dinner reviewer saw a dashed specular line on the thin plate rim at phone DPR (scratchpad/dinner-polish-r2.json). The plate clearcoat was softened afterwards (style-reference.md:76), but nobody has re-reviewed it. The plate and food are still in polish.",
+   "evidence": "docs/style-reference.md:111 (one row of whole-dot perforations, only on manufactured supports, never on food), :49 (Party, 25 dots), :66 (Sports, 22 dots), :80 (Dinner, on the plate rim wall, clearcoat softened to 0.4/0.3 against rim aliasing). Final post-fix captures: outputs/business/capture-light-guest-ready.png, outputs/party/capture-coral-guest-ready.png, outputs/sports/capture-orange-guest-ready.png, outputs/dinner/capture-pasta-accepted.png (d7703b4/5c79358). A crop of the Dinner plate at capture resolution shows the dot row on the rim wall only, with no dots on the food and no dashed specular line on the far rim. The checkpoint 4 phone-scale legibility review (scratchpad cp4-review-result.json) covered all five scenes and raised no Dinner rim or perforation finding",
+   "note": "Resolved: the Dinner model is final. The food is frozen as placeholders by Surya's decision (spec-revisions #17), the plate is committed in 89d7c20, and the Dinner-rim re-review happened in the checkpoint 4 collection review. Still open: whether Dinner's plate stays cream or takes a cobalt enamel band is a decision for Surya (qualification.md:230), and it would change the surface that carries the dot row. The real-phone look is part of the iPhone session (qualification.md:228).",
    "pendingOn": [
-    "dinner-model"
+    "surya"
    ]
   },
   {
@@ -820,10 +757,10 @@
    "section": "5 Visual system: art direction",
    "requirement": "Colour distinguishes presets; status always has a text/icon equivalent",
    "status": "met",
-   "evidence": "Preset pairs in src/demo/fixtures.ts:69-90 (captures outputs/birthday/capture-vanilla-guest-ready.png vs capture-cocoa-guest-ready.png, outputs/sports/capture-orange-guest-ready.png vs capture-cream-guest-ready.png, outputs/business/capture-light-accepted.png vs capture-dark-accepted.png); src/ui/guestControls.ts:63-80 (status text with check, minus and alert icons); docs/style-reference.md:152,164 (scanner glyphs as well as colour; HTML stays authoritative); tests/browser/sports.spec.ts:44 (status text 'Accepted'/'Declined')",
-   "note": "Dinner's pasta and vegetables presets are part of the model polish in flight.",
+   "evidence": "Preset pairs in src/demo/fixtures.ts:69-90. Final captures: outputs/birthday/capture-vanilla-guest-ready.png vs capture-cocoa-guest-ready.png, outputs/sports/capture-orange-guest-ready.png vs capture-cream-guest-ready.png, outputs/business/capture-light-accepted.png vs capture-dark-accepted.png, outputs/dinner/capture-pasta-accepted.png vs capture-vegetables-accepted.png (18,485 pixels differ by more than 30/255; guest-ready is identical by design because the cloche hides the food). src/ui/guestControls.ts:63-80 (status text plus check/minus/alert icons); docs/style-reference.md:37 (Business status glyph and value difference, also under deuteranopia); tests/browser/sports.spec.ts:44 and business.spec.ts:135 pass in the final 69/69 browser run (qualification.md:119)",
+   "note": "Resolved: the Dinner presets are final as frozen placeholders (#17). Still pending Surya (qualification.md:232): whether the shelved food shows as placeholders or as an empty plate. With an empty plate, Dinner's two presets would no longer differ visually.",
    "pendingOn": [
-    "dinner-model"
+    "surya"
    ]
   },
   {
@@ -912,35 +849,29 @@
    "section": "5 Rendering consistency",
    "requirement": "Reference stills exported from the browser renderer, not only a DCC",
    "status": "met",
-   "evidence": "docs/asset-manifest.md:15,40,43,49 (posters generated with the shipping renderer via pnpm capture); src/core/controller.ts:718-725 (captureStill); src/render/stage.ts:153-164 (snapshot); scripts/capture.ts; outputs/lookdev/*.png; Sports posters staged at outputs/sports/posters/*.webp",
-   "note": "asset-manifest.md:52 already lists Sports posters under assets, but they are only staged in outputs and not copied in. Dinner has no posters. Both belong to the final capture pass.",
-   "pendingOn": [
-    "captures"
-   ]
+   "evidence": "All posters come from the shipping renderer through pnpm capture (docs/asset-manifest.md:15, 40, 43, 49, 52, 54). assets/scenes/*/posters holds 36 WebP files at 720² (Business 8, Party 7, Birthday 7, Sports 8, Dinner 6). The rail thumbnails come from each scene's production capture (asset-manifest.md:41; assets/ui/collection/*.webp, all five rendered in the L2 studio). Still capture: src/core/controller.ts:805-812 (captureStill) and src/render/stage.ts:174 (snapshot); scripts/capture.ts; outputs/lookdev/*.png. tests/posters.test.ts passes (every preset × pose has a poster; 134/134 unit tests at HEAD)",
+   "note": "Resolved: Sports posters were copied in (147ac9c), Dinner posters were captured (5c79358, d7703b4), and the thumbnails are production renders. The posters predate the engine merge (66bafde) and 060d9ab, which were reported as pixel-identical renders.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
    "section": "5 Rendering consistency",
    "requirement": "Bevels catch light; fix faceted silhouettes, intersecting parts, wrong pivots, hovering contacts, texture shimmer and scale before secondary effects",
    "status": "partial",
-   "evidence": "Geometry checks, all passing at HEAD: tests/business.test.ts:79, tests/party.test.ts:65,91,215,231, tests/birthday.test.ts:59,162, tests/sports.test.ts:70,92, tests/dinner.test.ts:57,121,152; shader seams anti-aliased with fwidth (src/render/ballMaterial.ts:4-25,70); Dinner plate clearcoat softened against rim aliasing (docs/style-reference.md:76); human review: Business, Party and Birthday approved (style-reference.md:3,28), Sports signed off at checkpoint 4 (style-reference.md:61)",
-   "note": "Better than the previous 'unverified': Sports is now signed off. Dinner is not (scratchpad/dinner-polish-r2.json flagged a rim line and the cloche tone at phone scale), and its polish is in flight. Phone-scale shimmer can only be judged in the phone session (docs/qualification.md:153), which this production cannot run.",
+   "evidence": "Geometry and contact checks, all passing at HEAD (134/134): tests/business.test.ts:85,274; tests/party.test.ts:65,91,215,231,269 (lid reveal groove readable on a phone); tests/lining.test.ts:68 (Party lining moiré removed); tests/birthday.test.ts:59,162; tests/sports.test.ts:74,96,353 (touchdowns and rests on flat floor); tests/dinner.test.ts:59,138,169 (exact cloche clearance; settle never sinks). Shader seams anti-aliased with fwidth (src/render/ballMaterial.ts). Dinner plate clearcoat softened (style-reference.md:80). Human review: Business, Party and Birthday approved by Surya (style-reference.md:3,28); Sports signed off by a critical reviewer (style-reference.md:63). The checkpoint 4 legibility review covered all five scenes at phone scale; its shimmer and contact findings were fixed and merged (Party finish ddc573b, Sports double shadow ba6e54d, Dinner ground shadow; qualification.md:133-142)",
+   "note": "Dinner has no recorded visual sign-off. The checkpoint 4 sign-offs await Surya's confirmation (spec-revisions #12), and Dinner's plate option, framing (#3) and food display (#17) are open decisions (qualification.md:229-236). The Sports net cords breaking into dashes at Low are a recorded Low-tier limit (spec-revisions #16). Phone-scale shimmer on a real device belongs to the iPhone session (qualification.md:228).",
    "pendingOn": [
-    "dinner-model"
+    "surya"
    ]
   },
   {
    "key": "master-a",
    "section": "5 Rendering consistency",
    "requirement": "No generic primitive assemblies substituted for finished models without visual approval",
-   "status": "partial",
-   "evidence": "docs/asset-manifest.md:22 (approval gate), :41 (Sports and Dinner rail thumbnails come from direction-L study models), :53 (those study models are blockouts); premium models approved for Business, Party and Birthday (style-reference.md:3,28); Sports premium model signed off by a critical reviewer (style-reference.md:61; scratchpad/sports-polish-r1.json), pending Surya's confirmation (spec-revisions.md #12); assets/ui/collection/sports.webp and dinner.webp last changed in 9c70bfe (Milestone 2); the production Sports thumbnail is staged at outputs/sports/thumb.webp",
-   "note": "All five scenes now ship premium models, but the Dinner dish is in polish and not signed off. The shipping collection rail still shows the Sports and Dinner study-model thumbnails (checkpoint 4 findings cohesion-dinner-posters-thumb and interface-dinner-rail-thumbnail-offstyle).",
+   "status": "met",
+   "evidence": "All five scenes ship premium builder models (asset-manifest.md:38, 42, 45, 50, 53); Dinner's is committed in 89d7c20 (dinner.glb 861,540 B). Primitive blockouts are study only (asset-manifest.md:55), and the approval gate is at :22. The rail thumbnails are now production captures (asset-manifest.md:41): assets/ui/collection/sports.webp (147ac9c) and dinner.webp (d7703b4) are L2 studio renders, checked by eye next to the other three. That resolves checkpoint 4 findings interface-dinner-rail-thumbnail-offstyle and cohesion-dinner-posters-thumb. Surya approved Business, Party and Birthday (style-reference.md:3,28). Sports was signed off by a critical reviewer (style-reference.md:63). The Dinner food stays as frozen round-3 models by Surya's decision (spec-revisions #17)",
+   "note": "No primitive assembly stands in for a finished model anywhere in the runtime. Still to be confirmed by Surya: the reviewer sign-offs for Sports and checkpoint 4 (#12), and the Dinner decisions (plate option, placeholders or empty plate; qualification.md:229-236).",
    "pendingOn": [
-    "dinner-model",
-    "captures",
-    "cp4-fix:cohesion-dinner-posters-thumb",
-    "cp4-fix:interface-dinner-rail-thumbnail-offstyle",
     "surya"
    ]
   },
@@ -957,15 +888,10 @@
    "key": "master-a",
    "section": "6 Motion: primary",
    "requirement": "Each sequence runs preparation, action, contact, settle, with its own timing per element (no single ease per shot)",
-   "status": "partial",
-   "evidence": "src/motion/curves.ts:3-7,59-67 (house eases per beat); src/scenes/business/sequences.ts:100-148, src/scenes/sports/sequences.ts:55-62,142-181, src/scenes/dinner/sequences.ts:76-207 (per-beat curves ALIGN, RISE, REVEAL, TRANSFER, FLAP_OPEN, FLAP_CLOSE, BIN_ENTER); 1 ms continuity tests per scene (tests/business.test.ts:50, party.test.ts:36, birthday.test.ts:42, sports.test.ts:37, dinner.test.ts:42); Dinner beat fixes checked by tests/dinner.test.ts:191-202",
-   "note": "Checkpoint 4 motion-review findings still open at HEAD: the Business card jerks off the pad from a dead stop (EASE.land from rest at business/sequences.ts:132,144); the Sports made ball stops dead in the rim and the airball stalls (the drop restarts from rest at sports/sequences.ts:157); land-ease joints meet at zero velocity; the Sports pass floats and the gather parks the ball in mid-air. The Dinner carry and reveal findings are fixed in main.",
-   "pendingOn": [
-    "cp4-fix:motion-business-departure-snap",
-    "cp4-fix:motion-sports-rim-hang",
-    "cp4-fix:motion-land-ease-from-rest",
-    "cp4-fix:motion-sports-ballistics-consistency"
-   ]
+   "status": "met",
+   "evidence": "src/motion/curves.ts:3-7 (per-beat house eases) and per-scene beat tracks: business/sequences.ts, sports/sequences.ts (one shared gravity; each beat hands its velocity on), dinner/sequences.ts. Checkpoint 4 motion findings fixed and verified before merge: motion-business-departure-snap (abcda75: the card leaves the pad from rest with EASE.lift from DEPART_AT 1.14; tests/business.test.ts:133,153); motion-sports-rim-hang and motion-sports-ballistics-consistency (ba6e54d; tests/sports.test.ts:142,156,174,187,201). 1 ms continuity tests per scene: business.test.ts:56, party.test.ts:36, birthday.test.ts:42, sports.test.ts:41, dinner.test.ts:42; Dinner continuity at dinner.test.ts:209,216. All 134 pass at HEAD",
+   "note": "motion-land-ease-from-rest is only partly addressed. The Business departure is fixed. The 'land' ease from rest in Party's stylus drop (party/sequences.ts:99) and Birthday's wick return (birthday/sequences.ts:85) is deferred as polish in approved scenes (qualification.md:146, 240). The Business host slot settle (business/sequences.ts:83) and the zero-velocity host joints in Business and Party also remain; they are small velocity steps not named in that deferral. Every element still has its own beat timing, and no shot uses one ease.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -981,22 +907,18 @@
    "section": "6 Motion: primary",
    "requirement": "Host sequences last 0.9–1.6 s",
    "status": "met",
-   "evidence": "Host durations: Business 1.2 (src/scenes/business/poses.ts:9), Party 1.2 (party/poses.ts:9), Birthday 1.3 (birthday/poses.ts:10), Sports 1.2 (sports/sequences.ts:12), Dinner 1.2 (dinner/sequences.ts:15); tests/business.test.ts:72 (asserts 0.9–1.6 s for Business); each scene's canonical-endpoint test ends at its DURATIONS value",
-   "note": "Real-time host lengths have not been measured. The timing mode exists (scripts/capture.ts:466-512), but outputs/perf/sequence-timing.json has not been produced yet.",
-   "pendingOn": [
-    "measurements"
-   ]
+   "evidence": "Authored host durations: Business 1.2 (src/scenes/business/poses.ts:9), Party 1.2 (party/poses.ts:9), Birthday 1.3 (birthday/poses.ts:10), Sports 1.2 (sports/sequences.ts:15), Dinner 1.2 (dinner/sequences.ts:16). tests/business.test.ts:78 asserts 0.9–1.6 s. Real-time lengths measured in the live showcase (outputs/perf/sequence-timing.json, median of 3; qualification.md:120): Business 1.213, Party 1.210, Birthday 1.313, Sports 1.212, Dinner 1.212 s",
+   "note": "Resolved: real-time lengths are measured for all five scenes. Each is about one animation frame over its authored value. Desktop Chrome; not a phone measurement.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
    "section": "6 Motion: primary",
    "requirement": "Guest outcomes last 1.2–1.8 s",
    "status": "met",
-   "evidence": "Accept/decline: Business 1.5/1.5, Party 1.6/1.4, Birthday 1.4/1.5, Sports 1.7/1.6, Dinner 1.5/1.5 (same files); real-time lengths measured at checkpoint 3, docs/qualification.md:108 (Business 1.53 s, Party 1.63 s, Birthday 1.43 s)",
-   "note": "Sports and Dinner real-time lengths are not measured yet (timing mode in scripts/capture.ts:466-512, no output yet).",
-   "pendingOn": [
-    "measurements"
-   ]
+   "evidence": "Authored accept/decline: Business 1.5/1.5, Party 1.6/1.4, Birthday 1.4/1.5, Sports 1.7/1.6, Dinner 1.5/1.5 (poses.ts / sequences.ts DURATIONS). Real-time (outputs/perf/sequence-timing.json; qualification.md:120): Business 1.510/1.517, Party 1.613/1.411, Birthday 1.412/1.514, Sports 1.713/1.613, Dinner 1.511/1.512 s",
+   "note": "Resolved: Sports and Dinner real-time lengths are now measured, and all ten outcomes fall within 1.41–1.71 s. Desktop Chrome.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -1039,11 +961,9 @@
    "section": "6 Motion: primary",
    "requirement": "Record rotates only within its bounded acceptance clip",
    "status": "met",
-   "evidence": "tests/party.test.ts:79 ('turns only inside the acceptance clip'); tests/browser/party.spec.ts:76 (no idle spin: at most 2 rAF calls after the pose)",
-   "note": "When a guest changes from accepting, the interruption blend turns the label back about 43° by the shortest path (motion-interrupt-blend-quality, polish). That is the blend back to ready, not idle spin.",
-   "pendingOn": [
-    "cp4-fix:motion-interrupt-blend-quality"
-   ]
+   "evidence": "tests/party.test.ts:79 (turns only inside the acceptance clip, monotonically, lands on the display angle; passes at HEAD); tests/browser/party.spec.ts:76 (no idle spin after the pose; passes in the final 69/69 run)",
+   "note": "The reset blend on an answer change still turns the label back about 43° by the shortest path. That is interruption-blend polish, deferred with a reason (qualification.md:145, 239), not rotation outside the clip or idle spin. The pending fix is closed as deferred.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -1203,12 +1123,9 @@
    "section": "6 Motion: interruption",
    "requirement": "Blend through the canonical ready pose over at most 150 ms, using already loaded assets",
    "status": "partial",
-   "evidence": "src/core/visualDirector.ts:11 (INTERRUPT_BLEND 0.15), :150-157 (the blend captures from/to around pose('guest-ready')), :190 (linear k), :143-148 (cut when the scene asks); docs/spec-revisions.md #9 (a 0 ms cut is recorded ONLY 'where a straight blend would pass objects through each other'); src/scenes/sports/index.ts:75-80 (cuts whenever the ball is airborne within 1.15 u of the rim axis); scratchpad/cp4-partial.json motion-sports-cut-midflight REAL (the skeptic swept the straight path back to BALL_AT.guest against the rim torus, board and net: clear for ≈0.39–0.78 s of the accept, yet interruptCut() is true); motion-interrupt-blend-quality REAL (settle() at visualDirector.ts:150 snaps the Business sway to 0 before the capture, and card_secondary is not in animatedNodes at src/scenes/business/index.ts:63; linear k gives velocity steps); tests/visual-director.test.ts:49,70; tests/dinner.test.ts:204; controller.ts:637-645 (no reload on a change)",
-   "note": "The blend itself meets the spec, and the Dinner and Birthday cuts fall inside #9 (motion-dinner-cut-early is fixed in main). But the Sports cut also fires mid-flight where a straight blend is clean. That is outside #9's recorded criterion, so part of the current behaviour is an unrecorded deviation. The Business sway snap is a 0 ms pop inside the blend. pendingOn: cp4-fix:motion-sports-cut-midflight, cp4-fix:motion-interrupt-blend-quality. (skeptic: 'exception' requires that the recorded deviation covers the behaviour. The confirmed mid-flight Sports cut goes beyond spec-revisions #9, so only part of the requirement is met or excepted.)",
-   "pendingOn": [
-    "cp4-fix:motion-interrupt-blend-quality",
-    "cp4-fix:motion-sports-cut-midflight"
-   ]
+   "evidence": "src/core/visualDirector.ts:11 (INTERRUPT_BLEND 0.15), :143-148 (cut when the scene asks), :149-157 (the blend captures from/to around pose('guest-ready')), :190 (linear k); controller.ts:726-734 (no reload on a change). Sports fix merged (ba6e54d): sportsInterruptCut (src/scenes/sports/index.ts:77-79) cuts only when the straight path to guest-ready comes within a ball radius plus margin of the rim, net, board or pole, or while the net is moving. tests/sports.test.ts:257 (blends throughout 0–0.75 s of the accept and the whole airball) and :269 (no blend passes through the hoop), which resolves motion-sports-cut-midflight. Dinner blends while the cloche is over the food (tests/dinner.test.ts:221). tests/visual-director.test.ts:49,70. Recorded deviation: docs/spec-revisions.md #9 (0 ms cut where a straight blend would pass objects through each other)",
+   "note": "The blend meets the spec, and the Birthday, Dinner and Sports-at-rim cuts fall under #9. Two behaviours are neither fixed nor covered by #9. (1) Business settle() (src/scenes/business/index.ts:132-137) still zeroes the card sway spring in one frame before the blend capture, a 0 ms pop of up to about 1.65°; card_secondary is not in animatedNodes (:68). motion-interrupt-blend-quality was deferred (qualification.md:145, 239), but that deferral names only the eased/cross-dissolve blend and the Party label, not this snap. (2) Sports also cuts while the net is still settling, up to 0.4 s after the ball leaves it, which #9's wording does not list. Both are polish-level. No further fix is pending.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -1242,11 +1159,9 @@
    "section": "6 Motion: interruption",
    "requirement": "Category or mode change never submits a response",
    "status": "met",
-   "evidence": "src/core/controller.ts:598-629 (setConfig and setMode never touch the ledger); tests/browser/sports.spec.ts:83, birthday.spec.ts:86 and dinner.spec.ts:74 (mode change plus preset change: 0 requests); tests/browser/party.spec.ts:123 (preset change: 0 requests)",
-   "note": "No browser test counts requests across a category switch. A related open finding, interface-response-carries-across-events, shows the showcase keeping the previous event's saved response across a category switch. That is not a submission, but its fix changes the same path.",
-   "pendingOn": [
-    "cp4-fix:interface-response-carries-across-events"
-   ]
+   "evidence": "src/core/controller.ts:687-718 (setConfig and setMode never touch the response ledger). A category switch in the showcase now disposes the controller and adapter and mounts a fresh invitation (src/demo/main.ts:291-302; merged eae932b). tests/browser/collection.spec.ts:56: accept on Sports, switch to Dinner, then both answers are unpressed, status is empty, the visual is guest-ready and the new adapter has stored null and intent null. Mode plus preset changes send 0 requests: tests/browser/sports.spec.ts:105, birthday.spec.ts:86, dinner.spec.ts:74, party.spec.ts:123. All pass in the final 69/69 run (qualification.md:119)",
+   "note": "Resolved: interface-response-carries-across-events is fixed and a browser test now covers a category switch.",
+   "pendingOn": []
   },
   {
    "key": "master-a",
@@ -1280,11 +1195,9 @@
    "section": "§7 State dimensions",
    "requirement": "Graphics failure cannot block a response",
    "status": "met",
-   "evidence": "tests/browser/business.spec.ts:122, party.spec.ts:182 and birthday.spec.ts:98 (graphics loss, the answer still saves); tests/browser/resilience.spec.ts:18 (Static tier, one request), :44 (failed model download, the answer saves), :55 (context restore); src/core/controller.ts:637-645 (chooseResponse calls responses.choose whatever the resource state)",
-   "note": "Browser specs were read, not re-run on HEAD. tests/browser/dinner.spec.ts:84 also expects a shared-declined Dinner poster, which is not in assets yet, so that spec will fail its poster check until the Dinner posters land.",
-   "pendingOn": [
-    "captures"
-   ]
+   "evidence": "Graphics loss, the answer still saves: tests/browser/business.spec.ts:122, party.spec.ts:182, birthday.spec.ts:98, dinner.spec.ts:84 (shared declined Dinner poster). tests/browser/resilience.spec.ts:18 (Static tier, one request), :44 (failed model download, the answer saves), :55 (context restore), :182 (Static releases the stage; poster and controls keep working). src/core/controller.ts:726-734 (chooseResponse calls responses.choose whatever the resource state). Final browser run 69/69 (qualification.md:119; test-results/.last-run.json passed)",
+   "note": "Resolved: Dinner posters are in assets/scenes/dinner/posters, and the Dinner graphics-loss spec that used to fail now passes.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -1461,12 +1374,10 @@
    "key": "master-b",
    "section": "§7 Public interface",
    "requirement": "Each production controller/adapter is bound to one invitation identity; changing identity requires disposal and fresh initialization",
-   "status": "partial",
-   "evidence": "Rule now documented: docs/integration.md:79-81 ('One invitation per controller': dispose() and create a new controller for a different invitation). The controller has no identity parameter or mutator (types.ts:23-34; controller.ts:595-745). Showcase gap: the collection rail (main.ts:277-284) switches to a category with a different event fixture (fixtures.ts:11-17 EVENTS) through controller.setConfig, keeping the same controller and MockResponseAdapter. Checkpoint-4 finding interface-response-carries-across-events (scratchpad cp4-partial.json, REAL/major, reproduced): accept on Sports, then tap Dinner, and 'Supper club' shows Accept pressed, 'Accepted' and the accepted pose",
-   "note": "The public API and docs satisfy the rule; the showcase's own rail breaks it. The fix (remount on category change plus a Playwright check) is in flight.",
-   "pendingOn": [
-    "cp4-fix:interface-response-carries-across-events"
-   ]
+   "status": "met",
+   "evidence": "Rule documented at docs/integration.md:79-81 ('One invitation per controller'). The controller has no identity mutator (types.ts; controller.ts:687-734). The showcase rail now follows the rule (eae932b): src/demo/main.ts:291-302 sets the new category and config, clears initialResponse and calls mount(), which disposes the controller and adapter (main.ts:174-176). tests/browser/collection.spec.ts:56 checks for a fresh adapter (stored null, intent null) and one canvas; passes in the final 69/69 run",
+   "note": "Resolved: interface-response-carries-across-events is fixed. The dev-only window.__showcase.setConfig hook (main.ts:446-452) still switches category on one controller for capture tooling. It is not part of the showcase UI or the production API.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -1590,11 +1501,9 @@
    "section": "§8 Asset contract",
    "requirement": "Y-up, normalized units, applied transforms, sane origins, named pivots; validate GLB import with the pinned runtime",
    "status": "met",
-   "evidence": "docs/asset-manifest.md:7-9 (Y-up, units, applied transforms, named pivots); every scene parses its GLB with the pinned three 0.186.1 GLTFLoader at runtime (src/scenes/*/index.ts); tests/browser/collection.spec.ts:56 loads and plays all five; required-node checks tests/sports.test.ts:137 and dinner.test.ts:121 (builder output, pass in this audit's run)",
-   "note": "There is no standalone glTF-validator step; import is validated by loading in the pinned runtime. HEAD's committed dinner.glb is still the 113,860-byte stand-in; the premium dinner.glb (843,004 bytes) exists only in the working tree and needs the same load check once committed.",
-   "pendingOn": [
-    "dinner-model"
-   ]
+   "evidence": "docs/asset-manifest.md:7-9 (Y-up, units, applied transforms, named pivots). three is pinned at 0.186.1 (package.json), and every scene parses its GLB with that GLTFLoader at runtime. The premium dinner.glb is committed (89d7c20; 861,540 B, matching asset-manifest.md:53). All five GLBs load and play host/accept/decline to canonical poses in tests/browser/collection.spec.ts:78, plus each scene's own spec (final 69/69 run). Required-node and contract checks at tests/sports.test.ts:300 and tests/dinner.test.ts:138 (pass at HEAD)",
+   "note": "Resolved: the premium Dinner GLB is committed and passes the runtime load check. There is no standalone glTF-validator step; import is validated by loading in the pinned runtime.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -1609,16 +1518,10 @@
    "key": "master-b",
    "section": "§8 Asset contract",
    "requirement": "WebP posters for guest-ready, accepted, declined for every visually distinct preset, same framing and background as the renderer",
-   "status": "partial",
-   "evidence": "In assets/: Business 8, Party 7, Birthday 7 WebP posters (assets/scenes/<cat>/posters/*.webp, 720², shared declined for Party and Birthday; asset-manifest.md:15, 40, 43, 49). Sports: 8 posters staged in outputs/sports/posters (20.4-21.1 KB each), not copied into assets/, although asset-manifest.md:52 lists them there. Dinner: none (no assets/scenes/dinner/posters). Parity: the checkpoint-4 technical review measured the committed posters against the live render at a mean difference of 1.0-1.25/255 (cp4-partial.json, technical-dinner-no-posters evidence), before 24c4296 changed the palm cookie",
-   "note": "Gap: Sports posters are not in the checkout and Dinner posters are not captured (model in flight). tests/browser/dinner.spec.ts:84 expects /shared-declined/, so it should fail until Dinner posters exist (read, not run). The 24c4296 cookie change (near frond removed; Party, Birthday and Dinner most affected) post-dates every committed and staged poster, so the final posters for all five need a fresh capture.",
-   "pendingOn": [
-    "captures",
-    "dinner-model",
-    "cp4-fix:interface-dinner-posters-missing",
-    "cp4-fix:cohesion-dinner-posters-thumb",
-    "cp4-fix:technical-dinner-no-posters"
-   ]
+   "status": "met",
+   "evidence": "assets/scenes/<cat>/posters: Business 8, Party 7 (shared declined), Birthday 7 (shared declined), Sports 8, Dinner 6 (shared guest-ready and declined, byte-identical across dishes because the cloche hides the food; ae8928f). All 36 are 720² WebP, generated by the shipping renderer via pnpm capture (asset-manifest.md:15, 40, 43, 49, 52, 54). tests/posters.test.ts: every curated preset has all four poses (passes). Parity spot check in this audit: poster vs the same scene's renderer capture, mean absolute difference 1.1–1.6/255 (Business, Party, Birthday, Sports, Dinner). tests/browser/dinner.spec.ts:84 now passes (69/69)",
+   "note": "Resolved: checkpoint 4 findings interface-dinner-posters-missing, cohesion-dinner-posters-thumb and technical-dinner-no-posters are closed by the final captures (147ac9c, d7703b4, 635a376, eac6dc3), all taken after the gobo-frond removal. Documentation nit: asset-manifest.md:43 still gives the old Party poster sizes (28.7–29.0 KB and 15.8 KB; actual 25.0–26.3 KB and 15.3 KB).",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -1669,9 +1572,9 @@
    "key": "master-b",
    "section": "§8 Asset contract",
    "requirement": "Keep model sources and high-resolution selected exports in a linked Creative directory; runtime assets in the checkout; specs stay in Vault with no code or logs",
-   "status": "partial",
-   "evidence": "docs/environment.md:8-9; ~/Creative/Livetime/invitation-interactions/ exists with study/ populated (2 folders); runtime assets are in assets/; the Vault spec folder holds only .md files",
-   "note": "Gap: ~/Creative/.../masters/ and exports/ are still empty. The masters are the code builders in models/ (asset-manifest.md:18-22). scripts/package-release.ts would write a release-<date> folder there (source archive, runtime, evidence), but none exists yet.",
+   "status": "met",
+   "evidence": "docs/environment.md:8-9 names ~/Creative/Livetime/invitation-interactions/. That folder now holds: masters/ (MASTERS.md plus livetime-invitations-f65f567.tar.gz source archive), exports/ (1080 px stills for all five scenes plus lookdev/), study/, and release-2026-09-30/ (MANIFEST.md, docs, evidence, runtime, showcase, source), all written 2026-09-30 16:51 by scripts/package-release.ts (commit 9866254). Runtime assets are in assets/. The Vault snapshot folder holds only .md files (8)",
+   "note": "A release package now exists, built from f65f567, which predates this coverage close-out (its docs/coverage.json is the interim table). 'release' stays pending as instructed until the final package is built from the closing tree.",
    "pendingOn": [
     "release"
    ]
@@ -1680,12 +1583,10 @@
    "key": "master-b",
    "section": "§8 Asset contract",
    "requirement": "Maintain provenance for every mesh, texture, font, environment and sound (creator, license, modifications, master, runtime derivative); original brand assets keep exact geometry",
-   "status": "partial",
-   "evidence": "docs/asset-manifest.md:24-59 covers Business, Party, Birthday, the bin, procedural textures, fonts (none shipped) and audio (none); the Sports production model and leather-ball shader now have rows (asset-manifest.md:50-51); no third-party brand assets (asset-manifest.md:59)",
-   "note": "Gaps: no row for the Dinner production model (models/dinnerPremium.ts, dinnerParts.ts, the Dinner rig), its GLB or its posters. asset-manifest.md:52 lists Sports posters under assets/ that are only staged in outputs/. The rail-thumbnail row (:41) still says Sports and Dinner come from study models. docs/environment.md:57 'pnpm models' omits sports and dinner, although scripts/export-models.ts:76-77 exports them.",
+   "status": "met",
+   "evidence": "docs/asset-manifest.md:24-61 lists creator, licence, modifications, master and runtime derivative for the studio environment, procedural textures, prints, all five production models with their rigs (Sports :50-51, Dinner :53 including models/dinner.ts and dinnerParts.ts), the shared bin (:48), shadow proxies, posters for all five (:40, 43, 49, 52, 54), production rail thumbnails (:41), fonts (none shipped) and audio (none). No third-party brand assets (:61). GLB sizes in the manifest match the committed files (e.g. dinner.glb 861,540 B = 841.3 KiB, 415,124 B gz = 405.4 KiB)",
+   "note": "Resolved: the Dinner model and poster rows exist, the Sports posters are in assets/, and the thumbnail row is updated. Stale documentation, not provenance gaps: asset-manifest.md:43 has the old Party poster sizes; docs/environment.md:57/59 still list pnpm models and pnpm capture without sports and dinner, and :43 says Chrome 153. 'release' is kept pending as instructed (the final package carries the manifest).",
    "pendingOn": [
-    "dinner-model",
-    "captures",
     "release"
    ]
   },
@@ -1694,8 +1595,8 @@
    "section": "§9 Budgets",
    "requirement": "Business milestone proves or revises the target budgets explicitly before other scenes expand",
    "status": "partial",
-   "evidence": "docs/qualification.md:37-95 (Milestone 2 transfer, cadence, geometry and memory, with the MSAA risk at :95); explicit Normal-tier revision in docs/style-reference.md:22-24 and docs/spec-revisions.md:10 (#4)",
-   "note": "Proven only on the desktop authoring Mac. The phone proof run on Surya's iPhone 17 Max is still pending (qualification.md:88, 153). Low-end iOS and Android reference devices are unavailable (qualification.md:5-25).",
+   "evidence": "docs/qualification.md:37-95 (Milestone 2 transfer, cadence, geometry and memory; MSAA risk at :95); explicit Normal-tier revision in docs/style-reference.md:22-24 and docs/spec-revisions.md #4. Desktop evidence now confirms the budgets hold for all five scenes: live render-cost peaks (qualification.md:162-170), frame cadence (:172-186), transfer and cold load (:188-209)",
+   "note": "Proven only on the desktop authoring Mac. The phone proof run on Surya's iPhone 17 Max is still pending (qualification.md:88, 186, 228). Low-end iOS and Android reference devices are unavailable (qualification.md:5-25).",
    "pendingOn": [
     "surya"
    ]
@@ -1705,10 +1606,10 @@
    "section": "§9 Budgets",
    "requirement": "UI feedback: visible selected state within 100 ms of input on reference devices",
    "status": "unverified",
-   "evidence": "The code path is synchronous: chooseResponse → ResponseState.issue → change hook → guestControls sets aria-pressed (controller.ts:637-645; responseState.ts:105-116; src/ui/guestControls.ts:63-66)",
-   "note": "No device measurement: reference devices are unavailable (qualification.md:5-25). Desktop risk found at checkpoint 4: the first automatic switch to Low blocks the main thread for 40-94 ms while Low programs link (technical-low-tier-sync-compile, cp4-partial.json). That threatens the 100 ms target right after a sequence.",
+   "evidence": "The code path is synchronous: chooseResponse → ResponseState.issue → change hook → guestControls sets aria-pressed (src/core/controller.ts:726-734; src/core/responseState.ts:105-116; src/ui/guestControls.ts:63-66). The desktop risk is fixed (66bafde): switchTier compiles the new tier's variants with compileAsync before the resize and redraw (controller.ts:528-545), so the first automatic drop to Low no longer blocks for 40–94 ms. tests/browser/resilience.spec.ts:281 asserts no blocking link wait on the first Low switch (passes, 69/69)",
+   "note": "Resolved: technical-low-tier-sync-compile. No device measurement exists; the reference devices are unavailable (qualification.md:5-25). The only device path is Surya's iPhone session.",
    "pendingOn": [
-    "cp4-fix:technical-low-tier-sync-compile"
+    "surya"
    ]
   },
   {
@@ -1716,11 +1617,9 @@
    "section": "§9 Budgets",
    "requirement": "Animation cadence: 60 fps target; at 60 Hz p95 ≤20 ms and p99 ≤34 ms during warmed active playback",
    "status": "unverified",
-   "evidence": "Desktop only: Business on the 10-cycle protocol, M2 Pro/Chrome 153, p95 16.7 ms and p99 16.8 ms over 1,004 frames (docs/qualification.md:123-125; raw samples in outputs/perf/frame-times.json). Checkpoint-4 technical review (cp4/technical/phaseA.json; desktop, not the 10-cycle protocol): all five scenes' live host, accept, change and replay flows ran at interval p95 16.7-16.8 ms, max 16.8 ms; 4× CPU-throttle decline p95 16.7-16.8 ms (throttle.json, simulation)",
-   "note": "Not phone evidence. The all-five 10-cycle run at 1× and 4× exists as tooling (scripts/capture.ts:360-426) but has not been run (outputs/perf holds only the Business file). The review's Dinner figures came from an intermediate premium model. The phone run on Surya's iPhone is pending; low-end devices are unavailable.",
+   "evidence": "Desktop only, all five scenes on the 10-cycle protocol (one warm-up pair, 390×844 @3×, Normal tier): p50 16.7, p95 16.7–16.8, p99 16.8 ms. Max 16.8 ms, except Dinner 33.3 ms (one frame). 4× CPU throttle (simulation): p95 16.7–16.8 ms. Raw samples in outputs/perf/frame-times-<scene>.json (905–1,092 frames each); qualification.md:172-186. Dinner was measured on the final committed model",
+   "note": "Resolved: the all-scene runs and the final Dinner model. Not phone evidence: the M2 Pro is locked to 60 Hz and much faster than the reference phones (qualification.md:186). The runs predate the engine merge (66bafde), which changes teardown, precompile and Static, not warmed playback. The JSON labels still say 'Chrome 153' though the host had auto-updated to 154 (qualification.md:106). The iPhone run is pending; low-end devices are unavailable.",
    "pendingOn": [
-    "measurements",
-    "dinner-model",
     "surya"
    ]
   },
@@ -1729,13 +1628,10 @@
    "section": "§9 Budgets",
    "requirement": "Stalls: no application-caused frame interval >50 ms in warmed acceptance runs",
    "status": "unverified",
-   "evidence": "Desktop Business 10-cycle run: 0 frames over 50 ms, max 16.8 ms (outputs/perf/frame-times.json over50ms 0; qualification.md:125). Checkpoint-4 review cp4/technical/phaseA.json: max interval 16.8 ms in every flow of all five scenes",
-   "note": "No device runs yet. Checkpoint 4 found two application-caused stalls outside the warmed runs: the first frame after 'ready' links the shadow depth program synchronously (459 ms on one Business cold launch; technical-first-frame-compile), and the first switch to Low blocks for 40-94 ms (technical-low-tier-sync-compile).",
+   "evidence": "Desktop, all five scenes: 0 intervals over 50 ms at 1× and at 4× CPU throttle (outputs/perf/frame-times-<scene>.json over50ms 0; Party at 4× peaks at exactly 50.0 ms; qualification.md:176-185). The two checkpoint 4 stalls outside warmed runs are fixed (66bafde). A warm frame before 'ready' builds the shadow depth program and uploads textures (controller.ts:363-370), and tests/browser/resilience.spec.ts:220 asserts no program link in the first ready frame in any scene. Tier switches compile asynchronously (controller.ts:528-545; resilience.spec.ts:281). Both pass (69/69)",
+   "note": "Resolved: the measurements and technical-first-frame-compile / technical-low-tier-sync-compile. Desktop is not device evidence. The iPhone session is pending; low-end devices are unavailable.",
    "pendingOn": [
-    "measurements",
-    "surya",
-    "cp4-fix:technical-first-frame-compile",
-    "cp4-fix:technical-low-tier-sync-compile"
+    "surya"
    ]
   },
   {
@@ -1743,22 +1639,18 @@
    "section": "§9 Budgets",
    "requirement": "Cold first scene ≤2.5 MiB total transfer (HTML, JS, decoder, shared assets, scene, posters)",
    "status": "met",
-   "evidence": "The default first scene is Business (main.ts:132). This audit's production build of HEAD (scratchpad m3-build, gzip -9 per file): initial JS 180,950 B (showcase 5.6 KB, three/stage chunks 99.4 + 67.5 KB, preload helper 8.5 KB) + Business chunks 30,383 B (scene, keycard rig, GLTFLoader, types) + CSS 4,737 B + business.glb 257,631 B gz (737,852 raw) + one poster 22,472 B + five rail thumbnails 19,326 B ≈ 0.49 MiB gz, or ≈ 0.95 MiB with the GLB served raw. docs/qualification.md:127-137 reaches the same conclusion",
-   "note": "This is an estimate from file sizes, not a measured network transfer; the throttled cold-load run (scripts/capture.ts:428-460) would record transferred bytes. No decoder is shipped.",
-   "pendingOn": [
-    "measurements"
-   ]
+   "evidence": "Measured cold loads from the final production build (pnpm build + preview; 4 Mbps/100 ms, cache disabled; bytes from Chrome loadingFinished events): outputs/network/cold-load.json. Business, the default first scene (src/demo/main.ts:137), transferred 1,006,911 B (0.96 MiB). The other scenes as first scene: 0.80–1.30 MB, all under 2.5 MiB (qualification.md:199-209). No decoder is shipped",
+   "note": "Resolved: a measured network transfer replaces the file-size estimate. vite preview serves .glb uncompressed, so these are worst-case figures.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§9 Budgets",
    "requirement": "Later scene ≤1 MiB additional compressed transfer per category",
    "status": "met",
-   "evidence": "gzip -9 of the current GLBs (this audit): party 240,508 B; birthday 277,275 + bin 62,891; sports 207,864 (premium, committed in 12d72a4); dinner 404,399 (in-flight premium, working tree; HEAD stand-in 45,838) + bin. Scene JS chunks are 3-25 KB gz in this audit's build; one poster is at most about 28 KB. The largest per-category total is Dinner with the bin at about 0.47 MiB gz, under 1 MiB",
-   "note": "Dinner must be re-measured once its premium model is committed.",
-   "pendingOn": [
-    "dinner-model"
-   ]
+   "evidence": "gzip -9 of the committed files (this audit): party.glb 240,378 B; birthday.glb 277,275 + disposal-bin.glb 65,345; sports.glb 207,864; dinner.glb 415,124 (final premium, 89d7c20) + bin 65,345. Dinner's scene chunks in the current dist/ are 3,073 + 14,505 + 1,253 + 122 B gz, and one poster is at most 17.5 KB. The largest per-category addition is Dinner at about 0.49 MiB compressed",
+   "note": "Resolved: Dinner is measured on its committed final model. Caveat: served uncompressed, Dinner's addition would be about 1.03 MiB, and docs/integration.md does not tell hosts to gzip .glb. The budget is stated as compressed transfer.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -1773,27 +1665,19 @@
    "key": "master-b",
    "section": "§9 Budgets",
    "requirement": "Visible geometry ≤60,000 triangles and ≤40 draw calls per scene at normal quality",
-   "status": "partial",
-   "evidence": "docs/qualification.md:113-121 (lookdev, ready pose): Business 53.5k/34, Party 44.7k/32, Birthday 35.1k/21 (plus about 8.4k and 5 calls for the bin). Checkpoint-4 technical review, live per-frame peaks including the shadow pass (cp4/technical/phaseA.json): Business 57,066 tris/39 calls, Party 45,584/34, Birthday 56,183/34 (decline), Sports 35,912/18, Dinner 44,050/32 (intermediate premium model)",
-   "note": "All within 60k/40, but Business peaks one call under the budget, and the recorded table uses lookdev figures that understate live cost and omit Sports and Dinner (technical-drawcall-headroom-docs). Dinner must be re-measured on the final model.",
-   "pendingOn": [
-    "dinner-model",
-    "measurements",
-    "cp4-fix:technical-drawcall-headroom-docs"
-   ]
+   "status": "met",
+   "evidence": "Live per-frame peaks across host, accept, decline and answer changes, both presets, including the shadow pass and everything on stage (qualification.md:160-170): Business 57.1k tris / 39 calls, Party 45.6k/34, Birthday 58.0k/34 (decline with the bin, after the 40-segment flaps in d89b086), Sports 35.9k/18, Dinner 44.7k–45.3k/32–33 (final model). Lookdev ready-pose table at :150-158",
+   "note": "Resolved: technical-drawcall-headroom-docs; the record now uses live peaks for all five scenes. Headroom is thin but inside budget: Business is one call under 40 (recorded at qualification.md:242) and Birthday 2k triangles under 60k. The main pass alone is far lower (Business 29.1k/24). docs/style-reference.md:84-90 still carries the older budget table.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§9 Budgets",
    "requirement": "Estimated decoded textures/render targets ≤48 MiB for active scene plus shared resources; report the calculation",
    "status": "partial",
-   "evidence": "docs/qualification.md:90-95 and 147-149: calculation shown for Business, Party and Birthday (about 35-40 MiB). Checkpoint-4 technical review allocation tally (cp4/technical/phaseE.json; textures + renderbuffers + buffers + drawing buffer at 534²): Normal 33.2-37.0 MiB in all five scenes, High 40.8-44.6 MiB (Business 47.9 MiB with both card prints, per technical-pmrem-depth-buffer)",
-   "note": "Sports and Dinner calculations are not in the qualification record. High leaves Business at the edge of the budget, partly because a 3 MiB PMREM depth buffer is kept needlessly. The recorded risk remains: at the 2.5 MP drawing-buffer ceiling, MSAA 4× alone is about 90 MiB (qualification.md:95).",
-   "pendingOn": [
-    "measurements",
-    "dinner-model",
-    "cp4-fix:technical-pmrem-depth-buffer"
-   ]
+   "evidence": "Calculations are recorded in docs/qualification.md:90-95 (Milestone 2) and :294-296 (checkpoint 3: Business, Party, Birthday, about 35–40 MiB at Normal). The checkpoint 4 technical review's measured tally for all five scenes (scratchpad cp4/technical/phaseE.json: textures + renderbuffers + buffers + drawing buffer at 534²) gave Normal 33.2–37.0 MiB and High 40.8–44.6 MiB. That included the 3 MiB PMREM depth buffer, which the engine merge now frees (src/render/lighting.ts:81-102; tests/browser/resilience.spec.ts:309 passes), so about 30–34 MiB at Normal",
+   "note": "Resolved: technical-pmrem-depth-buffer, and Dinner is final. Still missing: the Sports and Dinner calculation is not in the qualification record (the all-five tally exists only in the reviewer's scratch output). The recorded MSAA risk at the 2.5 MP drawing-buffer ceiling (about 90 MiB, qualification.md:95) is not addressed in docs/integration.md.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -1808,22 +1692,19 @@
    "key": "master-b",
    "section": "§9 Budgets",
    "requirement": "Slow network: DOM controls usable before GLB; target ≤2 s on cold 4 Mbps/100 ms RTT; render-ready ≤6 s",
-   "status": "partial",
-   "evidence": "The HTML controls render before and independently of the GLB fetch (main.ts:38-125 builds the shell; mount() at :426 starts the load); tests/browser/business.spec.ts:203 holds the GLB, shows the 'taking a while' notice and becomes ready on release. Tooling for the 4 Mbps/100 ms cold load now exists (scripts/capture.ts:428-460, controls-usable and render-ready per scene)",
-   "note": "No throttled measurement is recorded yet (no outputs/perf/cold-load.json).",
-   "pendingOn": [
-    "measurements"
-   ]
+   "status": "met",
+   "evidence": "The HTML shell renders before and independently of the GLB (src/demo/main.ts:459-460 renderStatic then mount). tests/browser/business.spec.ts:342 holds the GLB, shows the 'taking a while' notice and becomes ready on release (passes). Throttled cold load from the final production build (scripts/capture.ts:437-465, 4 Mbps/100 ms, cache disabled; outputs/network/cold-load.json): controls usable 0.91–1.01 s and render-ready 2.19–3.22 s across all five scenes (qualification.md:199-209)",
+   "note": "Resolved: the measurement is recorded. It is Chrome network emulation on the desktop, not a phone. The emulated rate is 4×1024×1024/8 B/s, about 5% faster than a decimal 4 Mbps; the margins are large.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§9 Measurement protocol",
    "requirement": "Measure 10 alternating accept/decline cycles after one warm-up, visible page, on battery, no remote inspection; retain raw samples outside Vault; report p50/p95/p99, transfer bytes, dropped-frame pattern",
    "status": "partial",
-   "evidence": "The desktop Business run follows the protocol (one warm-up, 10 alternating cycles, visible page) with raw samples outside the Vault in outputs/perf/frame-times.json and p50/p95/p99/max/>50 ms reported (qualification.md:79-88, 123-125); transfer reported (qualification.md:127-137). scripts/capture.ts:360-426 now runs the protocol for all five scenes at 1× and 4×",
-   "note": "Business only, desktop only: the all-scene run has not been executed. Battery state is not recorded. No mobile runs (Surya's iPhone session pending).",
+   "evidence": "All five scenes now follow the protocol on the desktop: one warm-up pair, 10 alternating cycles, visible page, 1× and 4×. Raw samples are kept outside the Vault in outputs/perf/frame-times-<scene>.json, with p50/p95/p99/max/>50 ms reported (qualification.md:172-186). Transfer bytes come from the throttled cold load (outputs/network/cold-load.json; qualification.md:188-209)",
+   "note": "Desktop only. Battery state is not recorded, and the runs are driven over Playwright/CDP, a remote protocol, so 'no remote inspection' is not satisfied for automated desktop runs. No mobile runs: Surya's iPhone session is pending.",
    "pendingOn": [
-    "measurements",
     "surya"
    ]
   },
@@ -1841,10 +1722,9 @@
    "section": "§9 Measurement protocol",
    "requirement": "Test cold shader compilation separately",
    "status": "partial",
-   "evidence": "The checkpoint-4 technical review measured cold shader compilation separately on the desktop (cp4/technical/cold.json, 3 fresh-browser launches per scene): every first frame after 'ready' still linked one program (MeshDepthMaterial) and uploaded 10-14 textures. First-frame CPU was Business 16.9-19.1 ms and the other scenes 5.8-7.5 ms; one Business launch took 459 ms (phaseA.json). The phone cold-compile test is listed as open (qualification.md:153)",
-   "note": "Desktop only; the phone session is pending. The desktop test found a defect (technical-first-frame-compile); its fix is in flight.",
+   "evidence": "Desktop: the checkpoint 4 technical review measured cold compilation separately (scratchpad cp4/technical/cold.json, 3 fresh-browser launches per scene) and found the first ready frame linking MeshDepthMaterial. That is fixed (66bafde): a warm frame before 'ready' (src/core/controller.ts:363-370). A regression test, tests/browser/resilience.spec.ts:220, checks every scene for zero program links in any frame after 'ready' (passes, 69/69)",
+   "note": "Resolved: technical-first-frame-compile. Cold compilation on the phone is still open in the iPhone session (qualification.md:228).",
    "pendingOn": [
-    "cp4-fix:technical-first-frame-compile",
     "surya"
    ]
   },
@@ -1852,13 +1732,10 @@
    "key": "master-b",
    "section": "§9 Measurement protocol",
    "requirement": "Precompile the selected scene and its material variants before declaring it ready",
-   "status": "partial",
-   "evidence": "controller.ts:305-320 (scene precompile plus a forced link check before setResource('ready') at :330); every scene's precompile warms both presets (business/index.ts:158-167, party/index.ts:58-65, birthday/index.ts:61-72, sports/index.ts:82-88, dinner/index.ts:91-100)",
-   "note": "Checkpoint-4 findings: compileAsync misses the shadow-pass depth program and texture uploads, so the first frame after 'ready' links MeshDepthMaterial synchronously in 15 of 15 cold launches (technical-first-frame-compile). The Low-tier material variants are not precompiled (technical-low-tier-sync-compile: 40-94 ms on the first switch).",
-   "pendingOn": [
-    "cp4-fix:technical-first-frame-compile",
-    "cp4-fix:technical-low-tier-sync-compile"
-   ]
+   "status": "met",
+   "evidence": "src/core/controller.ts:341 (scene precompile), :350-357 (forced link check), :363-370 (one warm frame that builds the shadow depth program and uploads textures), then setResource('ready') at :376. Each scene's precompile warms both presets: business/index.ts:163, party/index.ts:58, birthday/index.ts:61, sports/index.ts:139-145, dinner/index.ts:91. Tier variants compile with compileAsync before any Low frame is drawn (controller.ts:528-545). tests/browser/resilience.spec.ts:220 (no link in the first ready frame, all five scenes) and :281 (first Low switch waits on no link) pass",
+   "note": "Resolved: technical-first-frame-compile and technical-low-tier-sync-compile (66bafde, verified). Low-tier variants compile on demand, off the main thread, rather than at load; the live frame keeps showing until they are ready.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -1874,8 +1751,8 @@
    "section": "§9 Quality tiers",
    "requirement": "Normal: DPR 1.5; simple PBR; baked contact detail; no postprocessing",
    "status": "exception",
-   "evidence": "DPR 1.5 (quality.ts:10); no WebGL postprocessing (createRenderer.ts:29-32, a single render pass). Recorded revision docs/spec-revisions.md:10 (#4): Normal includes the premium studio's real-time soft shadows and physical materials (style-reference.md:22-24). The CSS vignette and grain sit outside the renderer (spec-revisions.md:11, #5, approved by Surya)",
-   "note": "The phone measurement of Normal and of the CSS finish's compositor cost is still pending (qualification.md:153).",
+   "evidence": "DPR 1.5 (src/render/quality.ts:10). No WebGL postprocessing (src/render/createRenderer.ts:42-58, a single render pass; no composer in src/). Contact shadows at every tier (style-reference.md:20). Recorded revision docs/spec-revisions.md #4: Normal includes the premium studio's real-time soft shadows and physical materials (style-reference.md:22-24). The CSS vignette and grain sit outside the renderer (spec-revisions.md #5, approved by Surya)",
+   "note": "The phone measurement of Normal and of the CSS finish's compositor cost is still pending (qualification.md:228; style-reference.md:19,24).",
    "pendingOn": [
     "surya"
    ]
@@ -1902,15 +1779,10 @@
    "key": "master-b",
    "section": "§9 Quality tiers",
    "requirement": "Static: matching poster and fully functional HTML controls",
-   "status": "partial",
-   "evidence": "setQualityTier('static') and the automatic Static path release the scene and show the current-intent poster (controller.ts:686-697, 434-446); controls are HTML only; tests/browser/resilience.spec.ts:18 asserts the coral-accepted poster in Static with 1 request; posters exist in assets/ for Business, Party and Birthday",
-   "note": "Sports posters are staged in outputs/ but not in assets/, and Dinner has none, so Static shows only a sentence for both in this checkout (checkpoint-4 technical-dinner-no-posters and cohesion-dinner-posters-thumb for Dinner). Related open finding technical-static-keeps-gpu (Static keeps the WebGL stage allocated).",
-   "pendingOn": [
-    "captures",
-    "dinner-model",
-    "cp4-fix:cohesion-dinner-posters-thumb",
-    "cp4-fix:technical-dinner-no-posters"
-   ]
+   "status": "met",
+   "evidence": "Automatic Static (controller.ts:506-518) and setQualityTier('static') (:776-787) release the scene and the WebGL stage (destroyStage) and fall back to 'performance-static'. updatePoster shows the poster for the director's target pose (:226-249). Controls are HTML only. Posters exist in assets/scenes/<scene>/posters for all five scenes (Business 8, Party 7, Birthday 7, Sports 8, Dinner 6). tests/posters.test.ts checks every curated preset against every canonical pose; it passes in 134/134 (this audit). Browser checks passing at HEAD in this audit: resilience.spec.ts:18 (auto step-down to Static finishes on coral-accepted with 1 request), resilience.spec.ts:182 (Static releases the stage with 0 reachable renderers/contexts; the poster goes host-ready to accepted; Accept saves; leaving Static rebuilds 3D), sports.spec.ts:83 (Static declined still differs from the ready still), a11y.spec.ts:138 (Static notice copy). 060d9ab keeps procedural textures in CPU-backed copies, so leaving Static re-uploads them correctly.",
+   "note": "The Dinner posters show the frozen placeholder food (#17). If Surya picks an empty plate they need recapturing, but the requirement is met as it stands. The open technical-static-keeps-gpu finding is fixed by the engine batch (66bafde).",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -1952,60 +1824,46 @@
    "key": "master-b",
    "section": "§9 Resilience",
    "requirement": "If WebGL2 is missing, shaders fail or assets cannot load, show a poster immediately and keep response controls",
-   "status": "partial",
-   "evidence": "controller.ts:247-250 (no WebGL2 → fallback), :273-278 (renderer creation fails), :305-320 (shader/link failure → fallback), :332-338 (asset failure → fallback); the poster is requested at creation (controller.ts:747, before loadScene at :749); tests/browser/resilience.spec.ts:44 'a failed model download shows the poster and the answer still saves'; recorded review scratchpad/cp4/technical/phaseD.json (the answer saves while in fallback in all five scenes)",
-   "note": "No test simulates missing WebGL2 or a shader failure. Open cp4 finding technical-superseded-load-race: an aborted load still clears the newer load's onShaderError at controller.ts:318, so a shader failure in the newer scene can end up logged instead of showing the poster. At HEAD, Sports and Dinner have no posters in assets/: posterUrl returns null and the stage shows text only. The Sports posters sit in outputs/sports/posters (CAPTURE_STAGE_ONLY), and Dinner's wait for the model polish.",
-   "pendingOn": [
-    "cp4-fix:technical-superseded-load-race",
-    "captures",
-    "dinner-model"
-   ]
+   "status": "met",
+   "evidence": "The poster is requested before loading starts (controller.ts:834, then loadScene at :836). Fallback triggers: no WebGL2 at :274-276 and :303-305 (the probe is cached, and 'Try 3D again' re-probes, :770); shader or link failure at :335-359, where the compile runs and getUniforms forces the link check; asset failure at :380-383. Superseded-load race fixed: a superseded load stops after its precompile and clears onShaderError only if the hook is its own (:343-349, :358). Checks: resilience.spec.ts:44 (a failed GLB shows vanilla-accepted and the answer saves); resilience.spec.ts:245 (switching back mid-compile logs no GL errors); tests/webgl-probe.test.ts. Scripted check in this audit (scratchpad m7-fallback-check.mjs, dev server on the HEAD source), all five scenes: a null webgl2 context gives 'webgl-unavailable' in 0.18–0.37 s with no canvas; a forced LINK_STATUS=false gives 'shader-failure' in 0.5–1.0 s. In both cases the host-ready poster is visible, the declined poster follows a Decline, and the answer saves.",
+   "note": "In the shader-failure case the renderer stays allocated behind the poster until 'Try 3D again' rebuilds it. This is not a requirement breach. The superseded-load race and the missing Sports/Dinner posters, the two earlier gaps, are both resolved.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§9 Resilience",
    "requirement": "After 6 s without readiness, expose a nonblocking 'Try 3D again' control",
    "status": "met",
-   "evidence": "controller.ts:72 (LOAD_TIMEOUT_MS 6000), :264-270 (canRetryGraphics); src/demo/main.ts:79-82 (notice + 'Try 3D again') and :315-324; retryGraphics controller.ts:678-684; business.spec.ts:203 'A load slower than 6 s clears its \"taking a while\" notice once 3D is ready'; scratchpad/cp4/technical/phaseD.json 'retry' (all five scenes return to ready with 1 canvas and 1 live context)",
-   "note": "Open cp4 finding interface-graphics-notice-copy: with the Developer drawer open, two visible buttons are named 'Try 3D again' (main.ts:81, :117). The notice also says 'Showing a still image. Your response still works.' in host mode and on Dinner, where no image exists. Open technical-restore-warnings: retry after a simulated loss logs 'WEBGL_lose_context extension not supported' and does not force-release the old context. The control itself works.",
-   "pendingOn": [
-    "cp4-fix:interface-graphics-notice-copy",
-    "cp4-fix:technical-restore-warnings"
-   ]
+   "evidence": "controller.ts:72 (LOAD_TIMEOUT_MS 6000) and :290-297 (canRetryGraphics after 6 s). src/demo/main.ts:81-83 (notice plus 'Try 3D again'), :349-358 (notice copy by mode and by poster vs text), :424 (retryGraphics). controller.ts:767-774 (retryGraphics re-probes and rebuilds a fresh stage). Passing at HEAD in this audit: business.spec.ts:342 (a load over 6 s shows 'taking a while' and clears it once ready); a11y.spec.ts:138 (the notice names still image vs text and host vs guest; exactly one 'Try 3D again'; the drawer button is 'Restore 3D (dev)', main.ts:120); resilience.spec.ts:200 (loss, restore, a second loss and 'Try 3D again' log no warnings).",
+   "note": "Both open findings are fixed and merged. interface-graphics-notice-copy: showcase shell eae932b. technical-restore-warnings: engine 66bafde, where a lost stage is disposed while its context is lost and restore builds a fresh stage.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§9 Resilience",
    "requirement": "Context loss stops rendering and shows the current-intent poster",
-   "status": "partial",
-   "evidence": "controller.ts:362-373 (preventDefault, abort load, cancel rAF, releaseScene, fallback 'context-lost'); updatePoster uses the director's target pose (controller.ts:200-223); business.spec.ts:122, :189; party.spec.ts:182; birthday.spec.ts:98; dinner.spec.ts:84; scratchpad/cp4/technical/phaseD.json (all five: 0 frames requested after the loss; Business, Party, Birthday and Sports show the current-intent poster)",
-   "note": "At HEAD, Dinner has no posters, so the loss shows text only ('The covered dish is in the bin.'). dinner.spec.ts:84 expects /shared-declined/ and cannot pass until they exist. Sports showed its poster in the review build because the staged posters had been copied in. The main checkout still lacks assets/scenes/sports/posters.",
-   "pendingOn": [
-    "captures",
-    "dinner-model"
-   ]
+   "status": "met",
+   "evidence": "controller.ts:426-439: preventDefault, abort the load, cancel rAF, releaseScene, destroyStage(true), then fallback 'context-lost'. updatePoster uses director.targetPose (:226-249). All pass at HEAD in this audit: business.spec.ts:122 and :328, party.spec.ts:182, birthday.spec.ts:98, dinner.spec.ts:84 (shared-declined Dinner poster after a loss plus Decline, now passing), resilience.spec.ts:55 and :200. Dinner and Sports posters are in assets/ and covered by tests/posters.test.ts.",
+   "note": "The Dinner and Sports poster gaps are closed: the final captures d7703b4 and 147ac9c copied their posters into assets/.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§9 Resilience",
    "requirement": "Attempt one restoration after context loss, then keep static mode",
    "status": "met",
-   "evidence": "controller.ts:375-383 (restorationAttempted: one reload, then no more); tests/browser/resilience.spec.ts:55 'after a lost graphics context is restored, 3D comes back once and responses keep working'; scratchpad/cp4/technical/phaseD.json (all five scenes: the first restore returns to ready/context-restored; a second loss plus restoreContext stays fallback/context-lost until 'Try 3D again')",
-   "note": "Open cp4 finding technical-restore-warnings: every restore logs 35–41 WebGL 'object does not belong to this context' warnings, because destroyStage deletes objects from before the loss on the restored context. The behaviour is correct; only the console is noisy.",
-   "pendingOn": [
-    "cp4-fix:technical-restore-warnings"
-   ]
+   "evidence": "controller.ts:441-450: restorationAttempted allows one reload on webglcontextrestored and ignores any later restore. After a second loss, destroyStage(true) (:401-417) keeps the dead canvas with only its restore listener, so a later restore reaches that guard and is ignored. While contextLost is set, loadScene stays in fallback (:282-285) until 'Try 3D again' (:767-774). Passing at HEAD in this audit (Playwright 69/69, Chrome 154.0.8037.58, 2026-09-30): resilience.spec.ts:55 (3D comes back once after a restore, and the answer saves with one request) and resilience.spec.ts:200 (restore, a second loss and 'Try 3D again' log no warnings). Scripted check in this audit on the HEAD source (scratchpad m7sk/restore2.mjs, dev server), all five scenes: loss plus restore gives ready/loaded; a second loss gives fallback/context-lost with the current-intent poster; a second restoreContext() leaves it at fallback/context-lost with the canvas hidden after 2 s; a Decline saves and shows the declined poster; 'Try 3D again' returns to ready; no console warnings or errors.",
+   "note": "Evidence corrected, status unchanged. resilience.spec.ts:200 never restores after its second loss, because the drawer's 'Simulate graphics loss' only calls loseContext(). So it does not show a second restore being refused. scratchpad/cp4/technical/phaseD.json (2026-09-29 12:06) predates the engine batch's rewrite of the loss and restore path (66bafde). The scripted check above now shows at HEAD that the stage restores once and then stays static. No automated spec covers the refused second restore; one added to resilience.spec.ts would guard it. technical-restore-warnings is fixed in 66bafde. 060d9ab keeps procedural texture pixels, so the re-upload after a restore is correct. pendingOn stays []. (skeptic: The cited evidence did not prove 'then keep static mode' on the current code: the spec never restores a second time, and phaseD ran before the rewrite. The behaviour was re-verified at HEAD in all five scenes, so the status stays met with corrected evidence.)",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§9 Resilience",
    "requirement": "Disposing cancels fetches and event handlers, releases pointer capture, and frees textures/geometries/materials by ownership",
-   "status": "partial",
-   "evidence": "Every scene passes the AbortSignal to fetch (src/scenes/business/index.ts:318-328, party/index.ts:104-114, birthday/index.ts:107-117, sports/index.ts:112-122, dinner/index.ts:135-145); dispose() controller.ts:727-744 (abort, endPointer 574-585 releases pointer capture, releaseScene 226-235, freeLibraries, destroyStage 349-360, listener removal); stage.ts:166-176; business.spec.ts:174; tests/library.test.ts:33, :48, :67, :87",
-   "note": "Open cp4 finding technical-renderer-js-leak (cp4-partial.json; objs.mjs and retain.mjs): each stage teardown (controller dispose, remount, loss plus retry) leaves the old WebGLRenderer reachable through three's module-level DFG LUT dispose listener. Each teardown keeps +1 geometry, +4 materials and +1 mesh, and the heap grows 0.1–0.3 MiB. The GPU side is freed (forceContextLoss). Scene switches do not accumulate anything.",
-   "pendingOn": [
-    "cp4-fix:technical-renderer-js-leak"
-   ]
+   "status": "met",
+   "evidence": "Every scene passes the AbortSignal to fetch: business/index.ts:327-337, party/index.ts:104-114, birthday/index.ts:107-117, sports/index.ts:171-181, dinner/index.ts:136-146. controller.ts dispose() :814-831 aborts, clears the timer, cancels rAF, calls endPointer (:663-675, releases pointer capture), releaseScene (:252-262), freeLibraries and destroyStage (:401-417), and removes the observer and listeners. stage.ts:187-202 disposes three's shared DFG LUT (:30-47), the shared texture caches and the shadow-proxy material, then renderer.dispose and forceContextLoss. Passing at HEAD in this audit: resilience.spec.ts:160 (30 re-creations per scene covering remount, loss plus retry and Static round trips; after forced GC, CDP queryObjects finds 1 WebGLRenderer and 1 WebGL2 context in every scene, and 0/0 in Static), business.spec.ts:313, resilience.spec.ts:245. Also tests/library.test.ts:33, :48, :67, :87.",
+   "note": "The open technical-renderer-js-leak finding is fixed in 66bafde (DFG LUT listener, plus the shared shadow-proxy material in defc2dd). The orchestrator's heap check found one live WebGL2 context after 0/1/3/6 remounts in all five scenes, matching integration.md:112.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -2030,11 +1888,10 @@
    "section": "§10 Accessibility",
    "requirement": "Support VoiceOver on iOS and NVDA with desktop Firefox or Chrome",
    "status": "unverified",
-   "evidence": "Semantic structure in place: guestControls.ts:36-47 (group, native buttons, role=status); controller.ts:115-127 (stage layers aria-hidden); recorded ARIA snapshot scratchpad/cp4/interface/a11y.txt",
-   "note": "No VoiceOver or NVDA session is recorded. VoiceOver on iOS needs Surya's iPhone 17 Max session (qualification.md:153). NVDA needs a Windows machine, and none is available (qualification.md:17). Open cp4 finding interface-meta-sr-concatenation: the event meta reaches the accessibility tree as 'Thu, Nov 12 · 6:30 PMHudson Yards, New YorkSample event' because the separators are aria-hidden (main.ts:59).",
+   "evidence": "Semantic structure: guestControls.ts:35-46 (labelled group, native buttons, role=status aria-live=polite); controller.ts:141-150 (poster alt='' aria-hidden, fallback text and canvas host aria-hidden). The event meta separators read as commas (showcase.css:261-268). a11y.spec.ts:118 checks the accessibility snapshot reads '6:30 PM, Hudson Yards, New York, Sample event'; it passes at HEAD in this audit.",
+   "note": "No VoiceOver or NVDA session is recorded. VoiceOver on iOS needs Surya's iPhone 17 Max session (qualification.md:228). NVDA needs a Windows machine, and none is available (qualification.md:17, :108). interface-meta-sr-concatenation is fixed (eae932b).",
    "pendingOn": [
-    "surya",
-    "cp4-fix:interface-meta-sr-concatenation"
+    "surya"
    ]
   },
   {
@@ -2042,11 +1899,9 @@
    "section": "§10 Accessibility",
    "requirement": "Canvas is decorative/aria-hidden; event details, choices, selected response, saving and failure remain in semantic HTML",
    "status": "met",
-   "evidence": "controller.ts:115-127 (poster alt='' and aria-hidden, text fallback and canvas host aria-hidden), :519 (grab target aria-hidden); main.ts:57-60 (h1 plus event meta); guestControls.ts:36-47 (group, buttons, role=status); recorded ARIA snapshot scratchpad/cp4/interface/a11y.txt (host and guest trees expose heading, meta, choices and status; no stage content)",
-   "note": "Open cp4 finding interface-meta-sr-concatenation: the event details are in semantic HTML but reach the accessibility tree with no word breaks (main.ts:59).",
-   "pendingOn": [
-    "cp4-fix:interface-meta-sr-concatenation"
-   ]
+   "evidence": "controller.ts:141-150 (poster alt='' and aria-hidden, fallback text aria-hidden, canvas host aria-hidden) and :608 (grab target aria-hidden). main.ts:59-61 (h1 plus event meta as separate items). guestControls.ts:35-46 (group, buttons with aria-pressed, role=status) and :71-80 (saving, Accepted/Declined and error text). a11y.spec.ts:118 (meta reads as separate items), a11y.spec.ts:138 (graphics notice) and business.spec.ts:284 (keyboard answers) all pass at HEAD in this audit.",
+   "note": "interface-meta-sr-concatenation is fixed in eae932b. The separators are CSS ::before with the alt text ', ' (showcase.css:261-268), so words no longer run together.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -2071,11 +1926,9 @@
    "section": "§10 Accessibility",
    "requirement": "Minimum 44×44 CSS-pixel targets",
    "status": "met",
-   "evidence": "scripts/capture.ts:313-322 audit (no target under 44×44) for Business, Party and Birthday at 1440, 390, 320, 844×390 and 200% zoom (qualification.md:57, :109; outputs/ui/*); recorded cp4 layout audit scratchpad/cp4/interface/layout.mjs → layout/report.json (all five scenes, host and guest, at 320, 390, 768, 1024, 1440, 844×390, two 200% zoom cases and 150% text: no target under 44×44); tests/browser/resilience.spec.ts:105 (150% text at 320 and 390, Party)",
-   "note": "The cp4 audit ran on the review build at 779bb21. Nothing in src/demo or src/ui has changed since (git diff 779bb21..HEAD). The committed UI matrix in outputs/ui still lacks Sports and Dinner captures, although capture.ts:323 loops over all five.",
-   "pendingOn": [
-    "captures"
-   ]
+   "evidence": "The UI matrix audit (scripts/capture.ts:307-343) now covers all five scenes. outputs/ui holds 51 captures from 2026-09-30 15:22–15:23 at 1440, 390, 320, 844×390 and 200% zoom, host and guest. Layout audit in this audit (scratchpad m7-layout-audit.mjs, dev server on the HEAD source): 170 cases across 5 scenes, 17 viewport/text-size cases (320–1440, 768, 1024, landscape 844×390 and 667×375, 200% zoom at 720×450 and 640×400 CSS px, 125/150% text), host and guest. Every visible button and summary was at least 44×44. resilience.spec.ts:105 (150% text, Party) passes at HEAD. qualification.md:135 records a 204-case survey by the shell batch.",
+   "note": "The earlier gap (no Sports or Dinner UI captures) is closed.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -2154,23 +2007,18 @@
    "section": "§10 Layout",
    "requirement": "Support 320-1440 CSS px, landscape and browser zoom to 200% with no horizontal overflow",
    "status": "met",
-   "evidence": "UI matrix audit (capture.ts:303-341) found no overflow for Business, Party and Birthday at 1440, 390, 320, 844×390 and 200% zoom (qualification.md:57, :109; outputs/ui/*-phone-320-*.png and others); recorded cp4 layout audit scratchpad/cp4/interface/layout/report.json (all five scenes at 320–1440, 844×390 and 200% zoom at 1440×900 and 1280×800: no horizontal overflow at normal text size); resilience.spec.ts:92 (rotation to 844×390, no overflow)",
-   "note": "Nothing in src/demo or src/ui has changed since the review build (779bb21). Open cp4 finding interface-meta-nowrap-overflow: the nowrap meta spans (showcase.css:229-231) overflow at 320 px with 150% text on Dinner, and longer production venues would overflow sooner (see the text-size row). The Sports and Dinner UI captures in outputs/ui are pending.",
-   "pendingOn": [
-    "captures",
-    "cp4-fix:interface-meta-nowrap-overflow"
-   ]
+   "evidence": "UI matrix (capture.ts:307-343) for all five scenes in outputs/ui (2026-09-30). Layout audit in this audit (170 cases, same matrix as the target-size row, including 200% zoom and 125/150% text): no horizontal overflow. The meta now wraps date, place and 'Sample event' as whole items; only the date is nowrap (showcase.css:241-272). resilience.spec.ts:92 (rotation to 844×390 mid-playback, no overflow) passes at HEAD.",
+   "note": "interface-meta-nowrap-overflow is fixed in eae932b. Dinner at 320 px with 150% text no longer overflows (it was scrollWidth 332). The Sports and Dinner captures are in outputs/ui.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§10 Layout",
    "requirement": "Support increased text size",
-   "status": "partial",
-   "evidence": "Type is rem-based (e.g. shell.css:93, :227) with text-size-adjust 100% (shell.css:31-34); resilience.spec.ts:105 'increased text size (150 %) keeps every control usable with no horizontal overflow' (Party at 320 and 390); recorded cp4 layout audit scratchpad/cp4/interface/layout/report.json (150% text at 320, 390, 1440 and 844×390 for all five scenes)",
-   "note": "Two open cp4 findings. interface-meta-nowrap-overflow: Dinner at 320 px with 150% text has scrollWidth 332 against a 320 px viewport (layout/report.json text150-320-dinner-*). interface-landscape-header-overlap: at 667–812 px landscape with 125–150% text, the absolutely positioned Host/Guest switch (showcase.css:682-688) covers the 'Simulated saves' badge or the brand. No iOS text-size setting has been tried on a device.",
+   "status": "met",
+   "evidence": "Type is rem-based (shell.css:84, :93, :227), with text-size-adjust 100% (shell.css:32-33). resilience.spec.ts:105 (150% root text at 320 and 390 px in Party: no overflow and no target under 44) passes at HEAD (Playwright 69/69 in this audit). The layout audit (scratchpad m7-layout-audit.json: 170 cases, 0 failing) covered all five scenes, host and guest, at 150% text at 320×700, 375×667, 390×844, 1440×900 and 844×390, plus 667×375 at 125% and 150%. It found no overflow, no small target, and no overlap between the brand, the 'Simulated saves' badge, the Host/Guest switch and Motion. The short-landscape header is now in flow and wraps its actions instead of overlapping (showcase.css:733-775).",
+   "note": "Both open findings are fixed in eae932b: interface-meta-nowrap-overflow and interface-landscape-header-overlap. What remains is the iOS text-size setting on a real phone, which belongs to Surya's iPhone 17 Max session (qualification.md:229; the line moved down one in 7908069). Keep pendingOn ['surya']. (skeptic: Citation correction only: the qualification.md line for the iPhone session moved from :228 to :229 at HEAD 7908069.)",
    "pendingOn": [
-    "cp4-fix:interface-meta-nowrap-overflow",
-    "cp4-fix:interface-landscape-header-overlap",
     "surya"
    ]
   },
@@ -2179,8 +2027,8 @@
    "section": "§10 Layout",
    "requirement": "Stage height uses available space; vertical scrolling instead of shrinking controls; respect safe-area insets",
    "status": "partial",
-   "evidence": "showcase.css:22-23 (min-height 100svh, bottom safe-area padding), :8 (gutters from the safe-area insets), :31 (top inset), :698 (landscape stage sized to 100svh minus insets); index.html:5 viewport-fit=cover; controls keep min-height 44–52 px (shell.css:219); the layout audits (qualification.md:109; scratchpad/cp4/interface/layout/report.json) found no shrunken targets at any viewport; scratchpad/cp4/interface/fold.mjs measured the answers scrolling below the fold at 375×667 rather than shrinking",
-   "note": "Stage height and vertical scrolling are verified. The safe-area insets are implemented but unverified: desktop Chrome reports zero insets, and no notched phone has been checked (the iPhone 17 Max session is pending). The cp4 polish item interface-guest-first-viewport-small-phones is allowed by the spec ('allow vertical scrolling').",
+   "evidence": "showcase.css:8 (gutters from the safe-area insets), :22-23 (min-height 100svh, bottom padding max(40px, safe-area-inset-bottom)), :36 and :746 (top inset), :781 (landscape stage column sized from 100svh minus insets). index.html:5 sets viewport-fit=cover. Controls keep min-height 52 px and 44 px (shell.css:219, :295, :370). This audit's 170-case layout run found no target under 44 px at any viewport, including 375×667 and 150% text. The full-page captures in outputs/ui show the page scrolling vertically (the 320 px pages are about 1,374–1,515 CSS px tall).",
+   "note": "Stage height and vertical scrolling are verified. The safe-area insets are implemented but unverified: desktop Chrome reports zero insets, and no notched phone has been checked (the iPhone 17 Max session is pending).",
    "pendingOn": [
     "surya"
    ]
@@ -2199,22 +2047,18 @@
    "section": "§10 Layout",
    "requirement": "On narrow displays reposition via an authored layout variant rather than crop hoop, scanner, bin, lid or ball path; keep the shared camera angle",
    "status": "met",
-   "evidence": "The stage is always square (shell.css:100 aspect-ratio 1/1), so the fit to full motion bounds is the same at every width and nothing is cropped; one shared camera (style-reference.md:11, orthographic 3/4, az 20°, el 15°; stage.ts:63); phone-320 captures outputs/ui/{business,party,birthday}-phone-320-*.png; recorded cp4 layout screenshots scratchpad/cp4/interface/layout/w320-*-host.png for all five scenes; dinner.test.ts:169 (open bin keeps 8% clearance)",
-   "note": "No layout variants are needed because the stage is square. The cp4 320 px Dinner screenshots predate the Dinner re-layout (2d98f6f). The width-independent fit plus dinner.test.ts:169 cover HEAD. The Dinner dish's low placement in the frame is recorded for Surya (spec-revisions.md:9, row 3).",
-   "pendingOn": [
-    "captures"
-   ]
+   "evidence": "The stage is always square (shell.css:100, aspect-ratio 1/1), so the fit to the full motion bounds is the same at every width and nothing is cropped. There is one shared camera: camera.ts:7 (azimuth 20°, elevation 15°) and stage.ts:84, per style-reference.md:11 and :120. 320 px captures for all five scenes are in outputs/ui/<scene>-phone-320-{host,guest-accepted}.png (2026-09-30, after the Dinner re-layout); I viewed the Dinner and Sports ones in this audit. dinner.test.ts:186 (open bin keeps 8% clearance, at least 42% fill) passes in 134/134.",
+   "note": "No layout variant is needed because the stage is square. The Dinner dish's low placement in the frame is a separate framing decision recorded for Surya (spec-revisions.md row 3).",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§10 Inclusion",
    "requirement": "Birthday and Dinner disposal clean and stylized; no gore, splatter, mocking message, buzzer or one-sided confetti; declining is valid",
-   "status": "partial",
-   "evidence": "Birthday disposal approved at checkpoint 3 (style-reference.md:28; commit 0117e29); sports.spec.ts:44 'the HTML says Declined, never Failed'; declined status in neutral words with a minus icon (guestControls.ts:74-76); no audio (asset-manifest.md:57); Dinner decline transfer recorded (spec-revisions.md:20, row 14); cp4 motion fixes motion-dinner-decline-carry and motion-disposal-bin-entrance landed in main (24c4296, 2d98f6f)",
-   "note": "The Dinner decline has not been visually signed off. The latest Dinner model review did not sign off (scratchpad/dinner-polish-r2.json), no Dinner review clips exist in outputs/, and the transfer path revision awaits Surya's confirmation.",
+   "status": "met",
+   "evidence": "Birthday disposal was approved by Surya at checkpoint 3 (style-reference.md:26-28). Final Dinner decline captures are outputs/dinner/decline.mp4 and decline-vegetables.mp4 (2026-09-30 15:52; byte-identical, since the dish is covered). This audit viewed a montage of frames 0–113 (every 9th frame plus the last): the bin enters, the flaps open, the covered dish lifts across and drops in whole, and the flaps close. There is no mess, message or confetti. dinner.spec.ts:44, birthday.spec.ts:53 (decline bins the object with one request) and sports.spec.ts:44 ('Declined', never 'Failed') pass at HEAD (Playwright 69/69 in this audit). The declined status uses neutral words with a minus icon (guestControls.ts:74-76). No confetti, buzzer or audio code exists in src/ or models/ (asset-manifest.md:59: no audio).",
+   "note": "The Dinner decline path is recorded as spec-revisions row 14, pending Surya's confirmation. The Dinner food is shelved as frozen placeholders (#17). The critical reviewers' checkpoint 4 sign-offs also await Surya (qualification.md:237; the line moved down one in 7908069). Keep pendingOn ['surya']. (skeptic: Citation correction only: the qualification.md line for the pending sign-offs moved from :236 to :237 at HEAD 7908069. The status was re-verified from the decline frames and grep.)",
    "pendingOn": [
-    "dinner-model",
-    "captures",
     "surya"
    ]
   },
@@ -2223,8 +2067,8 @@
    "section": "§11 Devices",
    "requirement": "Reference devices iPhone SE (2nd gen), iPhone 12 in Safari, Pixel 6a and Galaxy A53 in Chrome; record the gap and agree a comparable substitute before claiming support",
    "status": "partial",
-   "evidence": "qualification.md:5-25: none of the four reference devices is available; the gap was recorded on 2026-09-28 and the iPhone 17 Max named as a high-end substitute (:11, :21-23); support is not claimed broadly (README.md:38; integration.md:11)",
-   "note": "Previously listed as an exception, but no row in docs/spec-revisions.md records this deviation. The spec's own condition is half met: the gap is recorded, but no comparable low-end iOS or Android substitute has been agreed (qualification.md:25). The support statement must stay narrowed until Surya agrees one.",
+   "evidence": "qualification.md:5-25: none of the four reference devices is available. The gap was recorded on 2026-09-28 and the iPhone 17 Max named as a high-end substitute (:11, :21-23). Broad support is not claimed (README.md:44; integration.md:11). qualification.md:228 still lists low-end iOS and Android as unverified.",
+   "note": "No docs/spec-revisions.md row records this deviation, so the row is not an exception. The gap is recorded, but no comparable low-end iOS or Android substitute has been agreed (qualification.md:25). The support statement must stay narrowed until Surya agrees one.",
    "pendingOn": [
     "surya"
    ]
@@ -2234,11 +2078,10 @@
    "section": "§11 Devices",
    "requirement": "Run baseline quality on all reference devices and reduced/static modes on at least one device per OS family",
    "status": "unverified",
-   "evidence": "qualification.md:88 and :151-153 (iPhone 17 Max session pending); desktop-only substitutes: qualification.md:79-88 and :123-125, scratchpad/cp4/technical/throttle.json (all five scenes at 4× CPU throttle on the authoring Mac, labelled as simulation)",
-   "note": "No device run is recorded. Neither this production nor Surya has an Android device, and the low-end iOS devices are unavailable. The reduced and static modes have not been run on any phone.",
+   "evidence": "Desktop-only measurements for all five scenes on the authoring Mac (qualification.md:172-186; outputs/perf/frame-times-<scene>.json, 2026-09-30): p95 16.7–16.8 ms at 1× and under 4× CPU throttle (labelled simulation), no frame over 50 ms. Low-tier brightness was measured on desktop (qualification.md:221-223). Reduced motion and Static are exercised in desktop Chrome (business.spec.ts:109, resilience.spec.ts:18 and :182).",
+   "note": "No device run is recorded. The iPhone 17 Max session is pending (qualification.md:228). The low-end iOS devices are unavailable, and neither the production nor Surya has an Android device. The desktop measurements are done, but they are not device evidence.",
    "pendingOn": [
-    "surya",
-    "measurements"
+    "surya"
    ]
   },
   {
@@ -2264,7 +2107,7 @@
    "section": "§11 Desktop",
    "requirement": "Desktop coverage: Firefox on macOS and Edge on Windows",
    "status": "unverified",
-   "evidence": "qualification.md:16-17 (Firefox not installed; no Windows machine); environment.md:43",
+   "evidence": "qualification.md:16-17 and :108 (Firefox and Edge not installed; no Windows machine); qualification.md:228 (Firefox and Edge remain unverified).",
    "note": "This production cannot run these checks today. Installing Firefox, or agreeing a Windows/Edge substitute, needs Surya's decision.",
    "pendingOn": [
     "surya"
@@ -2274,9 +2117,9 @@
    "key": "master-b",
    "section": "§11 Desktop",
    "requirement": "At release record exact OS/browser/build; check current and previous major browser versions where installable",
-   "status": "not met",
-   "evidence": "Only the authoring host build is recorded (environment.md:42-44: macOS 26.6 25G5065a, Chrome 153.0.8010.53, Safari 26.6)",
-   "note": "This is a release-time step and has not been done. Previous-major browser versions cannot be installed on this host, so those checks stay unverified.",
+   "status": "partial",
+   "evidence": "qualification.md:101-111 ('Release environment', recorded 2026-09-29): macOS 26.6 (25G5065a), Chrome 154.0.8037.58 for all automated checks, Safari 26.6 installed but not automated, Firefox and Edge not installed. Previous major versions are recorded as not installable on this host and unverified. Node 24.5.0, pnpm 11.0.4, three 0.186.1, playwright-core 1.63.0. The current Chrome was exercised in this audit: the full browser suite passed 69/69 on Chrome 154.0.8037.58.",
+   "note": "The final release package is still pending. A release-2026-09-30 folder (source f65f567) appeared during this audit, but main has since moved to 9866254 (release script change), so the record is not yet tied to a final package. Current Safari was not exercised. Previous-major checks stay unverified. environment.md:43 and the perf JSON labels (capture.ts:413) still say Chrome 153.",
    "pendingOn": [
     "release"
    ]
@@ -2295,8 +2138,8 @@
    "section": "§11 Desktop",
    "requirement": "Inspect one iOS and one Android in-app browser; fallback remains mandatory",
    "status": "unverified",
-   "evidence": "qualification.md:18-19 record both as gaps; the poster and HTML fallback path exists and is tested (controller.ts:247-250, :362-373; resilience.spec.ts:44; business.spec.ts:122)",
-   "note": "Needs physical phones: the iOS check depends on Surya's iPhone, and no Android device is available.",
+   "evidence": "qualification.md:18-19 and :228 record both as gaps. The poster and HTML fallback is implemented and tested: controller.ts:274-276 and :426-439; resilience.spec.ts:44; business.spec.ts:122. This audit's scripted check confirmed the missing-WebGL2 poster fallback in all five scenes.",
+   "note": "Needs physical phones. The iOS check depends on Surya's iPhone, and no Android device is available.",
    "pendingOn": [
     "surya"
    ]
@@ -2332,13 +2175,10 @@
    "key": "master-b",
    "section": "§11 Behavior verification",
    "requirement": "Response change during playback",
-   "status": "met",
-   "evidence": "tests/visual-director.test.ts:70 'interrupting accept with decline blends through ready and cancels the old completion', :49 'a scene that asks for a cut changes answer without a blend'; party.spec.ts:99 'Rapid reversals end in the latest choice'; party.test.ts:290; dinner.spec.ts:44 (accept then decline, 2 requests)",
-   "note": "Recorded deviations: the interruption cut (spec-revisions.md:15, row 9) and the ≈0.5° tonearm step (spec-revisions.md:16, row 10). Open cp4 visual findings on this path: motion-sports-cut-midflight and motion-interrupt-blend-quality. The behaviour is verified.",
-   "pendingOn": [
-    "cp4-fix:motion-sports-cut-midflight",
-    "cp4-fix:motion-interrupt-blend-quality"
-   ]
+   "status": "exception",
+   "evidence": "tests/visual-director.test.ts:70 (interrupting accept with decline blends through ready and cancels the old completion) and :49 (a scene that asks for a cut changes answer without a blend, then plays the new outcome). sports.test.ts:257 (blends mid-flight and at rest; cuts at the rim and while the net moves) and :269 (a blend never passes through rim, net, board or pole). dinner.test.ts:221 (blends while the cover is over the food; cuts once it is aside). party.test.ts:313 (the arm never drops in one frame and is never dragged). All pass in 134/134 (this audit, 2026-09-30 17:01). party.spec.ts:99 (rapid reversals end in the latest choice) and dinner.spec.ts:44 pass at HEAD (Playwright 69/69 in this audit). The verified behaviour includes two recorded deviations. docs/spec-revisions.md row 9: where a straight blend would pass objects through each other (the Birthday cake from the bin, the Dinner cloche beside the plate, the Sports ball at the rim or net), the scene cuts to ready in 0 ms instead of blending. Row 10: a ≈0.5° one-frame tonearm lift step when reversing from accept.",
+   "note": "Downgraded from met. The behaviour these tests verify includes the recorded deviations in rows 9 and 10, so under the table's rule this is an exception. That matches the Sports acceptance row 'Change response during playback keeps both outcomes clean' and the Master §6 row 'Tonearm continuity on an accept-to-decline reversal', both already exceptions. motion-sports-cut-midflight is fixed in 8fa87e5 (merged in ba6e54d). motion-interrupt-blend-quality (an eased or cross-dissolved blend) is deferred as polish, with reasons at docs/qualification.md:146 and :240 (both moved down one line in 7908069). pendingOn stays []: rows 9 and 10 are implementation and checkpoint 3 records, not waiting on Surya. (skeptic: Recorded deviations (spec-revisions rows 9 and 10) govern this behaviour, and the rules require 'exception' in that case, not 'met'.)",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -2407,13 +2247,10 @@
    "key": "master-b",
    "section": "§11 Behavior verification",
    "requirement": "Context loss",
-   "status": "partial",
-   "evidence": "business.spec.ts:122, :189; party.spec.ts:182; birthday.spec.ts:98; resilience.spec.ts:55 (restore); dinner.spec.ts:84; recorded review scratchpad/cp4/technical/phaseD.json (loss, answer while lost, restore, second loss and retry in all five scenes)",
-   "note": "dinner.spec.ts:84 asserts a Dinner shared-declined poster, but assets/scenes/dinner has no posters, so posterUrl returns null and the test cannot pass at HEAD. phaseD confirms the Dinner loss shows text only.",
-   "pendingOn": [
-    "captures",
-    "dinner-model"
-   ]
+   "status": "met",
+   "evidence": "All pass at HEAD in this audit: business.spec.ts:122 and :328, party.spec.ts:182, birthday.spec.ts:98, dinner.spec.ts:84 (shared-declined Dinner poster), resilience.spec.ts:55 (restore), resilience.spec.ts:160 (loss plus retry in 30 re-creations per scene) and resilience.spec.ts:200 (loss, restore, second loss, retry, no warnings). The earlier review scratchpad/cp4/technical/phaseD.json covered all five scenes.",
+   "note": "dinner.spec.ts:84 passes now that the Dinner posters are in assets/.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -2437,38 +2274,29 @@
    "key": "master-b",
    "section": "§11 Behavior verification",
    "requirement": "Disposal",
-   "status": "partial",
-   "evidence": "business.spec.ts:174 (30 re-creations, one canvas, no context warnings); collection.spec.ts:22 (30 switches); party.spec.ts:161; library.test.ts:33-87; recorded review scratchpad/cp4/technical/phaseB.json (switches flat)",
-   "note": "Verification found a defect: open cp4 finding technical-renderer-js-leak. After each loss plus retry and each remount, one more WebGLRenderer stays reachable (1 → 7 after 6 teardowns). business.spec.ts:174 checks canvases and context warnings, not retained JS objects.",
-   "pendingOn": [
-    "cp4-fix:technical-renderer-js-leak"
-   ]
+   "status": "met",
+   "evidence": "resilience.spec.ts:160 covers 30 stage re-creations in each of the five scenes (remount, loss plus retry, Static round trips). After forced GC, CDP Runtime.queryObjects finds exactly 1 WebGLRenderer and 1 WebGL2 context, 0/0 in Static, and 1 canvas. business.spec.ts:313 (30 controller re-creations), collection.spec.ts:22 (30 scene switches), party.spec.ts:161 and resilience.spec.ts:245 (a superseded compile frees what it built). All pass at HEAD in this audit. library.test.ts:33-87 pass in 134/134.",
+   "note": "The defect found in verification (technical-renderer-js-leak, 1 to 7 reachable renderers) is fixed in 66bafde. The new spec checks retained JS objects, not only canvases and warnings. The orchestrator's heap check found one live WebGL2 context after 0/1/3/6 remounts and 10 s in all five scenes.",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§11 Behavior verification",
    "requirement": "Automated tests exercise state and lifecycle contracts; reference captures aid regression review",
-   "status": "partial",
-   "evidence": "pnpm -s vitest run: 13 files, 109/109 passed (this audit, 2026-09-29 13:14); 9 browser specs in tests/browser/ (a11y, birthday, business, collection, dinner, idle, party, resilience, sports); reference captures in outputs/{business,party,birthday}/ (clips, stills, posters) and outputs/sports/ (clips and staged posters, 08:06)",
-   "note": "No Dinner reference captures exist yet. The Sports clips were recorded before the capture-judder fix (a2cff43), so they need re-recording. dinner.spec.ts:84 waits on Dinner posters. Playwright was not re-run (read-only rules).",
-   "pendingOn": [
-    "captures",
-    "dinner-model"
-   ]
+   "status": "met",
+   "evidence": "pnpm -s vitest run: 16 files, 134/134 passed (this audit, 2026-09-30 17:01). Playwright (system Chrome 154.0.8037.58, one worker): 69/69 passed in one full run in this audit (4.1 min, HEAD 7908069; src/ is unchanged since 060d9ab). By suite: a11y 7, birthday 5, business 13, collection 3, dinner 5, gallery 4, idle 2, party 9, resilience 16, sports 5. This matches qualification.md:118-119. Reference captures for all five scenes are in outputs/{business,party,birthday,sports,dinner}/ (host, accept, decline and change clips, preset variants and stills, 2026-09-30 15:18–15:58). Posters are in assets/scenes/*/posters, UI captures for all five scenes in outputs/ui (15:22–15:23), and frame times in outputs/perf/frame-times-<scene>.json. The captures predate the engine merge (66bafde) and 060d9ab. A poster-versus-live comparison at HEAD (scratchpad m7a-parity/live, captureStill 720² at 16:54–16:55, compared in this audit) finds all 40 shipped posters within a mean of 0.87–1.17/255, with no pixel over 40/255. The reference stills therefore still match the shipping renderer.",
+   "note": "Evidence corrected, status unchanged. The earlier per-suite split ('dinner and resilience 19/19; the other eight suites 50/50') does not match the specs: those groups hold 21 and 48 tests. The total of 69 was right. The Sports clips were re-recorded on 2026-09-30, after the capture-cadence and Sports motion fixes. The Dinner captures and posters exist. pendingOn stays []. (skeptic: The cited per-suite counts were wrong. They are replaced with this audit's own full 69/69 run, and a poster-versus-live check shows the pre-engine-merge captures still match the renderer at HEAD.)",
+   "pendingOn": []
   },
   {
    "key": "master-b",
    "section": "§11 Behavior verification",
    "requirement": "Human visual review separately inspects contact, silhouette, material consistency and choreography",
    "status": "partial",
-   "evidence": "Business approved at checkpoint 2b (style-reference.md:3); Party and Birthday at checkpoint 3 (style-reference.md:28; commit 0117e29); Sports model signed off by an independent reviewer (scratchpad/sports-polish-r1.json verdict signoff true; commit 12d72a4), pending Surya's confirmation (spec-revisions.md:18, row 12); checkpoint 4 critical reviews recorded in scratchpad/cp4/ (cohesion, motion, interface, technical, legibility, with skeptic verification; confirmed findings in cp4-open-findings.txt)",
-   "note": "Dinner is not signed off (dinner-polish-r2.json: signoff false) and its model polish is in flight. Open major motion findings on reviewed scenes: motion-business-departure-snap and motion-sports-rim-hang. No outputs/dinner review clips exist.",
+   "evidence": "Business approved by Surya at checkpoint 2b (style-reference.md:3). Party and Birthday approved at checkpoint 3 (style-reference.md:26-28). Sports model signed off by an independent reviewer (scratchpad/sports-polish-r1.json), pending Surya (spec-revisions row 12). The checkpoint 4 collection review by independent critical reviewers (cohesion, legibility and tiers, motion, interface, runtime) raised 59 findings, 54 confirmed. Each fix batch was verified before merging (qualification.md:122-148). Dinner rounds were driven by a separate unveiling review (qualification.md:141). Final captures for all five scenes are in outputs/<scene>/.",
+   "note": "motion-business-departure-snap is fixed (adec52f, merged abcda75; revision #19 in the working-tree spec-revisions.md, not yet committed). motion-sports-rim-hang is fixed (8fa87e5, merged ba6e54d, plus b3ff610). Dinner is judged on the dish unveiling, with food shelved (#17). The Sports, checkpoint 4 and checkpoint 5 sign-offs come from AI reviewers and await Surya's confirmation (qualification.md:236).",
    "pendingOn": [
-    "dinner-model",
-    "captures",
-    "surya",
-    "cp4-fix:motion-business-departure-snap",
-    "cp4-fix:motion-sports-rim-hang"
+    "surya"
    ]
   },
   {
@@ -2476,8 +2304,8 @@
    "section": "§11 Acceptance",
    "requirement": "1. Selected visual study and style tokens recorded by Surya; business scene reviewed on a phone",
    "status": "partial",
-   "evidence": "Selection recorded by Surya (docs/visual-study.md:40); style tokens in docs/style-reference.md v1.1, approved at checkpoint 2b (:1-3)",
-   "note": "The Business phone review on the iPhone 17 Max is still pending (qualification.md:88, :153).",
+   "evidence": "Selection recorded by Surya on 2026-09-28 (docs/visual-study.md:40). Style tokens are in docs/style-reference.md v1.1, approved by Surya at checkpoint 2b (:1-3).",
+   "note": "The Business phone review on the iPhone 17 Max is still pending (qualification.md:228).",
    "pendingOn": [
     "surya"
    ]
@@ -2486,15 +2314,11 @@
    "key": "master-b",
    "section": "§11 Acceptance",
    "requirement": "2. Every sub-spec's host, acceptance and decline criteria demonstrated, including static alternatives",
-   "status": "partial",
-   "evidence": "Business, Party and Birthday: tests, clips and posters (outputs/<scene>/*.mp4; assets/scenes/<scene>/posters); Sports: sports.test.ts, sports.spec.ts, clips outputs/sports/*.mp4, posters staged in outputs/sports/posters; Dinner: dinner.test.ts and dinner.spec.ts",
-   "note": "Sports posters are not in assets/, so the static alternative does not ship at HEAD. Dinner has no posters or clips, and its model polish is in flight. Open cp4 findings touch the Sports outcome criteria (motion-sports-rim-hang, motion-sports-airball-toss). Dinner acceptance and decline revisions await Surya (spec-revisions.md:19-20, rows 13-14).",
+   "status": "exception",
+   "evidence": "All five scenes have unit tests (business, party, birthday, sports and dinner .test.ts, all within 134/134 in this audit, 2026-09-30 17:01) and browser specs that pass at HEAD (Playwright 69/69 in this audit), including collection.spec.ts:78 (every category plays host, accept and decline to its canonical pose). Final clips are in outputs/<scene>/{host,accept,decline,change}.mp4, plus preset variants (2026-09-30). Static alternatives are posters for every preset and canonical pose in assets/ (tests/posters.test.ts). They match the live renderer at HEAD: all 40 posters are within a mean of 0.87–1.17/255 (scratchpad m7a-parity). In Static, every scene's host action, Accept, Decline and Replay work, with the matching poster and one request per answer (scratchpad m7sk/static.mjs, this audit). The Sports motion fixes are merged (8fa87e5, ba6e54d, b3ff610): one gravity family; the made ball keeps moving through the net; the airball flies long past the board on its own arc and rests on flat floor.",
+   "note": "Note corrected. Revision #19 (Business departure at 1.14 s) is committed: a660a1a, src/scenes/business/sequences.ts:104 DEPART_AT = 1.14. It is listed among Surya's open decisions in qualification.md 'Still open' (7908069), so it is no longer 'in the working tree'. Recorded deviations from sub-spec criteria behind the exception: Business status light (spec-revisions row 7); Business lanyard (row 8, Surya, checkpoint 2); Party tonearm step (row 10); Dinner cover rest place (row 13) and decline path (row 14), both pending Surya; Dinner and Business settle (row 15); Dinner food shelved as frozen placeholders (row 17, Surya); Business scan pose (row 18) and departure timing (row 19), both pending Surya. motion-sports-rim-hang and motion-sports-airball-toss are resolved. Keep pendingOn ['surya']. (skeptic: The note was stale: revision #19 is committed, not in the working tree. The deviation list also left out the earlier recorded sub-spec deviations (rows 7, 8, 10, 15) that the exception rests on.)",
    "pendingOn": [
-    "dinner-model",
-    "captures",
-    "surya",
-    "cp4-fix:motion-sports-rim-hang",
-    "cp4-fix:motion-sports-airball-toss"
+    "surya"
    ]
   },
   {
@@ -2511,10 +2335,9 @@
    "section": "§11 Acceptance",
    "requirement": "4. Performance targets met on the agreed matrix or explicit revisions recorded; no unverified blanket smoothness claim",
    "status": "unverified",
-   "evidence": "Desktop-only evidence, labelled as not phone evidence (qualification.md:79-88, :99, :123-125; scratchpad/cp4/technical/throttle.json, all five scenes at 4× CPU, labelled simulation); tier revisions recorded (spec-revisions.md:10 row 4, :22 row 16); no blanket smoothness claim (README.md:38; integration.md:11)",
-   "note": "The device matrix gap is recorded. The iPhone 17 Max run is pending and no low-end substitute is agreed. Per-scene 1×/4× cadence, cold load, render cost and memory figures for all five scenes are not yet in qualification.md (the tooling exists in scripts/capture.ts).",
+   "evidence": "Desktop evidence for all five scenes, labelled as not phone evidence (qualification.md:97-209): live render-cost peaks within 60k/40 (Business 39 calls, Birthday 58.0k triangles); frame cadence at 1× and 4× CPU (simulation), p95 16.7–16.8 ms with no frame over 50 ms (outputs/perf/frame-times-<scene>.json); cold load from the production build at 4 Mbps/100 ms, with controls usable in 0.91–1.01 s, render-ready in 2.19–3.22 s and 0.80–1.30 MB. GPU memory is calculated, not measured (qualification.md:294-296). Tier revisions are recorded (spec-revisions rows 4 and 16). There is no blanket smoothness claim (README.md:44; integration.md:11).",
+   "note": "The desktop measurement gap is closed. There is still no agreed device matrix: the iPhone 17 Max run is pending and no low-end substitute is agreed (qualification.md:25, :228). The targets cannot be claimed as met on phones.",
    "pendingOn": [
-    "measurements",
     "surya"
    ]
   },
@@ -2523,12 +2346,10 @@
    "section": "§11 Acceptance",
    "requirement": "5. Integration guide, source masters, asset/provenance manifest, runtime package, showcase build and release report delivered",
    "status": "partial",
-   "evidence": "docs/integration.md; models/ code masters; docs/asset-manifest.md (Sports production rows :50-52); dist/ showcase build (05:17); scripts/package-release.ts (Creative release folder with a SHA-256 manifest)",
-   "note": "No release package exists (~/Creative/Livetime/invitation-interactions has only study/, with empty exports/ and masters/), and there is no release report. dist/ predates the Sports and Dinner premium work. The manifest has no Dinner production model row, lists Sports posters under assets/ that are only staged, and still lists study-model Sports and Dinner thumbnails (:41).",
+   "evidence": "docs/integration.md (updated in 3f215c8). Code masters in models/. docs/asset-manifest.md now lists the Sports posters as shipped (:52), the Dinner production model (:53), the Dinner posters (:54) and production-capture thumbnails (:41). dist/ showcase build (2026-09-30 16:43). scripts/package-release.ts. A package folder, ~/Creative/Livetime/invitation-interactions/release-2026-09-30, appeared during this audit: MANIFEST.md, source f65f567, 270 files, 99.1 MiB, SHA-256, with docs, evidence, runtime, showcase and source, plus masters/MASTERS.md.",
+   "note": "The release step is still pending. The package seen here came before HEAD 9866254, which changed the release script, and there is no release report document. The asset manifest's poster byte ranges are stale against the final captures (for example Party per-label 28.7–29.0 KB listed vs 25.0–26.3 KB on disk).",
    "pendingOn": [
-    "release",
-    "dinner-model",
-    "captures"
+    "release"
    ]
   },
   {
@@ -2536,11 +2357,9 @@
    "section": "§11 Acceptance",
    "requirement": "6. Demo storage remains clearly mocked; real provider integration and public deployment require separate authorized work",
    "status": "met",
-   "evidence": "mockAdapter.ts:3-7; main.ts:43 ('Simulated saves' badge), :76 (host note), :97 (Simulated save control); integration.md:9; README.md:38; package-release.ts:1-3 'Nothing is sent or deployed'; index.html:7 noindex",
-   "note": "Open cp4 finding interface-landscape-header-overlap: at 667×375 with enlarged text, the Host/Guest switch covers the badge (it reads 'mulated saves'). 'Simulated' also appears in the host note and the Developer drawer.",
-   "pendingOn": [
-    "cp4-fix:interface-landscape-header-overlap"
-   ]
+   "evidence": "mockAdapter.ts:3-7 (SIMULATED persistence, never contacts a real service). main.ts:44 ('Simulated saves' badge), :76 (host note 'Nothing is sent to guests from this page'), :97-100 (Developer drawer 'Simulated save'). integration.md:9. README.md:40 and :44. package-release.ts:1-3 ('Nothing is sent or deployed'). index.html:7 noindex. This audit's layout run at 667×375 with 125% and 150% text, all five scenes, found no overlap between the badge and the Host/Guest switch.",
+   "note": "interface-landscape-header-overlap is fixed in eae932b: the switch is now in flow and the actions wrap (showcase.css:733-775).",
+   "pendingOn": []
   },
   {
    "key": "master-b",
@@ -2556,12 +2375,9 @@
    "section": "§12 Evidence boundaries",
    "requirement": "Technical references do not establish that models, budgets, visual quality or performance are achieved; no claim without evidence",
    "status": "partial",
-   "evidence": "qualification.md:3 'No result is claimed here without a dated measurement or check'; qualification.md:88, :99 and environment.md:46 label desktop figures as non-phone evidence; style-reference.md:19 (CSS finish cost unmeasured), :24 (Normal tier pending phone measurement)",
-   "note": "Two doc claims run ahead of evidence at HEAD. asset-manifest.md:52 lists 8 Sports posters in assets/scenes/sports/posters, but they exist only in outputs/sports/posters. integration.md:99 says context loss falls back to the poster, which is not true for Dinner (and not for Sports in the main checkout) until posters land.",
-   "pendingOn": [
-    "captures",
-    "dinner-model"
-   ]
+   "evidence": "qualification.md:3 ('No result is claimed here without a dated measurement or check'). qualification.md:99 and :187 and environment.md:46 label the desktop figures as non-phone evidence. Reviewer sign-offs are labelled pending Surya (qualification.md:99, :122), and style-reference.md:24 marks the revised Normal tier as pending phone measurement. Claims checked in this audit hold: the Sports posters (asset-manifest.md:52) exist; integration.md:99 (context loss falls back to the poster) holds in all five scenes (dinner.spec.ts:84 and this audit's restore check); integration.md:112 is backed by resilience.spec.ts:160; qualification.md:118-119 (134/134 and 69/69) match this audit's runs; the Business and Engine batch outcomes at qualification.md:139-140 are now filled in (7908069). Claims the evidence contradicts: (1) scripts/capture.ts:413 hard-codes the label 'M2 Pro · Chrome 153 · 390×844 @3x · Normal tier'. All five outputs/perf/frame-times-<scene>.json, written 2026-09-30 15:54–16:05, therefore say Chrome 153, but the host runs Chrome 154.0.8037.58 (checked in this audit), and qualification.md:106 says every automated check ran on 154. (2) environment.md:43 still gives the development host's browser as Chrome 153.0.8010.53. (3) The poster sizes in asset-manifest.md:40-54, 'measured from the files in assets/ on 2026-09-29' (line 16), no longer match the shipped files: Party per-label posters are recorded as 28.7–29.0 KB but ship at 25.0–26.3 KB; Party shared declined 15.8 vs 15.3 KB; Dinner 13.2–16.9 vs 13.6–17.5 KB; Business 22.0–25.9 vs 22.2–25.8 KB.",
+   "note": "Downgraded from met. The requirement is that nothing is claimed without evidence, and three records now state facts that their own evidence contradicts. The perf mislabel comes from a hard-coded string, so every future perf run will repeat it. None of them overstates a result: no measured value changes, and every poster is far inside the budget either way. So this is a small tidy-up, not a finding against the results. To reach met: take the perf label from browser.version() in capture.ts (or correct it) and relabel the five JSONs; update environment.md:43 to Chrome 154.0.8037.58; re-measure the poster sizes in asset-manifest.md. The earlier note's third item (blank placeholders at qualification.md:139-140) is resolved in 7908069. pendingOn stays [] (this is a docs and script tidy-up, not a device or client item). (skeptic: Stated claims that the current evidence contradicts (browser version in perf evidence and environment.md, poster sizes in the asset manifest) mean 'no claim without evidence' is not fully met.)",
+   "pendingOn": []
   },
   {
    "key": "business",
