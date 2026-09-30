@@ -1,4 +1,4 @@
-import { Euler, Vector3 } from 'three';
+import { Euler, Quaternion, Vector3 } from 'three';
 import { CARD, CARD_OFFSET_Y, FACE_F0, FACE_F1, HANG_PIVOT, HOOK, LANYARD_TOP_Y, SCANNER_FOOT, SCANNER_POS } from '../../../models/keycard.ts';
 
 /**
@@ -23,6 +23,18 @@ export const PAD_CENTER = new Vector3(SCANNER_POS.x - 0.1, SCANNER_FOOT + fc.y +
 
 /** Card tilt that lays its face parallel to the reading face. */
 export const SCAN_TILT = -Math.asin(FACE_NORMAL.y);
+/**
+ * At the reader the card also turns 20° about its own long axis, its face away from the key
+ * light and softbox (upper left) and towards the lens. Flat to the face, the laminate mirrored
+ * the softbox for the whole hold and the print washed out to about 2.8x its rest luminance;
+ * turned, it stays within about 20 % of rest. No still shows this pose.
+ */
+export const SCAN_YAW = (20 * Math.PI) / 180;
+/**
+ * The turn hinges on the pad's right side (card-local x), so the card's right edge, the part
+ * over the reader, stays clear of the glass through the contact press.
+ */
+const SCAN_HINGE_X = 0.3;
 
 function scanPivot(): Vector3 {
   // Card centre hovers over the face with its lower edge just past the pad; kept left of the
@@ -30,13 +42,17 @@ function scanPivot(): Vector3 {
   const centre = new Vector3(0.33, PAD_CENTER.y, PAD_CENTER.z)
     .addScaledVector(FACE_UP, CARD.height / 2 - 0.2)
     .addScaledVector(FACE_NORMAL, 0.07);
-  const offset = new Vector3(0, CARD_OFFSET_Y, 0).applyEuler(new Euler(SCAN_TILT, 0, 0));
+  const flat = new Quaternion().setFromEuler(new Euler(SCAN_TILT, 0, 0));
+  const turned = new Quaternion().setFromEuler(new Euler(SCAN_TILT, SCAN_YAW, 0));
+  const hinge = new Vector3(SCAN_HINGE_X, 0, 0);
+  centre.add(hinge.clone().applyQuaternion(flat)).sub(hinge.applyQuaternion(turned));
+  const offset = new Vector3(0, CARD_OFFSET_Y, 0).applyQuaternion(turned);
   return centre.sub(offset);
 }
 
 export const POSE = {
   ready: { pivot: HANG_PIVOT.clone(), rot: new Euler(0, 0, 0) },
-  scan: { pivot: scanPivot(), rot: new Euler(SCAN_TILT, 0, 0) },
+  scan: { pivot: scanPivot(), rot: new Euler(SCAN_TILT, SCAN_YAW, 0) },
   rest: { pivot: new Vector3(-0.22, 1.98, 0.3), rot: new Euler(0, 0, -0.035) },
 } as const;
 

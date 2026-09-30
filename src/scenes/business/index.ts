@@ -10,8 +10,13 @@ import { clampDragTarget, touchesScanner } from './drag.ts';
 import { DURATIONS, SCAN_AT, STATUS_COLOURS } from './poses.ts';
 import { frameFor, newFrame, sampleSequence, type BusinessFrame } from './sequences.ts';
 
-/** Premium status light: colour spill onto the card and housing (no bloom, Master §5). */
-const GLOW = { spill: 0.8 };
+/**
+ * Premium status light (no bloom, Master §5). The lit window keeps the idle glass colour and
+ * glows by emission alone, so it renders close to its token instead of clipping to mint or
+ * pink. Green sits brighter than red, so the two differ in value as well as hue (also under
+ * deuteranopia). The spill tints the card at the scan beat without washing its print.
+ */
+const GLOW = { spill: 0.35, window: { accept: 1, decline: 0.85 } };
 
 /** Release/cancel blend onto the scanner approach (sub-spec: 350–600 ms). */
 const RELEASE_BLEND = 0.45;
@@ -202,11 +207,15 @@ export class BusinessScene implements SceneInstance {
       m.color.set(off.color);
       m.emissive.set('#000000');
       m.emissiveIntensity = 0;
+    } else if (this.rig.glow) {
+      // Premium: a lit panel with an ink glyph (LED-display contrast).
+      m.color.set(off.color);
+      m.emissive.set(STATUS_COLOURS[lit]);
+      m.emissiveIntensity = GLOW.window[lit];
     } else {
       m.color.set(STATUS_COLOURS[lit]);
       m.emissive.set(STATUS_COLOURS[lit]);
-      // Premium: a lit panel with a dark glyph (LED-display contrast).
-      m.emissiveIntensity = this.rig.glow ? 0.85 : 0.9;
+      m.emissiveIntensity = 0.9;
     }
     this.rig.symbols.accept.visible = lit === 'accept';
     this.rig.symbols.decline.visible = lit === 'decline';
