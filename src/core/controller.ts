@@ -16,7 +16,7 @@ import type {
 } from './types.ts';
 import { VisualDirector } from './visualDirector.ts';
 import { FixedStepper } from '../motion/spring.ts';
-import { hasWebGL2 } from '../render/createRenderer.ts';
+import { hasWebGL2, resetWebGL2Probe } from '../render/createRenderer.ts';
 import { type DirectionId, LOCKED_DIRECTION, MaterialLibrary } from '../render/materials.ts';
 import { QualityMonitor, TIER_DPR, type Tier } from '../render/quality.ts';
 import { Stage, type StageOptions } from '../render/stage.ts';
@@ -100,10 +100,34 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     if (!lib) libraries.set(direction, (lib = new MaterialLibrary(direction)));
     return lib;
   };
-  /** Free every material and texture; call only once the stage no longer shows them. */
-  function freeLibraries() {
-    for (const lib of libraries.values()) lib.dispose();
+  /**
+   * Free every material and texture; call only once the stage no longer shows them. `afterCompile`
+   * waits for in-flight precompiles first (see afterCompiles).
+   */
+  function freeLibraries(afterCompile = false) {
+    const freed = [...libraries.values()];
     libraries.clear();
+    const free = () => {
+      for (const lib of freed) lib.dispose();
+    };
+    if (afterCompile) afterCompiles(free);
+    else free();
+  }
+  /**
+   * Precompiles still running. Chrome links programs in parallel (KHR_parallel_shader_compile)
+   * and logs glGetProgramiv errors for a program deleted mid-link, so a superseded load's scene
+   * and materials are freed only once the compiles that may be linking them have settled.
+   */
+  const compiling = new Set<Promise<unknown>>();
+  function afterCompiles(release: () => void) {
+    if (compiling.size === 0) release();
+    else void Promise.allSettled([...compiling]).then(release);
+  }
+  function trackCompile<T>(compile: Promise<T>): Promise<T> {
+    compiling.add(compile);
+    const done = () => compiling.delete(compile);
+    compile.then(done, done);
+    return compile;
   }
   /** The category whose scene last drew from the library. */
   let libraryCategory: Category | null = null;
@@ -160,6 +184,8 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   director.setReducedMotion(reduced());
 
   let stage: Stage | null = null;
+  /** A stage's canvas after its context was lost: it keeps only the restore listener. */
+  let lostCanvas: HTMLCanvasElement | null = null;
   let scene: SceneInstance | null = null;
   let loadAbort: AbortController | null = null;
   let loadTimer: ReturnType<typeof setTimeout> | null = null;
@@ -229,9 +255,10 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     grab.hidden = true;
     director.attach(null);
     stage?.setContent(null);
-    scene?.dispose();
+    const released = scene;
     scene = null;
     simulate = null;
+    if (released) afterCompiles(() => released.dispose());
   }
 
   async function loadScene() {
@@ -240,7 +267,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     releaseScene();
     // A new category shares nothing with the old scene (now off the stage): free its materials
     // and textures so the next scene builds only what it needs.
-    if (libraryCategory !== config.category) freeLibraries();
+    if (libraryCategory !== config.category) freeLibraries(true);
     libraryCategory = config.category;
     canRetryGraphics = false;
 
@@ -271,6 +298,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
 
     try {
       if (!stage) {
+        dropLostCanvas();
         stage = Stage.create(options.stage ?? { premium: true });
         if (!stage) {
           setResource('fallback', 'webgl-unavailable');
@@ -278,6 +306,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
         }
         attachCanvas(stage);
       }
+      const s = stage;
       const loader = options.scenes[config.category];
       if (!loader) throw new Error(`No scene registered for ${config.category}`);
       const module = await loader();
@@ -299,30 +328,47 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       scene = instance;
       // A preset chosen while the asset was loading wins over the one the load started with.
       instance.setConfig(config);
-      stage.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints);
+      s.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints);
       resize();
       applyTierDetail(quality.tier);
       let shaderError = false;
-      stage.renderer.debug.onShaderError = () => {
+      const onShaderError = () => {
         shaderError = true;
       };
+      const debug = s.renderer.debug;
+      debug.onShaderError = onShaderError;
       try {
-        if (instance.precompile) await instance.precompile(stage.renderer, stage.camera);
-        else await stage.renderer.compileAsync(stage.scene, stage.camera);
-        // compileAsync resolves even when linking failed; force the link check now so a
-        // broken program becomes a poster fallback instead of a blank stage.
-        for (const program of stage.renderer.info.programs ?? []) (program as { getUniforms(): unknown }).getUniforms();
+        await trackCompile<unknown>(instance.precompile ? instance.precompile(s.renderer, s.camera) : s.renderer.compileAsync(s.scene, s.camera));
       } catch {
         shaderError = true;
       }
-      stage.renderer.debug.onShaderError = null;
-      if (abort.signal.aborted || disposed) return;
+      // A superseded load stops here: the link check below would force the newer load's
+      // in-flight programs to finish synchronously, and the shader hook may be the newer load's.
+      if (abort.signal.aborted || disposed) {
+        if (debug.onShaderError === onShaderError) debug.onShaderError = null;
+        return;
+      }
+      try {
+        // compileAsync resolves even when linking failed; force the link check now so a
+        // broken program becomes a poster fallback instead of a blank stage.
+        for (const program of s.renderer.info.programs ?? []) (program as { getUniforms(): unknown }).getUniforms();
+      } catch {
+        shaderError = true;
+      }
+      if (debug.onShaderError === onShaderError) debug.onShaderError = null;
       if (shaderError) throw Object.assign(new Error('shader'), { reason: 'shader-failure' as const });
-      if (contextLost || stage.renderer.getContext().isContextLost()) {
+      if (contextLost || s.renderer.getContext().isContextLost()) {
         throw Object.assign(new Error('context'), { reason: 'context-lost' as const });
       }
       director.setReducedMotion(reduced());
       director.attach(instance);
+      // One warm frame while the poster still covers the canvas: compileAsync neither builds the
+      // shadow pass's depth program nor uploads textures, so without it the first frame after
+      // 'ready' (guest input live) would link and upload synchronously. Hidden tabs never draw.
+      if (!document.hidden) {
+        instance.beforeRender?.();
+        s.render();
+      }
       if (loadTimer) clearTimeout(loadTimer);
       const late = performance.now() - startedAt > LATE_LOAD_MS;
       canvasHost.style.transition = late || reduced() ? 'none' : `opacity ${ENTRANCE_MS}ms ease-out`;
@@ -346,20 +392,39 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     canvas.addEventListener('pointerdown', onPointerDown);
   }
 
-  function destroyStage() {
+  /**
+   * Dispose the stage and every material and texture it drew. On context loss (`lost`) this runs
+   * while the context is lost, so the deletes are silent no-ops (after a restore they would
+   * target objects of the old context), and the dead canvas stays, hidden behind the poster,
+   * with only its restore listener.
+   */
+  function destroyStage(lost = false) {
+    dropLostCanvas();
     if (!stage) return;
     const canvas = stage.canvas;
     canvas.removeEventListener('webglcontextlost', onContextLost);
-    canvas.removeEventListener('webglcontextrestored', onContextRestored);
     canvas.removeEventListener('pointerdown', onPointerDown);
     stage.dispose();
-    canvas.remove();
     stage = null;
     // Library materials and textures hold GPU resources of the renderer just disposed.
     freeLibraries();
+    if (lost) {
+      lostCanvas = canvas;
+    } else {
+      canvas.removeEventListener('webglcontextrestored', onContextRestored);
+      canvas.remove();
+    }
+  }
+
+  function dropLostCanvas() {
+    if (!lostCanvas) return;
+    lostCanvas.removeEventListener('webglcontextrestored', onContextRestored);
+    lostCanvas.remove();
+    lostCanvas = null;
   }
 
   function onContextLost(event: Event) {
+    // Prevented, the browser may restore the context (webglcontextrestored).
     event.preventDefault();
     contextLost = true;
     loadAbort?.abort();
@@ -369,13 +434,15 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     raf = 0;
     looping = false;
     releaseScene();
+    destroyStage(true);
     setResource('fallback', 'context-lost');
   }
 
   function onContextRestored() {
     if (restorationAttempted || disposed) return;
     restorationAttempted = true;
-    destroyStage();
+    // The stage went with the loss; loadScene builds a fresh one (new canvas and context).
+    dropLostCanvas();
     contextLost = false;
     void loadScene().then(() => {
       if (resource === 'ready') options.onResourceState?.({ state: 'ready', reason: 'context-restored' });
@@ -440,16 +507,38 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     const next = quality.applyPending();
     if (!next) return;
     if (next === 'static') {
+      // Static shows the poster only: release the stage (context, drawing buffer, environment,
+      // materials). Leaving Static reloads the scene on a fresh stage.
       releaseScene();
-      applyTierDetail(next);
+      destroyStage();
       setResource('fallback', 'performance-static');
       return;
     }
-    applyTierDetail(next);
-    resize();
-    redraw();
+    void switchTier(next);
     options.onResourceState?.({ state: resource, reason: 'reduced-quality' });
     emit();
+  }
+
+  /**
+   * A tier change on the live scene. The new material and light variants compile off the main
+   * thread first (the first switch to Low links 4–6 programs, 40–110 ms if the redraw did it);
+   * the resize, which clears the drawing buffer, and the redraw wait for them, so the last frame
+   * stays up meanwhile. A frame drawn before they are ready finishes the link itself.
+   */
+  async function switchTier(tier: Tier) {
+    applyTierDetail(tier);
+    const s = stage;
+    const live = scene;
+    if (s && live && resource === 'ready') {
+      try {
+        await trackCompile(s.renderer.compileAsync(s.scene, s.camera));
+      } catch {
+        // The redraw compiles instead.
+      }
+      if (disposed || stage !== s || scene !== live || quality.tier !== tier) return;
+    }
+    resize();
+    redraw();
     requestFrame();
   }
 
@@ -679,6 +768,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       if (disposed || resource === 'ready') return;
       if (quality.tier === 'static') quality.tier = 'low';
       contextLost = false;
+      resetWebGL2Probe();
       destroyStage();
       void loadScene();
     },
@@ -692,17 +782,14 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
         loadAbort = null;
         if (loadTimer) clearTimeout(loadTimer);
         releaseScene();
-        applyTierDetail(tier);
+        destroyStage();
         setResource('fallback', 'performance-static');
       } else if (resource !== 'ready') {
         if (contextLost) destroyStage();
         contextLost = false;
         void loadScene();
       } else {
-        applyTierDetail(tier);
-        resize();
-        redraw();
-        requestFrame();
+        void switchTier(tier);
       }
       emit();
     },

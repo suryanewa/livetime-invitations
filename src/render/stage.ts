@@ -1,10 +1,11 @@
-import { Box3, Color, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PerspectiveCamera, Scene, type Vector3, type WebGLRenderer } from 'three';
+import { Box3, Color, type Material, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PerspectiveCamera, Scene, type Texture, type Vector3, type WebGLRenderer } from 'three';
 import { cameraDirection, createStageCamera, fitCameraToBounds, fitPerspectiveToBounds } from './camera.ts';
 import { createPremiumStudio, type PremiumStudio } from './studio.ts';
 import { createRenderer, sizeRenderer } from './createRenderer.ts';
 import { releaseShadowTextureGpu } from './contactShadow.ts';
 import { createStudioRig, type StudioRig } from './lighting.ts';
 import { releaseCachedTextureGpu } from './textures.ts';
+import { shadowProxyMaterial } from '../../models/shadowProxy.ts';
 
 export const STAGE_COLOR = '#F4F1EB';
 /** Premium studio: the rendered plaster colour (behind anything the sweep does not cover). */
@@ -23,6 +24,26 @@ function castsVisibleShadow(m: Mesh): boolean {
   extent.copy(g.boundingBox!);
   const x = extent.max.x - extent.min.x, y = extent.max.y - extent.min.y, z = extent.max.z - extent.min.z;
   return Math.min(x, y, z) > 0.015 && Math.max(x, y, z) > 0.05;
+}
+
+/**
+ * three r186 shares one DFG lookup texture across every renderer on the page. Each renderer that
+ * uploads it adds a dispose listener that renderer.dispose() leaves behind, so the LUT keeps every
+ * disposed renderer (and its context) reachable. Disposing the LUT drops all those listeners;
+ * live renderers upload it again on their next draw. three does not export it: it is found
+ * through a drawn material's uniforms, and remembered for stages whose materials are gone.
+ */
+let dfgLUT: Texture | null = null;
+function releaseDfgLUT(renderer: WebGLRenderer, scene: Scene): void {
+  scene.traverse((o) => {
+    const m = (o as Mesh).material as Material | Material[] | undefined;
+    for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
+      if (dfgLUT) return;
+      const uniforms = (renderer.properties.get(mat) as { uniforms?: { dfgLUT?: { value?: Texture | null } } }).uniforms;
+      dfgLUT = uniforms?.dfgLUT?.value ?? null;
+    }
+  });
+  dfgLUT?.dispose();
 }
 
 export interface StageOptions {
@@ -164,14 +185,19 @@ export class Stage {
   }
 
   dispose(): void {
+    // Before the content and studio (whose materials lead to the shared LUT) leave the scene.
+    releaseDfgLUT(this.renderer, this.scene);
     this.setContent(null);
     this.premium?.dispose();
     this.rig.dispose();
-    // Shared texture caches hold dispose listeners that would keep this renderer (and its
-    // GL context) reachable; release their GPU copies, then drop the context explicitly.
+    // Shared texture caches and the shared shadow-proxy material (Birthday, Dinner) hold dispose
+    // listeners that would keep this renderer (and its GL context) reachable; release their GPU
+    // copies, then drop the context explicitly (a context already lost has nothing left to
+    // release, and no extension to do it with).
     releaseCachedTextureGpu();
     releaseShadowTextureGpu();
+    shadowProxyMaterial().dispose();
     this.renderer.dispose();
-    this.renderer.forceContextLoss();
+    if (!this.renderer.getContext().isContextLost()) this.renderer.forceContextLoss();
   }
 }

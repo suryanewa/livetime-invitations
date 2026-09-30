@@ -2,15 +2,18 @@ import {
   BackSide,
   BoxGeometry,
   Color,
+  type ColorSpace,
   DirectionalLight,
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
+  type PixelFormat,
   PlaneGeometry,
   PMREMGenerator,
   Scene,
   type Texture,
   type WebGLRenderer,
+  WebGLRenderTarget,
 } from 'three';
 
 /**
@@ -73,6 +76,38 @@ function buildEnvironmentScene(): Scene {
   return scene;
 }
 
+/**
+ * The PMREM target keeps the depth renderbuffer the room was rendered with (3 MiB at 768×1024),
+ * needed only while generating. Copy the prefiltered texture, texel for texel, into a depth-less
+ * target of the same size, type and filters, and free the original. A driver that refuses the
+ * half-float copy keeps the original (and its depth buffer) rather than a blank environment.
+ */
+function withoutDepth(renderer: WebGLRenderer, generated: WebGLRenderTarget): WebGLRenderTarget {
+  const gl = renderer.getContext();
+  // Clear errors raised earlier, so the check below sees only the copy's.
+  for (let i = 0; i < 8; i++) if (gl.getError() === gl.NO_ERROR) break;
+  const src = generated.texture;
+  const copy = new WebGLRenderTarget(generated.width, generated.height, {
+    type: src.type,
+    format: src.format as PixelFormat,
+    colorSpace: src.colorSpace as ColorSpace,
+    minFilter: src.minFilter,
+    magFilter: src.magFilter,
+    generateMipmaps: false,
+    depthBuffer: false,
+  });
+  copy.texture.mapping = src.mapping;
+  copy.texture.name = src.name;
+  renderer.initRenderTarget(copy);
+  renderer.copyTextureToTexture(src, copy.texture);
+  if (gl.getError() !== gl.NO_ERROR) {
+    copy.dispose();
+    return generated;
+  }
+  generated.dispose();
+  return copy;
+}
+
 export interface StudioRig {
   environment: Texture;
   lights: [DirectionalLight, HemisphereLight];
@@ -82,7 +117,7 @@ export interface StudioRig {
 export function createStudioRig(renderer: WebGLRenderer, scene: Scene): StudioRig {
   const pmrem = new PMREMGenerator(renderer);
   const envScene = buildEnvironmentScene();
-  const target = pmrem.fromScene(envScene, 0.035);
+  const generated = pmrem.fromScene(envScene, 0.035);
   envScene.traverse((o) => {
     if (o instanceof Mesh) {
       o.geometry.dispose();
@@ -90,6 +125,7 @@ export function createStudioRig(renderer: WebGLRenderer, scene: Scene): StudioRi
     }
   });
   pmrem.dispose();
+  const target = withoutDepth(renderer, generated);
 
   const key = new DirectionalLight(LIGHT_RIG.key.color, LIGHT_RIG.key.intensity);
   key.position.set(...LIGHT_RIG.key.position);
