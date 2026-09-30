@@ -80,6 +80,28 @@ test('Pointer drags and rapid taps on the stage never change the outcome or send
   expect(await stillDiff(page, settled, canonical)).toBeLessThan(0.5);
 });
 
+test('The declined still is clearly not the guest-ready still (Static tier and reduced-motion swap)', async ({ page }) => {
+  await ready(page);
+  await page.getByRole('button', { name: 'Guest', exact: true }).click();
+  const snap = async () => {
+    await page.waitForTimeout(150);
+    return page.evaluate(() => (window as any).__showcase.controller.captureStill(256, 1) as string);
+  };
+  await page.evaluate(() => (window as any).__showcase.controller.setReducedMotion(true));
+  const guestReady = await snap();
+  await page.getByRole('button', { name: 'Accept' }).click();
+  await expect.poll(async () => (await state(page)).visual).toBe('accepted-pose');
+  const accepted = await snap();
+  await page.getByRole('button', { name: 'Decline' }).click();
+  await expect.poll(async () => (await state(page)).visual).toBe('declined-pose');
+  const declined = await snap();
+  const toDeclined = await stillDiff(page, guestReady, declined);
+  const toAccepted = await stillDiff(page, guestReady, accepted);
+  // The ball ends visibly elsewhere: the swap to declined changes about as much as the swap to accepted.
+  expect(toDeclined).toBeGreaterThan(0.75 * toAccepted);
+  expect(await stillDiff(page, accepted, declined)).toBeGreaterThan(0.75 * toAccepted);
+});
+
 test('Cream preset and a saved decline show the static state without a new request', async ({ page }) => {
   await ready(page, '/?scene=sports&saved=decline');
   expect((await state(page)).visual).toBe('declined-pose');
