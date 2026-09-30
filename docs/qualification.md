@@ -119,6 +119,34 @@ All figures were measured on the authoring Mac (M2 Pro; Chrome 153, then 154 aft
 | Browser tests (Playwright, system Chrome) | 50 / 51 pass. The failure is `dinner.spec.ts` "Graphics loss shows the shared declined Dinner poster": Dinner's posters had not yet been copied into `assets/` (fixed by the Dinner capture; re-run below) |
 | Real-time sequence length (live showcase, `pnpm capture timing`, median of 3) | Business host 1.21 / accept 1.51 / decline 1.51 s · Party 1.21 / 1.61 / 1.41 · Birthday 1.31 / 1.41 / 1.51 · Sports 1.21 / 1.71 / 1.61 · Dinner 1.21 / 1.51 / 1.51 (each about 10 ms over the authored length: one animation frame to detect the end) |
 
+### Checkpoint 4 collection review (independent critical reviewers, pending Surya's confirmation)
+
+The reviewers each covered the collection through one lens:
+- cohesion;
+- phone-scale legibility and tiers;
+- motion;
+- interface and accessibility;
+- runtime quality.
+
+Each reviewer's findings went to a separate skeptic who tried to reproduce and refute them. 59 findings were raised, 54 confirmed and 5 rejected. Fixes ran in six isolated worktrees, one per file set. A separate reviewer verified each fix before it was merged.
+
+| Batch | Outcome |
+| --- | --- |
+| Showcase shell (11 findings) | Merged, verified. A category switch is a new invitation. On phones the stage comes into view and the new event is announced. The event line wraps and reads correctly to screen readers. The graphics notice is correct for image and text fallbacks. Layout survey: 204 cases, no overflow, overlap or target under 44 px. The one open copy item (preset labels) is left for Surya |
+| Collection gallery (4) | Merged, verified: five scenes side by side, a live stage on load, readable captions, replay on repeat clicks, phone scrolling |
+| Party finish (2) | Merged, verified: lid-lining moiré removed, reveal groove continuous; the approved look and the lanyard strap unchanged |
+| Sports motion and legibility (6) | Merged. The round-1 fix was verified for five findings: the made ball and the airball continue on their own arcs, answer changes blend where a blend is clean, the pass and the shot share one gravity family, and the airborne ball shows one shadow. Its declined rest spot sat on the rising backdrop cove. The orchestrator pushed the Sports wall back to z −4.2, like Birthday's and Dinner's, and a unit test now keeps every touchdown and rest on flat floor. A second round that moved the rest spot instead had pulled the airball back towards a vertical toss, so it was not used |
+| Business motion and legibility (4) | <!--BUSINESS--> |
+| Engine and renderer (8) | <!--ENGINE--> |
+| Dinner (orchestrator) | Frame fit taken from the real bin geometry (the flaps had come within 2.3 % of the top edge). New layout; a continuous transfer paced on screen; flaps close once the dish is out of sight; a continuous reveal and lowering; a contact-driven rim rock; the cloche's own contact shadow; a gentler bin entrance; blends while the cloche is still over the food; the host lifts the cloche from where the guest's reveal sets it down. A separate unveiling review (food shelved) drove the last round |
+| Studio (orchestrator) | The near palm frond whose tip streaked the front floor is removed. The Low tier keeps a small gobo |
+
+Deferred, with reasons:
+- **Interruption blends:** an eased or cross-dissolved interruption blend, and removing the Party label's backwards turn during the reset blend. Polish; it crosses the director and three scenes, and a dissolve needs a snapshot layer.
+- **The "land" ease used from rest:** in Party's stylus drop and Birthday's wick return. Polish in approved scenes.
+- **Thicker Sports net cords for the Low tier:** a Low-tier limitation, recorded below; changing the cords would change the signed-off Normal look.
+- **The Birthday stand and the floor shadows at Low:** recorded as a Low-tier limitation.
+
 ### Render cost per scene (lookdev, 358² @3×, including the shadow pass, contact shadows and the studio sweep)
 
 | Scene (ready pose) | Triangles | Draw calls | Budget |
@@ -129,7 +157,17 @@ All figures were measured on the authoring Mac (M2 Pro; Chrome 153, then 154 aft
 | Sports guest-ready | 35.9k | 18 | 60k / 40 |
 | Dinner accepted (cloche beside the pasta, bin off stage) | 27.3k | 20 | 60k / 40 |
 
-The shared bin adds about 8.4k triangles and 5 draw calls while it is on stage (Birthday and Dinner decline). The Dinner builder measured its decline peak with the bin at 44.1k / 32.
+These lookdev numbers are a static ready pose. The budget is judged on the **live per-frame peak** across host, accept, decline and an answer change, both presets. The peak includes the shadow pass and everything on stage: lanyard, status light and the bin while it is on stage. It was sampled every frame in the running showcase with the checkpoint 4 technical reviewer's harness.
+
+| Scene | Ready pose, tris / calls | Live peak, tris (main + shadow) | Live peak, calls (main + shadow) | Budget |
+| --- | --- | --- | --- | --- |
+| Business (light / dark) | 56.4k / 37 | 57.1k (29.1k + 27.9k), in accept, decline and answer changes | 39 (24 + 15): one call under budget, so any new Business geometry needs a shadow proxy or a merge | 60k / 40 |
+| Party (either label) | 45.6k / 34 | 45.6k (24.0k + 21.6k) | 34 (21 + 13) | 60k / 40 |
+| Birthday (either cake) | 39.2k / 19 | 58.0k (43.0k + 15.0k), in the decline with the bin | 34 (26 + 8) | 60k / 40 |
+| Sports (either ball) | 35.9k / 18 | 35.9k (20.6k + 15.3k) | 18 (13 + 5) | 60k / 40 |
+| Dinner (pasta / vegetables) | 27.3k / 20, 27.9k / 21 | 44.7k / 45.3k (33.9k + 11.4k), in the decline with the bin | 32 / 33 (24 + 9) | 60k / 40 |
+
+Birthday's decline is the tightest: 2k triangles under budget. Smoother bin flaps (48 segments) had pushed it to 61.4k, so the flaps now use 40 segments.
 
 ### Transfer and cold load
 
