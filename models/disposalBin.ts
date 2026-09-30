@@ -109,14 +109,14 @@ export function buildDisposalBin(ctx: ModelContext): Object3D {
   const lid = group('bin_lid', root);
   lid.position.set(0, top, 0);
   const profile: ProfilePoint[] = [[0, -0.012], [R + 0.02, -0.012, 0.008], [R + 0.022, 0.03, 0.012], [R - 0.12, 0.085, 0.14], [0, 0.11]];
-  // Fine fillets and 48 segments per half, with analytic tangents: the brushed flaps read as
+  // Finer fillets and 40 segments per half, with analytic tangents: the brushed flaps read as
   // turned metal, not radial wedges (checkpoint 4 review).
-  const pts = filletPolyline(profile, 6);
+  const pts = filletPolyline(profile, 4);
   for (const side of [-1, 1] as const) {
     const flap = group(side < 0 ? 'bin_flap_l' : 'bin_flap_r', lid);
     flap.position.set(side * BIN.hingeX, 0, 0);
     // LatheGeometry places points at (sin φ·r, y, cos φ·r): φ ∈ [π, 2π] is the −x half.
-    const half = withTangents(new LatheGeometry(pts, 48, side < 0 ? Math.PI : 0, Math.PI), 'around');
+    const half = withTangents(new LatheGeometry(pts, 40, side < 0 ? Math.PI : 0, Math.PI), 'around');
     // Cap on the cut plane (x = 0): the profile mirrored across the axis.
     const shape = new Shape([...pts.map((p) => new Vector2(p.x, p.y)), ...[...pts].reverse().map((p) => new Vector2(-p.x, p.y))]);
     const cap = new ShapeGeometry(shape, 1);
