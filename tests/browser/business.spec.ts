@@ -195,6 +195,82 @@ test('The lit status window keeps its colour: no clipping, no hotspot, green and
   expect(ratio(deut(accept.median), deut(decline.median))).toBeGreaterThanOrEqual(1.75);
 });
 
+test('The card print keeps its colour through the scan hold: the laminate does not wash it out', async ({ page }) => {
+  await page.clock.install();
+  await ready(page);
+  await guest(page);
+  // Mean linear luminance of the cobalt print panel (light template): the largest strongly
+  // blue region, eroded 2 px so edges and the strap never count.
+  const panel = () => page.evaluate(async () => {
+    const url = (window as any).__showcase.controller.captureStill(540, 1, 'image/png') as string;
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const g = c.getContext('2d')!;
+    g.drawImage(img, 0, 0);
+    const { data, width: w, height: h } = g.getImageData(0, 0, c.width, c.height);
+    const blue = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      const r = data[i * 4]!, gr = data[i * 4 + 1]!, b = data[i * 4 + 2]!;
+      blue[i] = b > r + 25 && b > gr + 15 ? 1 : 0;
+    }
+    const label = new Int32Array(w * h);
+    let best = 0, bestSize = 0, next = 0;
+    for (let s = 0; s < w * h; s++) {
+      if (!blue[s] || label[s]) continue;
+      const stack = [s];
+      label[s] = ++next;
+      let size = 0;
+      while (stack.length) {
+        const i = stack.pop()!;
+        size++;
+        const x = i % w;
+        for (const j of [i - w, i + w, x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1]) {
+          if (j >= 0 && j < w * h && blue[j] && !label[j]) { label[j] = next; stack.push(j); }
+        }
+      }
+      if (size > bestSize) { bestSize = size; best = next; }
+    }
+    const lin = (v: number) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    let sum = 0, n = 0;
+    for (let y = 2; y < h - 2; y++) {
+      for (let x = 2; x < w - 2; x++) {
+        let inside = true;
+        for (let dy = -2; dy <= 2 && inside; dy++) for (let dx = -2; dx <= 2 && inside; dx++) inside = label[(y + dy) * w + x + dx] === best;
+        if (!inside) continue;
+        const i = (y * w + x) * 4;
+        sum += 0.2126 * lin(data[i]!) + 0.7152 * lin(data[i + 1]!) + 0.0722 * lin(data[i + 2]!);
+        n++;
+      }
+    }
+    return { lum: sum / n, n };
+  });
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  await page.clock.runFor(1000);
+  await page.evaluate(() => (window as any).__showcase.controller.chooseResponse('accept'));
+  // Approach end, contact press, scan hold and settle (sub-spec 0.55–1.15 s).
+  const hold: number[] = [];
+  let at = 0;
+  for (const t of [0.6, 0.75, 0.9, 1.05, 1.15]) {
+    await page.clock.runFor(Math.round((t - at) * 1000));
+    at = t;
+    const p = await panel();
+    expect(p.n, `t=${t}`).toBeGreaterThan(1500);
+    hold.push(p.lum);
+  }
+  await page.clock.runFor(1000);
+  expect((await state(page)).visual).toBe('accepted-pose');
+  const rest = await panel();
+  expect(rest.n).toBeGreaterThan(1500);
+  // Within about 25 % of rest for the whole hold (it was 2.8x: pale lavender at the key beat).
+  const ratios = hold.map((l) => l / rest.lum);
+  expect(ratios.reduce((a, b) => a + b) / ratios.length).toBeLessThanOrEqual(1.25);
+  for (const r of ratios) expect(r).toBeLessThanOrEqual(1.3);
+});
+
 test('An initially saved response shows its final pose without a new submission', async ({ page }) => {
   await ready(page, '/?saved=decline');
   const s = await state(page);

@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import { Box3, Color, type Mesh, MeshStandardMaterial, Object3D, PointLight, Vector3 } from 'three';
+import { Box3, Color, DoubleSide, Euler, Matrix3, type Mesh, MeshStandardMaterial, Object3D, PointLight, Raycaster, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CARD, HOOK, type KeycardRig } from '../models/keycard.ts';
+import { cameraDirection } from '../src/render/camera.ts';
+import { LIGHT_RIG } from '../src/render/lighting.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { BusinessScene } from '../src/scenes/business/index.ts';
-import { DURATIONS, SCAN_AT, STATUS_COLOURS } from '../src/scenes/business/poses.ts';
+import { DURATIONS, SCAN_AT, SCAN_TILT, SCAN_YAW, STATUS_COLOURS } from '../src/scenes/business/poses.ts';
 import { frameFor, newFrame, sampleSequence, type BusinessFrame } from '../src/scenes/business/sequences.ts';
 import type { SequenceName } from '../src/core/types.ts';
 
@@ -245,5 +247,64 @@ describe('Business legibility (checkpoint 4)', () => {
     expect(rig.statusMaterial.emissiveIntensity).toBe(0);
     expect(rig.glow!.spill.intensity).toBe(0);
     expect(rig.symbols.accept.visible || rig.symbols.decline.visible).toBe(false);
+  });
+
+  /** Card face normal (business_root space) for a sampled frame. */
+  const faceNormal = (f: BusinessFrame) => new Vector3(0, 0, 1).applyAxisAngle(new Vector3(1, 0, 0), f.cardTilt).applyQuaternion(f.rot);
+  /** Angle between the camera ray's mirror off a surface and the key light (the softbox sits beside it). */
+  const mirrorToKey = (n: Vector3) => {
+    const view = cameraDirection();
+    const mirror = n.clone().multiplyScalar(2 * n.dot(view)).sub(view);
+    return (mirror.angleTo(new Vector3(...LIGHT_RIG.key.position).normalize()) * 180) / Math.PI;
+  };
+
+  it('through the scan hold the laminate never mirrors the key softbox into the lens (no print washout)', () => {
+    // Flat to the reading face, the mirror falls 18° from the key: the print washed out to
+    // about 2.8x its rest luminance for the whole hold. Turned, it stays about 45° away.
+    expect(mirrorToKey(new Vector3(0, 0, 1).applyEuler(new Euler(SCAN_TILT, 0, 0)))).toBeLessThan(25);
+    for (const seq of ['accept', 'decline'] as const) {
+      for (let t = 0.55; t <= 1.15; t += 0.01) {
+        expect(mirrorToKey(faceNormal(at(seq, t))), `${seq} t=${t.toFixed(2)}`).toBeGreaterThan(40);
+      }
+      expect(mirrorToKey(faceNormal(at(seq, DURATIONS[seq])))).toBeGreaterThan(40);
+    }
+    expect(SCAN_YAW).toBeGreaterThan(0); // turned away from the key, which is on the left
+  });
+
+  it('turned at the reader, the card keeps clear of the shipped scanner through press, hold and departure', async () => {
+    const file = await readFile(new URL('../assets/scenes/business/business.glb', import.meta.url));
+    const gltf = await new GLTFLoader().parseAsync(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer, '');
+    const root = gltf.scene.getObjectByName('business_root')!;
+    root.removeFromParent();
+    root.updateMatrixWorld(true);
+    const solids = ['scanner_body', 'scanner_faceplate', 'scanner_bezel'].map((n) => root.getObjectByName(n) as Mesh);
+    for (const m of solids) (m.material as MeshStandardMaterial).side = DoubleSide; // see exits too
+    const box = new Box3();
+    solids.forEach((m) => box.expandByObject(m));
+    box.expandByScalar(0.05);
+    const down = new Vector3(0, -0.69, -0.724).normalize(); // into the reading face
+    const ray = new Raycaster();
+    const p = new Vector3(), n = new Vector3(), nm = new Matrix3();
+    let closest = Infinity;
+    for (let t = 0.62; t <= 1.32; t += 0.04) {
+      const f = at('accept', t);
+      for (let i = 0; i <= 10; i++) {
+        for (let j = 0; j <= 14; j++) {
+          // The card's back face, the side that meets the reader.
+          p.set((i / 10 - 0.5) * CARD.width, (j / 14 - 0.5) * CARD.height, -CARD.depth / 2)
+            .applyAxisAngle(new Vector3(1, 0, 0), f.cardTilt).add(f.cardOffset).applyQuaternion(f.rot).add(f.pivot);
+          if (!box.containsPoint(p)) continue;
+          ray.set(p, down);
+          const hit = ray.intersectObjects(solids, false)[0];
+          if (!hit) continue;
+          // Outside the reader the first surface below is entered (it faces the card), never exited.
+          n.copy(hit.face!.normal).applyMatrix3(nm.getNormalMatrix(hit.object.matrixWorld));
+          expect(n.dot(down), `t=${t.toFixed(2)} inside ${hit.object.name}`).toBeLessThan(0);
+          closest = Math.min(closest, hit.distance);
+        }
+      }
+    }
+    expect(closest).toBeGreaterThan(0.01);
+    expect(closest).toBeLessThan(0.08); // still reads as held to the reader
   });
 });
