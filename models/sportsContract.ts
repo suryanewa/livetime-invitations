@@ -65,3 +65,10 @@ export interface NetDeform {
  * every path; the declined rest lies behind this box but well inside its framed view.
  */
 export const SPORTS_BOUNDS = new Box3(new Vector3(-1.2, 0, -1.2), new Vector3(1.8, 2.9, 1.1));
+
+/**
+ * Backdrop wall for this scene (studio sweep wall z), pushed back like Birthday's and Dinner's so
+ * the airball's landing and the declined rest spot sit on flat floor, clear of the cove: on the
+ * default wall the cove rose under the resting ball and sliced its contact shadow.
+ */
+export const SPORTS_WALL_Z = -4.2;

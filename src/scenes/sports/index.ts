@@ -1,7 +1,7 @@
 import { Box3, type Camera, type Object3D, Vector3, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
-import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, POLE, RIM, RIM_CENTER, rigSports, type BallPreset, type SportsRig } from '../../../models/sports.ts';
+import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, type BallPreset, type SportsRig } from '../../../models/sports.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
@@ -91,6 +91,7 @@ export class SportsScene implements SceneInstance {
   readonly bounds: Box3;
   readonly durations = DURATIONS;
   readonly animatedNodes: Object3D[];
+  readonly studio = { wallZ: SPORTS_WALL_Z };
   readonly framePoints = sportsFramePoints();
 
   private readonly frame = newFrame();

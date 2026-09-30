@@ -9,7 +9,8 @@ import {
   CONTACT_AT, DURATIONS, frameFor, GRAVITY, LANDINGS, MADE_LAND_AT, MISS_LAND_AT, MISS_POINT, NET_DRAG, NET_EXIT, NET_HOLD, newFrame, PASS_LAND_AT, RELEASE_AT, sampleSequence,
   type SportsFrame,
 } from '../src/scenes/sports/sequences.ts';
-import { farLayerShade, NET_FAR_SHADE, NET_FLARE_WIDEN, NET_STRETCH } from '../models/sports.ts';
+import { farLayerShade, NET_FAR_SHADE, NET_FLARE_WIDEN, NET_STRETCH, SPORTS_WALL_Z } from '../models/sports.ts';
+import { COVE_RADIUS } from '../src/render/studio.ts';
 import { BLEND_MARGIN, blendClearance, hoopDistance, sportsFramePoints, sportsInterruptCut } from '../src/scenes/sports/index.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
@@ -345,5 +346,19 @@ describe('sports look guards', () => {
     expect(c[3]).toBeCloseTo(NET_FAR_SHADE, 5);
     expect(c[6]).toBeGreaterThan(NET_FAR_SHADE);
     expect(c[6]).toBeLessThan(1);
+  });
+});
+
+describe('sports staging on the studio floor', () => {
+  it('the ball, wherever it touches down or rests, and its contact shadow stay on flat floor in front of the cove', () => {
+    const coveStart = SPORTS_WALL_Z + COVE_RADIUS;
+    const shadowReach = BALL_R * 2.2 * 0.5 + 0.05; // widest contact-shadow spread behind the ball, plus margin
+    for (const seq of ['host', 'accept', 'decline'] as const) {
+      for (let t = 0; t <= DURATIONS[seq] + 1e-9; t += 0.005) {
+        const p = at(seq, t).ballPos;
+        if (p.y <= BALL_R + 0.02) expect(p.z - shadowReach).toBeGreaterThan(coveStart);
+      }
+    }
+    for (const p of Object.values(BALL_AT)) expect(p.z - shadowReach).toBeGreaterThan(coveStart);
   });
 });

@@ -207,8 +207,11 @@ export function plasterTextures(size = 512): { normal: Texture; albedo: Texture 
  * space and their shadows (and the gobo) land on something. Scenes whose motion reaches far
  * back (the Birthday bin) push the wall back so the cove never meets an object.
  */
+/** Radius of the backdrop cove: the floor starts curving up at z = wallZ + COVE_RADIUS. */
+export const COVE_RADIUS = 1.6;
+
 export function sweepGeometry(wallZ: number = STUDIO.wallZ): BufferGeometry {
-  const width = 16, depth = 7, height = 8, radius = 1.6, segs = 24;
+  const width = 16, depth = 7, height = 8, radius = COVE_RADIUS, segs = 24;
   // Profile in (z, y): front edge → floor → cove arc → wall top.
   const profile: [number, number][] = [];
   profile.push([depth, 0], [wallZ + radius, 0]);
