@@ -10,6 +10,14 @@ import {
 } from 'three';
 
 /**
+ * Procedural textures are drawn once into 2D canvases and uploaded to every new WebGL context
+ * (a restored context, leaving Static, a remount). Chrome may back a 2D canvas on the GPU and
+ * drop its pixels under memory pressure or a GPU reset; a re-upload then yields a black texture
+ * (a black gobo blocks the key light entirely). `willReadFrequently` keeps them CPU-backed.
+ */
+export const CPU_CANVAS: CanvasRenderingContext2DSettings = { willReadFrequently: true };
+
+/**
  * Procedural signature textures. Original, code-generated, no external source to license.
  * UV convention: signature surfaces map 1 UV unit to one tile, sized in scene units by the
  * model builders so density is identical across the family.
@@ -24,7 +32,7 @@ function heightToNormal(size: number, height: HeightFn, strength: number): HTMLC
   }
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d', CPU_CANVAS)!;
   const img = ctx.createImageData(size, size);
   const at = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)]!;
   for (let y = 0; y < size; y++) {
@@ -124,7 +132,7 @@ export function perforationMaps(): { map: Texture; normalMap: Texture } {
     const size = 128;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d', CPU_CANVAS)!;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, size, size);
     const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size * r);
@@ -150,7 +158,7 @@ export function perforationDarkMap(): Texture {
     const r = 0.26;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d', CPU_CANVAS)!;
     ctx.fillStyle = '#25282B';
     ctx.fillRect(0, 0, size, size);
     const g = ctx.createRadialGradient(size / 2, size / 2 - 3, 0, size / 2, size / 2, size * r);
@@ -217,7 +225,7 @@ function bandLimitedNormalMips(size: number, terms: WeaveTerm[], strength: numbe
     const s = size / block;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = s;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d', CPU_CANVAS)!;
     const img = ctx.createImageData(s, s);
     for (let by = 0; by < s; by++) {
       for (let bx = 0; bx < s; bx++) {

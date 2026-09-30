@@ -19,6 +19,7 @@ import {
   type Texture,
   type WebGLRenderer,
 } from 'three';
+import { CPU_CANVAS } from './textures.ts';
 
 /**
  * Premium studio (fidelity pass): a sunlit key with a soft-edged foliage gobo, a seamless
@@ -47,7 +48,7 @@ export const STUDIO = {
 export function foliageCookie(size = 768): Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d', CPU_CANVAS)!;
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, size, size);
   // Deterministic pseudo-random fronds so every render (and poster) matches.
@@ -164,7 +165,7 @@ export function plasterTextures(size = 512): { normal: Texture; albedo: Texture 
     return c;
   };
   const nc = canvasOf(), ac = canvasOf();
-  const nctx = nc.getContext('2d')!, actx = ac.getContext('2d')!;
+  const nctx = nc.getContext('2d', CPU_CANVAS)!, actx = ac.getContext('2d', CPU_CANVAS)!;
   const nimg = nctx.createImageData(size, size), aimg = actx.createImageData(size, size);
   const H = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)]!;
   let lo = Infinity, hi = -Infinity;
@@ -295,7 +296,7 @@ export interface PremiumStudio {
 function downsampledCookie(full: Texture, size: number): Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d', CPU_CANVAS)!;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(full.image as CanvasImageSource, 0, 0, size, size);
   const tex = new CanvasTexture(canvas);

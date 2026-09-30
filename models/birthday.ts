@@ -1,4 +1,5 @@
 import { CanvasTexture, type Material, type Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, type ShaderMaterial, SRGBColorSpace, Mesh as ThreeMesh } from 'three';
+import { CPU_CANVAS } from '../src/render/textures.ts';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { BIN_POS, BIN_YAW, birthdayBounds, CAKE } from './birthdayContract.ts';
 import { buildCakeGeometry, CAKE_NODES, type CakePreset } from './cake.ts';
@@ -47,7 +48,7 @@ function wispTexture(): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  const c = canvas.getContext('2d')!;
+  const c = canvas.getContext('2d', CPU_CANVAS)!;
   c.filter = 'blur(3px)';
   c.strokeStyle = 'rgba(255,255,255,0.9)';
   c.lineCap = 'round';

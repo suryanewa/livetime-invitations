@@ -8,6 +8,7 @@ import {
   SRGBColorSpace,
   type Texture,
 } from 'three';
+import { CPU_CANVAS } from './textures.ts';
 
 /**
  * Baked-style contact shadows (Master §8). Two layers sized from the object's FOOTPRINT:
@@ -24,7 +25,7 @@ function makeTexture(shape: ShadowShape, profile: Profile): Texture {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d', CPU_CANVAS)!;
   const img = ctx.createImageData(size, size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
