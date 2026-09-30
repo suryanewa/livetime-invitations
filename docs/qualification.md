@@ -224,6 +224,20 @@ Targets (Master §9): controls usable ≤2 s, render-ready ≤6 s, cold first sc
 The Low tier kept the objects' look only after a fix. Dropping the palm gobo at Low had brightened and cooled every object by 35–90 % per colour channel, because the cookie also dims and warms the key. Low now keeps a 192² copy of the gobo. Measured object brightness at Low against Normal: Sports +5 %, Party +10 %, Business +9 % (linear RGB means over the object pixels). The remaining difference is the missing shadow map.
 
 
+### GPU memory (Master §9: texture allocation ≤ 48 MiB; counted allocations, not driver readings)
+
+Measured at HEAD after the engine fixes by wrapping the WebGL calls that allocate (textures, renderbuffers, buffers) and adding the default framebuffer with 4× MSAA. Two layouts: phone (430×932 @3×, 534² drawing buffer) and desktop (1440×900 @2×, 657²). "Both presets" is after switching to the second preset, with both resident. Raw figures: `outputs/perf/gpu-memory.json`.
+
+| Scene | Phone: Normal / both presets / Low | Desktop: Normal / both presets / Low |
+| --- | --- | --- |
+| Business | 34.0 / 36.8 / 19.9 MiB | 39.0 / 41.8 / 22.2 MiB |
+| Party | 32.4 / 33.7 / 16.9 | 37.4 / 38.8 / 19.1 |
+| Birthday | 30.2 / 30.2 / 13.4 | 35.3 / 35.3 / 15.6 |
+| Sports | 30.3 / 30.3 / 13.4 | 35.3 / 35.3 / 15.6 |
+| Dinner | 30.3 / 30.8 / 13.9 | 35.3 / 35.8 / 16.1 |
+
+Every scene is within 48 MiB in both layouts; the peak is Business on desktop with both card prints resident (41.8 MiB). No renderbuffer remains after load (the environment map's 3 MiB depth buffer is freed), and each page holds one live WebGL context. The drawing buffer is the part that grows with the embed: the risk recorded at checkpoint 3 (MSAA 4× near the 2.5 MP ceiling) still applies to embeds much larger than the showcase stage. Phone driver figures belong to the iPhone session.
+
 ### Still open after checkpoint 4
 
 - **iPhone 17 Max session (Surya).** Every scene at Normal and Low: frame times, cold shader compile, shimmer (net, grooves, card edge), legibility at arm's length, and the compositor cost of the CSS vignette and grain. Also VoiceOver on iOS, and touch. See the steps in the checkpoint review page. Low-end iOS, Android, Firefox, Edge, in-app browsers and previous-major browser versions remain unverified (not available on this host).
