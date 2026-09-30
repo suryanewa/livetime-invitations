@@ -223,6 +223,24 @@ Targets (Master §9): controls usable ≤2 s, render-ready ≤6 s, cold first sc
 The Low tier kept the objects' look only after a fix. Dropping the palm gobo at Low had brightened and cooled every object by 35–90 % per colour channel, because the cookie also dims and warms the key. Low now keeps a 192² copy of the gobo. Measured object brightness at Low against Normal: Sports +5 %, Party +10 %, Business +9 % (linear RGB means over the object pixels). The remaining difference is the missing shadow map.
 
 
+### Still open after checkpoint 4
+
+- **iPhone 17 Max session (Surya).** Every scene at Normal and Low: frame times, cold shader compile, shimmer (net, grooves, card edge), legibility at arm's length, and the compositor cost of the CSS vignette and grain. Also VoiceOver on iOS, and touch. See the steps in the checkpoint review page. Low-end iOS, Android, Firefox, Edge, in-app browsers and previous-major browser versions remain unverified (not available on this host).
+- **Decisions for Surya.**
+  - Dinner's plate: cream or a cobalt enamel band (a rendered option is on the review page).
+  - Dinner's 43 % framing and its low placement (revision #3).
+  - Whether the shelved food shows as placeholders or an empty plate (#17).
+  - The cloche's rest place and the decline path (#13, #14).
+  - The Business scan pose (#18).
+  - The showcase's preset label copy.
+  - Confirmation of the critical reviewers' sign-offs for Sports, checkpoint 4 and checkpoint 5.
+- **Low-tier limits.** Recorded, not defects: cast shadows are gone (Birthday stand and the Party and Birthday floor shadows), and Sports net cords fall below a pixel at DPR 1 on small stages.
+- **Polish deferred.**
+  - An eased or cross-dissolved interruption blend, including the Party label turning back during the reset.
+  - The "land" ease used from rest in Party's stylus drop and Birthday's wick return.
+  - The tonearm's 0.5° one-frame lift step on an answer change (recorded at checkpoint 3).
+- **Business draw-call headroom.** The live peak is 39 of 40 calls, so new Business geometry needs a merge or a shadow proxy.
+
 ## Checkpoint 3 evidence (2026-09-29, premium L2: Business, Party, Birthday)
 
 All figures measured on the authoring Mac (M2 Pro, Chrome 153) from the committed build at checkpoint 3. None of this is phone evidence.
