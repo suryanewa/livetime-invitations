@@ -96,7 +96,7 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 
 ## Checkpoint 4 evidence (2026-09-29, all five scenes, premium L2)
 
-All figures were measured on the authoring Mac (M2 Pro, Chrome 153) from the committed tree during checkpoint 4. None of this is phone evidence. Checkpoint 4 was carried out by independent critical reviewers at Surya's request; their sign-offs are recorded as **pending Surya's confirmation**.
+All figures were measured on the authoring Mac (M2 Pro; Chrome 153, then 154 after an automatic update during the session; see Release environment) from the committed tree during checkpoint 4. None of this is phone evidence. Checkpoint 4 was carried out by independent critical reviewers at Surya's request; their sign-offs are recorded as **pending Surya's confirmation**.
 
 ### Release environment (recorded 2026-09-29, Master §11)
 
