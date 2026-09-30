@@ -196,15 +196,15 @@ Ten alternating accept/decline cycles after one warm-up pair, 390×844 @3×, Nor
 | dinner.glb | 841.3 KiB | 405.4 KiB |
 | shared/disposal-bin.glb | 155.7 KiB | 63.8 KiB |
 
-Cold load from the production build (`pnpm build`, `pnpm preview`) on a throttled network (4 Mbps down, 100 ms latency, cache disabled; `pnpm capture network`, bytes from Chrome's `loadingFinished` events):
+Cold load from the final production build after all checkpoint 4 fixes (`pnpm build`, `pnpm preview`) on a throttled network (4 Mbps down, 100 ms latency, cache disabled; `pnpm capture network`, bytes from Chrome's `loadingFinished` events):
 
 | Scene | Controls usable | Render-ready | Transferred |
 | --- | --- | --- | --- |
-| Business | 0.93 s | 2.72 s | 1.00 MB |
-| Party | 0.91 s | 2.74 s | 0.89 MB |
-| Birthday | 0.91 s | 2.70 s | 0.99 MB |
-| Sports | 0.91 s | 2.19 s | 0.77 MB |
-| Dinner | 0.91 s | 3.20 s | 1.27 MB |
+| Business | 1.01 s | 2.81 s | 1.01 MB |
+| Party | 0.95 s | 2.74 s | 0.89 MB |
+| Birthday | 0.91 s | 2.70 s | 1.00 MB |
+| Sports | 0.91 s | 2.19 s | 0.80 MB |
+| Dinner | 0.93 s | 3.22 s | 1.30 MB |
 
 Targets (Master §9): controls usable ≤2 s, render-ready ≤6 s, cold first scene ≤2.5 MiB. All five pass on this desktop simulation. `vite preview` serves the GLB files uncompressed, so these byte counts are the uncompressed worst case; a host that gzips `.glb` would transfer less.
 

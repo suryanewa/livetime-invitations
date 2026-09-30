@@ -1,5 +1,5 @@
 import { CanvasTexture, LinearMipmapLinearFilter, RepeatWrapping, SRGBColorSpace, type Texture } from 'three';
-import { CPU_CANVAS } from './textures.ts';
+import { keepPixels } from './textures.ts';
 
 /**
  * Printed graphics for the objects (fidelity pass), drawn at load time on a canvas: no font
@@ -69,7 +69,7 @@ function roundRect(c: Ctx, x: number, y: number, w: number, h: number, r: number
 }
 
 function finish(canvas: HTMLCanvasElement, repeat = false): Texture {
-  const t = new CanvasTexture(canvas);
+  const t = new CanvasTexture(keepPixels(canvas));
   t.colorSpace = SRGBColorSpace;
   t.minFilter = LinearMipmapLinearFilter;
   t.anisotropy = 8;
@@ -86,7 +86,7 @@ export function cardPrint(template: 'light' | 'dark', width = 600): Texture {
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
-  const c = canvas.getContext('2d', CPU_CANVAS)!;
+  const c = canvas.getContext('2d')!;
   const u = W / 0.86; // px per scene unit
   const stock = template === 'light' ? PRINT_COLORS.cream : PRINT_COLORS.ink;
   const onStock = template === 'light' ? PRINT_COLORS.ink : PRINT_COLORS.cream;
@@ -168,7 +168,7 @@ export function strapPrint(size = 256): Texture {
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
-  const c = canvas.getContext('2d', CPU_CANVAS)!;
+  const c = canvas.getContext('2d')!;
   c.fillStyle = PRINT_COLORS.cobaltDeep;
   c.fillRect(0, 0, size, size);
   c.fillStyle = PRINT_COLORS.coral;
@@ -190,7 +190,7 @@ export function strapPrint(size = 256): Texture {
 export function holoPattern(size = 256): Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
-  const c = canvas.getContext('2d', CPU_CANVAS)!;
+  const c = canvas.getContext('2d')!;
   const img = c.createImageData(size, size);
   const hsl = (h: number, sat: number, l: number): [number, number, number] => {
     const k = (n: number) => (n + h * 12) % 12;
@@ -232,7 +232,7 @@ export function holoPattern(size = 256): Texture {
 export function labelPrint(preset: 'coral' | 'cobalt', size = 512): Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
-  const c = canvas.getContext('2d', CPU_CANVAS)!;
+  const c = canvas.getContext('2d')!;
   const ground = preset === 'coral' ? PRINT_COLORS.coral : PRINT_COLORS.cobalt;
   const accent = preset === 'coral' ? PRINT_COLORS.cobaltDeep : PRINT_COLORS.coral;
   const r = size / 2;
@@ -285,7 +285,7 @@ export function labelPrint(preset: 'coral' | 'cobalt', size = 512): Texture {
 export function grooveDirections(size = 256): Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
-  const c = canvas.getContext('2d', CPU_CANVAS)!;
+  const c = canvas.getContext('2d')!;
   const img = c.createImageData(size, size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -303,7 +303,7 @@ export function grooveDirections(size = 256): Texture {
     }
   }
   c.putImageData(img, 0, 0);
-  const t = new CanvasTexture(canvas);
+  const t = new CanvasTexture(keepPixels(canvas));
   t.minFilter = LinearMipmapLinearFilter;
   return t;
 }

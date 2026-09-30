@@ -13,9 +13,20 @@ import {
  * Procedural textures are drawn once into 2D canvases and uploaded to every new WebGL context
  * (a restored context, leaving Static, a remount). Chrome may back a 2D canvas on the GPU and
  * drop its pixels under memory pressure or a GPU reset; a re-upload then yields a black texture
- * (a black gobo blocks the key light entirely). `willReadFrequently` keeps them CPU-backed.
+ * (a black gobo blocks the key light entirely). Drawing stays on the fast default canvas; the
+ * finished pixels are copied once into a CPU-backed canvas (`willReadFrequently`), which keeps
+ * them, and the texture uploads from that copy.
  */
-export const CPU_CANVAS: CanvasRenderingContext2DSettings = { willReadFrequently: true };
+export function keepPixels(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  const copy = document.createElement('canvas');
+  copy.width = canvas.width;
+  copy.height = canvas.height;
+  const ctx = copy.getContext('2d', { willReadFrequently: true });
+  // Without a real 2D context (unit-test stubs) the original canvas is used as is.
+  if (!ctx || typeof ctx.drawImage !== 'function') return canvas;
+  ctx.drawImage(canvas, 0, 0);
+  return copy;
+}
 
 /**
  * Procedural signature textures. Original, code-generated, no external source to license.
@@ -32,7 +43,7 @@ function heightToNormal(size: number, height: HeightFn, strength: number): HTMLC
   }
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d', CPU_CANVAS)!;
+  const ctx = canvas.getContext('2d')!;
   const img = ctx.createImageData(size, size);
   const at = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)]!;
   for (let y = 0; y < size; y++) {
@@ -55,7 +66,7 @@ function heightToNormal(size: number, height: HeightFn, strength: number): HTMLC
 }
 
 function dataTexture(canvas: HTMLCanvasElement, color: boolean, wrapV: Wrapping = RepeatWrapping): Texture {
-  const t = new CanvasTexture(canvas);
+  const t = new CanvasTexture(keepPixels(canvas));
   t.colorSpace = color ? SRGBColorSpace : NoColorSpace;
   t.wrapS = RepeatWrapping;
   t.wrapT = wrapV;
@@ -132,7 +143,7 @@ export function perforationMaps(): { map: Texture; normalMap: Texture } {
     const size = 128;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;
-    const ctx = canvas.getContext('2d', CPU_CANVAS)!;
+    const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, size, size);
     const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size * r);
@@ -158,7 +169,7 @@ export function perforationDarkMap(): Texture {
     const r = 0.26;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;
-    const ctx = canvas.getContext('2d', CPU_CANVAS)!;
+    const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = '#25282B';
     ctx.fillRect(0, 0, size, size);
     const g = ctx.createRadialGradient(size / 2, size / 2 - 3, 0, size / 2, size / 2, size * r);
@@ -225,7 +236,7 @@ function bandLimitedNormalMips(size: number, terms: WeaveTerm[], strength: numbe
     const s = size / block;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = s;
-    const ctx = canvas.getContext('2d', CPU_CANVAS)!;
+    const ctx = canvas.getContext('2d')!;
     const img = ctx.createImageData(s, s);
     for (let by = 0; by < s; by++) {
       for (let bx = 0; bx < s; bx++) {
