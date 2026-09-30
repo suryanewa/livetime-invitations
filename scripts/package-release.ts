@@ -11,6 +11,9 @@
  *   evidence/    real-speed clips and review stills per scene, UI matrix, perf samples, lookdev stills
  *   docs/        README, integration guide, style reference, asset manifest, qualification, time log
  *   MANIFEST.md  every file with its size and SHA-256
+ *
+ * It also refreshes ../masters/ (the source archive and a note on the code-authored masters) and
+ * ../exports/ (1080 px review stills per scene and the premium lookdev stills).
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -63,6 +66,22 @@ await copyIfExists(join(root, 'outputs', 'lookdev'), join(out, 'evidence', 'look
 await mkdir(join(out, 'docs'), { recursive: true });
 for (const f of ['README.md', 'PRODUCT.md', 'DESIGN.md']) await copyIfExists(join(root, f), join(out, 'docs', f));
 await copyIfExists(join(root, 'docs'), join(out, 'docs'));
+
+// Creative masters and selected exports (Master §8: model sources and high-resolution selected
+// exports live in the linked Creative directory, runtime assets in the application).
+const creative = join(homedir(), 'Creative', 'Livetime', 'invitation-interactions');
+await mkdir(join(creative, 'masters'), { recursive: true });
+await cp(join(out, 'source', `livetime-invitations-${commit}.tar.gz`), join(creative, 'masters', `livetime-invitations-${commit}.tar.gz`));
+await writeFile(join(creative, 'masters', 'MASTERS.md'), [
+  '# Editable masters',
+  '',
+  `The models are code-authored parametric builders, not DCC files: \`models/*.ts\` in the source archive (commit \`${commit}\`). Each builder is the editable master; \`pnpm models <scene>\` exports the runtime GLB (GLTFExporter, then gltf-transform dedup/weld/prune/quantise). Materials are tokens in \`src/render/materials.ts\`; printed art and procedural textures are in \`src/render/print.ts\`, \`textures.ts\` and \`studio.ts\`. Sources and licences for every asset are in \`docs/asset-manifest.md\`.`,
+  '',
+].join('\n'));
+for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
+  await copyIfExists(join(root, 'outputs', scene), join(creative, 'exports', scene), (src) => !src.includes('.') ? !/\/frames-|\/posters/.test(src) : /capture-[^/]+\.png$/.test(src));
+}
+await copyIfExists(join(root, 'outputs', 'lookdev'), join(creative, 'exports', 'lookdev'), (src) => !src.includes('.') || /premium-ortho\.png$/.test(src));
 
 // Manifest.
 const files = (await walk(out)).filter((f) => !f.endsWith('MANIFEST.md')).sort();
