@@ -5,6 +5,7 @@ import { createRenderer, sizeRenderer } from './createRenderer.ts';
 import { releaseShadowTextureGpu } from './contactShadow.ts';
 import { createStudioRig, type StudioRig } from './lighting.ts';
 import { releaseCachedTextureGpu } from './textures.ts';
+import { shadowProxyMaterial } from '../../models/shadowProxy.ts';
 
 export const STAGE_COLOR = '#F4F1EB';
 /** Premium studio: the rendered plaster colour (behind anything the sweep does not cover). */
@@ -189,11 +190,13 @@ export class Stage {
     this.setContent(null);
     this.premium?.dispose();
     this.rig.dispose();
-    // Shared texture caches hold dispose listeners that would keep this renderer (and its
-    // GL context) reachable; release their GPU copies, then drop the context explicitly
-    // (a context already lost has nothing left to release, and no extension to do it with).
+    // Shared texture caches and the shared shadow-proxy material (Birthday, Dinner) hold dispose
+    // listeners that would keep this renderer (and its GL context) reachable; release their GPU
+    // copies, then drop the context explicitly (a context already lost has nothing left to
+    // release, and no extension to do it with).
     releaseCachedTextureGpu();
     releaseShadowTextureGpu();
+    shadowProxyMaterial().dispose();
     this.renderer.dispose();
     if (!this.renderer.getContext().isContextLost()) this.renderer.forceContextLoss();
   }

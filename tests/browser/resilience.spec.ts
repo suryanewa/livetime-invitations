@@ -157,22 +157,26 @@ async function reachable(page: Page) {
   return counts;
 }
 
-test('30 stage re-creations (remount, loss + retry, Static and back) leave one canvas and one renderer', async ({ page }) => {
-  test.setTimeout(240_000);
-  await ready(page);
-  for (let i = 0; i < 10; i++) {
-    await click(page, 'reset');
-    await expect.poll(() => resource(page), { timeout: 30_000 }).toBe('ready');
-    await click(page, 'lose-context');
-    await expect.poll(async () => (await state(page)).resourceReason).toBe('context-lost');
-    await click(page, 'retry-3d');
-    await expect.poll(() => resource(page), { timeout: 30_000 }).toBe('ready');
-    await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('static'));
-    await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('normal'));
-    await expect.poll(() => resource(page), { timeout: 30_000 }).toBe('ready');
+test('30 stage re-creations (remount, loss + retry, Static and back) leave one canvas and one renderer in every scene', async ({ page }) => {
+  test.setTimeout(300_000);
+  // Every scene: each draws its own shared resources (Birthday and Dinner the shadow-proxy material).
+  for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
+    await ready(page, `/?scene=${scene}`);
+    for (let i = 0; i < 2; i++) {
+      await click(page, 'reset');
+      await expect.poll(() => resource(page), { timeout: 30_000 }).toBe('ready');
+      await click(page, 'lose-context');
+      await expect.poll(async () => (await state(page)).resourceReason).toBe('context-lost');
+      await click(page, 'retry-3d');
+      await expect.poll(() => resource(page), { timeout: 30_000 }).toBe('ready');
+      await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('static'));
+      if (i === 0) expect(await reachable(page), `${scene}: Static`).toEqual({ renderers: 0, contexts: 0 });
+      await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('normal'));
+      await expect.poll(() => resource(page), { timeout: 30_000 }).toBe('ready');
+    }
+    expect(await page.locator('canvas').count(), scene).toBe(1);
+    expect(await reachable(page), scene).toEqual({ renderers: 1, contexts: 1 });
   }
-  expect(await page.locator('canvas').count()).toBe(1);
-  expect(await reachable(page)).toEqual({ renderers: 1, contexts: 1 });
 });
 
 test('Static releases the WebGL stage, keeps the poster and controls, and leaving it brings 3D back', async ({ page }) => {
