@@ -173,12 +173,12 @@ Birthday's decline is the tightest: 2k triangles under budget. Smoother bin flap
 
 | Asset | Raw | Gzip −9 |
 | --- | --- | --- |
-| business.glb | 720.6 KiB | 251.6 KiB |
-| party.glb | 608.3 KiB | 234.9 KiB |
+| business.glb | 720.8 KiB | 251.5 KiB |
+| party.glb | 608.3 KiB | 234.7 KiB |
 | birthday.glb | 561.7 KiB | 270.8 KiB |
 | sports.glb | 516.3 KiB | 203.0 KiB |
 | dinner.glb | 841.3 KiB | 405.4 KiB |
-| shared/disposal-bin.glb | 143.7 KiB | 61.4 KiB |
+| shared/disposal-bin.glb | 155.7 KiB | 63.8 KiB |
 
 Cold load from the production build (`pnpm build`, `pnpm preview`) on a throttled network (4 Mbps down, 100 ms latency, cache disabled; `pnpm capture network`, bytes from Chrome's `loadingFinished` events):
 
