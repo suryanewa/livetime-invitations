@@ -50,7 +50,7 @@ export const RIM_BRACKET = new Box3(new Vector3(-0.2177, 1.5299, -0.007), new Ve
  * Net: 20 twisted-rope strands from 10 rim hooks, 6 knot rows, hanging NET.depth below the rim
  * centre. `profile` is its inner envelope: [depth fraction, smallest radius of any cord, knot or
  * loop vertex in that band] (horizontal, from the rim axis). The mini hoop's net is narrow: at rest
- * its waist (0.18) is smaller than the ball, so the made shot needs the net opened (`netOpenScale`).
+ * its waist (0.18) is smaller than the ball, so the made shot bulges it round the ball (`netOpening`).
  */
 export const NET = {
   depth: 0.6837,
@@ -171,9 +171,11 @@ export function netInnerRadius(t: number, ux: number, uz: number, pose: NetPose)
 /**
  * Pivots in hoop space, measured from the master at HOOP_SCALE (the `rim` and `backboard` nodes'
  * origins in the exported GLB; tests/sports.test.ts checks them). Both pitch about +x: positive
- * tips the front (+z) down.
+ * tips the front (+z) down. The rim hinges on the bracket plate's back-bottom edge (the edge it
+ * bears on, 1.5 mm proud of the board face), the board on the centre of its flat back (where the
+ * stand's back plate holds it).
  */
-export const RIM_HINGE = new Vector3(0, 1.6377, -0.007);
+export const RIM_HINGE = new Vector3(0, 1.53, -0.0071);
 export const BOARD_PIVOT = new Vector3(0, 2.0847, -0.1249);
 /** Recoil limits (degrees). */
 export const RECOIL_LIMIT = { rimDeg: 1.5, boardDeg: 0.4 } as const;

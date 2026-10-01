@@ -1,4 +1,4 @@
-import { type BufferAttribute, Float32BufferAttribute, type Material, Matrix4, type Mesh, type Object3D, Quaternion, Vector3 } from 'three';
+import { type BufferAttribute, Float32BufferAttribute, type Material, Matrix4, type Mesh, type MeshStandardMaterial, type Object3D, Quaternion, Vector3 } from 'three';
 import { cameraDirection } from '../src/render/camera.ts';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import {
@@ -201,6 +201,27 @@ export function farLayerShade(base: Float32Array, toCamera: Vector3): Float32Buf
 }
 
 /**
+ * Leather grade: per-channel multipliers (linear) on the master ball's albedo, applied at load to
+ * the material colour (baseColorFactor; values above 1 are fine at runtime, though not in a glTF
+ * file). The master's scan-matched orange (sRGB 223, 64, 10 median) reads a touch hot against the
+ * peach stage under the warm key; this pulls its hue from about 15° towards the v1.1 ball's 21°
+ * and lifts the shadow side's warmth, keeping every texel's relative value, so the pebble grain,
+ * mottling and black seams are untouched (a multiply maps black to black). The cream variant is
+ * tuned in its own albedo (recipes/sports.ts `creamAlbedo`) and only trimmed here.
+ */
+export const LEATHER_GRADE: Readonly<Record<string, readonly [number, number, number]>> = {
+  ball_leather: [0.78, 1.25, 3],
+  ball_leather_cream: [1, 1, 1],
+};
+function gradeLeather(m: Material): void {
+  const g = LEATHER_GRADE[m.name];
+  const std = m as MeshStandardMaterial;
+  if (!g || !std.color || m.userData.leatherGraded) return;
+  std.color.setRGB(std.color.r * g[0], std.color.g * g[1], std.color.b * g[2]);
+  m.userData.leatherGraded = true;
+}
+
+/**
  * `variants`: the GLB's ball presets (KHR_materials_variants, `loadMaterialVariants`): the master
  * ball's orange and cream albedos. Without them (the code-authored lookdev model) presets swap the
  * library's shader balls by name.
@@ -236,6 +257,11 @@ export function rigSports(root: Object3D, lib: ModelContext['lib'], preset: Ball
       if (m.isMesh && (m.material as { name?: string }).name?.startsWith('mat_ball_')) m.material = want;
     });
   };
+  for (const m of variants?.materials ?? []) gradeLeather(m);
+  nodes.ball_mesh!.traverse((o) => {
+    const m = (o as Mesh).material;
+    if (m) for (const x of Array.isArray(m) ? m : [m]) gradeLeather(x);
+  });
   setPreset(preset);
   // The net is rebaked at RIM_LOCAL first, so the recoil captures its final rest transform.
   const net = netDeform(nodes.net!);

@@ -2,7 +2,7 @@ import { Box3, type Camera, type Object3D, Vector3, type WebGLRenderer } from 't
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
-  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netInnerRadius, netRestRadius, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, type BallPreset, type SportsRig,
+  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netInnerRadius, netRestRadius, newNetPose, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, type BallPreset, type SportsRig,
 } from '../../../models/sports.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
@@ -12,6 +12,7 @@ import { CONTACT_AT, DURATIONS, frameFor, newFrame, sampleSequence, type SportsF
 
 /** Outer net silhouette beyond its inner envelope (cords, knots, the far layer's thickness). */
 const NET_OUTSET = 0.05;
+const REST_NET = newNetPose();
 
 /** Silhouette samples of every Sports path: the hoop, the pass, the made shot and the airball. */
 export function sportsFramePoints(sequences: readonly SequenceName[] = ['host', 'accept', 'decline']): Vector3[] {
@@ -98,11 +99,11 @@ export function blendClearance(from: Vector3, to: Vector3 = BALL_AT.guest, sampl
 
 /**
  * Spec revision #9: blend through guest-ready wherever a straight blend is clean, and cut only
- * where it would pass the ball through the rim, net, board or pole, or while the net is moving
- * (a blend would snap it to rest).
+ * where it would pass the ball through the rim, net, board or pole, or while the hoop is moving
+ * (net swish, rim or board recoil: a blend would snap them to rest).
  */
-export function sportsInterruptCut(ball: Vector3, f: Pick<SportsFrame, 'netFlare' | 'netStretch'>): boolean {
-  return f.netFlare !== 0 || f.netStretch !== 0 || blendClearance(ball) < BALL_R + BLEND_MARGIN;
+export function sportsInterruptCut(ball: Vector3, f: Pick<SportsFrame, 'net' | 'rimPitch' | 'boardPitch'>): boolean {
+  return f.net.active || f.rimPitch !== 0 || f.boardPitch !== 0 || blendClearance(ball) < BALL_R + BLEND_MARGIN;
 }
 
 /**
@@ -124,16 +125,22 @@ export class SportsScene implements SceneInstance {
   private readonly frame = newFrame();
   private preset: BallPreset;
   private shadowHeight = 0;
+  private shadowSpread = 1;
+  /** ball_secondary's rest height under ball_authored (the contact hold offsets it). */
+  private readonly secondaryRestY: number;
 
   constructor(readonly rig: SportsRig, config: Extract<SceneConfig, { category: 'sports' }>) {
     this.root = rig.root;
     this.bounds = rig.bounds.clone();
     this.preset = config.ball;
     const n = rig.nodes;
-    this.animatedNodes = [n.ball_authored!, n.ball_secondary!];
+    this.secondaryRestY = n.ball_secondary!.position.y;
+    // The blend interpolates the authored path, the squash and the spin (ball_mesh carries the
+    // spin over the master's rest orientation; ball_secondary only squashes).
+    this.animatedNodes = [n.ball_authored!, n.ball_secondary!, n.ball_mesh!];
     // The blob's opacity depends on whether this render has the key's shadow map: decided per draw.
     rig.ballShadow.onBeforeRender = (renderer) => {
-      if (renderer.shadowMap.enabled) rig.ballShadow.setHeight(this.shadowHeight, BLOB_FALLOFF.withKeyShadow);
+      if (renderer.shadowMap.enabled) this.shadeBlob(BLOB_FALLOFF.withKeyShadow);
     };
     this.pose('guest-ready');
   }
@@ -152,10 +159,12 @@ export class SportsScene implements SceneInstance {
     this.apply(sampleSequence(sequence, t, this.frame));
   }
 
-  /** Interruption blends move the ball directly: the net rests, the shadow follows. */
+  /** Interruption blends move the ball directly: the hoop rests, the shadow follows the drawn ball. */
   refresh(): void {
-    this.rig.net.update(0, 0);
-    this.updateShadow(this.rig.nodes.ball_authored!.position);
+    this.rig.net.update(REST_NET);
+    this.rig.recoil.set(0, 0);
+    const n = this.rig.nodes;
+    this.updateShadow(n.ball_authored!.position, n.ball_secondary!.position.y - this.secondaryRestY, n.ball_secondary!.scale.x);
   }
 
   /** Cut only where a straight blend from the ball's current position would cross the hoop. */
@@ -186,18 +195,33 @@ export class SportsScene implements SceneInstance {
   private apply(f: SportsFrame): void {
     const n = this.rig.nodes;
     n.ball_authored!.position.copy(f.ballPos);
-    n.ball_secondary!.quaternion.copy(f.ballRot);
-    this.rig.net.update(f.netFlare, f.netStretch);
-    this.updateShadow(f.ballPos);
+    // Squash (volume-preserving, along the floor normal) and the contact hold on ball_secondary,
+    // which never rotates, so its scale axis stays the floor normal while the ball spins inside it.
+    const sv = 1 - f.squash, sh = 1 / Math.sqrt(sv);
+    n.ball_secondary!.scale.set(sh, sv, sh);
+    n.ball_secondary!.position.y = this.secondaryRestY + f.ballDrop;
+    n.ball_mesh!.quaternion.multiplyQuaternions(f.ballRot, this.rig.ballRest);
+    this.rig.net.update(f.net);
+    this.rig.recoil.set(f.boardPitch, f.rimPitch);
+    this.updateShadow(f.ballPos, f.ballDrop, sh);
   }
 
-  private updateShadow(ball: Vector3): void {
+  /** Contact blob under the drawn ball: its bottom height, widened with the squash. */
+  private updateShadow(ball: Vector3, drop: number, spread: number): void {
     // Tight and dark on the floor; wider and fainter as the ball rises, never stuck to it. This is
     // the Low-tier falloff; renders with the key's shadow map fade it faster (onBeforeRender).
+    this.rig.ballShadow.setFootprint(ball.x, ball.z);
+    // Drawn bottom = centre + drop − BALL_R·(squashed half-height), i.e. ball.y + drop − BALL_R / spread².
+    this.shadowHeight = Math.max(0, ball.y + drop - BALL_R / (spread * spread));
+    this.shadowSpread = spread;
+    this.shadeBlob(BLOB_FALLOFF.alone);
+  }
+
+  private shadeBlob(falloff: number): void {
     const s = this.rig.ballShadow;
-    s.setFootprint(ball.x, ball.z);
-    this.shadowHeight = Math.max(0, ball.y - BALL_R);
-    s.setHeight(this.shadowHeight, BLOB_FALLOFF.alone);
+    s.setHeight(this.shadowHeight, falloff);
+    s.scale.x *= this.shadowSpread;
+    s.scale.y *= this.shadowSpread;
   }
 }
 

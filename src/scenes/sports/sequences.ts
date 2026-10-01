@@ -16,16 +16,19 @@ import type { CanonicalPose, SequenceName } from '../../core/types.ts';
  * v1.2 fidelity pass (same beats, same durations):
  * - Spin is integrated from angular-velocity profiles, so the spin rate is continuous at every
  *   beat boundary (C1 orientation). The shots carry real backspin (2.5 and 2.2 rev/s); on the
- *   floor the ball rolls without sliding; a short skid at each first bounce hands the air spin
- *   over to the rolling rate. The host pass's backspin is solved so guest-ready keeps the
+ *   floor the ball rolls without sliding; a skid during each first bounce's 35 ms contact hands
+ *   the air spin over to the rolling rate (in the air the spin never changes, except where the
+ *   net grips the made ball). The host pass's backspin is solved so guest-ready keeps the
  *   orientation the master's seam cross was fitted to (`GUEST_TURN`).
  * - The gathers (host pass and both shots) rise into their release with exactly the flight's
  *   launch velocity (C1 release).
  * - Contacts with the floor squash the ball (volume-preserving, ≤ 8 %, along the floor normal)
  *   and hold it on the floor for a few milliseconds while it compresses (`squash`, `ballDrop`
  *   on `ball_secondary`); the authored centre path is untouched.
- * - The made shot drives a ball-following net bulge (`NetPose`) and a small damped recoil of the
- *   rim on its bracket and of the board on its arm.
+ * - The made shot drives a ball-following net bulge (`NetPose`: the rows round the ball open
+ *   just enough to clear it, the net stretches while the ball drags it, and once the ball's top
+ *   has left the bottom it rebounds and settles) and a small damped recoil of the rim on its
+ *   bracket hinge (≤ 1.2°) and of the board on its arm (≤ 0.3°), zero again 0.6 s after contact.
  */
 
 export const DURATIONS = { host: 1.2, accept: 1.7, decline: 1.6 } as const;
@@ -310,8 +313,14 @@ const rollAxis = (d: Vector3) => new Vector3().crossVectors(UP, d).normalize();
 
 /** Backspin of the shots in the air (rev/s): a real shot leaves the fingertips at 2–3 rev/s. */
 export const SHOT_BACKSPIN = { made: 2.5, missed: 2.2 } as const;
-/** Skid at a first bounce: the air spin hands over to the rolling rate over this time (s). */
-export const SKID = 0.05;
+/**
+ * Floor contact time (s): the drawn ball stays on the floor while it compresses (`contact`). Only
+ * then can friction act, so the bounce's skid (the air spin handing over to the rolling rate)
+ * lasts exactly as long: in the air the spin never changes.
+ */
+export const CONTACT_HOLD = 0.035;
+/** Skid at a first bounce: the air spin hands over to the rolling rate during the contact. */
+export const SKID = CONTACT_HOLD;
 const skidWeight = (t: number, at: number) => smoothstep(seg(t, at, at + SKID));
 
 /** Gather spin: rolls with the gather on the floor, then (in the air) turns into the flight's `air` rate. */
@@ -418,15 +427,17 @@ const SPINS: Record<SequenceName, Spin[]> = {
  * with zero relative speed, so the bounce reads as a contact rather than a reflection.
  */
 export const SQUASH = { max: 0.08, refSpeed: 6.5, hz: 11, zeta: 0.5, end: 0.32 } as const;
-export const CONTACT_HOLD = 0.035;
 const SQ_W = 2 * Math.PI * SQUASH.hz;
 const SQ_WD = SQ_W * Math.sqrt(1 - SQUASH.zeta * SQUASH.zeta);
 const SQ_PEAK_AT = Math.atan(SQ_WD / (SQUASH.zeta * SQ_W)) / SQ_WD;
 const SQ_PEAK = Math.exp(-SQUASH.zeta * SQ_W * SQ_PEAK_AT) * Math.sin(SQ_WD * SQ_PEAK_AT);
-/** Unit squash pulse u seconds after an impact (peak 1), faded to exactly 0 at SQUASH.end. */
-export function squashPulse(u: number): number {
-  if (u <= 0 || u >= SQUASH.end) return 0;
-  const fade = 1 - smoothstep(seg(u, SQUASH.end * 0.6, SQUASH.end));
+/**
+ * Unit squash pulse u seconds after an impact (peak 1), faded to exactly 0 at `end` (SQUASH.end,
+ * or earlier when the sequence ends first, so every canonical pose is exactly round).
+ */
+export function squashPulse(u: number, end: number = SQUASH.end): number {
+  if (u <= 0 || u >= end) return 0;
+  const fade = 1 - smoothstep(seg(u, end * 0.6, end));
   return (Math.exp(-SQUASH.zeta * SQ_W * u) * Math.sin(SQ_WD * u) * fade) / SQ_PEAK;
 }
 interface Impact {
@@ -435,6 +446,8 @@ interface Impact {
   amp: number;
 }
 const impact = (at: number, speed: number): Impact => ({ at, amp: SQUASH.max * Math.min(1, Math.abs(speed) / SQUASH.refSpeed) });
+/** Pulse length of an impact in a sequence: SQUASH.end, cut to finish by the sequence's end. */
+const pulseEnd = (seq: SequenceName, im: Impact) => Math.min(SQUASH.end, DURATIONS[seq] - im.at);
 const bounceImpacts = (l: Landing, landSpeed: number): Impact[] => [impact(l.at, landSpeed), impact(l.at + l.hop, Math.sqrt(2 * GRAVITY * l.top))];
 /** Every floor contact per sequence (time, amplitude), derived from the curves. */
 export const IMPACTS: Record<SequenceName, Impact[]> = {
@@ -447,7 +460,7 @@ function contact(seq: SequenceName, t: number, out: SportsFrame): void {
   for (const im of IMPACTS[seq]) {
     const u = t - im.at;
     if (u <= 0) continue;
-    a += im.amp * squashPulse(u);
+    a += im.amp * squashPulse(u, pulseEnd(seq, im));
     if (u < CONTACT_HOLD) hold += 1 - smoothstep(u / CONTACT_HOLD);
   }
   out.squash = a;
@@ -460,7 +473,8 @@ function contact(seq: SequenceName, t: number, out: SportsFrame): void {
 export const HOOP_SETTLED = 0.6;
 /** Rim and board recoil: peak pitch (rad), frequency and damping of each spring. */
 export const RECOIL = {
-  rim: { peak: (1.2 * Math.PI) / 180, hz: 5.5, zeta: 0.22 },
+  // Firmly damped: tipping back past rest would close the bracket plate's 1.5 mm gap to the board.
+  rim: { peak: (1.2 * Math.PI) / 180, hz: 5, zeta: 0.45 },
   board: { peak: (0.3 * Math.PI) / 180, hz: 3.5, zeta: 0.3 },
 } as const;
 /** Unit step response of a damped spring (x(0) = 0, x′(0) = 0: C1 at the onset). */
@@ -491,17 +505,6 @@ export function boardRecoil(k: number): number {
 
 /** Net response amplitudes: drag stretch, then the rebound (shortening and pulling in, then settling). */
 export const NET_RESPONSE = { stretch: 0.2, reboundStretch: 0.06, snap: 0.035, hz: 3.2, zeta: 0.35 } as const;
-/** The made ball's centre passes the net's bottom (rest depth) this long after contact. */
-export const NET_BOTTOM_PASS = (() => {
-  const y = (k: number) => V_CONTACT * k + 0.5 * NET_VERTICAL * k * k; // relative to the rim, inside the net
-  let lo = 0, hi = NET_EXIT;
-  for (let i = 0; i < 60; i++) {
-    const m = (lo + hi) / 2;
-    if (y(m) > -NET.depth) lo = m;
-    else hi = m;
-  }
-  return (lo + hi) / 2;
-})();
 /** Drag weight from the ball's depth fraction f (centre below the rim / NET.depth): 0 … 1 … 0. */
 function dragWeight(f: number): number {
   if (f <= 0.35 || f >= 1.7) return 0;
@@ -537,7 +540,9 @@ function hoopResponse(made: boolean, t: number, out: SportsFrame): void {
   const a = -(out.boardPitch + out.rimPitch), c = Math.cos(a), s = Math.sin(a);
   p.set(p.x, p.y * c - p.z * s, p.y * s + p.z * c);
   const fade = hoopFade(k);
-  const rb = rebound(k - NET_BOTTOM_PASS) * fade;
+  // The rebound starts once the ball's top has left the net's bottom (NET_EXIT), never while any
+  // row could still touch it, so the snap cannot pull a cord into the ball.
+  const rb = rebound(k - NET_EXIT) * fade;
   net.active = true;
   net.stretch = NET_RESPONSE.stretch * dragWeight(-p.y / NET.depth) - NET_RESPONSE.reboundStretch * rb;
   net.snap = NET_RESPONSE.snap * rb;

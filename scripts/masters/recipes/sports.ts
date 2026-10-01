@@ -20,11 +20,16 @@ import type { Quat, RawImage, SceneRecipe } from '../types.ts';
  * - Cream preset: a second albedo (`ball_leather_cream`) generated here from the orange one by a
  *   deterministic remap (below) and stored with KHR_materials_variants (variants orange, cream);
  *   ORM and normal maps are shared. `setPreset` switches with `loadMaterialVariants`.
+ *   v1.2 fidelity pass: the cream is a cooler ivory (236, 229, 212; was 239, 228, 205) so its lit
+ *   side separates from the peach stage by hue instead of merging with it. The orange albedo is
+ *   kept exactly as authored; its look is graded at load (models/sports.ts `LEATHER_GRADE`),
+ *   because the recipe has no pixel function for a default-variant material.
  * - Hoop: `basketball-hoop.glb` at HOOP_SCALE (rim inner radius 0.451 → 0.4 = 1.6 × BALL_R),
  *   no rotation (+z already faces the player), aligned so the rim-ring centre lands on RIM_LOCAL
  *   (the v1.1 rim centre, so every authored arc is unchanged).
  *   `board` → `backboard` (pivot: centre of its flat back, where the arm's plate meets it),
- *   `rim` (pivot: back centre of the bracket plate, the ring's hinge on the board),
+ *   `rim` (pivot: the bracket plate's back-bottom edge, the ring's recoil hinge on the board face:
+ *   tipping about the edge the plate bears on lifts the plate off the board instead of into it),
  *   `net` (pivot: the rim-ring centre = RIM_LOCAL, the net space the rig deforms in).
  * - Joins: the board's four parts → 3 meshes (frame, face+back, target); the rim's ring, bracket,
  *   hooks, bolts, nuts and washers → 2 (paint, steel). The net keeps its three meshes (strands,
@@ -61,14 +66,14 @@ function ballRotation(): Quat {
 
 /**
  * Cream albedo from the orange one. Panels: the master's panel colour (sRGB 223, 64, 10 median)
- * becomes warm cream (239, 228, 205), keeping each texel's relative brightness so the pebble
+ * becomes an ivory cream (236, 229, 212), keeping each texel's relative brightness so the pebble
  * mottling survives. Seams and grooves (dark texels) keep their original colour. Linear-light
  * maths; a pure function of the input pixels.
  */
 const lin = (c: number) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
 const srgb = (x: number) => Math.round(255 * Math.min(1, Math.max(0, x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055)));
 const PANEL = [223, 64, 10].map(lin) as [number, number, number];
-const CREAM = [239, 228, 205].map(lin) as [number, number, number];
+const CREAM = [236, 229, 212].map(lin) as [number, number, number];
 const luma = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 export function creamAlbedo(img: RawImage): RawImage {
   const LUT = new Float32Array(256).map((_, i) => lin(i));
@@ -118,7 +123,9 @@ export const recipe: SceneRecipe = {
       decimate: { 'net-knots': { ratio: 0.4, error: 0.001 } },
       nodes: {
         board: { rename: 'backboard', pivot: { node: 'board-back', point: 'center' } },
-        rim: { pivot: { node: 'bracket-plate', point: 'back' } },
+        // Hinge on the board face at the bracket plate's back-bottom edge: the recoil tips the ring
+        // down about the edge the plate bears on, so the plate lifts off the board, never into it.
+        rim: { pivot: { node: 'bracket-plate', point: [0.5, 0, 0] } },
         net: { pivot: { node: 'rim-ring', point: 'center' } },
       },
     },
