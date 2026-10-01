@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import type { Node as GltfNode } from '@gltf-transform/core';
 import { listTextureSlots } from '@gltf-transform/functions';
-import { Box3, Matrix4, type Mesh, MeshStandardMaterial, type Object3D, OrthographicCamera, Quaternion, Vector3 } from 'three';
+import { Box3, type BufferGeometry, Matrix4, type Mesh, MeshPhysicalMaterial, MeshStandardMaterial, type Object3D, OrthographicCamera, Quaternion, Vector3 } from 'three';
 import { boxIn, createIO, findNode, MASTERS_DIR } from '../scripts/masters/compose.ts';
 import { loadSharp } from '../scripts/masters/sharp.ts';
 import {
   armPoint, CONTACT_PITCH, CUE, fromMaster, LID, LID_CLOSED_BOX, PARTY_BOUNDS, PARTY_NODES, PLATTER, PLATTER_TOP, PLAYER, RECORD, RECORD_SEATED,
   RECORD_TOP, STATUS_KEY, stylusAt, TONEARM, tonearmYawFor, TT_SCALE,
 } from '../models/recordContract.ts';
-import { extendLid, type RecordPlayerRig } from '../models/recordPlayer.ts';
+import { extendLid, LID_LOOK, splitLidInterior, type RecordPlayerRig } from '../models/recordPlayer.ts';
 import { fitCameraToBounds } from '../src/render/camera.ts';
 import { PartyScene, partyFramePoints } from '../src/scenes/party/index.ts';
 import { ARM, DURATIONS, HOVER, LEVEL_BY, PLAY_AT, RPM_33, SPIN, TILT_MAX_SHEEN } from '../src/scenes/party/poses.ts';
@@ -118,6 +118,13 @@ describe('Party choreography', () => {
     }
   });
 
+  it('host is one gesture: the align hands over to the lower without stopping (speed ≥ 10 % of its peak from 0.06 s to 0.45 s, across the 0.12–0.22 s hand-over)', () => {
+    const speed = (t: number) => at('host', t + 0.0005).recordPos.distanceTo(at('host', t - 0.0005).recordPos) / 0.001;
+    const ts = Array.from({ length: 750 }, (_, i) => (i + 1) / 1000);
+    const peak = Math.max(...ts.map(speed));
+    for (const t of ts) if (t >= 0.06 && t <= 0.45) expect(speed(t), `${t.toFixed(3)} s`).toBeGreaterThan(0.1 * peak);
+  });
+
   it('seat-and-settle: contact at 0.75 s, a small precessing tilt that rides on the mat, still from 1.05 s', () => {
     expect(at('host', SETTLE.at).recordPos.y).toBeCloseTo(PLATTER_TOP, 9);
     let peak = 0, turned = 0, prevPhi: number | null = null;
@@ -133,9 +140,10 @@ describe('Party choreography', () => {
         prevPhi = phi;
       }
     }
-    // A visible but small settle: the rim rises ≥ 3 mm and ≤ 8 mm; the low side runs round the rim.
-    expect(RECORD.radius * Math.sin(peak)).toBeGreaterThan(0.003);
-    expect(RECORD.radius * Math.sin(peak)).toBeLessThan(0.008);
+    // A settle that registers at stage size but stays a settle: the rim rises 8–15 mm (scene
+    // units; about 2–3 px on the stage); the low side runs round the rim.
+    expect(RECORD.radius * Math.sin(peak)).toBeGreaterThan(0.008);
+    expect(RECORD.radius * Math.sin(peak)).toBeLessThan(0.015);
     expect(turned).toBeGreaterThan(Math.PI);
     for (const t of [SETTLE.at + SETTLE.end, 1.1, 1.2]) {
       expect(settleTilt(t - SETTLE.at)).toBe(0);
@@ -623,6 +631,79 @@ describe('Party model clearances on the exported geometry', () => {
     scene.pose('guest-ready');
     expect(get('cue_lever').quaternion.angleTo(leverRest)).toBeLessThan(1e-9);
     expect(get('cue_lift').position.distanceTo(liftRest)).toBeLessThan(1e-9);
+  });
+});
+
+describe('Party dust cover look (the decline flash fix)', () => {
+  const root = threeFromDoc(doc);
+  const hinge = root.getObjectByName('lid_hinge')!;
+  extendLid(hinge);
+  const shell = hinge.children.find((c) => ((c as Mesh).material as MeshStandardMaterial | undefined)?.name === 'tt_lid') as Mesh;
+  // The runtime lid material is physical (clearcoat); stand it in for the test hierarchy's.
+  const physical = new MeshPhysicalMaterial({ name: 'tt_lid', color: (shell.material as MeshStandardMaterial).color, roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.08 });
+  shell.material = physical;
+  const trianglesBefore = (shell.geometry.index?.count ?? shell.geometry.getAttribute('position').count) / 3;
+  const innerMaterial = splitLidInterior(hinge)!;
+  const inner = hinge.getObjectByName('lid_shell_inner') as Mesh;
+  const tris = (g: BufferGeometry) => g.index!.count / 3;
+
+  it('splits the shell into its outside and its inside without losing a triangle (idempotent)', () => {
+    expect(inner).toBeDefined();
+    expect(tris(shell.geometry) + tris(inner.geometry)).toBe(trianglesBefore);
+    expect(tris(inner.geometry)).toBeGreaterThan(0.2 * trianglesBefore);
+    expect(tris(shell.geometry)).toBeGreaterThan(0.2 * trianglesBefore);
+    expect(splitLidInterior(hinge)).toBeNull();
+    expect(hinge.children.filter((c) => c.name === 'lid_shell_inner')).toHaveLength(1);
+  });
+
+  it('every inside triangle faces into the closed box, every outside one faces out; the inside covers the top panel and the walls', () => {
+    const box = new Box3().setFromBufferAttribute(shell.geometry.getAttribute('position') as never);
+    const centre = box.getCenter(new Vector3());
+    const facing = (g: BufferGeometry) => {
+      const pos = g.getAttribute('position'), idx = g.index!;
+      const a = new Vector3(), b = new Vector3(), c = new Vector3(), n = new Vector3(), e = new Vector3();
+      const out: { dot: number; n: Vector3; y: number }[] = [];
+      for (let i = 0; i < idx.count; i += 3) {
+        a.fromBufferAttribute(pos, idx.getX(i)); b.fromBufferAttribute(pos, idx.getX(i + 1)); c.fromBufferAttribute(pos, idx.getX(i + 2));
+        n.subVectors(c, b).cross(e.subVectors(a, b));
+        if (n.lengthSq() === 0) continue;
+        const centroid = a.clone().add(b).add(c).divideScalar(3);
+        out.push({ dot: n.dot(centroid.clone().sub(centre)), n: n.clone().normalize(), y: centroid.y });
+      }
+      return out;
+    };
+    const ins = facing(inner.geometry), outs = facing(shell.geometry);
+    expect(ins.every((f) => f.dot < 0)).toBe(true);
+    expect(outs.every((f) => f.dot >= 0)).toBe(true);
+    // The top panel's underside (normal down) and the back wall's inner face (normal forward) are inside.
+    expect(ins.some((f) => f.n.y < -0.99)).toBe(true);
+    expect(ins.some((f) => f.n.z > 0.99)).toBe(true);
+    expect(outs.some((f) => f.n.y > 0.99)).toBe(true);
+  });
+
+  it('the inside is darker and uncoated, with occlusion deepest under the top panel; the outside is a satin coat', () => {
+    expect(innerMaterial.name).toBe('tt_lid_inner');
+    expect(inner.material).toBe(innerMaterial);
+    expect(innerMaterial.clearcoat).toBe(0);
+    expect(innerMaterial.defines).toHaveProperty('PHYSICAL');
+    expect(innerMaterial.specularIntensity).toBe(LID_LOOK.inner.specularIntensity);
+    expect(innerMaterial.color.r).toBeCloseTo(physical.color.r * LID_LOOK.inner.tint, 6);
+    expect(innerMaterial.vertexColors).toBe(true);
+    const ao = inner.geometry.getAttribute('color'), pos = inner.geometry.getAttribute('position');
+    let lo = Infinity, hi = -Infinity, atTop = 1, yTop = -Infinity;
+    for (let i = 0; i < ao.count; i++) {
+      lo = Math.min(lo, ao.getX(i)); hi = Math.max(hi, ao.getX(i));
+      if (pos.getY(i) > yTop) { yTop = pos.getY(i); atTop = ao.getX(i); }
+    }
+    expect(lo).toBeGreaterThanOrEqual(LID_LOOK.inner.aoDeep - 1e-6);
+    expect(hi).toBeLessThanOrEqual(LID_LOOK.inner.aoRim + 1e-6);
+    expect(atTop).toBeLessThan(LID_LOOK.inner.aoDeep + 0.05);
+    // Outside: a thinner, rougher coat than the master's near-mirror (0.6 at 0.08).
+    expect(physical.clearcoat).toBe(LID_LOOK.outer.clearcoat);
+    expect(physical.clearcoatRoughness).toBe(LID_LOOK.outer.clearcoatRoughness);
+    expect(physical.roughness).toBe(LID_LOOK.outer.roughness);
+    expect(physical.clearcoatRoughness).toBeGreaterThanOrEqual(0.4);
+    expect(physical.clearcoat).toBeLessThanOrEqual(0.3);
   });
 });
 
