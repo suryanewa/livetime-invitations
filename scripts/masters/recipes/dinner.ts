@@ -28,11 +28,11 @@ import type { SceneRecipe } from '../types.ts';
  *   dome's lower half took the floor's colour and the bead, bands and handle read as whitish lines.
  *   The Low tier (own env 0.8) read more like silver than Normal. Compared side by side (own env
  *   0.85–1.1, roughness 0.14–0.20, darker F0, anisotropy 0–0.7 at both orientations):
- *   - dome: own env 0.9, uniform roughness 0.18 and anisotropy 0.5 along the meridians (the
- *     spinning-lathe polish of a real cloche; the v1.1 cloche's 0.7 brushed look, softer). The
- *     softbox stretches into vertical highlight bands with dark reflections between them, which is
- *     what reads as silver here; isotropic finishes at any env stayed a grey ball with two
- *     softbox blobs. The roughness and the anisotropy are set at load (`finishDish`,
+ *   - dome: own env 0.9, uniform roughness 0.2 and anisotropy 0.3 along the meridians (the
+ *     spinning-lathe polish of a real cloche). The softbox stretches into soft vertical
+ *     highlights with darker reflections between them, which is what reads as silver here;
+ *     isotropic finishes at any env stayed a grey ball with two softbox blobs, and the first
+ *     ship (0.5 at 0.18) read as light and dark gores, a ribbed dome (v1.2.1 polish). The roughness and the anisotropy are set at load (`finishDish`,
  *     models/dinner.ts: the recipe API has no anisotropy policy and cannot raise a roughness
  *     above its map), the own env here.
  *   - bead, bands, finial, handle: own env 0.8 and roughness 0.12 (from the master's 0.065–0.09):

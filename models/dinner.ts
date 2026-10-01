@@ -83,13 +83,15 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
  * is near-uniform (G 23–34: roughness 0.09–0.13, no visible lathe detail); as an isotropic
  * near-mirror of a near-white F0 in the cream studio it read pale and frosted (v1.2 review). The
  * dome becomes a MeshPhysicalMaterial with a uniform DOME_ROUGHNESS and DOME_ANISOTROPY along its
- * meridians (the lathe polish: the softbox stretches into vertical bands with dark reflections
- * between them, as the v1.1 cloche's brushed finish did). Its own environment (0.9) comes from the
+ * meridians (the lathe polish: the softbox stretches into soft vertical highlights with darker
+ * reflections between them). v1.2.1 polish: 0.5 at roughness 0.18 read as distinct light and dark
+ * gores (a ribbed, melon-like dome) in the 540 px frames; 0.3 at 0.2 keeps the stretched highlights
+ * and reads as smooth mirror-polished silver (0.15 broke back into softbox blobs). Its own environment (0.9) comes from the
  * recipe's extras. The unused roughness map is freed. Call before `prepareImported`, so the
  * replacement is the material registered for the Low tier and disposal.
  */
-export const DOME_ROUGHNESS = 0.18;
-export const DOME_ANISOTROPY = 0.5;
+export const DOME_ROUGHNESS = 0.2;
+export const DOME_ANISOTROPY = 0.3;
 /** Anisotropy direction in the dome's UV frame: π/2 runs along v, the meridians. */
 export const DOME_ANISOTROPY_ROTATION = Math.PI / 2;
 export function finishDish(root: Object3D): void {

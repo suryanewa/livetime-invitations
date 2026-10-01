@@ -1,4 +1,4 @@
-# Dinner v1.2: the cloche and the clean plate on the scan-to-CAD masters
+# Dinner v1.2: the cloche and the clean plate on the scan-to-CAD masters (v1.2.1 polish)
 
 Owner's direction (Surya, 2026-10-01): same beats, higher fidelity, the new models, **no food**. The scene is the
 porcelain plate with its gilt rim (`dinner-plate.glb`) and the silver cloche's dome assembly (`silver-cloche.glb`
@@ -34,7 +34,10 @@ minus its tray). Recipe: `scripts/masters/recipes/dinner.ts`; contract: `models/
   roughness 0.14–0.20, darker F0, anisotropy 0–0.7 along and across the meridians): every isotropic finish stayed
   a grey ball with two softbox blobs; a **lathe-polish anisotropy along the meridians** is what reads as silver
   here (the softbox stretches into vertical highlight bands with dark reflections between them, the look the v1.1
-  brushed cloche had). Shipped: dome `MeshPhysicalMaterial`, roughness 0.18, anisotropy 0.5 at rotation π/2,
+  brushed cloche had). Shipped: dome `MeshPhysicalMaterial`, roughness 0.2, anisotropy 0.3 at rotation π/2
+  (v1.2.1 polish: the first ship, 0.5 at 0.18, read as distinct light and dark gores, a ribbed melon-like dome,
+  in the 540 px frames; 0.3 at 0.2 keeps the stretched highlights and reads as smooth polished silver, while
+  0.15 broke back into softbox blobs; compared side by side in the host, guest-ready and accepted poses),
   own environment 0.9 (`finishDish` in models/dinner.ts sets the finish at load, before `prepareImported`;
   the own env comes from the recipe); bead, bands, finial and handle roughness 0.12 at own environment 0.8
   (recipe policies), so the ring handle and the lip shade light to dark like metal. Checked at Normal, Low and
@@ -82,9 +85,25 @@ it is in contact, the handle's grip while it is carried, blended smoothly betwee
   around exactly those instants.
 - **Decline** keeps its v1.1 path: the covered dish as one unit, up–across–down into the bin, flaps closing once the
   handle is below the rim.
+- **Change of mind (v1.2.1, replaces the v1.1 cut).** The outcome that is showing plays backwards along its own
+  authored path to the covered dish, then the new outcome plays (`planAnswerChange`, `sampleAnswerChange` in
+  sequences.ts; `DinnerScene.interruptCut` asks the director for its cut and starts the new playback on the exact
+  interrupted frame, so the cut is never seen). The authored paths are clear of the plate and the bin, so their
+  reverse is too: a lifted cover comes back down onto the plate like a reversed lift, a dish in the bin comes
+  back up out of it. The rewind leaves at the outcome's own speed (Hermite, no velocity jump), is paced by
+  arc length (dish and bin each in units of its own fastest frame, so a still hold such as the rock takes no
+  time) and lasts the shortest 0.15–0.6 s (0.45 s before an accept) in which no frame moves the dish or the bin
+  more than 1.6× its own fastest authored frame. Before a decline the bin starts coming in during the end of
+  the rewind (up to the decline's 0.25 s lead) wherever it keeps 1.64 plan clearance (bin rim + bead + 0.05)
+  from the returning cover; the new outcome is sped up only if it would not fit (k ≤ 1.25; 1.0 for every
+  accept → decline). The capture's change clip (decline at 0.496 s): the cover rewinds in 0.24 s, frame
+  diffs f30–f34 2.2, 1.8, 1.2 (v1.1: 8.2 at f30→f31); the larger diffs after that are the bin's entrance,
+  the same as in the decline clip. It works the same from the accepted pose (the whole reveal rewinds in
+  0.36 s) and for decline → accept. Tested in tests/dinner.test.ts (every interruption time both ways, through
+  the real `VisualDirector`).
 
-Verified by looking: `outputs/dinner/` stills and every frame strip of host, accept, decline and change (the
-change clip cuts to the covered dish once the cover is aside, as v1.1 did).
+Verified by looking: `outputs/dinner/` stills and every frame strip of host, accept, decline and change (v1.2.1:
+the change clip lowers the cover back onto the plate as the bin comes in, then bins the covered dish).
 
 ## Export report (`pnpm models dinner`, deterministic: two exports, identical SHA-1 de23de79…)
 
@@ -110,8 +129,12 @@ Recorded in `docs/qualification.md` (v1.2 re-measure), `docs/asset-manifest.md`,
   policy) would move all of this into the export.
 - **Capture plan (fixed in the fix pass).** `scripts/capture.ts` now has one Dinner preset whose posters are all
   `shared-<pose>` (`sharedAll`) and no second-preset clips, so a plain `pnpm capture dinner` writes exactly the
-  four shared posters and the thumbnail into `assets/` (the per-dish files cannot come back). Review stills are
-  `capture-shared-*.png`.
+  four shared posters and the thumbnail into `assets/`. Review stills are `capture-shared-*.png`.
+  v1.2.1: the v1.1 per-dish posters did come back once (a stale `outputs/dinner/posters` from a v1.1 run was
+  copied wholesale into `assets/`, where `posterUrl` prefers `dinner/pasta/<pose>` over `shared-<pose>`).
+  `captureScene` now clears the scene's staged posters, review stills, frame strips and clips before a run and
+  removes any poster in `assets/scenes/<scene>/posters` that the run did not write; `tests/dinner.test.ts`
+  fails if the folder holds anything but the four shared posters.
 - **Studio environment.** The stage environment has no dark horizon, so the polished dome reads as bright silver
   with soft highlight bands rather than the master viewer's room reflections; raising its environment further
   flattens it. A per-scene environment is a stage (shared) change.
@@ -125,9 +148,17 @@ Recorded in `docs/qualification.md` (v1.2 re-measure), `docs/asset-manifest.md`,
   direction is not visible. The height kinks only at the two instants the rock passes level (the flat beat and
   half-way through the rock: it switches the rim it rocks on); the C1 test exempts ±2 ms around exactly those
   instants and checks height everywhere else.
-- **Answer change cut.** The change clip (accept, then decline at 0.5 s) cuts from the cover in mid-air to the
-  covered dish at 0.496 s, because a straight blend from aside would drag the cover through the plate
-  (`coverBlendSafe`). Same as v1.1 (not a regression); the one visible pop in the Dinner clips.
+- **Answer change (fixed in v1.2.1, see Choreography).** Two limits: the scene keeps a little state between the
+  director's cut and the new playback (the rewind plan; any other pose or sequence clears it), so the change is
+  not a pure function of time like the outcomes; and a third answer inside the first ~0.6 s of a rewind-led
+  decline can move the arriving bin by a few frames' worth (its clock runs ahead of the dish there).
+- **Dish in the bin.** Inside the bin the dome drops out of sight before the ring handle does, so the handle
+  shows briefly as a small "C" then a dash (decline f45–f51). It is the shared bin's dark interior; harmless,
+  left as is.
+- **Plate well.** At stage size the empty well is a near-flat white disc; the gilt rim carries the reveal, as
+  the owner's no-food decision implies. Not changed (the porcelain is the master's material).
+- **Other docs.** `docs/style-reference.md` (Cloche) still quotes the first ship's dome finish (anisotropy 0.5,
+  roughness 0.18); it is outside this scene's files. The shipped values are 0.3 and 0.2 (`models/dinner.ts`).
 - **Shared tooling text.** `study.ts`, `studyRubric.ts` and the library's food materials in
   `src/render/materials.ts` still mention food (study and lookdev pages, v1.0/v1.1 history); the lookdev label
   now says "cloche beside the clean plate".

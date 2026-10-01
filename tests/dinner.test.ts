@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { Box3, BoxGeometry, Color, Euler, Group, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, type Object3D, OrthographicCamera, Texture, Vector3 } from 'three';
-import { DOME_ANISOTROPY, DOME_ROUGHNESS, finishDish } from '../models/dinner.ts';
+import { DOME_ANISOTROPY, DOME_ROUGHNESS, finishDish, type DinnerRig } from '../models/dinner.ts';
+import { VisualDirector } from '../src/core/visualDirector.ts';
 import type { Node } from '@gltf-transform/core';
 import { listTextureSlots } from '@gltf-transform/functions';
 import { fitCameraToBounds } from '../src/render/camera.ts';
-import { dinnerFramePoints } from '../src/scenes/dinner/index.ts';
+import { DinnerScene, dinnerFramePoints } from '../src/scenes/dinner/index.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import {
   COVER, COVER_BESIDE, COVER_SEATED, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_GLB_NODES, DINNER_NODES, DINNER_RIM_CLEARANCE, DISH_HEIGHT,
@@ -15,7 +16,8 @@ import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 import { BIN, buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
 import {
-  ACCEPT, coverBlendSafe, coverLowering, DURATIONS, frameFor, HOST_FLAT, HOST_TOUCH, newFrame, REVEAL_DIR, SAFE_SKIRT, sampleSequence, SETTLE_TILT, TIP,
+  ACCEPT, type AnswerChange, BIN_CLEARANCE, binStep, changeTime, CONTENT_END, coverBlendSafe, coverLowering, dishStep, DURATIONS, outcomePace, planAnswerChange, REWIND,
+  sampleAnswerChange, frameFor, HOST_FLAT, HOST_TOUCH, newFrame, REVEAL_DIR, SAFE_SKIRT, sampleSequence, SETTLE_TILT, TIP,
   type DinnerFrame,
 } from '../src/scenes/dinner/sequences.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
@@ -423,7 +425,7 @@ describe('Dinner motion continuity (checkpoint 4)', () => {
     }
   });
 
-  it('an answer change blends while the cover is still over the plate, and cuts once it is aside', () => {
+  it('a straight blend would be clean only while the cover is over the plate (the clearance reference)', () => {
     expect(coverBlendSafe(at('accept', 0.3))).toBe(true);
     expect(coverBlendSafe(at('accept', 0.7))).toBe(false);
     expect(SAFE_SKIRT).toBeGreaterThan(PLATE.rimHeight + 0.25);
@@ -468,3 +470,122 @@ describe('Dinner silver finish at load (finishDish)', () => {
   });
 });
 
+
+describe('Dinner change of mind (v1.2.1: rewind along the authored path, no cut)', () => {
+  const FRAME = 1 / 60;
+  /** Largest 60 fps step of the dish and of the bin over [t0, t1] of a change's playback. */
+  const fastest = (c: AnswerChange, t0: number, t1: number) => {
+    let prev = sampleAnswerChange(c, t0, newFrame()), dish = 0, bin = 0;
+    for (let t = t0 + FRAME; t <= t1 + 1e-9; t += FRAME) {
+      const f = sampleAnswerChange(c, t, newFrame());
+      dish = Math.max(dish, dishStep(prev, f));
+      bin = Math.max(bin, binStep(prev, f));
+      prev = f;
+    }
+    return [dish, bin] as const;
+  };
+
+  it('starts on the exact interrupted frame, never jumps, and ends on the new outcome', () => {
+    for (const [from, next] of [['accept', 'decline'], ['decline', 'accept']] as const) {
+      const [ownDish, ownBin] = outcomePace(from);
+      const [nextDish, nextBin] = outcomePace(next);
+      for (let a = 0.05; a <= DURATIONS[from] + 1e-9; a += 0.05) {
+        const c = planAnswerChange(from, a, a < DURATIONS[from] ? 1 : 0, next);
+        const label = `${from}@${a.toFixed(2)} → ${next}`;
+        close(sampleAnswerChange(c, 0, newFrame()), at(from, Math.min(a, CONTENT_END[from])));
+        expect(c.rewind, label).toBeGreaterThanOrEqual(REWIND.min);
+        expect(c.rewind, label).toBeLessThanOrEqual(REWIND.max[next]);
+        // The rewind: each part at most REWIND.pace × its own fastest authored frame.
+        const [rd, rb] = fastest(c, 0, c.rewind);
+        expect(rd, label).toBeLessThanOrEqual(REWIND.pace * ownDish + 1e-3);
+        expect(rb, label).toBeLessThanOrEqual(REWIND.pace * Math.max(ownBin, nextBin) + 1e-3);
+        // The new outcome after it: its own path, sped up by at most k (≤ 1.25).
+        expect(c.k, label).toBeLessThanOrEqual(1.25);
+        const [nd, nb] = fastest(c, c.rewind, DURATIONS[next]);
+        expect(nd, label).toBeLessThanOrEqual(Math.max(c.k * nextDish, REWIND.pace * ownDish) + 1e-3);
+        expect(nb, label).toBeLessThanOrEqual(c.k * Math.max(nextBin, ownBin) + 1e-3);
+        close(sampleAnswerChange(c, DURATIONS[next], newFrame()), pose(next === 'accept' ? 'accepted' : 'declined'));
+        // The bin never comes in through the returning cover (it sweeps past the reveal's landing spot).
+        for (let t = 0; t <= c.rewind + 0.3; t += 0.004) {
+          const f = sampleAnswerChange(c, t, newFrame());
+          if (f.binVisible && f.platePos.lengthSq() < 1e-9) expect(plan(f.coverPos, f.binPos), `${label} t=${t.toFixed(3)}`).toBeGreaterThanOrEqual(BIN_CLEARANCE - 1e-6);
+        }
+      }
+    }
+  });
+
+  it('the mid-reveal change lowers the cover back onto the plate in about 0.25 s along its own path, then declines', () => {
+    const c = planAnswerChange('accept', 0.496, 1, 'decline');
+    expect(c.rewind).toBeGreaterThanOrEqual(0.15);
+    expect(c.rewind).toBeLessThanOrEqual(0.25);
+    // It keeps its speed for an instant (no velocity jump), then comes back along the reveal's
+    // clear path; the bin comes in meanwhile, and the cover is seated when the dish lifts.
+    expect(changeTime(c, 0)[2]).toBeCloseTo(1, 1);
+    for (let t = 0; t < c.rewind; t += 0.004) {
+      const [seq, s] = changeTime(c, t);
+      expect(seq).toBe('accept');
+      expect(s).toBeLessThanOrEqual(0.52);
+    }
+    const seated = sampleAnswerChange(c, c.rewind, newFrame());
+    expect(seated.coverPos.distanceTo(COVER_SEATED)).toBeLessThan(1e-6);
+    expect(tiltOf(seated)).toBeLessThan(1e-9);
+    // The bin starts in only once it cannot sweep through the returning cover.
+    expect(c.start).toBeGreaterThan(0.05);
+    expect(c.k).toBeLessThan(1.1);
+  });
+
+  it('the scene rewinds through the director: accept → decline mid-reveal, back to accept mid-decline, and from the accepted pose', () => {
+    const lib = plainLibrary();
+    const bin = buildDisposalBin({ lib });
+    const plate = new Group(); plate.name = 'plate_authored';
+    const cover = new Group(); cover.name = 'cover_authored';
+    const root = new Group().add(plate, cover, bin);
+    const stub = { setFootprint() {}, setHeight() {}, visible: false };
+    const rig = {
+      root, nodes: { plate_authored: plate, cover_authored: cover, bin_root: bin }, shadows: [], dishShadow: stub, coverShadow: stub,
+      flapL: bin.getObjectByName('bin_flap_l')!, flapR: bin.getObjectByName('bin_flap_r')!, bounds: dinnerBounds(), setPreset() {}, dispose() {},
+    } as unknown as DinnerRig;
+    const scene = new DinnerScene(rig, { category: 'dinner', dish: 'pasta' });
+    const v = new VisualDirector({ complete() {} }, 'guest', null);
+    v.attach(scene);
+    const snap = () => ({ p: cover.position.clone(), q: cover.quaternion.clone(), d: plate.position.clone() });
+    const jump = (a: ReturnType<typeof snap>, b: ReturnType<typeof snap>) => Math.max(a.p.distanceTo(b.p) + a.q.angleTo(b.q), a.d.distanceTo(b.d));
+    const limit = REWIND.pace * Math.max(outcomePace('accept')[0], outcomePace('decline')[0]) * 1.25;
+    const run = (from: number, to: number) => {
+      let prev = snap(), max = 0;
+      for (let t = from; t <= to + 1e-9; t += FRAME) { v.update(t); const s = snap(); max = Math.max(max, jump(prev, s)); prev = s; }
+      return max;
+    };
+    v.update(0);
+    v.setIntent('accept');
+    run(FRAME, 0.496);
+    const before = snap();
+    v.setIntent('decline');
+    expect(jump(before, snap())).toBeLessThan(1e-9);
+    expect(run(0.496 + FRAME, 0.496 + 0.5)).toBeLessThan(limit);
+    // Mid-decline, back to accept: the dish comes back out along its path and the reveal plays.
+    const mid = snap();
+    v.setIntent('accept');
+    expect(jump(mid, snap())).toBeLessThan(1e-9);
+    expect(run(0.996 + FRAME, 3)).toBeLessThan(limit);
+    expect(v.state).toBe('accepted-pose');
+    // From the accepted pose (no playback), a change to decline rewinds the whole reveal.
+    const rest = snap();
+    v.setIntent('decline');
+    expect(jump(rest, snap())).toBeLessThan(1e-9);
+    expect(run(3 + FRAME, 5)).toBeLessThan(limit);
+    expect(v.state).toBe('declined-pose');
+    expect(plate.visible).toBe(false);
+    // A replay starts clean from guest-ready (no rewind left over).
+    v.replay();
+    expect(cover.position.distanceTo(COVER_SEATED)).toBeLessThan(1e-9);
+  });
+});
+
+describe('Dinner posters (one shared set, no food)', () => {
+  it('ships exactly the four shared posters: no per-dish (v1.1 food) poster can shadow them', async () => {
+    const { readdirSync } = await import('node:fs');
+    const files = readdirSync(join(import.meta.dirname, '..', 'assets', 'scenes', 'dinner', 'posters')).filter((f) => !f.startsWith('.')).sort();
+    expect(files).toEqual(['shared-accepted.webp', 'shared-declined.webp', 'shared-guest-ready.webp', 'shared-host-ready.webp']);
+  });
+});

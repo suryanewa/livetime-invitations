@@ -167,6 +167,13 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
   // Stage posters outside the watched tree; writing into assets/ mid-run makes Vite reload.
   const posterDir = join(import.meta.dirname, '..', 'assets', 'scenes', category, 'posters');
   const stagedPosters = join(outDir, 'posters');
+  // Start from a clean slate: the staged posters, review stills, frame strips and clips of an
+  // earlier capture plan (e.g. Dinner v1.1's per-dish posters) must not survive into this one,
+  // or into assets/ below.
+  const { readdir, rm } = await import('node:fs/promises');
+  for (const entry of await readdir(outDir)) {
+    if (entry === 'posters' || entry === 'thumb.webp' || /^(capture-.*\.png|frames-.*|.*\.mp4)$/.test(entry)) await rm(join(outDir, entry), { recursive: true, force: true });
+  }
   await mkdir(stagedPosters, { recursive: true });
   const browser = await launch();
   const page = await browser.newPage({ viewport: { width: 1200, height: 1000 }, deviceScaleFactor: 1 });
@@ -280,6 +287,9 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
   }
   const { cp } = await import('node:fs/promises');
   await mkdir(posterDir, { recursive: true });
+  // The posters this plan wrote are the scene's whole set: drop any other poster in assets/.
+  const staged = new Set(await readdir(stagedPosters));
+  for (const file of await readdir(posterDir)) if (file.endsWith('.webp') && !staged.has(file)) await rm(join(posterDir, file));
   await cp(stagedPosters, posterDir, { recursive: true });
   const thumbDir = join(import.meta.dirname, '..', 'assets', 'ui', 'collection');
   await cp(join(outDir, 'thumb.webp'), join(thumbDir, `${category}.webp`));

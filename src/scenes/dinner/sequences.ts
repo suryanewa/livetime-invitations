@@ -6,6 +6,7 @@ import {
   DISH_IN_BIN, PLATE,
 } from '../../../models/dinnerContract.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
+import { BIN } from '../../../models/disposalBin.ts';
 
 /**
  * Pure authored choreography for Dinner (Dinner sub-spec): cover the dish, reveal the plate, or
@@ -294,16 +295,20 @@ const PATH = (() => {
 })();
 
 const dish = new Vector3();
-function decline(t: number, out: DinnerFrame): void {
+/**
+ * `tBin` (default t) drives the bin's entrance and the flaps opening; after a change of mind the
+ * bin comes in while the cover is still coming back down, so it runs ahead of the dish (tBin ≥ t).
+ */
+function decline(t: number, out: DinnerFrame, tBin = t): void {
   frameFor('guest-ready', out);
   // 0–0.25: the bin slides into the margin and opens.
-  out.binVisible = t > 0;
+  out.binVisible = tBin > 0;
   // Its speed peaks off-screen and it decelerates across the visible part (no dark mass
   // slamming across the frame in a few frames).
-  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(t, 0, 0.34)));
+  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tBin, 0, 0.34)));
   // Flaps open as it arrives, and start closing as soon as the dish is out of sight (no frozen
   // frames): nearly shut by 1.10 s, the last gap settles by 1.30 s.
-  if (t < FLAP_CLOSE_AT) out.flaps = FLAP_OPEN(seg(t, 0.14, 0.36));
+  if (t < FLAP_CLOSE_AT) out.flaps = FLAP_OPEN(seg(tBin, 0.14, 0.36));
   else if (t < 1.1) out.flaps = lerp(1, FLAP_GAP, FLAP_CLOSE(seg(t, FLAP_CLOSE_AT, 1.1)));
   else out.flaps = lerp(FLAP_GAP, 0, EASE.land(seg(t, 1.1, 1.3)));
   // 0.25–0.95: the covered dish, as one unit, rises clear, crosses over the rim between the
@@ -320,7 +325,8 @@ function decline(t: number, out: DinnerFrame): void {
 /**
  * Whether a straight interruption blend back to the seated cover is clean from this frame: the
  * cover is still (nearly) centred, or close to centred and above the safe skirt height, so a
- * straight blend down onto the seat never drags its rim across the plate's gilt rim.
+ * straight blend down onto the seat never drags its rim across the plate's gilt rim. (v1.2.1:
+ * the scene rewinds instead of blending, `planAnswerChange`; kept as the clearance reference.)
  */
 export function coverBlendSafe(f: DinnerFrame): boolean {
   const offset = Math.hypot(f.coverPos.x - COVER_SEATED.x, f.coverPos.z - COVER_SEATED.z);
@@ -335,4 +341,206 @@ export function sampleSequence(sequence: SequenceName, t: number, out: DinnerFra
   return out;
 }
 
-export { COVER };
+// ── Change of mind (v1.2.1) ───────────────────────────────────────────────────
+type Outcome = 'accept' | 'decline';
+/** When each outcome's motion is over (it holds its final pose from here to its duration). */
+export const CONTENT_END: Readonly<Record<Outcome, number>> = { accept: ACCEPT.settled, decline: 1.3 };
+/** The decline's first 0.25 s only bring the bin in: they may run during the rewind. */
+const DECLINE_LEAD = 0.25;
+/** Plan clearance between the returning cover and the bin coming in (bin rim + bead + margin). */
+export const BIN_CLEARANCE = BIN.radius + COVER.radius + 0.05;
+/** Bin position on the decline's clock (its entrance). */
+const binAt = (tb: number, out: Vector3) => out.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tb, 0, 0.34)));
+const FRAME = 1 / 60;
+/**
+ * Rewind bounds (s) by the outcome that follows (a decline's first 0.25 s run during the rewind,
+ * so it can take longer before the decline has to speed up), and its largest 60 fps step relative
+ * to the rewound outcome's own largest step.
+ */
+export const REWIND = { min: 0.15, max: { accept: 0.45, decline: 0.6 }, pace: 1.6 } as const;
+
+/**
+ * A change of mind mid-outcome (or after it): the outcome that is showing plays backwards along
+ * its own authored path to the covered dish, which is clear of the plate and the bin by
+ * construction (a lifted cover comes back down onto the plate like a reversed lift, a dish in
+ * the bin comes back up out of it), then the new outcome plays. A straight blend would drag the
+ * cover through the plate's rim; the v1.1 cut popped it onto the plate in one frame.
+ */
+export interface AnswerChange {
+  /** The outcome that was showing, and the time along it where the change happened. */
+  from: Outcome;
+  at: number;
+  /** Its playback rate there (1 while it plays, 0 at rest): the rewind leaves at that speed. */
+  rate: number;
+  /** Path length from the outcome's start to `at`, and the path speed there (`lengthAt`). */
+  length: number;
+  speed: number;
+  /** Rewind duration (0 when the change returns to the outcome being rewound). */
+  rewind: number;
+  /** The new outcome; its time `start + (t − rewind)·k` after the rewind (k fits it in its duration). */
+  next: Outcome;
+  start: number;
+  k: number;
+}
+
+const fa = newFrame(), fb = newFrame();
+/** Per-frame move of the dish (cover position + lean, plate) and of the bin (position + flaps). */
+export function dishStep(a: DinnerFrame, b: DinnerFrame): number {
+  const lean = Math.abs(Math.hypot(b.coverTilt, b.coverTiltX) - Math.hypot(a.coverTilt, a.coverTiltX));
+  return Math.max(a.coverPos.distanceTo(b.coverPos) + lean, a.platePos.distanceTo(b.platePos));
+}
+export const binStep = (a: DinnerFrame, b: DinnerFrame) => a.binPos.distanceTo(b.binPos) + Math.abs(a.flaps - b.flaps);
+/** The outcome's own fastest 60 fps frame, for the dish and for the bin. */
+const paceCache: Partial<Record<Outcome, [number, number]>> = {};
+export function outcomePace(seq: Outcome): [number, number] {
+  let p = paceCache[seq];
+  if (!p) {
+    p = [0, 0];
+    for (let t = 0; t < DURATIONS[seq]; t += FRAME) {
+      sampleSequence(seq, t, fa);
+      sampleSequence(seq, t + FRAME, fb);
+      p = [Math.max(p[0], dishStep(fa, fb)), Math.max(p[1], binStep(fa, fb))];
+    }
+    paceCache[seq] = p;
+  }
+  return p;
+}
+
+const LEN_DT = 0.002;
+/**
+ * Cumulative path length along each outcome, every 2 ms up to CONTENT_END: the dish's move plus
+ * the bin's, each in units of its own fastest frame. The rewind is paced by it, so a still hold
+ * (the reveal's rock, a beat where only the bin moves for the dish) takes no rewind time, and no
+ * part of the scene is rewound faster than the rest relative to its own authored speed.
+ */
+const lengthCache: Partial<Record<Outcome, Float64Array>> = {};
+function lengths(seq: Outcome): Float64Array {
+  let cum = lengthCache[seq];
+  if (!cum) {
+    const [dishPace, binPace] = outcomePace(seq);
+    const n = Math.ceil(CONTENT_END[seq] / LEN_DT);
+    cum = new Float64Array(n + 1);
+    sampleSequence(seq, 0, fa);
+    for (let i = 1; i <= n; i++) {
+      sampleSequence(seq, Math.min(i * LEN_DT, CONTENT_END[seq]), fb);
+      cum[i] = cum[i - 1]! + dishStep(fa, fb) / dishPace + (binPace > 0 ? binStep(fa, fb) / binPace : 0);
+      fa.coverPos.copy(fb.coverPos); fa.platePos.copy(fb.platePos); fa.binPos.copy(fb.binPos);
+      fa.coverTilt = fb.coverTilt; fa.coverTiltX = fb.coverTiltX; fa.flaps = fb.flaps;
+    }
+    lengthCache[seq] = cum;
+  }
+  return cum;
+}
+/** Path length from the outcome's start to time s. */
+export function lengthAt(seq: Outcome, s: number): number {
+  const cum = lengths(seq);
+  const x = Math.min(Math.max(s, 0), CONTENT_END[seq]) / LEN_DT;
+  const i = Math.min(Math.floor(x), cum.length - 2);
+  return cum[i]! + (cum[i + 1]! - cum[i]!) * (x - i);
+}
+/** The earliest time at which the path length reaches d (a still hold is skipped). */
+function timeAtLength(seq: Outcome, d: number): number {
+  const cum = lengths(seq);
+  if (d <= 0) return 0;
+  if (d >= cum[cum.length - 1]!) return CONTENT_END[seq];
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (cum[mid]! < d) lo = mid; else hi = mid; }
+  const span = cum[hi]! - cum[lo]!;
+  return Math.min((lo + (span > 0 ? (d - cum[lo]!) / span : 1)) * LEN_DT, CONTENT_END[seq]);
+}
+/** Path speed (length per second) of the outcome at time s. */
+function speedAt(seq: Outcome, s: number): number {
+  const a = Math.max(s - 0.004, 0), b = Math.min(s + 0.004, CONTENT_END[seq]);
+  return b > a ? (lengthAt(seq, b) - lengthAt(seq, a)) / (b - a) : 0;
+}
+/**
+ * Path length left during the rewind at u ∈ [0, 1] and its rate per unit u: Hermite from the
+ * interrupted length L0, leaving at the outcome's own speed v0 (no velocity jump), to 0, landing softly.
+ */
+function rewindLength(L0: number, v0: number, R: number, u: number): [number, number] {
+  const u2 = u * u, u3 = u2 * u;
+  const d = (2 * u3 - 3 * u2 + 1) * L0 + (u3 - 2 * u2 + u) * v0 * R;
+  const dd = (6 * u2 - 6 * u) * L0 + (3 * u2 - 4 * u + 1) * v0 * R;
+  return [d, dd];
+}
+
+/**
+ * The shortest rewind (REWIND.min to `max`, 10 ms steps) whose every 60 fps frame moves the dish
+ * and the bin at most REWIND.pace × the outcome's own fastest frame for each: quick, never a whip
+ * (unless even `max` is short).
+ */
+export function rewindDuration(from: Outcome, L0: number, v0: number, max: number): number {
+  const [dishPace, binPace] = outcomePace(from);
+  for (let R = REWIND.min; R < max; R += 0.01) {
+    let ok = true;
+    sampleSequence(from, timeAtLength(from, L0), fa);
+    for (let t = FRAME; t < R + FRAME && ok; t += FRAME) {
+      sampleSequence(from, timeAtLength(from, rewindLength(L0, v0, R, Math.min(t / R, 1))[0]), fb);
+      ok = dishStep(fa, fb) <= REWIND.pace * dishPace && binStep(fa, fb) <= REWIND.pace * Math.max(binPace, 1e-3);
+      fa.coverPos.copy(fb.coverPos); fa.platePos.copy(fb.platePos); fa.binPos.copy(fb.binPos);
+      fa.coverTilt = fb.coverTilt; fa.coverTiltX = fb.coverTiltX; fa.flaps = fb.flaps;
+    }
+    if (ok) return R;
+  }
+  return max;
+}
+
+export function planAnswerChange(from: Outcome, at: number, rate: number, next: Outcome): AnswerChange {
+  const a = Math.min(Math.max(at, 0), CONTENT_END[from]);
+  const r = a < CONTENT_END[from] ? rate : 0;
+  // Changing back to the outcome being rewound: it simply plays on from where it is.
+  if (from === next) return { from, at: a, rate: r, length: 0, speed: 0, rewind: 0, next, start: a, k: 1 };
+  const length = lengthAt(from, a), speed = r * speedAt(from, a);
+  const rewind = rewindDuration(from, length, speed, REWIND.max[next]);
+  // A decline's lead (the bin coming in) runs during the end of the rewind, as much of it as
+  // keeps the bin clear of the returning cover (the bin sweeps in past the reveal's landing
+  // spot); an accept starts after the rewind.
+  const start = next === 'decline' ? declineLead(from, length, speed, rewind) : 0;
+  const k = Math.max(1, (CONTENT_END[next] - start) / (DURATIONS[next] - rewind));
+  return { from, at: a, rate: r, length, speed, rewind, next, start, k };
+}
+
+const binP = new Vector3();
+function declineLead(from: Outcome, length: number, speed: number, R: number): number {
+  for (let L = Math.min(DECLINE_LEAD, R); L > 0; L -= 0.01) {
+    let clear = true;
+    for (let t = Math.max(0, R - L); t <= R + 1e-9 && clear; t += 0.004) {
+      sampleSequence(from, timeAtLength(from, rewindLength(length, speed, R, Math.min(t / R, 1))[0]), fa);
+      binAt(t - (R - L), binP);
+      clear = Math.hypot(fa.coverPos.x - binP.x, fa.coverPos.z - binP.z) >= BIN_CLEARANCE;
+    }
+    if (clear) return L;
+  }
+  return 0;
+}
+
+/** Where the change is at time `t` of the new outcome's playback: [outcome, its time, its rate]. */
+export function changeTime(c: AnswerChange, t: number): [Outcome, number, number] {
+  if (t < c.rewind) {
+    const [d, dd] = rewindLength(c.length, c.speed, c.rewind, t / c.rewind);
+    const s = timeAtLength(c.from, d);
+    const v = speedAt(c.from, s);
+    return [c.from, s, v > 1e-9 ? dd / c.rewind / v : 0];
+  }
+  const s = c.start + (t - c.rewind) * c.k;
+  return s >= CONTENT_END[c.next] ? [c.next, CONTENT_END[c.next], 0] : [c.next, s, c.k];
+}
+
+export function sampleAnswerChange(c: AnswerChange, t: number, out: DinnerFrame): DinnerFrame {
+  const [seq, s] = changeTime(c, t);
+  // On the way to the bin, the bin comes in on its own clock, `start` s ahead of the dish.
+  const toBin = c.next === 'decline' && c.from !== 'decline';
+  const binClock = toBin && t < c.rewind ? t - (c.rewind - c.start) : s;
+  if (seq === 'decline') {
+    decline(Math.min(s, DURATIONS.decline), out, Math.min(Math.max(binClock, s), DURATIONS.decline));
+    return out;
+  }
+  sampleSequence(seq, s, out);
+  if (toBin) {
+    // Rewinding the reveal: the bin may already be on its way in.
+    out.binVisible = binClock > 0;
+    binAt(Math.max(binClock, 0), out.binPos);
+    out.flaps = FLAP_OPEN(seg(binClock, 0.14, 0.36));
+  }
+  return out;
+}
