@@ -55,7 +55,7 @@ const invitation = createInvitation({
 });
 ```
 
-Defaults: the approved look (direction `L2`, premium studio), the user's `prefers-reduced-motion`, and the Normal quality tier with automatic step-down. Pass `reducedMotion` to override the OS setting, `direction` or `stage` only for tooling.
+Defaults: the approved look (direction `L2`; since v1.3 the production studio rig `neutral-room` through the perspective lens, with the stage token `--lt-stage` `#D5D2CD`), the user's `prefers-reduced-motion`, and the Normal quality tier with automatic step-down. Pass `reducedMotion` to override the OS setting, `direction` or `stage` (an options object, `stage: { rig, projection, fov }`: `rig` a rig name from `src/render/rigs/` or a `Rig`, `projection` `'perspective'` (default) or `'orthographic'`; `src/core/controller.ts`) only for tooling: the posters and the `--lt-stage` token belong to the production rig.
 
 ### Configuration (finite presets)
 
@@ -100,7 +100,7 @@ State for your UI comes from `getState()` / `onStateChange`: `response.intent`, 
 
 - **Resource states**: `poster` (still image) → `loading` → `ready` (live 3D) or `fallback` (poster or text). After 6 s without readiness `canRetryGraphics` becomes true: offer "Try 3D again" (`retryGraphics()`). Context loss falls back to the poster and responses keep working.
 - **Reduced motion**: sequences snap to their final pose; no simulation runs; the drag handle hides. `setReducedMotion(enabled)` applies live.
-- **Quality tiers**: High, Normal, Low (no shadow map or plaster relief, a small copy of the gobo, simplified materials), Static (poster only; the WebGL stage and its context are released, and rebuilt if a tier above Static is chosen again). The controller steps down on sustained slow frames and never steps back up on its own; `setQualityTier` forces a tier (tooling).
+- **Quality tiers**: High, Normal, Low (no shadow map, simplified materials; under rig `v1.1` also no plaster relief and a small copy of the gobo, which the production rig does not have), Static (poster only; the WebGL stage and its context are released, and rebuilt if a tier above Static is chosen again). The controller steps down on sustained slow frames and never steps back up on its own; `setQualityTier` forces a tier (tooling).
 - **Render on demand**: the loop stops when nothing moves and pauses in hidden tabs; the visual clock resumes without skipping.
 
 ## Assets

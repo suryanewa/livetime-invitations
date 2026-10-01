@@ -12,6 +12,25 @@ doubled, the spindle reads as turned steel, and the plinth is toned towards grap
 gaps): the interruption blend (shared `visualDirector.ts`), the lid's proportions, the tonearm's size at stage
 scale and the label wedge.
 
+## v1.3: the studio pass (2026-10-01)
+
+- **Grades removed** (rows marked v1.3 in Decisions): `PLINTH_TONE` (the brushed steel is the master's factor),
+  the lid's satin outer coat (`LID_LOOK.outer`; the master's clearcoat 0.6 at 0.08, roughness 0.3), `SPINDLE_LOOK`
+  (the spindle is the master's chrome) and the label's quarter wedge and butter sliver. The coral and cobalt labels
+  are the master's print with only its field and ink recoloured; the master's off-centre square carries the spin,
+  and `tests/party.test.ts` checks on the exported prints that the square's quarter holds clearly more ink than the
+  opposite one. The darker interior shell with baked occlusion (`splitLidInterior`) stays, as the brief allows.
+- **Re-export:** `party.glb` 2334.6 KiB raw / 1032.4 KiB gzip −9 (2,390,588 / 1,057,191 bytes; was 2355.3 / 1053.6 KiB, 2,411,828 / 1,078,855 bytes at `fd136ac`); the label prints are 16 KiB
+  each (were 26 and 27). Triangles and draw calls unchanged.
+- **New studio.** The production rig is `neutral-room` (`docs/style-reference.md` v1.3); the cove measures `#D1CEC8`
+  in this scene (token `#D5D2CD`). The plinth, aluminium and chrome get the rig's own environment 1.0 on every tier.
+- **Judges.** The plinth reads as neutral taupe-grey brushed steel like the master (the bronze cast came from the
+  light), the tonearm and spindle as chrome, the lid's exterior correctly. None wants a grade back. Open: the lid's
+  inside renders near-black (p1 21), which the judges would lift with baked occlusion or a warm bounce, not a grade;
+  no reviewer has yet watched the accept spin on the master's print. The 0.65 rad presentation tilt was set below
+  the v1.1 key's specular lobe and was not re-derived for the new key.
+- Posters regenerated under the new rig (15.3–16.7 KB, shared declined 7.7 KB).
+
 ## Decisions
 
 | Topic | Decision |

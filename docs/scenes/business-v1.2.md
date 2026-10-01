@@ -11,6 +11,22 @@ numbers), `models/businessFrame.ts` (the recipe's builder: empty contract nodes 
 `src/scenes/business/{poses,sequences,drag,index}.ts`, `tests/business.test.ts`,
 `tests/browser/business.spec.ts`.
 
+## v1.3: the studio pass (2026-10-01)
+
+- **Grade removed.** The chrome polish (`badge_chrome` at roughness 0.1, base 0.6) is gone: the D-ring, swivel and
+  hook are the master's `chrome_hardware` as authored (roughness 0.3, base 0.86), with the rig's own environment 1.0
+  on every tier (Decisions, Chrome). `business.glb` re-exported (2062.5 KiB raw, unchanged to the tenth).
+- **New studio.** The production rig is `neutral-room` (`docs/style-reference.md` v1.3); the cove measures `#D8D5D0`
+  here (token `#D5D2CD`). The browser test that reads the status glyph insets further into the tile, because through
+  the perspective lens its edges are not quite level. The scan's "reflection 41.8° from the key light" was computed
+  for the v1.1 key; the new key comes from a different direction and the angle was not re-derived (the judges did
+  not raise it).
+- **Judges.** The badge print, the lanyard weave and the reader's glass all read; no grade is needed. Open: the
+  reader's lower front and bezel read near-white and more chrome than brushed. The rig's designer traced it to the
+  master's material under the window; the judges would fix it in the light (trim the lamp or skylight on the bezel),
+  not in the material. A diagonal shadow streak sits at the top right of the cove.
+- Posters regenerated under the new rig (16.2–19.6 KB).
+
 ## v1.2.2 fixes (three judges' review of 6a7f2a1)
 
 Frame differences below are the mean absolute RGB difference between consecutive 540 px frames of

@@ -10,6 +10,23 @@ frame), `models/sportsContract.ts` (net pose, recoil pivots), `models/sports.ts`
 recoil rig, leather grade), `scripts/masters/recipes/sports.ts` (rim hinge pivot, cream albedo),
 `tests/sports.test.ts`.
 
+## v1.3: the studio pass (2026-10-01)
+
+- **Grade removed.** `LEATHER_GRADE`, the load-time colour multiply (0.78, 1.25, 3) that pulled the orange towards
+  the v1.1 ball against the peach stage, is gone: the ball renders the master's albedo as authored (Look, below).
+  The cream preset's ivory albedo is a preset, not a grade, and stays. `sports.glb` is unchanged, because the grade
+  was applied at load.
+- **New studio.** The production rig is `neutral-room` (`docs/style-reference.md` v1.3): the Models viewer's room at
+  full environment strength, one soft key from its window, a greige cove that measures `#D7D4CF` in this scene (the
+  token is `#D5D2CD`). The hoop steel's own environment is now the rig's 1.0, not 1.1, on every tier. The
+  perspective lens keeps the shared view direction, so the airball offset and `SEAM_FRAME` are unchanged; this scene
+  is the one the lens frames slightly larger than v1.1 did (1.02×).
+- **Judges.** The orange reads as saturated orange-red leather with soft form, matching `basketball/B-hero.png`; one
+  judge found it slightly more saturated than the master and would trim saturation, not darken. None wants the grade
+  back. Open: a speckled PCF fringe in the net's shadow and at the hoop's base, and a diagonal shadow streak at the top
+  right of the cove (`docs/qualification.md`, v1.3).
+- Posters regenerated under the new rig (17.7–18.8 KB).
+
 ## What changed in the choreography, and why
 
 | Beat | v1.2 foundation | Now |

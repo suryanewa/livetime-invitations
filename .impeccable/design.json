@@ -134,18 +134,18 @@
       },
       "stage": {
         "role": "neutral",
-        "displayName": "Stage Linen",
-        "canonical": "#F8E4C8",
-        "oklch": "oklch(92.8% 0.043 76.3)",
+        "displayName": "Stage Greige",
+        "canonical": "#D5D2CD",
+        "oklch": "oklch(86.5% 0.008 80.7)",
         "tonalRamp": [
-          "#120900",
-          "#31220A",
-          "#4F3F27",
-          "#6F5E46",
-          "#917F66",
-          "#B5A287",
-          "#DAC6AB",
-          "#FFECD1"
+          "#0D0B07",
+          "#272521",
+          "#44413D",
+          "#63615C",
+          "#84827D",
+          "#A7A49F",
+          "#CCC9C3",
+          "#F2EEE9"
         ]
       },
       "surface": {
@@ -422,17 +422,17 @@
       "name": "Invitation Card",
       "kind": "card",
       "refersTo": "card-invitation",
-      "description": "The only lifted surface: event title and meta, the 1:1 Stage Linen stage, then the active panel. One per page.",
+      "description": "The only lifted surface: event title and meta, the 1:1 Stage Greige stage, then the active panel. One per page.",
       "html": "<article class=\"ds-card\"><header><h1 class=\"ds-card__title\">Partner Summit — Welcome Reception</h1><p class=\"ds-card__meta\"><span>Thu, Nov 12 · 6:30 PM</span><span aria-hidden=\"true\"> · </span><span>Hudson Yards, New York</span><span aria-hidden=\"true\"> · </span><span>Sample event</span></p></header><div class=\"ds-stage\" role=\"img\" aria-label=\"Stage placeholder\"></div></article>",
-      "css": ".ds-card { display: grid; gap: 16px; padding: 20px; max-width: 440px; border-radius: 28px; background: #fff; border: 1px solid rgba(32,35,32,0.07); box-shadow: 0 1px 2px rgba(32,35,32,0.05), 0 18px 48px -28px rgba(32,35,32,0.32); font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); color: var(--lt-text, #202320); line-height: 1.4; } .ds-card__title { margin: 0; font-family: var(--lt-font-display, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 1.5rem; line-height: 1.15; font-weight: 650; letter-spacing: -0.018em; text-wrap: balance; } .ds-card__meta { margin: 6px 0 0; font-size: 0.9375rem; color: var(--lt-text-2, #585c57); font-variant-numeric: tabular-nums; text-wrap: pretty; } .ds-card__meta span { white-space: nowrap; } .ds-stage { width: 100%; aspect-ratio: 1 / 1; border-radius: 20px; background: var(--lt-stage, #f8e4c8); overflow: hidden; }"
+      "css": ".ds-card { display: grid; gap: 16px; padding: 20px; max-width: 440px; border-radius: 28px; background: #fff; border: 1px solid rgba(32,35,32,0.07); box-shadow: 0 1px 2px rgba(32,35,32,0.05), 0 18px 48px -28px rgba(32,35,32,0.32); font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); color: var(--lt-text, #202320); line-height: 1.4; } .ds-card__title { margin: 0; font-family: var(--lt-font-display, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); font-size: 1.5rem; line-height: 1.15; font-weight: 650; letter-spacing: -0.018em; text-wrap: balance; } .ds-card__meta { margin: 6px 0 0; font-size: 0.9375rem; color: var(--lt-text-2, #585c57); font-variant-numeric: tabular-nums; text-wrap: pretty; } .ds-card__meta span { white-space: nowrap; } .ds-stage { width: 100%; aspect-ratio: 1 / 1; border-radius: 20px; background: var(--lt-stage, #d5d2cd); overflow: hidden; }"
     },
     {
       "name": "Collection Rail Item",
       "kind": "nav",
       "refersTo": "rail-item",
-      "description": "Row button with a 60px Stage Linen thumbnail, name over object line, right tag. Selected row is white with a hairline; unavailable rows are aria-disabled and desaturated.",
+      "description": "Row button with a 60px Stage Greige thumbnail, name over object line, right tag. Selected row is white with a hairline; unavailable rows are aria-disabled and desaturated.",
       "html": "<ul class=\"ds-rail\"><li><button class=\"ds-rail__item\" type=\"button\" aria-pressed=\"false\" aria-disabled=\"true\"><span class=\"ds-rail__thumb\"></span><span class=\"ds-rail__text\"><span class=\"ds-rail__name\">Dinner</span><span class=\"ds-rail__obj\">Covered dish</span></span><span class=\"ds-rail__tag\">In production</span></button></li><li><button class=\"ds-rail__item\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-rail__thumb\"></span><span class=\"ds-rail__text\"><span class=\"ds-rail__name\">Business</span><span class=\"ds-rail__obj\">Keycard</span></span><span class=\"ds-rail__tag\">Showing</span></button></li></ul>",
-      "css": ".ds-rail { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 420px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-rail__item { width: 100%; min-height: 72px; padding: 6px 14px 6px 6px; display: grid; grid-template-columns: 60px 1fr auto; align-items: center; gap: 14px; text-align: left; font: inherit; font-size: 1rem; line-height: 1.4; color: var(--lt-text, #202320); background: transparent; border: 1px solid transparent; border-radius: 16px; cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out; } .ds-rail__thumb { width: 60px; height: 60px; border-radius: 12px; background: var(--lt-stage, #f8e4c8); } .ds-rail__item:hover { background: #f4f2ed; } .ds-rail__item:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-rail__item[aria-pressed='true'] { background: #fff; border-color: var(--sc-line, #e6e3dc); box-shadow: 0 1px 2px rgba(32,35,32,0.05); } .ds-rail__item[aria-disabled='true'] { cursor: default; } .ds-rail__item[aria-disabled='true']:hover { background: transparent; } .ds-rail__item[aria-disabled='true'] .ds-rail__thumb { filter: saturate(0.55); opacity: 0.8; } .ds-rail__text { display: grid; gap: 2px; min-width: 0; } .ds-rail__name { font-weight: 650; } .ds-rail__obj { font-size: 0.875rem; color: var(--lt-text-2, #585c57); } .ds-rail__tag { font-size: 0.75rem; font-weight: 600; color: var(--lt-text-2, #585c57); white-space: nowrap; } .ds-rail__item[aria-pressed='true'] .ds-rail__tag { color: var(--lt-text, #202320); }"
+      "css": ".ds-rail { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-width: 420px; font-family: var(--lt-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif); } .ds-rail__item { width: 100%; min-height: 72px; padding: 6px 14px 6px 6px; display: grid; grid-template-columns: 60px 1fr auto; align-items: center; gap: 14px; text-align: left; font: inherit; font-size: 1rem; line-height: 1.4; color: var(--lt-text, #202320); background: transparent; border: 1px solid transparent; border-radius: 16px; cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out; } .ds-rail__thumb { width: 60px; height: 60px; border-radius: 12px; background: var(--lt-stage, #d5d2cd); } .ds-rail__item:hover { background: #f4f2ed; } .ds-rail__item:focus-visible { outline: 3px solid var(--lt-focus, #2f54c9); outline-offset: 2px; } .ds-rail__item[aria-pressed='true'] { background: #fff; border-color: var(--sc-line, #e6e3dc); box-shadow: 0 1px 2px rgba(32,35,32,0.05); } .ds-rail__item[aria-disabled='true'] { cursor: default; } .ds-rail__item[aria-disabled='true']:hover { background: transparent; } .ds-rail__item[aria-disabled='true'] .ds-rail__thumb { filter: saturate(0.55); opacity: 0.8; } .ds-rail__text { display: grid; gap: 2px; min-width: 0; } .ds-rail__name { font-weight: 650; } .ds-rail__obj { font-size: 0.875rem; color: var(--lt-text-2, #585c57); } .ds-rail__tag { font-size: 0.75rem; font-weight: 600; color: var(--lt-text-2, #585c57); white-space: nowrap; } .ds-rail__item[aria-pressed='true'] .ds-rail__tag { color: var(--lt-text, #202320); }"
     },
     {
       "name": "Developer Drawer",

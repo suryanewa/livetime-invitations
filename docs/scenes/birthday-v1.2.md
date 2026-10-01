@@ -10,6 +10,21 @@ Files: `scripts/masters/recipes/birthday.ts` (the recipe, with a Decisions block
 (runtime rig), `src/scenes/birthday/{poses,sequences,framing,index}.ts`, `tests/birthday.test.ts`,
 `tests/browser/birthday.spec.ts`.
 
+## v1.3: the studio pass (2026-10-01)
+
+- **Grade removed.** The v1.2.1 vanilla darkening (body `#E0D3BF` at roughness 0.58) is gone: vanilla is the ivory
+  rebuild's palette again (body `#F3E9D8`, piping `#FFFDF8`, rosettes `#F3E3C7`, pearls white) at the master's own
+  roughness (Decisions, Presets). The darkening fixed the judges' v1.2 must-fix "flat vanilla"; under the new light
+  the ivory keeps its form without it. Cocoa is unchanged.
+- **New studio.** The production rig is `neutral-room` (`docs/style-reference.md` v1.3); the cove measures
+  `#D5D2CD` here, the token itself. No gobo, so the cookie's dimming no longer separates Low from Normal.
+- **Judges.** The ivory body (`#DEDAD4` on the cove's `#B7B4B0`) separates, with the piping in relief (luminance p1
+  124, p99 240, flames excepted). None wants the darkening back. Two caveats from them: under the peach
+  `livetime-warm` rig the vanilla nearly vanished (the grade compensated for that backdrop), and if the cove is ever
+  lifted towards a lighter greige, re-check the vanilla stills and take at most a 3–4 % value step, not `#E0D3BF`. The
+  in-bin shade was tuned under the v1.1 key and was not re-derived.
+- Posters regenerated under the new rig (21.1–22.5 KB, shared declined 11.6 KB).
+
 ## Decisions
 
 - **Scale 1.1 (scan to scene units).** The cake with its candles and wicks, from its underside to the wick tips, is

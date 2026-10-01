@@ -10,7 +10,7 @@ colors:
   decline: "#A62D36"
   focus: "#2F54C9"
   page: "#FBFAF7"
-  stage: "#F8E4C8"
+  stage: "#D5D2CD"
   surface: "#FFFFFF"
   track: "#EEECE6"
   hairline: "#E6E3DC"
@@ -224,7 +224,7 @@ A near-monochrome warm-neutral palette with olive-black ink; the only saturated 
 
 ### Neutral
 - **Warm White** (#FBFAF7): the page ground and the root scrollbar track.
-- **Stage Linen** (#F8E4C8): the stage square behind the 3D object, and the fill behind collection thumbnails so posters and thumbs read as the same material. It is the rendered colour of the premium studio's plaster backdrop under the warm key, measured from the posters, so the stage never shows a different colour while the poster, the fallback sentence or the canvas is up.
+- **Stage Greige** (#D5D2CD): the stage square behind the 3D object, and the fill behind collection thumbnails so posters and thumbs read as the same material. It is the rendered colour of the production studio's cove (the `neutral-room` rig, v1.3) measured from the empty stage, so the stage never shows a different colour while the poster, the fallback sentence or the canvas is up. (v1.1–v1.2: Stage Linen #F8E4C8, the peach plaster sweep; superseded by the studio pass, `docs/style-reference.md` v1.3.)
 - **Paper White** (#FFFFFF): lifted and interactive surfaces: the invitation card, buttons, selected segment thumbs, the selected rail row, the Developer drawer.
 - **Track Stone** (#EEECE6): the recessed track of every segmented control, and the "Simulated saves" badge.
 - **Hairline Sand** (#E6E3DC): container rules only: the drawer border, the selected rail row border, the state list dividers.
@@ -289,7 +289,7 @@ The page is a warm-white field with a side gutter of `max(16px, safe-area insets
 
 ## Elevation & Depth
 
-The system is tonal first. Depth comes from the warm stack: the Warm White page, the Stage Linen square, the Track Stone recess and the Paper White surfaces. Only one surface floats. Shadows otherwise appear only as a selected state, and borders are hairlines or keylines rather than structure.
+The system is tonal first. Depth comes from the warm stack: the Warm White page, the Stage Greige square, the Track Stone recess and the Paper White surfaces. Only one surface floats. Shadows otherwise appear only as a selected state, and borders are hairlines or keylines rather than structure.
 
 ### Shadow Vocabulary
 - **Card lift** (`box-shadow: 0 1px 2px rgba(32,35,32,0.05), 0 18px 48px -28px rgba(32,35,32,0.32)`, with a `1px solid rgba(32,35,32,0.07)` border): the invitation card only. A long, low, negative-spread shadow that reads as the card resting on the page.
@@ -351,11 +351,11 @@ Firm, calm and exactly sized; nothing bounces.
 
 ### Cards / Containers
 - **Invitation card:** Paper White, 28px radius at every width, 20px padding (14px at ≤420px, 16px in short landscape), 16px internal gap, card-lift shadow and a 7% ink hairline border. There is exactly one per page.
-- **Stage:** a Stage Linen 1:1 square, 20px radius, full card width. A poster image cross-fades to the live canvas (180ms ease-out); if graphics fail, a centred 15px Sage Graphite sentence replaces it. The warm vignette and film grain over poster and canvas are part of the object look (`docs/style-reference.md` v1.1), not interface ornament. The response never waits on the stage.
+- **Stage:** a Stage Greige 1:1 square, 20px radius, full card width. A poster image cross-fades to the live canvas (180ms ease-out); if graphics fail, a centred 15px Sage Graphite sentence replaces it. No CSS layer sits over poster or canvas (v1.3, revision #33; the v1.1 warm vignette and film grain were removed); what the renderer draws is what shows. The response never waits on the stage.
 - **Graphics notice:** a 14px-radius warm strip under the panel, holding 14px Soft Ink text and a "Try 3D again" utility button. It is shown only when graphics are degraded. The text says what the stage shows ("Showing a still image." when a poster is up, "The 3D scene isn't available right now." when only the text description is, "The 3D scene is taking a while." during a slow load) and what still works for this viewer ("Your response still works." for a guest, "Presets and preview still work." for a host).
 
 ### Collection Rail
-- **Style:** a list of full-width row buttons (72px minimum, 16px radius, 6px 14px 6px 6px padding, 6px apart; at most 480px wide). Each row has a 60px Stage Linen thumbnail (12px radius) and a name (16px/650) over an object line (14px Sage Graphite). Only the current row carries a right-aligned 12px/600 tag. Each button is named "Party, record player" and so on; `aria-pressed` carries the selection.
+- **Style:** a list of full-width row buttons (72px minimum, 16px radius, 6px 14px 6px 6px padding, 6px apart; at most 480px wide). Each row has a 60px Stage Greige thumbnail (12px radius) and a name (16px/650) over an object line (14px Sage Graphite). Only the current row carries a right-aligned 12px/600 tag. Each button is named "Party, record player" and so on; `aria-pressed` carries the selection.
 - **States:** hover takes a faint warm fill. The current row is Paper White with a Hairline Sand border, a 1px shadow and the tag "Showing" in ink. Scenes not yet live are `aria-disabled`, with a desaturated thumbnail (saturation 0.55, opacity 0.8), no hover and the tag "In production".
 - **Choosing a scene** opens a new invitation: a fresh controller and adapter with no response, so an answer never carries from one event to the next (presets and songs change within one event and keep it). If less than half the stage is on screen (phones, where the rail follows the card), the card scrolls into view, smoothly only with Motion on. A visually hidden polite live region announces the event ("Showing Party: Rooftop listening party"), and focus stays on the pressed row so keyboard users can keep browsing.
 

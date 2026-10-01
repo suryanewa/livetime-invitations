@@ -1,24 +1,122 @@
+# Style reference — v1.3 · the studio pass
+
+## v1.3 (2026-10-01): the studio pass
+
+Surya, auditing v1.2: *"Why do these look so cartoonish compared to the original renders?"* The models were not the problem: the same GLBs render photographically in the Models viewer (`scan-to-cad-rebuilds`, the light the masters were judged in). The showcase still lit, framed and finished them like the stylised v1.1 objects. The brief (`docs/studio-pass-brief.md`) names five causes, and v1.3 removes all five. The masters, recipes, beats, durations and interface are unchanged. Where a v1.2, v1.1 or v1.0 statement further down disagrees with this section, this section wins; those statements are marked *superseded in v1.3* or *(removed in v1.3)* and kept for the record. Revisions #31–#36 (`docs/spec-revisions.md`) record the deviations; the measurements are in `docs/qualification.md` (v1.3).
+
+### The causes
+
+1. **An orthographic camera.** Every product frame was orthographic (az 20°, el 15°). Floor and cove had no depth, so the objects read as cut-outs on a card.
+2. **A studio built for cream satin toys.** One warm spot key `#FFF1DE` × 15 through a palm-frond gobo, hemisphere and sky fills, a peach limewash plaster cove, and a blurred softbox environment at 0.52. Polished metal had nothing with a shape to reflect: imported metals needed their own environment at 1.1 just to read as metal.
+3. **A peach backdrop and stage token** (`#F8E4C8`) that the v1.2 objects were tuned to sit on.
+4. **Grades** that the v1.2 scene agents added to make the masters fit that stage (Grades removed, below). They compensated for the light, not for the masters.
+5. **A CSS finish** over poster and canvas: a warm radial vignette (multiply, 12 %) and fractal film grain (overlay, 16 %).
+
+### Rigs: the light is a module
+
+- A **rig** is one file in `src/render/rigs/` (contract `src/render/rig.ts`; guide and worked example `src/render/rigs/README.md`). It declares everything about the light and nothing about the objects:
+  - the prefiltered environment (PMREM), `environmentIntensity`, and `metalEnvIntensity`: the strength of the environment on every material that carries its own map (`ownEnv`: the polished and imported metals), applied by the Stage on every tier;
+  - the lights, the backdrop (or none), exposure and tone mapping, and an optional gobo;
+  - the real-time shadow: filter (`vogel16`, `pcf` or `vsm`), map size, radius, biases and camera range;
+  - the **stage colour**, measured from its own rendered backdrop.
+- **Registered by file.** `src/render/rigRegistry.ts` finds every rig through `import.meta.glob('./rigs/*.ts', { eager: true })`, so adding one edits no shared index. `DEFAULT_RIG` names the production rig. The Stage takes a rig by name or object, and the controller uses `DEFAULT_RIG` unless the embedder names another.
+- **The v1.1 premium studio is rig `v1.1`**, kept as the baseline: 18 orthographic stills are byte-identical before and after the refactor. `src/render/studio.ts` is now the shared kit (cookie, sweep backdrop, the 16-tap PCF patch).
+- **Comparison tooling.** `pnpm capture rigs <baseUrl> [rig,…]` renders every rig (or the listed ones) on all five scenes' guest-ready and accepted stills, both presets where they differ, at 720² through the real stage. It writes `outputs/rigs/<rig>/`, one contact sheet per rig and a cross-rig sheet per scene, and never touches `assets/`. `pnpm capture stagecolor <baseUrl> <rig>` renders the stage with no object and prints the mean sRGB of its central 20 %.
+
+### The production studio: `neutral-room`
+
+The Models viewer's interior (`scan-to-cad-rebuilds/candidates/final/env.js`, under which the master renders `master-renders/<master>/B-hero.png` were made) ported as a rig, on a neutral greige painted cove. Source `src/render/rigs/neutral-room.ts`; reasoning and the six capture rounds in `docs/rigs/neutral-room.md`.
+
+| Setting | Value |
+| --- | --- |
+| Camera | Perspective, 18° vertical, at the shared az 20° / el 15° (The camera, below) |
+| Tone mapping / exposure | `NeutralToneMapping` (Khronos PBR Neutral, what the viewer installs) · exposure 1.15, the viewer's |
+| Environment | The viewer's procedural room, evaluated texel by texel into a 1024 × 512 linear float equirect and prefiltered once (PMREM, no blur), with no downloads and no randomness. `environmentIntensity` 1, `metalEnvIntensity` 1 |
+| The room | A large sheer window with soft mullions between linen drapes (radiance 3.4, cool); an overcast ceiling with a skylight strip and a large soft bounce behind the camera; a narrow sheer side window; a tungsten lamp behind-right (1.8, warm) with its halo on greige walls; a framed print and a dark doorway behind the subject; a walnut sideboard and a dark table runner on the camera side, the dark strokes polished metal needs; a mid-grey table meeting the wall at a soft horizon. Every parameter is the viewer's (`NEUTRAL_ROOM`). The room is mirrored and turned (world θ = 120° − room θ) so it sits round the product camera as it sat round the viewer's: the window camera-left-front, as in the master renders |
+| Key | One soft `SpotLight` `#F3F5FA` × 1.5, decay 0, from the window's direction raised to 40°, 12 units from the content's centre (it follows `setContent`), angle 0.62, penumbra 0.8. It is the window's direct share and casts the real-time shadow. There are no fill or bounce lights: everything else is image-based light at full strength |
+| Shadow | `vogel16` (v1.1's 16 fixed taps), 1024², radius 5, bias −0.0004, normal bias 0.012, near 4, far 24. Contact shadows are unchanged |
+| Backdrop | `createSweepBackdrop`: a painted cove `#BEB9B1`, roughness 0.9, no plaster relief (the mottle read as dirt under a raking key). Each scene's `wallZ` is honoured |
+| Stage colour | **`#D5D2CD`**, measured (Stage tokens, below) |
+| Gobo | None |
+| Low tier | The Stage frees the shadow map; contact shadows remain. `setLowDetail` is a no-op (no cookie, no relief to drop). The metals keep `metalEnvIntensity` 1 on every tier: the Stage applies it again after the libraries' Low-tier 0.8 |
+
+**Why it won.** Three independent judges scored the four new rigs on all five scenes against the master renders: realism (35), materials reading as their materials (25), the beats still reading (15), fit with the interface (15) and artifacts (10). All three ranked `neutral-room` first, at 82, 81 and 82 (mean 81.7; realism 29 and materials 21 from each). Their reasons:
+
+- It is the only rig whose environment puts the viewer's own window, mullion and horizon shapes into the metals. The cloche matches `silver-cloche/B-hero.png` and `B-close.png` as polished silver, not grey plastic, with no hot spot (0.006 % of pixels clipped on average).
+- The plinth reads as grey brushed steel, the tonearm and spindle as chrome, the reader's screen as glass and the vinyl as black vinyl, with no grade.
+- It has the masters' neutral tonality. The ivory cake, the cream ball and the white plate keep their own colours and separate from the cove.
+
+Its weakest score was interface fit (10–11 of 15): beside the warm-white page the greige square reads a little cold (Known gaps, below).
+
+**The other rigs stay** for the owner to compare, on a local host only: `?rig=<name>` (`localhost`, `127.0.0.1`, `[::1]`), plus `&camera=ortho` for the v1.1 lens. Under a rig other than the production one, the stage surround takes that rig's measured colour and no poster shows, because the posters belong to the production rig. Each rig's reasoning is in `docs/rigs/<name>.md`.
+
+| Rig | Direction | Stage (measured) | Judges' mean | Judges' reasons it ranked lower |
+| --- | --- | --- | --- | --- |
+| `neutral-room` | The Models viewer's interior on a greige cove (brief direction b) | `#D5D2CD` | **81.7** | Ships |
+| `product-studio` | Three softboxes on a light-grey cyc, black gradient flags | `#ECE9E4` | 76.7 | A crisp catalogue look, more contrasty than the masters. Its flags crush and clip on the cloche, its net shadow is stippled, and its light cove sits too close to the ivory cake, cream ball and light badge |
+| `daylight-table` | A pale oak desk by a sheer window, light grey wall | `#E0D4C3` | 69.3 | The desk-to-wall horizon line, a wide per-scene stage spread (`#D8D0C4`–`#E4D1B8`) and crushed reader glass |
+| `livetime-warm` | The Livetime peach plaster cove lit by a daylight window (brief direction a) | `#F6DDC3` | 69.0 | The vanilla cake nearly vanishes into the peach (it would need its grade back), and the warm stage departs from the masters' neutral one |
+| `v1.1` | The v1.1 premium studio, unchanged | `#F8E4C8` declared; measures `#F6E0C5` through the perspective lens | Baseline, not scored | The look the owner called cartoonish |
+
+### The camera
+
+Perspective is the product lens: `PERSPECTIVE_FOV` 18° and `fitPerspectiveToBounds` in `src/render/camera.ts`, created by the Stage unless a caller asks for `projection: 'orthographic'`.
+
+- **The same angle.** The shared azimuth 20° and elevation 15° are kept, so every piece of choreography that reads the view direction is unchanged: the Sports airball offset and `SEAM_FRAME`, and Dinner's transfer pacing.
+- **The same fit.** The camera distance is solved so the projected silhouette samples of every authored path (`framePoints`, or the bounds' corners when a scene has none) fit with the same 8 % clearance. The view is then shifted so they sit centred.
+- **The same composition.** Measured against v1.1's orthographic fit, the subject's size is 0.93 (Dinner, with its deep bin) to 1.02 (Sports) of what it was, and its centre moves at most 0.073 in normalised device units (Birthday, Dinner), under 4 % of the stage width. Every scene is seen from at least 4× its bounds radius, so the foreshortening stays photographic, not wide. All of this is unit-tested at three aspects (`tests/stage-framing.test.ts`).
+- The orthographic camera stays for the study and lookdev pages and for `?camera=ortho`.
+
+### Grades removed
+
+Each grade below compensated for the v1.1 peach studio, not for the masters. All were removed in `a62fab0` and the GLBs re-exported, so the masters' materials stand as authored. All three judges found that **none should return** under `neutral-room`. The per-material own-environment values of v1.2 (1.1 on imported metals, 0.9 on the dome, 0.8 on the cloche trim) are replaced on every tier by the rig's `metalEnvIntensity` 1.
+
+| Scene | Grade (v1.2) | What it did | Now | Judges, under `neutral-room` |
+| --- | --- | --- | --- | --- |
+| Sports | `LEATHER_GRADE` (`models/sports.ts`) | A linear multiply (0.78, 1.25, 3) on the orange ball's colour, pulling the scan-matched orange towards the v1.1 ball's hue against the peach stage | The master's albedo. The cream preset's ivory albedo stays: it is a preset, not a grade | A saturated orange-red with soft form and a rounded terminator, matching `basketball/B-hero.png`. One judge saw it slightly more saturated than the master: "if anything, a tiny saturation trim, not a darkening" |
+| Party | `PLINTH_TONE` (recipe) | The brushed steel kept 92 % of its luminance and 40 % of its chroma, so it read graphite rather than bronze under the warm key | The master's base factor | Neutral taupe-grey brushed steel, like the master. The bronze cast came from the light |
+| Party | `LID_LOOK` outer coat (`models/recordPlayer.ts`) | A satin coat (clearcoat 0.25 / 0.5, roughness 0.55) replacing the master's, against a mid-close flash of the cream softbox | The master's coat (clearcoat 0.6 at 0.08, roughness 0.3). The darker inner shell with baked occlusion (`splitLidInterior`) stays, as the brief allows | The exterior reads correctly. The interior split is justified: the lid's inside renders near-black, as in the master |
+| Party | `SPINDLE_LOOK` | The spindle in turned grey steel (0.42, roughness 0.24) instead of mirror chrome, which had reflected only the even cream softbox | The master's chrome | A small bright chrome pin |
+| Party | The label wedge and sliver (`labelPrint`) | v1.1's quarter wedge and butter sliver painted into the coral and cobalt prints so the accept spin read | The master's own label print, recoloured (field and ink only). Its off-centre square is the asymmetric mark; a unit test holds that asymmetry on the exported prints (the square's quarter against the opposite quarter) | The recoloured print reads, and its small off-centre marks show. Whether the spin reads in motion cannot be judged from stills (Known gaps) |
+| Dinner | `finishDish` (`DOME_ROUGHNESS` 0.2, `DOME_ANISOTROPY` 0.3) and the trim at roughness 0.12 | A uniform "lathe polish" replacing the master's polished map, so the near-white mirror stopped reading pale and frosted in the cream studio | The master's polished silver: the dome's own roughness map, no anisotropy, and the bead, bands, finial and handle at their near-mirror 0.065–0.09 | Of all four rigs, the closest match to `silver-cloche/B-close.png`: window and mullion reflections, with 0.006–0.11 % of pixels clipped in the judges' measurements |
+| Birthday | Vanilla darkening (recipe variants) | Body `#E0D3BF` at roughness 0.58 (the master's 0.42), so the ivory left the tone mapper's shoulder on the peach stage | The ivory rebuild's palette (body `#F3E9D8`, piping `#FFFDF8`, rosettes `#F3E3C7`) at the master's roughness | The ivory body (`#DEDAD4` on the cove's `#B7B4B0`) separates, with the piping in relief (luminance p1 124, p99 240, flames excepted) |
+| Business | Chrome polish (recipe) | `chrome_hardware` at roughness 0.1 and base 0.6, because the master's read as white satin plastic in the beige studio | The master's chrome (roughness 0.3, base 0.86) | Badge print, lanyard weave and reader glass all read; no grade needed |
+
+Not graded and so not removed, but tuned under the v1.1 key and not re-derived for `neutral-room`: Party's 0.65 rad presentation tilt (kept below the old key's specular lobe), Birthday's in-bin shade, and the Business holder's 14 % dimming. The judges raised none of them.
+
+### Stage tokens
+
+- **`--lt-stage` is `#D5D2CD`** (`src/ui/shell.css`): the production rig's measured backdrop, the mean sRGB of the central 20 % of the empty stage (`pnpm capture stagecolor`, at `40f9e04`). It is the mean of the five scenes, which measure business `#D8D5D0`, party `#D1CEC8`, birthday `#D5D2CD`, sports `#D7D4CF` and dinner `#D4D0CB`.
+- **Poster, fallback, canvas and CSS agree.** The rig declares the same value (`stageColor`), and the Stage paints it as `scene.background`. The poster cross-fade, the text fallback and the collection thumbnails sit on it, and the posters and thumbnails were regenerated under `neutral-room`. Unit tests hold the CSS token to the production rig's colour, and each rig's declaration within 2 levels of its measurement whenever `outputs/rigs/<rig>/stagecolor.json` is in the checkout. `PREMIUM_STAGE_COLOR` is gone: the stage colour belongs to the rig. The agreement is exact only at the centre: the cove falls off towards the frame, so the posters' 36-pixel corner patches measure `#AFACA9`–`#C6C2BC` (top left darkest, Sports lowest; bottom left lightest; for example the Dinner poster's top left is 182/179/174, measured on the committed posters). Wherever the flat token shows on its own (the fallback sentence, the stage before the poster loads, the thumbnail fill), the square is lighter at its edges than the rendered image.
+- **Against the interface.** It is a light warm-neutral grey, a clear step under the page's `#FBFAF7` (1.44:1), so the canvas reads as a lit room set into the page rather than a continuation of it. Ink text `#202320` on it is 10.5:1, and secondary text `#585C57` is 4.52:1, just over 4.5:1.
+- **No CSS finish.** `.lt-stage::before` (vignette) and `::after` (grain) are deleted, and a unit test keeps them out. What the renderer draws is what shows.
+
+### Known gaps (v1.3)
+
+From `docs/rigs/neutral-room.md` and the judges' notes on the winner. Each judge also proposed grafts from the runners-up. None has been applied yet; they are listed here as the open items.
+
+- **Interface fit.** All three judges found the greige square slightly cold beside the warm-white page and olive ink. They proposed lifting and warming the cove (towards `#D9D5CE`, `#E2DED7` or `#E6E3DE`) or adding a faint warm floor bounce. Any change must keep the vanilla cake and cream ball at least 10 % in luminance from the cove, and then be re-measured, with the tokens, posters and thumbnails following.
+- **Metal contrast.** All three proposed one soft dark gradient card in the environment, low and camera-right, for a deeper band on the cloche, tonearm and reader bezel. The reader's lower front and bezel read near-white (the master's own material under the window, per the rig's designer; the judges would trim the lamp or skylight there, not grade the material).
+- **The Party lid's inside** renders near-black (p1 21), and the plinth reads flatter and more matte than the master render. The judges would lift it with fill or a lighter baked occlusion, not a colour grade.
+- **Shadow artefacts.** A speckled PCF fringe in the net's shadow and at the hoop's base, and a large curved dark shadow across the top right of the cove in Business and Sports, cast (per the adversarial review) by geometry outside the frame: the lanyard above it, the backboard. It is the most noticeable artefact left.
+- **Stage spread.** The five scenes' backdrops span `#D1CEC8`–`#D8D5D0` (up to 8 levels per channel: blue, party against business) against one token, because the cove's gradient depends on each scene's framing.
+- **The Party spin** on the master's own label is checked by the asymmetry test, not yet by a judge in motion.
+- **Load cost.** The room is evaluated on the CPU when the stage is created (524,288 texels) and uploaded once as an 8 MiB float texture before prefiltering. That cost has not been measured, and not on a phone.
+
 # Style reference — v1.2 · the scan-to-CAD rebuilds
 
 ## v1.2 (2026-10-01): scan-to-CAD masters
 
-> **Studio pass v1.3 in progress (docs/studio-pass-brief.md).** The infrastructure commit removed the grades that
-> compensated for the v1.1 peach studio, so the masters' materials stand as authored: Party `PLINTH_TONE`, the lid's
-> satin outer coat (the interior split stays), `tt_spindle` and the label's wedge and sliver (the prints are the
-> master's art recoloured); Dinner's `finishDish` lathe polish and the trim's roughness 0.12; Birthday's darker
-> vanilla (back to `#F3E9D8` at the master's roughness); Sports' `LEATHER_GRADE`; Business' chrome polish. The CSS
-> vignette and grain over the stage are gone, and the stage renders through a perspective lens (18°, the shared
-> angle, `framePoints` fitted). Statements below marked *(removed in v1.3)* record v1.2 only. The studio is still
-> v1.1's (rig `v1.1`, `src/render/rigs/`), so the stage token `#F8E4C8` still matches it; v1.3 replaces this section.
+> **Superseded in part by v1.3 (above).** The studio, camera and finish statements in this section, and the grades marked *(removed in v1.3)*, record v1.2 only. The objects, recipes, physics upgrades, beats and durations still hold.
 
 Surya asked that every interaction use the new models: *"buttery smooth and the same conceptually, but higher fidelity with the physics and our new models."* The invitation objects are now the scan-to-CAD rebuilds: eight realistic PBR objects with textured materials, rebuilt by design.inc from Meshy scans (`models/masters/*.glb`; generators in `github.com/suryanewa/scan-to-cad-rebuilds`).
 
 - **The object look is owned by the masters and the recipes,** not by the v1.1 "Satin Enamel" object rules. `models/masters/*.glb` gives the geometry and materials. Each scene's recipe (`scripts/masters/recipes/<scene>.ts`, with a Decisions block at the top) gives the scale, pivots, joins, material policies and preset variants, plus a few load-time finishes in the scene's rig (named below). Where a v1.1 or v1.0 object statement further down disagrees with this section, this section wins; those statements are marked *superseded* and kept for the record.
-- **Unchanged from v1.1:** the interface, the studio (key, gobo, fill, environment, plaster sweep, finish), the camera and the shared disposal bin. The beats and durations are also unchanged, unless a scene below records otherwise. Every choreography channel is still a pure function of time (the one exception is a change of mind mid-sequence: Dinner rewinds along its own path and Business draws a recovery path from the pose on screen, revisions #24 and #25) and is C1 at its beat boundaries (unit-tested per scene).
+- **Unchanged from v1.1:** the interface, the studio (key, gobo, fill, environment, plaster sweep, finish), the camera and the shared disposal bin. *(Superseded in v1.3: the studio is rig `neutral-room`, the camera is perspective and the CSS finish is gone; the interface and the bin are unchanged.)* The beats and durations are also unchanged, unless a scene below records otherwise. Every choreography channel is still a pure function of time (the one exception is a change of mind mid-sequence: Dinner rewinds along its own path and Business draws a recovery path from the pose on screen, revisions #24 and #25) and is C1 at its beat boundaries (unit-tested per scene).
 - **Budgets are waived for this pass** (owner's brief): the export reports state what ships (`docs/qualification.md`, v1.2).
 - **Import path:** `scripts/masters/` (per-scene recipes; `scripts/masters/README.md`) merges the masters with the code-authored parts we keep into one runtime GLB. Imported materials keep their own textures and extensions; a material renamed to a library name is driven by the locked library instead.
-- **Metals** without a library material get their own copy of the studio environment at 1.1 (`ownEnv`), so polished steel reads as metal, not gunmetal, under the 0.52 scene environment.
-- **Low tier** also simplifies imported materials (no normal, clearcoat-normal or sheen maps; own environment 0.8), reversibly (`models/imported.ts`).
+- **Metals** without a library material get their own copy of the studio environment at 1.1 (`ownEnv`), so polished steel reads as metal, not gunmetal, under the 0.52 scene environment. *(Superseded in v1.3: the production rig's `metalEnvIntensity` sets every own environment to 1.0, the same strength as the scene's, on every tier.)*
+- **Low tier** also simplifies imported materials (no normal, clearcoat-normal or sheen maps; own environment 0.8), reversibly (`models/imported.ts`). *(v1.3: the maps are still dropped; the rig's own-environment 1.0 is applied again after the 0.8.)*
 - **Textures** ship as WebP (`EXT_texture_webp`): colour and ORM maps lossy q90, capped at 2048; normal, anisotropy and lookup-table textures exact (lossless).
 - **Presets** are `KHR_materials_variants` in the GLB (a second print or a recoloured material), except Dinner, which has none.
 - **Per-scene detail:** `docs/scenes/<scene>-v1.2.md`, with decisions, measured contract numbers, export report, choreography changes and known gaps.
@@ -72,7 +170,7 @@ Surya asked that every interaction use the new models: *"buttery smooth and the 
   - Every floor contact gets a volume-preserving squash on `ball_secondary` (≤ 10 %, scaled by impact speed).
   - The rim and board recoil on their hinges when the net tugs (peaks of 2.5° and 0.6°).
   - v1.2.1 (`a613138`) raised these from 1.2°, 0.3° and ≤ 8 %, which the judges found correct but too small to see at stage size. The shapes, fades and end times are unchanged, and in the 540 px captures the rim's front edge now dips 6–7 px.
-- **Known gaps:** the recoil and the squash are still modest on a 390 px stage. The board, fixed by the 1.6× rim rule, carries more visual weight than v1.1's. The orange grade lives at runtime. See `docs/scenes/sports-v1.2.md`.
+- **Known gaps:** the recoil and the squash are still modest on a 390 px stage. The board, fixed by the 1.6× rim rule, carries more visual weight than v1.1's. The orange grade lives at runtime *(removed in v1.3)*. See `docs/scenes/sports-v1.2.md`.
 
 ### Dinner (v1.2)
 
@@ -81,10 +179,10 @@ Surya asked that every interaction use the new models: *"buttery smooth and the 
 - **Plate:** the porcelain plate master (clearcoated porcelain, with a gilt band on the rim that has its own environment at 1.1), 1.6 across as in v1.1. The reveal shows the plate itself, the gilt rim catching the key. The v1.1 perforation row, ink foot line and cream glaze are replaced by the master's own design.
 - **Cloche:** the silver cloche master's dome assembly (dome, lip bead, two bands, finial, ring handle) at the plate's scale (`DISH_SCALE` 0.8399). Its own tray is dropped and the plate takes its place.
   - **Dome:** polished silver with a **lathe-polish anisotropy**: 0.3 along the meridians (rotation π/2), roughness 0.2, own environment 0.9, set at load by `finishDish` in `models/dinner.ts`. The softbox stretches into soft vertical highlight bands with darker reflections between them. An isotropic finish of the master's near-white silver read pale and frosted in the cream studio. The first ship (0.5 at roughness 0.18) read as a ribbed dome of light and dark gores; v1.2.1 settled on 0.3 / 0.2. *(removed in v1.3)*
-  - **Bead, bands, finial and handle:** softened to roughness 0.12 at own environment 0.8, so they shade like metal rather than pale lines.
+  - **Bead, bands, finial and handle:** softened to roughness 0.12 at own environment 0.8, so they shade like metal rather than pale lines. *(removed in v1.3)*
   - The v1.1 coral knob is gone with the master's ring handle.
 - **Motion:** the beats and durations are the same. The reveal is handle-led (the guest-side rim tips up first). Every set-down lands the leading rim first, and the ≤ 1° rim rock follows on, C1. A change of mind rewinds the showing outcome along its own path instead of cutting (see `docs/spec-revisions.md`).
-- **Known gaps:** at stage size the empty well is a near-flat white disc, and the gilt rim carries the reveal. The studio environment has no dark horizon, so the dome shows soft bands rather than room reflections. Inside the bin, the ring handle shows briefly after the dome has gone.
+- **Known gaps:** at stage size the empty well is a near-flat white disc, and the gilt rim carries the reveal. The studio environment has no dark horizon, so the dome shows soft bands rather than room reflections *(resolved in v1.3: `neutral-room`'s window, horizon, runner and sideboard give the master's dome room reflections)*. Inside the bin, the ring handle shows briefly after the dome has gone.
 
 ### Business (v1.2): the all-access badge and the RFID/NFC reader
 
@@ -106,26 +204,30 @@ Surya asked that every interaction use the new models: *"buttery smooth and the 
 
 **v1.1 (2026-09-29).** Surya approved the premium pass at checkpoint 2b ("go with premium… high fidelity and masterful texturing, lighting and scene work"), with the orthographic camera and the two-tier cake. L2 keeps L's identity (palette, silhouettes, one enamel insert, the perforation row) and upgrades surfaces, construction, light and finish. v1.0 (below) still defines the palette and object rules unless a v1.1 rule replaces them.
 
-Source of truth: `src/render/studio.ts` (key, fill, sweep, cookie, shadow filter, Low-tier detail), `src/render/lighting.ts` (L's hemisphere fill, kept under the premium key), `src/render/stage.ts` (shadow casters, backdrop wall), `src/render/camera.ts` (framing), `src/render/materials.ts` (`DIRECTIONS.L2`), `src/render/print.ts` (printed art, holo foil), `models/badgePremium.ts`, `models/cakeParts.ts`, `models/recordPremium.ts` + `models/recordParts.ts`, `models/disposalBin.ts`, `models/shadowProxy.ts`, `models/sportsPremium.ts` + `models/sportsParts.ts`, `src/render/ballMaterial.ts`, `models/dinnerPremium.ts` + `models/dinnerParts.ts` (v1.1; since v1.2 Dinner is `scripts/masters/recipes/dinner.ts` + `models/dinner.ts`, and `dinnerParts.ts` is deleted), `src/ui/shell.css` (stage finish).
+Source of truth: `src/render/studio.ts` (key, fill, sweep, cookie, shadow filter, Low-tier detail), `src/render/lighting.ts` (L's hemisphere fill, kept under the premium key), `src/render/stage.ts` (shadow casters, backdrop wall), `src/render/camera.ts` (framing), `src/render/materials.ts` (`DIRECTIONS.L2`), `src/render/print.ts` (printed art, holo foil), `models/badgePremium.ts`, `models/cakeParts.ts`, `models/recordPremium.ts` + `models/recordParts.ts`, `models/disposalBin.ts`, `models/shadowProxy.ts`, `models/sportsPremium.ts` + `models/sportsParts.ts`, `src/render/ballMaterial.ts`, `models/dinnerPremium.ts` + `models/dinnerParts.ts` (v1.1; since v1.2 Dinner is `scripts/masters/recipes/dinner.ts` + `models/dinner.ts`, and `dinnerParts.ts` is deleted), `src/ui/shell.css` (stage finish). *Since v1.3* the studio below is rig `v1.1` (`src/render/rigs/v1.1.ts`, built from the kit in `src/render/studio.ts`), the camera is perspective, and `shell.css` has no finish.
 
 ### Studio (all scenes)
 
+*Superseded in v1.3* by rig `neutral-room` (v1.3 at the top). The table is kept as the record of rig `v1.1`, which still renders under `?rig=v1.1&camera=ortho` on a local host. Rows marked *v1.3* say what the production studio does now.
+
 | Setting | Value |
 | --- | --- |
-| Camera | Orthographic 3/4, unchanged (az 20°, el 15°) |
-| Key | Spot `#FFF1DE` × 15, decay 0, from (−4.2, 7.8, 5.4), angle 0.6, penumbra 0.7 — late-afternoon sun. L's directional key is removed from the scene (no light slot) |
-| Gobo | Procedural palm cookie (768²): far layer blurred and faint, near layer of tapered drooping leaflets, crisper. Fronds enter from the edges; objects sit in open sun |
-| Soft shadows | PCF 1024², radius 6, patched to 16 fixed Vogel taps (no dither noise, no extra draw calls) |
+| Camera | Orthographic 3/4, unchanged (az 20°, el 15°). *v1.3: perspective, 18°, same angle* |
+| Key | Spot `#FFF1DE` × 15, decay 0, from (−4.2, 7.8, 5.4), angle 0.6, penumbra 0.7 — late-afternoon sun. L's directional key is removed from the scene (no light slot). *v1.3: one soft spot `#F3F5FA` × 1.5 from the room's window* |
+| Gobo | Procedural palm cookie (768²): far layer blurred and faint, near layer of tapered drooping leaflets, crisper. Fronds enter from the edges; objects sit in open sun. *v1.3: no gobo* |
+| Soft shadows | PCF 1024², radius 6, patched to 16 fixed Vogel taps (no dither noise, no extra draw calls). *v1.3: the same filter at radius 5* |
 | Shadow casters | A mesh skips the shadow pass when its local (unscaled) geometry bounding box is thinner than 0.015 units or no larger than 0.05 units (1.5 mm and 5 mm at the manifest's stage-decimetre scale): decals, prints and small hardware. Lanyard strands skip only this size test; transparent meshes and `*_shadow` contact planes never do. Two explicit flags override the size test: `userData.noShadowCast` opts a mesh out, and `userData.shadowProxy` marks an invisible low-poly stand-in that casts for the meshes it replaces (and receives nothing) |
-| Fill / bounce | **Combined fill, the approved look:** L's direction hemisphere, sky `#F7F3EE` / ground `#CFC4B3` × 0.9 (`lighting.ts`, left on under the premium key), plus the premium cool sky fill `#E3E9EF` / `#D6C7B2` × 0.3 (`studio.ts`). Bounce `#FFE8D2` × 0.14 |
-| Environment | L's procedural softbox PMREM at 0.52 (reflections for glass, clearcoat, chrome) |
-| Backdrop | Seamless cove sweep `#EAE3D6`, limewash plaster: tileable relief normal (multi-octave + pits) and matching albedo mottle, 512², repeat 2.2. Under the warm key it renders as about `#F8E4C8` (measured from the posters); the HTML stage colour matches that, so poster, fallback and canvas agree. The wall sits at z −3.2 unless a scene moves it (see Birthday) |
-| Finish | CSS over poster and canvas: warm radial vignette (multiply, 12%) + fractal film grain (overlay, 16%). It adds nothing to the WebGL frame. Its cost in the browser compositor (two blended layers over a live canvas) has not been measured on desktop or on a phone. Hidden in forced-colours |
-| Low tier | Shadow map off (and its target freed) and plaster normal map off; contact shadows remain. The gobo stays as a 192² copy (0.14 MiB, the 768² original freed): the cookie also dims and warms the key on every object, so dropping it brightened and cooled Low by 35–90 % per channel (measured at checkpoint 4). With the small cookie, object bodies at Low stay within 5–10 % of Normal. What the missing shadow map takes away is cast shadows: the Birthday stand's pedestal reads about 50 % brighter without the tray's shadow, and the Party and Birthday floor shadows go (contact shadows remain). At DPR 1 on small stages the Sports net's cords fall below a pixel and read as dashes. Library materials simplified as before (no normal maps or sheen). Environment response 0.8 applies only to materials with their own environment (the cloche; since v1.2 every imported metal); the rest follow the scene-wide 0.52 |
+| Fill / bounce | **Combined fill, the approved look:** L's direction hemisphere, sky `#F7F3EE` / ground `#CFC4B3` × 0.9 (`lighting.ts`, left on under the premium key), plus the premium cool sky fill `#E3E9EF` / `#D6C7B2` × 0.3 (`studio.ts`). Bounce `#FFE8D2` × 0.14. *v1.3: no fill or bounce lights; the room environment fills* |
+| Environment | L's procedural softbox PMREM at 0.52 (reflections for glass, clearcoat, chrome). *v1.3: the Models viewer's room at 1.0, metals included* |
+| Backdrop | Seamless cove sweep `#EAE3D6`, limewash plaster: tileable relief normal (multi-octave + pits) and matching albedo mottle, 512², repeat 2.2. Under the warm key it renders as about `#F8E4C8` (measured from the posters); the HTML stage colour matches that, so poster, fallback and canvas agree. The wall sits at z −3.2 unless a scene moves it (see Birthday). *v1.3: a clean painted greige cove `#BEB9B1`, rendering `#D5D2CD`, the new token; the wall rule is unchanged* |
+| Finish | CSS over poster and canvas: warm radial vignette (multiply, 12%) + fractal film grain (overlay, 16%). It adds nothing to the WebGL frame. Its cost in the browser compositor (two blended layers over a live canvas) has not been measured on desktop or on a phone. Hidden in forced-colours. *v1.3: removed* |
+| Low tier | Shadow map off (and its target freed) and plaster normal map off; contact shadows remain. The gobo stays as a 192² copy (0.14 MiB, the 768² original freed): the cookie also dims and warms the key on every object, so dropping it brightened and cooled Low by 35–90 % per channel (measured at checkpoint 4). With the small cookie, object bodies at Low stay within 5–10 % of Normal. What the missing shadow map takes away is cast shadows: the Birthday stand's pedestal reads about 50 % brighter without the tray's shadow, and the Party and Birthday floor shadows go (contact shadows remain). At DPR 1 on small stages the Sports net's cords fall below a pixel and read as dashes. Library materials simplified as before (no normal maps or sheen). Environment response 0.8 applies only to materials with their own environment (the cloche; since v1.2 every imported metal); the rest follow the scene-wide 0.52. *v1.3: shadow map off, contact shadows kept, no gobo or relief to drop; metals stay at 1.0* |
 
 ### Normal tier (revised)
 
-The premium studio's real-time soft shadows (one 1024² map, 16-tap PCF, gobo cookie) and physical materials (clearcoat, sheen, anisotropy, the holo foil) are the revised Normal-tier definition. Master §9 defines Normal as "simple PBR; baked contact detail; no postprocessing". Its revision clause covers budgets set at the Business milestone, so this is recorded as an explicit revision of the tier itself, with the reasons: the WebGL frame still has no postprocessing (no extra passes); the CSS vignette and grain are compositor layers outside the renderer, their cost unmeasured and listed for the phone session. This follows following the premium look Surya approved at checkpoint 2b. It is pending phone measurement on the reference device (iPhone 17 Max, Safari). If Normal misses the frame-interval target there, the quality monitor drops to Low (defined above) as it would for any tier.
+The premium studio's real-time soft shadows (one 1024² map, 16-tap PCF, gobo cookie) and physical materials (clearcoat, sheen, anisotropy, the holo foil) are the revised Normal-tier definition. Master §9 defines Normal as "simple PBR; baked contact detail; no postprocessing". Its revision clause covers budgets set at the Business milestone, so this is recorded as an explicit revision of the tier itself, with the reasons: the WebGL frame still has no postprocessing (no extra passes); the CSS vignette and grain are compositor layers outside the renderer, their cost unmeasured and listed for the phone session. This follows the premium look Surya approved at checkpoint 2b. It is pending phone measurement on the reference device (iPhone 17 Max, Safari). If Normal misses the frame-interval target there, the quality monitor drops to Low (defined above) as it would for any tier.
+
+*v1.3:* the production rig has no gobo and the CSS layers are gone, so Normal is one 1024² 16-tap shadow map, a full-strength environment and the physical materials, with no postprocessing and no compositor layers (revisions #32 and #33). Still pending the phone.
 
 ### Checkpoint 3 decisions (2026-09-29)
 
@@ -207,7 +309,7 @@ SDF modelling (surface nets, gradient normals, Newton projection) for continuous
 
 Texture memory added by L2 (RGBA8; mipmapped textures × 4/3):
 
-- Studio, every scene: palm cookie 768², no mipmaps, 2.25 MiB; plaster normal + albedo 2 × 512², 2.67 MiB. Total 4.9 MiB.
+- Studio, every scene: palm cookie 768², no mipmaps, 2.25 MiB; plaster normal + albedo 2 × 512², 2.67 MiB. Total 4.9 MiB. *(Rig `v1.1` only since v1.3; `neutral-room` allocates neither. Its environment is the same 768 × 1024 half-float PMREM size, about 6 MiB.)*
 - Business: card prints 2 × 600 × 907 (both templates once visited), 5.54 MiB; holo seal and strap print 2 × 256², 0.67 MiB. Total 6.2 MiB, so 11.1 MiB with the studio.
 - Party: label prints 2 × 512² (both presets once visited), 2.67 MiB; groove directions 256², 0.33 MiB. Total 3.0 MiB.
 - Birthday: smoke wisp 64 × 160, 0.05 MiB.

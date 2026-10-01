@@ -37,8 +37,8 @@ The guest chooses first and the motion expresses that choice. No gesture, aim, m
 ## Brand Commitments
 
 - Livetime's broader identity (logo, naming, brand palette) is **out of scope**. The showcase must not invent a Livetime logo or brand graphics.
-- The invitation objects follow the locked style reference (`docs/style-reference.md`, direction L2 "Satin Enamel · premium", v1.1: L's identity with the premium surfaces and sunlit studio approved at checkpoint 2b).
-- Interface tokens are study inputs, not an approved brand palette: stage `#F8E4C8` (the rendered studio backdrop, so poster, fallback and canvas match), text `#202320`, muted `#DCDDD5`, accent `#FF714A` (never for UI text or focus on white), status green `#176B42` / red `#A62D36`, focus `#2F54C9`, system sans.
+- The invitation objects follow the locked style reference (`docs/style-reference.md`, direction L2 "Satin Enamel · premium", v1.1: L's identity with the premium surfaces and sunlit studio approved at checkpoint 2b; the studio superseded in v1.3 by the `neutral-room` rig, `docs/style-reference.md`).
+- Interface tokens are study inputs, not an approved brand palette: stage `#D5D2CD` (the rendered backdrop of the production studio rig, measured so poster, fallback and canvas match; `#F8E4C8` until the v1.3 studio pass), text `#202320`, muted `#DCDDD5`, accent `#FF714A` (never for UI text or focus on white), status green `#176B42` / red `#A62D36`, focus `#2F54C9`, system sans.
 
 ## Evidence on Hand
 

@@ -94,9 +94,104 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 - Drawing buffer at the showcase stage (≈400 CSS px, DPR 1.5 → 600², MSAA 4×): ≈13 MiB. **Total ≈ 20 MiB** against the 48 MiB budget.
 - **Risk recorded:** at the master's 2.5 MP drawing-buffer ceiling, MSAA 4× alone would need ≈90 MiB. Embeds larger than ≈700 CSS px at DPR 1.5 should create the renderer without MSAA; this is a decision for Milestone 7 integration guidance.
 
+## v1.3: the studio pass (2026-10-01)
+
+The masters are now lit by a physically plausible studio, rig `neutral-room`: the Models viewer's room at full environment strength, one soft key, a greige cove. They are seen through an 18° perspective lens, with no CSS finish and none of the v1.2 grades (revisions #31–#36; `docs/style-reference.md` v1.3). The objects, beats and durations are those of v1.2. The budgets stay waived. The tables below supersede v1.2's sequence-length, cadence and GLB tables; v1.2's budget and cold-load figures still hold to within a few KiB (Runtime GLBs, below).
+
+**Every run below was taken at HEAD `40f9e04`** (17:45–17:53 on 2026-10-01), the integration commit that made `neutral-room` the default: `pnpm capture timing`, `pnpm capture perf`, `pnpm capture stagecolor … neutral-room`, `pnpm models` for every scene, and the typecheck and unit tests. The browser suite passed at the same commit. The machine is the authoring Mac (M2 Pro), with Chrome 153. None of this is phone evidence.
+
+### Checks
+
+| Check | Result |
+| --- | --- |
+| Typecheck | Clean |
+| Unit tests (Vitest) | 263 / 263 pass (20 files, at HEAD `40f9e04`; again on this docs pass). Added in v1.3 (from 232): `tests/rigs.test.ts` (the registry; each rig's declarations; the studio-pass rules for every rig but `v1.1`: environment and metal intensity 1 and a real-time shadow; each declared stage colour within 2 levels of its measurement, when the measurement file `outputs/rigs/<rig>/stagecolor.json` is in the checkout; the CSS token equal to the production rig's colour; no `.lt-stage::before` or `::after`; `metalEnvIntensity` reaching the metals on every tier), `tests/stage-framing.test.ts` (the perspective fit for all five scenes), GLB checks that every removed grade is gone, and the Party label's asymmetry on the exported prints |
+| Browser tests (Playwright, system Chrome) | 71 / 71 pass (`pnpm test:browser`, at HEAD `40f9e04`). The integration run kept no log; the adversarial review re-ran it against `:5199` (71 / 71, 4.7 min), and the fix pass again at 18:42 with the output saved (`final-measurements-v1.3/browser.txt` in the session scratchpad: 71 passed, 4.8 min; working tree = `40f9e04` plus docs and two code comments) |
+| Deterministic exports | Every GLB is byte-identical to the committed file. The integration run's status file (`determinism.txt`) is empty, which alone does not show the export ran; so the fix pass re-ran `pnpm models` (all scenes) at 18:40 in a clean `git archive 40f9e04` copy, leaving the live dev server's `assets/` untouched, and compared SHA-256: all six exported GLBs (five scenes and the disposal bin) equal `40f9e04`'s and the working tree's, and `git status -- assets` is empty (`final-measurements-v1.3/determinism-recheck.txt`) |
+| Stage colour | `neutral-room` measures `#D5D2CD`, the value of `--lt-stage` and of the rig's `stageColor` (Stage colour, below) |
+| Production build | Not re-run for v1.3. All five rigs are registered eagerly, so the comparison rigs ship in the runtime JavaScript even though only a local host can select them (about 52 KB of source together, before minification and gzip); the effect on the first-route size is unmeasured |
+
+### Real-time sequence lengths (`pnpm capture timing`, live showcase, HEAD `40f9e04`)
+
+| Scene | Host | Accept | Decline | Authored |
+| --- | --- | --- | --- | --- |
+| Business | 1.210 s | 1.510 | 1.512 | 1.2 / 1.5 / 1.5 |
+| Party | 1.209 | 1.612 | 1.412 | 1.2 / 1.6 / 1.4 |
+| Birthday | 1.314 | 1.413 | 1.513 | 1.3 / 1.4 / 1.5 |
+| Sports | 1.212 | 1.713 | 1.613 | 1.2 / 1.7 / 1.6 |
+| Dinner | 1.212 | 1.512 | 1.512 | 1.2 / 1.5 / 1.5 |
+
+The durations are unchanged. As in v1.2, each run is 9–14 ms over the authored length: one animation frame to detect the end.
+
+### Frame cadence (desktop only, `pnpm capture perf`, HEAD `40f9e04`)
+
+Ten alternating accept/decline cycles after a warm-up, 390×844 @3×, Normal tier, visible page, frames sampled only while a sequence plays. GPU objects are three.js's `renderer.info` counts at the end of the run; the v1.2 counts are given for comparison.
+
+| Scene | Frames | p50 | p95 | p99 | Max | >50 ms | 4× CPU throttle (simulation): p95 / max / >50 ms | GPU geometries / textures / programs | v1.2 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Business | 909 | 16.7 ms | 16.7 | 16.8 | 16.8 | 0 | 16.7 / 16.8 / 0 | 28 / 16 / 11 | 28 / 19 / 12 |
+| Party | 1,000 | 16.7 | 16.7 | 16.8 | 16.8 | 0 | 16.8 / 16.8 / 0 | 33 / 12 / 9 | 33 / 15 / 10 |
+| Birthday | 926 | 16.7 | 16.7 | 16.8 | 16.8 | 0 | 16.8 / 16.8 / 0 | 30 / 9 / 11 | 30 / 12 / 12 |
+| Sports | 1,089 | 16.7 | 16.7 | 16.8 | 16.8 | 0 | 16.8 / 16.8 / 0 | 15 / 21 / 12 | 15 / 24 / 13 |
+| Dinner | 907 | 16.7 | 16.7 | 16.8 | 16.8 | 0 | 16.7 / 16.8 / 0 | 17 / 7 / 8 | 17 / 9 / 8 |
+
+The Master §9 targets (p95 ≤ 20 ms, p99 ≤ 34 ms, no stall over 50 ms) are met on this desktop. Every scene holds three textures fewer than in v1.2: the v1.1 studio's gobo cookie and plaster normal and albedo are gone, and `neutral-room` adds none besides its environment, which is the same size as v1.1's (a 768 × 1024 half-float PMREM, about 6 MiB). Dinner holds one more than that implies, because the dome's own 1024² roughness map now stays (`finishDish` had freed it): about 5.3 MiB as RGBA8 + mips. These are counts and calculations, not driver readings; the counting harness was not re-run.
+
+### Runtime GLBs (`pnpm models <scene>` export reports at HEAD `40f9e04`; sizes from the committed files)
+
+| Scene | GLB raw | Gzip −9 | Report gzip | Triangles (visible pass) | Draw calls (+ shadow proxies) | Textures (as RGBA8 + mips) | Change from v1.2 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Business | 2062.5 KiB | 1272.0 KiB | 1376.5 | 76,236 | 21 | 12 (57.4 MiB) | The chrome's policy is the master's (40 bytes larger) |
+| Party | 2334.6 | 1032.4 | 1159.4 | 97,948 | 28 (+ 1, 368 tris) | 7 (27.0 MiB) | 20.7 KiB smaller: no `PLINTH_TONE`, no `tt_spindle`, and the coral and cobalt prints are the master's art without the wedge (16 KiB each, were 26 and 27) |
+| Birthday | 4343.0 | 2201.9 | 2427.5 | 219,780 | 23 (+ 8, 3,340 tris) | 2 LUTs (0.0 MiB) | The vanilla palette is the ivory rebuild's again, at the master's roughness (4 bytes smaller) |
+| Sports | 8071.5 | 5915.7 | 6159.4 | 259,206 | 11 (+ 1, 2,436 tris) | 16 (62.6 MiB) | None: `LEATHER_GRADE` was applied at load |
+| Dinner | 3412.5 | 1753.5 | 1963.0 | 146,944 | 6 (+ 2, 5,277 tris) | 1 (5.3 MiB; now kept at load) | The trim's roughness is the master's (4 bytes larger) |
+| shared/disposal-bin.glb | 155.7 | 63.8 | — | ≈ 8.4k while on stage | 5 | 0 | None |
+
+Posters (720², q0.86) and collection thumbnails (192²) were regenerated under `neutral-room` at `40f9e04`. The flatter greige backdrop compresses better: Business 16.2–19.6 KB, Party 15.3–16.7 KB (shared declined 7.7), Birthday 21.1–22.5 KB (shared declined 11.6), Sports 17.7–18.8 KB, Dinner 8.2–11.5 KB; thumbnails 2.2–3.6 KB, 16.0 KB together. The cold first-scene figures in v1.2's budget table are therefore upper bounds (Party's GLB is 21 KiB smaller gzipped, every poster smaller); `pnpm capture network` was not re-run.
+
+### Stage colour (`pnpm capture stagecolor http://127.0.0.1:5199 neutral-room`, HEAD `40f9e04`)
+
+The mean sRGB of the central 20 % of the empty stage (content hidden for that frame), per scene and averaged:
+
+| Business | Party | Birthday | Sports | Dinner | Mean (the token) |
+| --- | --- | --- | --- | --- | --- |
+| `#D8D5D0` | `#D1CEC8` | `#D5D2CD` | `#D7D4CF` | `#D4D0CB` | **`#D5D2CD`** |
+
+`--lt-stage` (`src/ui/shell.css`) and `neutral-room`'s `stageColor` are both `#D5D2CD`, and `tests/rigs.test.ts` holds them equal. The scenes differ by up to 8 levels per channel (blue, party against business; red and green by 7), because the cove's gradient depends on each scene's framing and wall. On the interface: ink `#202320` on the stage is 10.5:1, secondary text `#585C57` 4.52:1, and the page `#FBFAF7` against the stage 1.44:1 (calculated, WCAG).
+
+The other rigs' measured colours, from their own runs: `product-studio` `#ECE9E4`, `daylight-table` `#E0D4C3` (spread `#D8D0C4`–`#E4D1B8`), `livetime-warm` `#F6DDC3`. `v1.1` keeps the v1.2 token `#F8E4C8` as its declaration (what its posters were made with) and measures `#F6E0C5` through the perspective lens, the palm shadow dappling the centre slightly below it (`src/render/rigs/README.md`).
+
+### Independent judging of the rigs (three judges, 2026-10-01, 16:37–17:24)
+
+Three fresh judges scored each rig on all five scenes' stills against the master renders (`master-renders/<master>/B-hero.png`, `B-close.png`): realism (35), materials reading as their materials (25), the beats still reading in the accepted stills (15), fit with the interface around the stage (15) and artifacts (10), out of 100. The scores below are transcribed from the three judges' reports to the orchestrating session; no score file was saved with the measurements, so they cannot be re-checked against one.
+
+| Rig | Mean | Judge 1 | Judge 2 | Judge 3 |
+| --- | --- | --- | --- | --- |
+| `neutral-room` | **81.7** | 82, 1st (realism 29, materials 21, beats 13, interface 11, artifacts 8) | 81, 1st (29, 21, 13, 10, 8) | 82, 1st (29, 21, 13, 11, 8) |
+| `product-studio` | 76.7 | 2nd | 2nd | 2nd |
+| `daylight-table` | 69.3 | 3rd | 4th | 3rd |
+| `livetime-warm` | 69.0 | 4th | 3rd | 4th |
+
+The per-judge totals of the three runners-up were not kept in the run's record; their means and every judge's ranking were. All three judges answered the brief's question on the removed grades the same way: none should return under `neutral-room` (`docs/style-reference.md` v1.3, Grades removed). Their proposed grafts from the runners-up are open (Known limitations, below). As at checkpoints 4 and 5 and in v1.2, the verdict is **pending Surya's confirmation**: the brief left the warm and neutral directions open to the owner, and every rig stays comparable under `?rig=` on a local host.
+
+### Known limitations (v1.3)
+
+From `docs/rigs/neutral-room.md` and the three judges' notes on the winner. None of the judges' grafts had been applied when this was recorded.
+
+- **Interface fit (the lowest sub-score, 10–11 of 15).** The greige square reads slightly cold beside the warm-white page and olive ink. The judges proposed lifting and warming the cove towards `#D9D5CE`–`#E6E3DE`, or a faint 2700–3000 K floor bounce kept out of the environment's upper hemisphere. Any change must keep the vanilla cake and the cream ball at least 10 % in luminance from the cove, then be re-measured, with the token, posters and thumbnails following.
+- **Metal contrast.** All three proposed one soft dark gradient card in the environment, low and camera-right (not a visible flag), for a deeper reflected band on the cloche, the tonearm and the reader's bezel. The reader's lower front and bezel read near-white. The rig's designer traced that to the master's material under the window, not to the key; the judges would trim the lamp or skylight there, not regrade the material.
+- **Party lid interior** renders near-black (p1 21), and the plinth reads flatter and more matte than in the master render. The kept interior split is justified, but the judges would lift its baked occlusion or add a warm bounce so it holds dark-grey form.
+- **Shadow artefacts.** A speckled PCF fringe in the net's shadow and at the hoop's base, and a large curved dark shadow across the top right of the cove in Business and Sports, which the adversarial reviewer attributes to geometry outside the frame (the lanyard above it; the backboard). It is the most noticeable artefact left.
+- **Stage spread.** One token against per-scene backdrops that span `#D1CEC8`–`#D8D5D0`, and the token is the centre only: the posters' corners measure `#AFACA9`–`#C6C2BC`, so wherever the flat token shows alone (fallback sentence, stage before the poster, thumbnail fill) the square is lighter at its edges than the rendered image.
+- **Party accept spin.** The master's own label carries the spin through its off-centre square; a unit test holds the asymmetry, and the judges could not judge motion from stills. No reviewer has yet watched the spin on the master's print.
+- **Not re-derived.** Party's 0.65 rad presentation tilt, Birthday's in-bin shade and the Business holder's 14 % dimming were tuned under the v1.1 key; none was flagged.
+- **Load cost.** `neutral-room` evaluates its room on the CPU when the stage is created (1024 × 512 = 524,288 texels) and uploads an 8 MiB float texture once for prefiltering. That cost was not measured, and not on a phone.
+- **Not re-measured for v1.3:** the production build's JavaScript size (the comparison rigs are bundled), live render-cost peaks, counted GPU memory, throttled cold load and the iPhone 17 Max session. **Adversarial review and fix pass (2026-10-01, ≈18:30–18:50):** the reviewer captured `neutral-room` fresh beside every `master-renders/*/B-hero.png` and found the five scenes no longer cartoonish (metals reflect a room, steel neutral, no peach, vignette, grain or wedge, the dome the master's polished silver); verdict pass with fixes. The fixes were documentation only (stale finish and colour claims in `DESIGN.md`, `PRODUCT.md`, `.impeccable/design.json`, revision #36 and `docs/RESUME.md`; the stage-spread figure; provenance for the browser, determinism and judging rows above); the look did not change, so no scene was re-captured.
+
 ## v1.2: the scan-to-CAD masters (2026-10-01)
 
-The five scenes now run on the scan-to-CAD masters (revision #20). **Budgets are waived for this pass** (owner's brief, `docs/new-models-brief.md`, revision #21). The figures below are what ships; they are not a pass/fail against the budgets. Where they exceed a cap, the cap is shown next to them. They supersede the checkpoint 4 render-cost, cadence, transfer, cold-load and GPU-memory tables further down, which describe the v1.1 code-authored objects.
+*Superseded in part by v1.3 (above): its sequence-length, cadence and GLB tables replace the ones below, and the look items marked v1.3 in Known limitations are resolved.* The five scenes now run on the scan-to-CAD masters (revision #20). **Budgets are waived for this pass** (owner's brief, `docs/new-models-brief.md`, revision #21). The figures below are what ships; they are not a pass/fail against the budgets. Where they exceed a cap, the cap is shown next to them. They supersede the checkpoint 4 render-cost, cadence, transfer, cold-load and GPU-memory tables further down, which describe the v1.1 code-authored objects.
 
 **Every run below was taken at HEAD `a613138`** (06:26–06:38 on 2026-10-01), after the Birthday, Party and Dinner v1.2.1 and Business v1.2.2 polish (`a6a1ce2`, `9329416`, `201a201`, `7c951e7`, merged by `b225f95`) and the Sports v1.2.1 amplitude pass (`a613138`): `pnpm models` for all scenes (every GLB byte-identical to the committed file), `pnpm capture timing`, `pnpm capture perf`, the full browser suite and the typecheck and unit tests (232 / 232). Earlier runs during the pass (05:15–05:42, on `6a62beb` and `756a635`, before the polish) gave the same cadence and the same 71 / 71 and differed from these only by a few milliseconds in the sequence lengths; they are superseded. The machine is the authoring Mac (M2 Pro), with the browser tests run in Chrome 153. None of this is phone evidence. Per-scene detail, including every decision and the measured contract numbers, is in `docs/scenes/<scene>-v1.2.md`.
 
@@ -181,13 +276,13 @@ Overall, the judges found that all five scenes use the masters and keep v1.1's b
 
 - **Shared director.** Party's interruption blend still slerps linearly, so an accept → decline change mid-spin can turn the record back by up to π and whip the arm to its rest. Sports' change clip blends at a constant rate. Business uses the director's 0 ms cut as a hand-over for its own recovery (#25). A first-class scene path in `src/core/visualDirector.ts` would make this explicit. Dinner's rewind keeps a little state between the cut and the new playback (#24).
 - **Shadow-depth texture leak (shared).** three.js's shadow depth material keeps the last caster's `map`. Birthday avoids leaking a disposed texture per visit by casting through proxies with no map. A scene whose shadow-casting master mesh has a map could leak the same way; the general fix belongs in the stage.
-- **Load-time finishes outside the GLB.** The Sports leather grade, Dinner's dome anisotropy and roughness (its unused 1024² roughness map still travels, 6 KiB), Party's lid extension and split, and the Birthday bin shade are applied at load. The recipe API has no pixel function for a default material, no anisotropy policy and no way to drop a texture slot.
+- **Load-time finishes outside the GLB.** The Sports leather grade, Dinner's dome anisotropy and roughness (its unused 1024² roughness map still travels, 6 KiB), Party's lid extension and split, and the Birthday bin shade are applied at load. *(v1.3: the leather grade and the dome finish are removed, and the dome's map is used again; the lid extension and split and the bin shade remain.)* The recipe API has no pixel function for a default material, no anisotropy policy and no way to drop a texture slot.
 - **Small at stage size.** The Business hook threading (a 2.7 mm gap), Birthday's thin candles (r 0.0205) and the 1.8° carry lean, the Party tonearm cue and settle, the Sports recoil and squash (raised in `a613138` to 2.5° / 0.6° and ≤ 10 %; the rim's front edge now dips 6–7 px in the 540 px captures), and the Dinner rim rock (≤ 1°) are all correct but small at stage size.
 - **Look.**
   - The Sports board carries more visual weight than v1.1's, fixed by the 1.6× rim rule. The cream ball has no coral equator.
-  - The Party closed lid reads as a second box. The label wedge is a v1.1 graphic over the master print.
+  - The Party closed lid reads as a second box. The label wedge is a v1.1 graphic over the master print *(removed in v1.3: the label is the master's print, recoloured)*.
   - The Birthday flames are the stylised v1.1 shader. The cake is small in the 192 px thumbnail.
-  - Dinner's empty well is a near-flat white disc. The studio environment has no dark horizon for the polished dome.
+  - Dinner's empty well is a near-flat white disc. The studio environment has no dark horizon for the polished dome *(resolved in v1.3: `neutral-room`'s room gives the master's dome window, horizon and dark-furniture reflections)*.
   - The Business strap has no twist. The LED bar is under the pressed card, and the tile carries the outcome. The dark card's lower edge relies on the holder's rim.
 - **Small geometric allowances (tested, invisible).** The Sports board recoil (0.6° since `a613138`) can overlap the stand's back plate by up to 1.6 mm, hidden from the camera. Dinner's rim rock can dip up to 1 mm on the coupe slope. The Business clearance tests allow 0.3 mm at the hook wire and 0.7 mm where the clips press the glass.
 - **Lookdev.** The lookdev identity tiles still build the v1.1 cake and the code-authored keycard rig: the master GLBs load asynchronously.

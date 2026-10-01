@@ -9,6 +9,8 @@ pnpm install
 pnpm dev        # showcase at http://127.0.0.1:5199/  (?scene=party|birthday|sports|dinner|business); /gallery.html compares all five
 ```
 
+On a local host the showcase also takes `?rig=<name>` to light the scene with another studio rig from `src/render/rigs/` (`neutral-room` is the production rig; `product-studio`, `daylight-table`, `livetime-warm` and `v1.1` are kept for comparison), and `&camera=ortho` for the v1.1 orthographic camera.
+
 Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm test` (unit) and `pnpm test:browser` (behaviour, uses the installed Google Chrome).
 
 ## Where things are
@@ -20,7 +22,8 @@ Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm tes
 | `models/` | Runtime rigs, the code-authored parts (Sports stand, Birthday wicks and flames, Party tonearm rest, contract skeletons, the shared bin) and the v1.1 builders kept for lookdev; `*Contract.ts` fixes the dimensions the choreography relies on, measured from the masters |
 | `models/masters/` | The eight scan-to-CAD masters (`*.glb`: basketball, hoop, turntable, cake, plate, cloche, badge, reader), copied unmodified; generators and process notes in `github.com/suryanewa/scan-to-cad-rebuilds` |
 | `scripts/masters/` | The master import path: one recipe per scene (`recipes/<scene>.ts`, with a Decisions block), the composer and the export report; `README.md` there is the guide |
-| `src/render/` | Renderer, premium studio (light, gobo, plaster, soft shadows), materials, printed art |
+| `src/render/` | Renderer, stage and camera (the 18° perspective product lens), the rig contract (`rig.ts`) and registry (`rigRegistry.ts`), the shared studio kit (sweep backdrop, 16-tap soft shadows, the v1.1 gobo and plaster), materials, printed art |
+| `src/render/rigs/` | Studio rigs, one file each, registered by file name: `neutral-room` (production, `DEFAULT_RIG`: the Models viewer's room on a greige cove), `product-studio`, `daylight-table`, `livetime-warm`, `v1.1`. Selectable with `?rig=` on a local host; `README.md` there is the guide. `pnpm capture rigs` and `pnpm capture stagecolor` compare them and measure their backdrops |
 | `src/demo/`, `src/ui/` | Showcase shell and guest controls; `mockAdapter.ts` is the simulated persistence |
 | `assets/` | Runtime GLB models, posters, collection thumbnails |
 | `scripts/` | Model export (`pnpm models <scene>`: masters + builder → one runtime GLB, deterministic) and evidence capture (`pnpm capture <mode>`) |
@@ -28,13 +31,14 @@ Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm tes
 | `docs/` | Integration guide, style reference, asset manifest, qualification record, spec revisions, time log |
 | `docs/scenes/` | One note per scene for v1.2 (`<scene>-v1.2.md`): decisions, measured contract numbers, export report, choreography changes, known gaps |
 | `docs/new-models-brief.md` | The v1.2 brief: the owner's request, the masters, the scene mapping and the owner decisions (budgets waived; Dinner without food) |
+| `docs/studio-pass-brief.md`, `docs/rigs/` | The v1.3 studio pass: the brief (why v1.2 looked cartoonish and the five causes) and one note per rig with its reasoning, measured stage colour and iterations |
 
 ## Documentation
 
 - [Integration guide](docs/integration.md): embedding, configuration, responses (idempotency and ordering), fallbacks, lifecycle.
-- [Style reference](docs/style-reference.md): v1.2, the objects as the scan-to-CAD masters per scene, over the approved premium studio and interface (v1.1) and the palette (v1.0).
+- [Style reference](docs/style-reference.md): v1.3, the studio pass (the production rig, the perspective lens, the grades removed, the stage token), over v1.2 (the objects as the scan-to-CAD masters per scene), the interface (v1.1) and the palette (v1.0).
 - [Asset manifest](docs/asset-manifest.md): provenance and licence of every model, texture and dependency.
-- [Qualification record](docs/qualification.md): device coverage, measurements (v1.2 re-measured, budgets waived), known limitations.
+- [Qualification record](docs/qualification.md): device coverage, measurements (v1.3 re-measured under the new studio, budgets waived), the rig judging, known limitations.
 - [Coverage table](docs/coverage.md): every Master and sub-spec requirement linked to a result or a recorded exception (regenerate with `node --experimental-strip-types scripts/coverage-table.ts`). It still reflects the checkpoint 5 audit; it has not been re-audited for v1.2 (the three-candle, Dinner food and triangle-budget rows are superseded by `docs/qualification.md` v1.2).
 - [Spec revisions](docs/spec-revisions.md): approved and recorded deviations to reconcile into the Master Specification.
 - [Time log](docs/time-log.md): actual effort by milestone.

@@ -5,6 +5,25 @@ porcelain plate with its gilt rim (`dinner-plate.glb`) and the silver cloche's d
 minus its tray). Recipe: `scripts/masters/recipes/dinner.ts`; contract: `models/dinnerContract.ts`; rig:
 `models/dinner.ts`; choreography: `src/scenes/dinner/sequences.ts`.
 
+## v1.3: the studio pass (2026-10-01)
+
+- **Grades removed.** `finishDish` (the dome's uniform roughness 0.2 and anisotropy 0.3 along the meridians) and the
+  trim's roughness 0.12 are gone: the dome renders with the master's own polished roughness map and no anisotropy,
+  and the bead, bands, finial and handle at their near-mirror 0.065–0.09 (Decisions, Silver). The dome's 1024²
+  roughness map is now used rather than freed at load (about 5.3 MiB as RGBA8 + mips). The dome, the trim and the gilt
+  get the rig's own environment 1.0 on every tier (the recipe's `ownEnv` 0.9, 0.8 and 1.1 are overridden by
+  `metalEnvIntensity`).
+- **New studio.** The production rig is `neutral-room` (`docs/style-reference.md` v1.3): the Models viewer's room,
+  whose window, mullions, horizon, runner and sideboard are what the polished dome now reflects. The known gap "the
+  studio environment has no dark horizon" is resolved. The cove measures `#D4D0CB` here (token `#D5D2CD`). Through
+  the perspective lens the deep bin makes the dish 0.93× its v1.1 size, the smallest of the five, and shifts the
+  frame's centre by 0.073 NDC.
+- **Judges.** Of all four rigs, `neutral-room` gives the closest match to `silver-cloche/B-hero.png` and `B-close.png`:
+  polished silver with the master's window and mullion arcs and its bright upper band, 0.006–0.11 % of pixels
+  clipped. None wants the lathe polish back. All three would add one soft dark card low and camera-right in the
+  environment for a deeper lower band on the dome (open).
+- Posters regenerated under the new rig (8.2–11.5 KB).
+
 ## Decisions
 
 - **No food, no preset control.** The pasta and vegetable builders and the code-authored v1.1 plate and cloche

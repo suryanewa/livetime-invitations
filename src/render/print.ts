@@ -228,6 +228,10 @@ export function holoPattern(size = 256): Texture {
  * Record label art (circle UVs, 0–1 across the label disc). Deliberately asymmetric — an
  * off-centre wedge and a printed side mark — so a quarter turn of the record reads at a
  * glance, even foreshortened at the family's 15° elevation.
+ *
+ * v1.1 / study only: reached only from the v1.1 material library (the lookdev and study pages).
+ * The shipped Party GLB carries the master's own label (`labelPrint` in
+ * scripts/masters/recipes/party.ts, no wedge since the v1.3 studio pass).
  */
 export function labelPrint(preset: 'coral' | 'cobalt', size = 512): Texture {
   const canvas = document.createElement('canvas');

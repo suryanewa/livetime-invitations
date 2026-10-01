@@ -359,7 +359,8 @@ export const DIRECTIONS = {
     name: 'Satin Enamel · premium',
     summary: 'The locked L identity with premium surfaces and a sunlit studio: laminated printed badges, chrome hardware, printed woven straps, glass reader faces, buttercream sheen, glazed ceramics.',
     style: { ...L.style, card: 'print' },
-    // The sunlit plaster renders peach; the stage token matches so poster, canvas and CSS agree.
+    // v1.1 / study only: the sunlit plaster rendered peach and the v1.1 token matched it. The shipped
+    // stage colour is the production rig's `stageColor` (`#D5D2CD`, src/render/rigs/, v1.3).
     ui: { ...L.ui, stage: '#F8E4C8' },
     surfaces: { ...L.surfaces, ...up },
   };

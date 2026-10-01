@@ -88,3 +88,46 @@ Still open:
 - Re-running the checkpoint 4 harnesses for live render-cost peaks, counted GPU memory and throttled cold load.
 - The shared-code follow-ups the scene docs route to the foundation owner: a scene path for interruptions in `visualDirector.ts`, a stage-level fix for the shadow-depth texture leak, and recipe options for load-time finishes.
 - `docs/coverage.md` regenerates cleanly (`node --experimental-strip-types scripts/coverage-table.ts`, 650 rows), but the output is unchanged because `docs/coverage.json` still records the checkpoint 5 audit. Its rows were not re-audited for v1.2 (for example the 60k-triangle budget row, the three-candle rows and the Dinner food rows).
+
+## Studio pass (v1.3)
+
+Written 2026-10-01 ≈18:20 EDT. Surya, auditing v1.2: *"Why do these look so cartoonish compared to the original
+renders?"* The models were right; the showcase lit, framed and finished them like the v1.1 objects. Read
+`docs/studio-pass-brief.md` (the five causes and the plan), then `docs/style-reference.md` v1.3 and
+`src/render/rigs/README.md`.
+
+| What landed | Where |
+| --- | --- |
+| Infrastructure: the rig contract and registry (rigs register by file), the v1.1 studio as rig `v1.1` (byte-identical stills), the 18° perspective lens fitted to `framePoints`, `?rig=` / `?camera=ortho` on local hosts, `pnpm capture rigs` and `pnpm capture stagecolor`, the CSS vignette and grain removed, every v1.2 grade removed and the GLBs re-exported | `a62fab0`; `src/render/rig.ts`, `src/render/rigRegistry.ts`, `src/render/rigs/`, `src/render/camera.ts`, `src/render/stage.ts`, `src/ui/shell.css`, `scripts/capture.ts` |
+| `metalEnvIntensity` (the rig's environment strength on every own-environment metal, every tier), `?rig=` driving the whole stage, the Party label's asymmetry test | `ee87771` |
+| Four rigs designed in parallel, one per designer, each with its reasoning and measured stage colour: `neutral-room` (`5d079fb`), `product-studio` (`f1718da`), `livetime-warm` (`13fce13`), `daylight-table` (`1aaa020`, recovered from the designer's uncommitted checkout); merged by `83a1b38`, `f387bd1`, `48b38d3` | `src/render/rigs/<name>.ts`, `docs/rigs/<name>.md` |
+| Three independent judges on all five scenes: `neutral-room` 81.7, `product-studio` 76.7, `daylight-table` 69.3, `livetime-warm` 69.0; all three ranked `neutral-room` first, and none wants a removed grade back | `docs/qualification.md` v1.3 (Independent judging) |
+| Integration: `DEFAULT_RIG` = `neutral-room`, `--lt-stage` = `#D5D2CD` (measured), posters, review clips and collection thumbnails regenerated | `40f9e04` |
+| Every measurement re-run at `40f9e04` (timing, cadence, stage colour, export reports and determinism, 263 unit and 71 browser tests) | `docs/qualification.md` v1.3 |
+| Docs: style reference v1.3, revisions #31–#36, qualification v1.3, a v1.3 note in each scene doc, manifest rows for the rigs, README, integration defaults, time log | this docs pass (in the working tree for the orchestrator to commit) |
+
+To compare the rigs: `pnpm dev`, then `http://127.0.0.1:5199/?scene=dinner&rig=product-studio` (any scene, any rig;
+`&camera=ortho` for the v1.1 lens). `pnpm capture rigs http://127.0.0.1:5199` writes every rig's stills and contact
+sheets to `outputs/rigs/` (local, git-ignored); `pnpm capture stagecolor http://127.0.0.1:5199 <rig>` measures a
+backdrop. A new rig is one new file in `src/render/rigs/`; changing the production rig means `DEFAULT_RIG`, then
+re-measuring, setting `--lt-stage` to the measurement and regenerating posters and thumbnails (`pnpm capture <scene>`).
+
+Still open:
+
+- **Owner decisions, pending:** the neutral `neutral-room` over the warm `livetime-warm` direction (the brief left
+  the choice to Surya; the judges chose), the perspective lens (it reverses his checkpoint 2b choice of orthographic,
+  revision #2), the removal of the CSS finish he approved on review page v1, and the new stage token. Revisions
+  #31–#36.
+- **The brief's last two steps are done:** the adversarial review (fresh `neutral-room` captures beside every master
+  render: no longer cartoonish; pass with fixes) and a documentation-only fix pass (`docs/qualification.md` v1.3,
+  Known limitations). The look is unchanged, so the open polish below still stands.
+- **The judges' grafts onto `neutral-room`, none applied yet** (`docs/qualification.md` v1.3, Known limitations): a
+  slightly lighter and warmer cove (then re-measure, tokens, posters, thumbnails), one soft dark gradient card low
+  and camera-right in the environment, the reader's near-white lower bezel, the Party lid's near-black inside, the
+  speckled net and hoop-base shadow, a large curved shadow top right of the cove in Business and Sports (cast from
+  outside the frame: the lanyard, the backboard; the most noticeable artefact left).
+- **Stale stage colour in the coverage audit:** `docs/coverage.md` / `coverage.json` (audited at `7908069`) cite
+  `#F8E4C8` and its 12.8:1 and 5.5:1 contrasts in three rows; the next audit should restate them for `#D5D2CD`
+  (10.5:1 and 4.52:1). `DESIGN.md`, `PRODUCT.md` and `.impeccable/design.json` are reconciled.
+- Not re-measured: the production build's JavaScript size (all five rigs are bundled), live render-cost peaks, counted
+  GPU memory, throttled cold load, `neutral-room`'s CPU cost at stage creation, and the iPhone 17 Max session.
