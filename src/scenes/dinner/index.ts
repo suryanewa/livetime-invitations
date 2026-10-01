@@ -12,7 +12,10 @@ import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { smoothstep } from '../../motion/curves.ts';
-import { coverBlendSafe, DURATIONS, frameFor, newFrame, sampleSequence, type DinnerFrame } from './sequences.ts';
+import {
+  type AnswerChange, changeTime, coverBlendSafe, DURATIONS, frameFor, newFrame, planAnswerChange, sampleAnswerChange, sampleSequence,
+  type DinnerFrame,
+} from './sequences.ts';
 
 /**
  * Silhouette samples of every Dinner path: the plate, the cover along the host and accept paths
@@ -80,22 +83,45 @@ export class DinnerScene implements SceneInstance {
   /** v1.2 has no food: `dish` stays in SceneConfig for integration compatibility and selects nothing. */
   setConfig(_config: SceneConfig): void {}
 
+  /** What is showing: the last outcome sampled (or posed) and its time, for a change of mind. */
+  private shown: { seq: SequenceName; t: number; rate: number } | null = null;
+  /** The change of mind in progress: the next outcome's playback rewinds the old one first. */
+  private change: AnswerChange | null = null;
+  /** The director poses guest-ready between interruptCut and the new outcome's first sample. */
+  private changeArmed = false;
+
   pose(pose: CanonicalPose): void {
+    if (this.changeArmed) this.changeArmed = false;
+    else this.change = null;
+    this.shown = pose === 'accepted' ? { seq: 'accept', t: DURATIONS.accept, rate: 0 }
+      : pose === 'declined' ? { seq: 'decline', t: DURATIONS.decline, rate: 0 } : null;
     this.apply(frameFor(pose, this.frame));
   }
 
   sample(sequence: SequenceName, t: number): void {
-    this.apply(sampleSequence(sequence, t, this.frame));
+    this.changeArmed = false;
+    if (this.change && sequence !== this.change.next) this.change = null;
+    this.shown = { seq: sequence, t, rate: 1 };
+    this.apply(this.change ? sampleAnswerChange(this.change, t, this.frame) : sampleSequence(sequence, t, this.frame));
   }
 
   /**
-   * A cover lifted aside, or a dish on its way to the bin, would sweep through the plate rim
-   * or out of the bin on a straight blend: cut to the covered dish instead.
+   * A change of mind. A straight blend would sweep a lifted cover through the plate's rim, or a
+   * dish out through the bin, so the director is asked to cut, and the cut is never seen: the
+   * new outcome's playback first rewinds the outcome that was showing along its own path to the
+   * covered dish (`planAnswerChange`), starting exactly from the current frame.
    */
   interruptCut(): boolean {
-    const f = this.frame;
-    const coverAside = !coverBlendSafe(f);
-    return f.binVisible || !f.dishVisible || f.platePos.lengthSq() > 1e-6 || coverAside;
+    const s = this.shown;
+    if (!s || s.seq === 'host') {
+      const f = this.frame;
+      return f.binVisible || !f.dishVisible || f.platePos.lengthSq() > 1e-6 || !coverBlendSafe(f);
+    }
+    const [from, at, rate] = this.change && s.seq === this.change.next ? changeTime(this.change, s.t) : [s.seq, s.t, s.rate];
+    const next = s.seq === 'accept' ? 'decline' : 'accept';
+    this.change = planAnswerChange(from, at, rate, next);
+    this.changeArmed = true;
+    return true;
   }
 
   /** Low tier for the imported plate and cloche materials (the library handles the bin). */
