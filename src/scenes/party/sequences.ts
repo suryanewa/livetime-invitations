@@ -58,8 +58,8 @@ export function recordHeight(f: PartyFrame): number {
 /** Weighted lowering: unhurried start, controlled descent, soft set-down exactly at 0.75 s. */
 const LOWER = cubicBezier(0.42, 0, 0.22, 1);
 const TILT_OUT = cubicBezier(0.45, 0, 0.3, 1);
-/** The record is level by 0.44 s, still above LEVEL_BY (the spindle top plus a 5 cm margin). */
-const TILT_LEVEL_AT = 0.44;
+/** The record is level by 0.40 s, still above LEVEL_BY (the spindle top plus a 5 cm margin). */
+const TILT_LEVEL_AT = 0.4;
 /**
  * Seat-and-settle: contact at 0.75 s, then the record settles like a coin on a table: a small
  * tilt whose low side runs round the rim (precession, `hz` turns per second) while the tilt
@@ -67,24 +67,32 @@ const TILT_LEVEL_AT = 0.44;
  * point, so its centre rises by R·sin(tilt) and no point ever dips below the mat. Unlike a rock
  * between two edges, the contact point never jumps, so the motion is smooth (C¹) throughout.
  */
-export const SETTLE = { at: 0.75, amplitude: 0.011, hz: 3.2, tau: 0.09, rampIn: 0.05, end: 0.3, phase: 2.2 } as const;
+export const SETTLE = { at: 0.75, amplitude: 0.024, hz: 3.2, tau: 0.09, rampIn: 0.05, end: 0.3, phase: 2.2 } as const;
 /** Settle tilt magnitude (rad) at u seconds after contact: smooth in, decaying, exactly 0 at end. */
 export function settleTilt(u: number): number {
   if (u <= 0 || u >= SETTLE.end) return 0;
   return SETTLE.amplitude * smoothstep(seg(u, 0, SETTLE.rampIn)) * Math.exp(-u / SETTLE.tau) * (1 - smoothstep(seg(u, SETTLE.end * 0.55, SETTLE.end)));
 }
+/**
+ * Align (over the spindle, 0–ALIGN_END) and lower (LOWER_FROM–contact) overlap, so the hand never
+ * stops between them: the lower starts while the align is still easing out and the record keeps
+ * moving down through the hand-over (one gesture, not "line up, then set down"). Each part is an
+ * eased displacement with zero end speeds, so their sum is C¹, and both move the record down and
+ * level it, so height and tilt stay monotonic.
+ */
+export const HOST_PATH = { alignEnd: 0.22, lowerFrom: 0.12 } as const;
+const _alignStep = new Vector3();
 function host(t: number, out: PartyFrame): void {
   frameFor('guest-ready', out);
-  if (t < 0.2) {
-    // Align over the platter, label still presented.
-    const a = EASE.travel(seg(t, 0, 0.2));
-    out.recordPos.lerpVectors(HOVER.pos, ALIGNED.pos, a);
-    out.recordTilt = lerp(HOVER.tilt, ALIGNED.tilt, a);
-  } else if (t < SETTLE.at) {
-    // Lower onto the spindle: level and centred before the hole reaches the spindle top.
-    const s = LOWER(seg(t, 0.2, SETTLE.at));
-    out.recordPos.lerpVectors(ALIGNED.pos, SEATED, s);
-    out.recordTilt = lerp(ALIGNED.tilt, 0, TILT_OUT(seg(t, 0.2, TILT_LEVEL_AT)));
+  if (t < SETTLE.at) {
+    // Align over the platter (label still presented), blended into the lower onto the spindle:
+    // level and centred before the hole reaches the spindle top.
+    const a = EASE.travel(seg(t, 0, HOST_PATH.alignEnd));
+    const s = LOWER(seg(t, HOST_PATH.lowerFrom, SETTLE.at));
+    out.recordPos.copy(HOVER.pos)
+      .add(_alignStep.subVectors(ALIGNED.pos, HOVER.pos).multiplyScalar(a))
+      .add(_alignStep.subVectors(SEATED, ALIGNED.pos).multiplyScalar(s));
+    out.recordTilt = HOVER.tilt + (ALIGNED.tilt - HOVER.tilt) * a - ALIGNED.tilt * TILT_OUT(seg(t, HOST_PATH.lowerFrom, TILT_LEVEL_AT));
   } else {
     // Contact at 0.75 s (zero speed), the precessing settle, still by 1.05 s, then hold.
     out.recordPos.copy(SEATED);

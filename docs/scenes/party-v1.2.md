@@ -6,6 +6,12 @@ The architecture is the same as before: the contract is in `models/recordContrac
 `models/recordPlayer.ts`, and the choreography in `src/scenes/party/{poses,sequences,index}.ts`. The
 beats, durations (host 1.2 s, accept 1.6 s, decline 1.4 s), song line and metadata logic are unchanged.
 
+**v1.2.1 polish (judges' review).** Must-fix: the smoked cover no longer flashes pale cream mid-close, and its
+inside stays dark (Decisions: Lid look). Minor items done: the host's align and lower are one gesture, the settle is
+doubled, the spindle reads as turned steel, and the plinth is toned towards graphite. Kept, with reasons (Known
+gaps): the interruption blend (shared `visualDirector.ts`), the lid's proportions, the tonearm's size at stage
+scale and the label wedge.
+
 ## Decisions
 
 | Topic | Decision |
@@ -20,7 +26,10 @@ beats, durations (host 1.2 s, accept 1.6 s, decline 1.4 s), song line and metada
 | Parked arm | `TONEARM.parkedYaw` is +0.04 rad, 23.7° out from the cue (the first pass had −0.04, 19°). The headshell and cartridge park beside the platter: the nearest point of the pitching arm is 0.169 beyond the platter rim in plan, up from 0.115. From the 15° camera the headshell still meets the silver rim's front-right edge in projection, but by less. |
 | Dust cover hinge | The master `dust_cover` origin is on the hinge pins' axis (y −0.387, z −0.609 scan, checked against both `hinge_*_pin` boxes in the test), so it becomes `lid_hinge` unchanged. The master poses the lid open at −62.4° about +X, which is a 27.6° lean back from vertical. That angle is `LID.open`, and `LID.closed` is 0. |
 | Dust cover length | The master cover is a short display lid. Closed, it would stop 0.30 scan short of the plinth front, cut through the platter rim and the speed knob, and leave the counterweight poking through its top. `extendLid` (rig) lengthens it in place by piecewise translation: front +0.33, up +0.034, left +0.04, right +0.065 scan. The fillets, rim and tab keep their exact shape. The closed outer box is `LID_CLOSED_BOX`. |
-| Lid self-shadow | The lid shell does not receive shadows. Mid-close, the key light grazes its inside back wall, and the shadow of its own top panel there stair-stepped into a saw-tooth under the studio's 16 fixed PCF taps (a shared filter). The rig re-asserts `receiveShadow = false` per draw. The cover still casts. |
+| Lid self-shadow | The lid shell does not receive shadows. Mid-close, the key light grazes its inside back wall, and the shadow of its own top panel there stair-stepped into a saw-tooth under the studio's 16 fixed PCF taps (a shared filter). The rig re-asserts `receiveShadow = false` per draw (on both halves of the split shell). The cover still casts. The interior's own material and baked occlusion (next row) stand in for the lost self-shadow. |
+| Lid look (v1.2.1) | `splitLidInterior` (rig) splits the extended shell by face orientation: a triangle whose normal points towards the closed box's centre is inside. The inside becomes `lid_shell_inner` with `tt_lid_inner`: the lid colour × 0.7, no clearcoat, roughness 0.6, specular 0.5, and occlusion baked into vertex colours from 1.0 at the open rim to 0.6 under the top panel (depth^1.5). The outside keeps `tt_lid` as a satin coat: clearcoat 0.6 → 0.25, clearcoat roughness 0.08 → 0.5, roughness 0.3 → 0.55, specular 0.5 (`LID_LOOK`). Why: the cover's front wall (uppermost while open) meets the key's mirror direction at about 32° open, which the Beta(2, 4) close passes at its speed peak; the wall is flat, the camera orthographic and the key far, so every texel shared one half-vector and the whole wall flashed pale cream at once. Four coats were rendered side by side over decline frames 28–40 (the master's, 0.3/0.3, 0.25/0.5, 0.15/0.6); 0.25/0.5 is the lightest that keeps the wall dark bronze at the mirror angle while the closed cover keeps a visible sheen. |
+| Plinth tone (v1.2.1) | The brushed steel's base factor keeps 92 % of its luminance and 40 % of its chroma (`PLINTH_TONE` in the recipe: linear 0.202, 0.178, 0.153 → 0.174, 0.165, 0.156). Under the warm key and cream softbox the master's own factor read warm bronze against the master renders' dark graphite-taupe. Textures untouched. |
+| Spindle (v1.2.1) | The spindle gets its own clone of the chrome (`tt_spindle`): linear grey 0.42, roughness 0.24 (`SPINDLE_LOOK`). The mirror chrome (0.89, 0.07) reflected only the even cream softbox and read as a flat pale post on the label; the turned steel shades round the cylinder and catches the key down one side. |
 | Status | The master has no LED or lens. The start/stop key cap (`button_cap` → `player_status`) gets its own clone of the aluminium material and lights green (`#3BE08A`, emissive, frosted) from the playback beat. The v1.1 perforation row and status lens are dropped. |
 | Materials | Every master material keeps its look and is renamed `tt_*`. The metals (plinth, aluminium, chrome) get their own environment at 1.1 (metalness ≥ 0.5). The smoked lid plastic is opaque in the master and stays opaque. |
 | Label presets | The label presets are KHR_materials_variants: `paper` (the master's olive print, the file default, never selected by the app), `coral` and `cobalt`. `labelPrint()` reads each texel's ink weight from its luminance between the olive field and the ink, then substitutes the preset's field and ink pair in linear light. Anti-aliased edges keep their partial weight, and darker strokes keep their relative weight. Under the ink it paints the v1.1 label's bold quarter wedge (130°–220°, in the other preset's colour: navy `#1D3180` on coral, coral on cobalt) and its butter sliver (220°–232°), anti-aliased over one texel, on the side the master's bars and square leave clear; the master's rings and centre ring print over it. The inks are darker than the first pass (coral `#54160C`, cobalt `#060A28`): field-to-ink contrast ratio 5.2 and 3.0, up from 3.7 and 2.4; field to wedge 4.3 and 2.4, on top of the hue contrast. The vinyl's sheen is rotationally symmetric and the master's marks are small, so without the wedge the accept spin hardly read. This is deterministic, and the three prints are stored lossless. The master label UVs are a disc print that does not fit the library's `mat_label_*`, so variants were used instead of renaming. |
@@ -42,14 +51,15 @@ beats, durations (host 1.2 s, accept 1.6 s, decline 1.4 s), song line and metada
 
 ## Choreography: what changed and why
 
-- **Host: seat-and-settle.** In v1.1 the record rocked between two opposite edges, and the centre was lifted by R·|sin θ|. That has a velocity kink each time the contact point jumps edges. The record now settles like a coin. It touches down at 0.75 s with zero velocity. A small tilt vector then precesses at 3.2 turns/s while it decays (τ 0.09 s, windowed to exactly 0 at 1.05 s). The record turns about its lowest rim point, and its centre rises by R·sin(true tilt), so the edge rides exactly on the mat. The peak tilt is 0.0065 rad, a rim excursion of about 5 mm. This is C1 throughout.
+- **Host: one gesture (v1.2.1).** The align (0–0.22 s, over the spindle) and the lower (0.12 s to contact at 0.75 s) overlap: the record position is HOVER plus the eased align step plus the eased lower step, and the tilt likewise (level by 0.40 s, was 0.44, because the record now descends sooner). Both steps move the record down and level it, so height and tilt stay monotonic and the sum is C1. The record's speed no longer stops between them: its minimum across the hand-over is 13 % of the host's peak (was about 0), and the captured frame diff bottoms at 0.58 (frame 14) where it was 0.03. It reads as one hand setting the record down.
+- **Host: seat-and-settle.** In v1.1 the record rocked between two opposite edges, and the centre was lifted by R·|sin θ|. That has a velocity kink each time the contact point jumps edges. The record now settles like a coin. It touches down at 0.75 s with zero velocity. A small tilt vector then precesses at 3.2 turns/s while it decays (τ 0.09 s, windowed to exactly 0 at 1.05 s). The record turns about its lowest rim point, and its centre rises by R·sin(true tilt), so the edge rides exactly on the mat. v1.2.1 doubles it so it registers at stage size: amplitude 0.024 (was 0.011), peak tilt 0.0141 rad, a rim excursion of 10.8 mm in scene units (was 5 mm; about 2 mm on a real 12-inch record). Captured frame diff during the settle 0.22–0.26 (was 0.11–0.13). This is C1 throughout.
 - **Host: presentation tilt 0.65.** The record hovers tipped 0.65 rad towards the camera, not 0.9, so it reads black at host-ready and in the posters, and its shade changes smoothly as it aligns and lowers (see Decisions). Captured: the frame's dark-pixel count falls monotonically 33.5k → 25.5k over the align (the disc foreshortening), where the first pass jumped 11.5k → 23.3k → 30.1k in two frames; the largest frame-to-frame mean difference is 3.0 at the align's speed peak, a smooth bell, against 3.96 at the flip.
-- **Host: level earlier.** The presentation tilt is now zero by 0.44 s (was 0.48 s). The master's spindle is taller (0.079 vs 0.045), so the record has to be level higher up to clear `LEVEL_BY`.
+- **Host: level earlier.** The presentation tilt is now zero by 0.40 s (0.48 s in v1.1, 0.44 s in the first v1.2 pass). The master's spindle is taller (0.079 vs 0.045), so the record has to be level higher up to clear `LEVEL_BY`.
 - **Accept: gimballed cue.** The arm lifts off the rest (0–0.08 s) and swings to the lead-in groove (0.04–0.25 s) on the master bearing. The cue damper then lowers it (0.25–0.40 s) onto the already turning record. The counterweight pitches with it. The cue lever and lift platform follow the lift. During interruption blends the yaw-derived pitch ceiling lifts the stylus clear of the vinyl and the rest's prongs.
 - **Accept: belt drive.** The motor starts at 0.30 s. The platter follows through the elastic belt as a critically damped lag, ω = ω_ss·(1 − (1 + a·u)·e^(−a·u)) with a = 13.5/s, so it starts with zero angular acceleration and reaches 95 % of speed in about 0.35 s. The steady state is 33⅓ rpm × 2.19 (7.63 rad/s; a silent 1.6 s clip has to read as playing). It brakes along a smootherstep from 1.10 s to rest at 1.60 s, on the display angle (−(2π + 0.6)). The spin is the closed-form integral, so it is exact and monotonic. The record and platter share one angle. The label's wedge makes the turn visible: in the captures the navy (or coral) quarter sweeps round the label every frame, and the whole-frame mean difference during the spin is 0.03–0.04 grey levels, up from 0.01–0.02, all of it on the label.
 - **Decline: damped hinge.** The lid is released from the master's 27.6° lean as one continuous Beta(2, 4) CDF over 0.20–1.30 s: gravity start, a single speed peak, and the damper brakes it into contact at zero speed. It never passes closed.
 
-## Export report (`pnpm models party`, deterministic: two exports, same SHA-1 c9f6af8e…)
+## Export report (`pnpm models party`, deterministic: two exports, same SHA-1 9251469d…)
 
 ```
 triangles 97,948 · draw calls 28 (+ 1 shadow proxy, 368 tris, shadow pass only) · 60 nodes
@@ -63,7 +73,7 @@ Frame pacing in headless Chrome on this machine (1200×1000 at DPR 2, Normal tie
 
 ## Tests
 
-`tests/party.test.ts` (35 tests) covers:
+`tests/party.test.ts` (39 tests) covers:
 
 - canonical poses at the ends of every sequence;
 - 1 ms continuity;
@@ -71,7 +81,8 @@ Frame pacing in headless Chrome on this machine (1200×1000 at DPR 2, Normal tie
 - the status beat;
 - the presentation tilt below the key's specular lobe (`TILT_MAX_SHEEN`), only decreasing on the host path;
 - the record level and centred before the spindle, never below the mat, and the hole never binding;
-- the settle;
+- the host as one gesture (speed ≥ 10 % of its peak from 0.06 s to 0.45 s, across the hand-over);
+- the settle (rim excursion 8–15 mm);
 - spin monotonic, the belt lag and steady state;
 - the stylus on the groove;
 - the label prints (on a synthetic print through `labelPrint`): the wedge and sliver where they belong, the field half a turn away, and the wedge and ink contrast;
@@ -91,7 +102,8 @@ On the GLB geometry (`tests/partyGlb.ts` builds a three.js hierarchy from it) it
 - nothing on the arm except the stylus touching the vinyl;
 - motion bounds;
 - an interruption with the real nodes;
-- framing.
+- framing;
+- the lid look: the split loses no triangle and is idempotent, every inside triangle faces into the box and every outside one out, the inside is uncoated, darker and physical with its occlusion deepest under the top panel, and the outside carries the satin coat.
 
 `tests/browser/party.spec.ts` runs unchanged (9 tests pass).
 
@@ -99,7 +111,9 @@ On the GLB geometry (`tests/partyGlb.ts` builds a three.js hierarchy from it) it
 
 - **Interruption spin.** The visual director's blend slerps every animated node linearly, along the shortest path. An Accept→Decline change mid-spin therefore turns the record back by up to π in 150 ms, the arm whips back to its rest, and the velocity jumps at the blend's ends. This is shared behaviour (v1.1 did the same), in `src/core/visualDirector.ts`, which this pass may not edit.
 - **Shared docs.** `docs/asset-manifest.md`, `docs/style-reference.md`, `docs/qualification.md` and `docs/spec-revisions.md` are not updated here; they are shared files. The rows they need are this document's decisions and report.
-- **Lid self-shadow.** The lid shell does not receive shadows (see Decisions). Mid-close (decline frames 30–36) its inside back wall reads an even, light cream instead of falling into its own shadow, and a record hovering in front of the open lid casts no shadow onto its inside. The outer top face also turns from dark to key-lit over about two frames (decline frames 29–31, frame diff 4.0–4.2): that is its clearcoat swinging through the key's mirror angle at the hinge's speed peak. Receiving shadows again brings back the saw-tooth from the studio's shared PCF filter, so this stays as it is.
-- **Subtle settle.** The seat-and-settle peaks at about 5 mm of rim lift, so it barely shows at stage size (frame diff 0.11–0.13). It is kept small on purpose: a real record settles almost flat.
-- **Align-to-lower near-stop.** The host's align (0–0.20 s) and lower (0.20–0.75 s) meet at almost zero speed (frame diff 0.03 at 0.2 s). It is C1 by design and as in v1.1, so it reads as two moves: line up, then set down.
+- **Lid self-shadow.** The lid shell still does not receive shadows (see Decisions), so a record hovering in front of the open lid casts no shadow onto its inside. Since v1.2.1 the inside has its own dark material and baked occlusion, so it no longer reads as an even light cream mid-close, and the outside's satin coat removed the cream flash: decline frames 29–38 stay dark bronze, and the clip's largest frame-to-frame mean difference is 2.65 (frame 32), a flat plateau over the hinge's speed peak, where it was 4.21 with a second hump at frames 37–38. The sheen still brightens the front wall a little as it passes the mirror angle; that is the glint a real smoked cover shows.
+- **Subtle settle.** Even doubled, the seat-and-settle is about 2–3 px of rim lift at stage size (frame diff 0.22–0.26). It stays a settle on purpose: a real record settles almost flat.
 - **Smoked lid.** The master's smoked lid plastic is opaque (and v1.1's closed case was too), so the declined pose is a closed dark box.
+- **Lid proportions (judges, v1.2.1: kept).** The extended cover is taller and deeper than the master's short display lid, and closed it reads as a second box on the plinth. Without the extension the closed lid cuts through the platter rim, the speed knob and the counterweight (Decisions, Dust cover length), so the closed decline pose needs it.
+- **Tonearm at stage size (judges, v1.2.1: kept).** The gimballed cue (lift, swing, lower, counterweight pitch) is correct but small at stage size, and from the 15° camera the parked headshell still meets the platter's front-right rim in projection (0.169 clear in plan). Making it read larger means a different camera or a larger arm than the master's, both outside this pass.
+- **Label wedge (judges, v1.2.1: kept).** The coral/cobalt quarter wedge is a v1.1 graphic over the master's print. It stays: it is what makes the accept spin legible at stage size, and all three judges read the spin through it.

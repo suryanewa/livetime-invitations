@@ -46,7 +46,15 @@ import type { Quat, RawImage, SceneRecipe } from '../types.ts';
  *   vinyl's sheen is rotationally symmetric and the master's marks are small, so without the
  *   wedge the accept beat's 1.1-turn spin hardly read at stage size.
  * - Lid shadows (rig): the shell casts but does not receive (its own top panel stair-stepped on its
- *   inside back wall mid-close under the studio's fixed PCF taps).
+ *   inside back wall mid-close under the studio's fixed PCF taps). v1.2.1: the rig splits the shell
+ *   into outside and inside; the inside gets its own darker, uncoated material with baked
+ *   occlusion, and the outside a satin coat, so the cover stays dark smoked plastic through the
+ *   decline swing (no cream flash at the key's mirror angle). recordPlayer.ts, LID_LOOK.
+ * - Plinth tone (v1.2.1): the brushed steel's base factor keeps 92 % of its luminance and 40 % of
+ *   its chroma (PLINTH_TONE), so it reads as dark graphite-taupe metal in the warm studio, not
+ *   bronze. Its textures are untouched.
+ * - Spindle (rig, v1.2.1): its own darker turned-steel clone of the chrome (SPINDLE_LOOK); the
+ *   mirror chrome read as a flat pale post on the label.
  * - Framing (contract): silhouette frame points plus a 0.17 side margin, so the player fills the
  *   stage as v1.1 did (74.6 % of its width).
  * - Full write-up, measured contract and export report: docs/scenes/party-v1.2.md.
@@ -54,6 +62,20 @@ import type { Quat, RawImage, SceneRecipe } from '../types.ts';
  *   plinth's brushed normal exact; the three label prints exact lossless (flat print, crisp edges);
  *   the plinth ORM lossy q90 at source size (1024²).
  */
+
+/**
+ * The plinth's brushed steel, toned towards graphite: the master's factor (linear 0.202, 0.178,
+ * 0.153) keeps its luminance's 92 % and 40 % of its chroma. Under the studio's warm key and cream
+ * softbox the master's own value read warm bronze, against the dark graphite-taupe of the master's
+ * renders; this keeps it a dark brushed metal with a hint of warmth. Its ORM, normal and
+ * anisotropy are untouched.
+ */
+const PLINTH_TONE = ((): [number, number, number, number] => {
+  const c = [0.20155625378383743, 0.17788841597328695, 0.15292615198613213];
+  const l = 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
+  const [r, g, b] = c.map((x) => 0.92 * (l + 0.4 * (x - l)));
+  return [r!, g!, b!, 1];
+})();
 
 const yawQuat = (yaw: number): Quat => [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)];
 
@@ -136,7 +158,7 @@ export const recipe: SceneRecipe = {
       scale: TT_SCALE,
       align: { node: 'plinth', point: [0.5, 0, 0.5], to: fromMaster(0.0125, -0.66, 0.115).toArray() },
       materials: {
-        brushed_steel_plinth: { rename: 'tt_brushed_steel' },
+        brushed_steel_plinth: { rename: 'tt_brushed_steel', baseColorFactor: PLINTH_TONE },
         rubber_feet: { rename: 'tt_rubber_feet' },
         machined_aluminium: { rename: 'tt_aluminium' },
         black_anodised: { rename: 'tt_black_anodised' },
