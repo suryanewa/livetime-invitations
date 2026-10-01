@@ -1,12 +1,13 @@
-import { Box3, type Camera, type Object3D, Vector3, type WebGLRenderer } from 'three';
+import { Box3, type Camera, Euler, type Object3D, Vector3, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/dinner/dinner.glb?url';
 import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import {
-  COVER, COVER_BESIDE, COVER_POISED, COVER_SEATED, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
-  type DinnerRig, type DishPreset,
+  COVER, COVER_PROFILE, COVER_TOP, finishDish, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
+  type DinnerRig,
 } from '../../../models/dinner.ts';
 import { flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
+import { disposeImported, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
@@ -14,8 +15,9 @@ import { smoothstep } from '../../motion/curves.ts';
 import { coverBlendSafe, DURATIONS, frameFor, newFrame, sampleSequence, type DinnerFrame } from './sequences.ts';
 
 /**
- * Silhouette samples of every Dinner path: dish, poised and resting cover and the carry. The
- * scene adds the open bin from its geometry (openBinFramePoints).
+ * Silhouette samples of every Dinner path: the plate, the cover along the host and accept paths
+ * (its measured profile, tilted and placed exactly as rendered), the resting cover and the carry.
+ * The scene adds the open bin from its geometry (openBinFramePoints).
  */
 export function dinnerFramePoints(): Vector3[] {
   const pts: Vector3[] = [];
@@ -27,12 +29,25 @@ export function dinnerFramePoints(): Vector3[] {
   };
   ring(0, 0, PLATE.radius, 0);
   ring(0, 0, PLATE.radius, PLATE.rimHeight);
-  ring(0, 0, COVER.radius * 0.35, PLATE.well + COVER_TOP, 8);
-  ring(COVER_BESIDE.x, COVER_BESIDE.z, COVER.radius, 0);
-  ring(COVER_BESIDE.x, COVER_BESIDE.z, COVER.radius * 0.35, COVER_TOP, 8);
-  ring(COVER_POISED.x, COVER_POISED.z, COVER.radius, COVER_POISED.y);
-  ring(COVER_POISED.x, COVER_POISED.z, COVER.radius * 0.4, COVER_POISED.y + COVER_TOP, 8);
+  // The cover: rim, shoulder, crown and handle top, in cover space, at each sampled pose.
+  const shoulder = COVER_PROFILE[Math.floor(COVER_PROFILE.length / 2)]!;
+  const local: Vector3[] = [];
+  for (const [r, y, n] of [[COVER.radius, 0, 16], [shoulder[0], shoulder[1], 12], [COVER.radius * 0.35, COVER.domeHeight, 8], [COVER.radius * 0.25, COVER_TOP, 6]] as const) {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      local.push(new Vector3(Math.cos(a) * r, y, Math.sin(a) * r));
+    }
+  }
+  const e = new Euler();
+  const cover = (f: DinnerFrame) => {
+    e.set(f.coverTiltX, 0, f.coverTilt);
+    for (const p of local) pts.push(p.clone().applyEuler(e).add(f.coverPos));
+  };
   const f = newFrame();
+  for (const pose of ['host-ready', 'guest-ready', 'accepted'] as const) cover(frameFor(pose, f));
+  for (const seq of ['host', 'accept'] as const) {
+    for (let t = 0; t <= DURATIONS[seq] + 1e-9; t += 0.02) cover(sampleSequence(seq, t, f));
+  }
   for (let t = 0.25; t <= DURATIONS.decline; t += 0.025) {
     const p = sampleSequence('decline', t, f).platePos;
     ring(p.x, p.z, PLATE.radius, p.y, 12);
@@ -52,23 +67,18 @@ export class DinnerScene implements SceneInstance {
   readonly framePoints: Vector3[];
 
   private readonly frame = newFrame();
-  private preset: DishPreset;
 
-  constructor(readonly rig: DinnerRig, config: Extract<SceneConfig, { category: 'dinner' }>) {
+  constructor(readonly rig: DinnerRig, _config: Extract<SceneConfig, { category: 'dinner' }>) {
     this.root = rig.root;
     this.bounds = rig.bounds.clone();
-    this.preset = config.dish;
     const n = rig.nodes;
     this.animatedNodes = [n.plate_authored!, n.cover_authored!, n.bin_root!, rig.flapL, rig.flapR];
     this.framePoints = [...dinnerFramePoints(), ...openBinFramePoints(n.bin_root!, DINNER_BIN_POS, DINNER_BIN_YAW)];
     this.pose('guest-ready');
   }
 
-  setConfig(config: SceneConfig): void {
-    if (config.category !== 'dinner' || config.dish === this.preset) return;
-    this.preset = config.dish;
-    this.rig.setPreset(config.dish);
-  }
+  /** v1.2 has no food: `dish` stays in SceneConfig for integration compatibility and selects nothing. */
+  setConfig(_config: SceneConfig): void {}
 
   pose(pose: CanonicalPose): void {
     this.apply(frameFor(pose, this.frame));
@@ -88,19 +98,22 @@ export class DinnerScene implements SceneInstance {
     return f.binVisible || !f.dishVisible || f.platePos.lengthSq() > 1e-6 || coverAside;
   }
 
+  /** Low tier for the imported plate and cloche materials (the library handles the bin). */
+  setLowDetail(enabled: boolean): void {
+    setImportedLowDetail(this.root, enabled);
+  }
+
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
-    // Warm both foods and the bin (shown for the compile only).
+    // Warm the bin too (shown for the compile only).
     const scene = this.root.parent ?? this.root;
-    const n = this.rig.nodes;
-    n.bin_root!.visible = true;
-    n.food_pasta!.visible = n.food_vegetables!.visible = true;
+    this.rig.nodes.bin_root!.visible = true;
     await renderer.compileAsync(scene, camera);
-    this.rig.setPreset(this.preset);
     this.apply(this.frame);
   }
 
   dispose(): void {
     this.rig.dispose();
+    disposeImported(this.root);
     this.root.traverse((o) => (o as { geometry?: { dispose(): void } }).geometry?.dispose());
     this.root.removeFromParent();
   }
@@ -153,6 +166,11 @@ export const dinnerScene: SceneModule = {
     binRoot.removeFromParent();
     bindMaterialsByName(root, library);
     bindMaterialsByName(binRoot, library);
-    return new DinnerScene(rigDinner(root, binRoot, library, config.dish), config);
+    // The plate and cloche masters keep their own PBR materials: own environment for the
+    // silver and the gilt, the Low tier's registry (models/imported.ts). The dome's anisotropic
+    // finish replaces its material first, so the registry holds the material that is drawn.
+    finishDish(root);
+    prepareImported(root, library);
+    return new DinnerScene(rigDinner(root, binRoot, library), config);
   },
 };

@@ -101,7 +101,7 @@ const SUBJECTS: Subject[] = [
   },
   {
     key: 'dinner',
-    label: 'Dinner · accepted (cloche beside the uncovered pasta)',
+    label: 'Dinner · accepted (cloche beside the clean plate)',
     build(lib) {
       if (lib.direction.id !== 'L2') {
         const model = buildDishBlockout({ lib });

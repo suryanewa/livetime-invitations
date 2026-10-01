@@ -146,11 +146,12 @@ const SCENE_CAPTURE = {
     clips: { host: 1.5, accept: 2.0, decline: 1.9, change: 2.6 },
   },
   dinner: {
-    presets: [['pasta', '{ category: "dinner", dish: "pasta" }'], ['vegetables', '{ category: "dinner", dish: "vegetables" }']],
-    // Declined shows the closed bin and the cleared place, guest-ready the covered dish: both
-    // identical for either dish (verified byte-identical), so each is one shared poster.
+    // v1.2 has no food and no dish preset: one look, so one capture pass and one shared poster
+    // set (`shared-<pose>`, which posterUrl serves for either `dish` value) and no second-preset clips.
+    presets: [['shared', '{ category: "dinner", dish: "pasta" }']],
     sharedDeclined: true,
     sharedReady: true,
+    sharedAll: true,
     clips: { host: 1.5, accept: 1.8, decline: 1.8, change: 2.6 },
   },
 } as const;
@@ -217,7 +218,8 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
       await call(action);
       await tick(400);
       const poster = await still(720, 1, 'image/webp', 0.86);
-      const shared = (pose === 'declined' && plan.sharedDeclined) || (pose === 'guest-ready' && 'sharedReady' in plan && plan.sharedReady);
+      const shared =
+        ('sharedAll' in plan && plan.sharedAll) || (pose === 'declined' && plan.sharedDeclined) || (pose === 'guest-ready' && 'sharedReady' in plan && plan.sharedReady);
       const file = shared ? `shared-${pose}` : `${key}-${pose}`;
       await saveDataUrl(join(stagedPosters, `${file}.webp`), poster!);
       if (pose !== 'host-ready') {
@@ -259,12 +261,16 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
   await record('accept', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', plan.clips.accept);
   await record('decline', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("decline")', plan.clips.decline);
   await record('change', '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', plan.clips.change, [0.5, '(s) => s.controller.chooseResponse("decline")']);
-  // The second preset plays both outcomes too (dark card, cobalt label, cocoa, cream ball, vegetables).
-  const [secondKey, secondLiteral] = plan.presets[1];
-  await setPreset(secondLiteral);
-  await waitReady();
-  await record(`accept-${secondKey}`, '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', plan.clips.accept);
-  await record(`decline-${secondKey}`, '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("decline")', plan.clips.decline);
+  // The second preset plays both outcomes too (dark card, cobalt label, cocoa, cream ball);
+  // a one-look scene (Dinner v1.2) has none.
+  const second = (plan.presets as readonly (readonly [string, string])[])[1];
+  if (second) {
+    const [secondKey, secondLiteral] = second;
+    await setPreset(secondLiteral);
+    await waitReady();
+    await record(`accept-${secondKey}`, '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("accept")', plan.clips.accept);
+    await record(`decline-${secondKey}`, '(s) => s.controller.setMode("guest")', '(s) => s.controller.chooseResponse("decline")', plan.clips.decline);
+  }
 
   await browser.close();
   if (process.env.CAPTURE_STAGE_ONLY) {

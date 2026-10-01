@@ -50,9 +50,10 @@ test('opens with the live stage showing a default, scenes as columns and readabl
   // Pose-major: four pose rows, each with the five scenes in collection order.
   const rows = await page.locator('.g-row').evaluateAll((els) => els.map((r) => [...r.querySelectorAll<HTMLElement>('.g-cell')].map((c) => c.dataset.category).join(',')));
   expect(rows).toEqual(Array(4).fill('party,birthday,sports,dinner,business'));
-  // The preset switch swaps every column to its second preset.
+  await expect(page.locator('.g-head span')).toHaveText(['Coral label', 'Vanilla', 'Orange ball', 'Cloche and plate', 'Light card']);
+  // The preset switch swaps every column to its second preset (Dinner v1.2 has one look, no food).
   await page.getByRole('button', { name: 'Preset B' }).click();
-  await expect(page.locator('.g-head span')).toHaveText(['Cobalt label', 'Cocoa', 'Cream ball', 'Vegetables', 'Dark card']);
+  await expect(page.locator('.g-head span')).toHaveText(['Cobalt label', 'Cocoa', 'Cream ball', 'Cloche and plate', 'Dark card']);
   await cell(page, 'business', 'guest-ready').click();
   await expect(page.locator('#g-caption')).toHaveText('Business · Dark card · Guest ready');
 });

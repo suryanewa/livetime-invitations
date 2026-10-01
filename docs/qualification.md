@@ -94,6 +94,22 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 - Drawing buffer at the showcase stage (≈400 CSS px, DPR 1.5 → 600², MSAA 4×): ≈13 MiB. **Total ≈ 20 MiB** against the 48 MiB budget.
 - **Risk recorded:** at the master's 2.5 MP drawing-buffer ceiling, MSAA 4× alone would need ≈90 MiB. Embeds larger than ≈700 CSS px at DPR 1.5 should create the renderer without MSAA; this is a decision for Milestone 7 integration guidance.
 
+## v1.2 re-measure: Dinner on the scan-to-CAD masters (2026-10-01)
+
+**Budgets are waived for this pass** (owner's brief, `docs/new-models-brief.md`): these are the numbers that ship, not a pass/fail against the checkpoint 4 budgets below, which they supersede for Dinner. Desktop only; none of this is phone evidence.
+
+| Measure | Dinner v1.2 | v1.1 (checkpoint 4, for reference) |
+| --- | --- | --- |
+| Runtime GLB (`pnpm models dinner`, deterministic: two exports byte-identical) | `dinner.glb` 3412.5 KiB raw / 1753.5 KiB gz (gzip −9) | 841.3 KiB / 405.4 KiB |
+| Triangles (dish GLB, visible pass) | 146,944 (+ 5,277 in 2 shadow proxies, shadow pass only) | 27.3k guest-ready (lookdev, incl. shadow pass) |
+| Draw calls (dish GLB) | 6 (plate body, gilt band, dome, handle, joined bead/bands, finial) + 2 shadow proxies; the shared bin adds its own as in v1.1 | 20 |
+| Textures (dish GLB) | 1: the dome's 1024² roughness map (6 KiB WebP, 5.3 MiB as RGBA8 + mips if kept), freed at load by `finishDish` | — |
+| Frame cadence (`pnpm capture perf dinner`, M2 Pro, Chrome 153, 390×844 @3×, Normal tier, 908 frames) | p50 16.7 · p95 16.7 · p99 16.8 · max 16.8 ms · 0 over 50 ms (4× CPU simulation: p50 16.7 · p99 16.8 · max 16.8 · 0 over 50 ms, 906 frames) | p50 16.7 · p99 16.8 (905 frames) |
+| Unit tests / Dinner browser spec | `pnpm test` 158 / 158 (18 files) · `tests/browser/dinner.spec.ts` 5 / 5 and `gallery.spec.ts` 4 / 4 against the worktree's dev server | — |
+| Sequence lengths | unchanged: host 1.2 s, accept 1.5 s, decline 1.5 s | same |
+
+Captured with `pnpm capture dinner` (one shared poster set, `assets/scenes/dinner/posters/shared-*.webp`, 13.6–15.3 KB). Details: `docs/scenes/dinner-v1.2.md`.
+
 ## Checkpoint 5: qualification review and release (2026-09-30)
 
 Checkpoint 5 (Production Plan M7 and M8) was carried out by three fresh independent reviewers, each followed by a skeptic who tried to reproduce and refute every finding. As with checkpoint 4, their sign-offs are **pending Surya's confirmation**. None of this is phone evidence.

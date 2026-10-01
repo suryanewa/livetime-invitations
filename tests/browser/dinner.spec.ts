@@ -33,9 +33,12 @@ async function stillDiff(page: Page, a: string, b: string): Promise<number> {
   }, [a, b] as const);
 }
 
-test('Cover dish plays the host sequence and ends at guest-ready', async ({ page }) => {
+test('Cover dish plays the host sequence and ends at guest-ready; Dinner has no preset control', async ({ page }) => {
   await ready(page);
-  await expect(page.locator('[data-bind="preset-legend"]')).toHaveText('Dish');
+  // v1.2: the cloche and the clean plate, no food: no Dish control in the host panel.
+  await expect(page.locator('[data-bind="preset-legend"]')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Pasta' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Vegetables' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Cover dish' }).click();
   await expect.poll(async () => (await state(page)).visual).toBe('host-playing');
   await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('guest-ready');
@@ -52,7 +55,7 @@ test('Accept reveals the dish; Decline bins the covered dish; one request each',
   await expect.poll(async () => (await state(page)).response.persistence).toBe('saved');
 });
 
-test('Replay after decline restores plate, food, cover and bin, and ends on the canonical pose', async ({ page }) => {
+test('Replay after decline restores plate, cover and bin, and ends on the canonical pose', async ({ page }) => {
   await ready(page);
   await page.getByRole('button', { name: 'Guest', exact: true }).click();
   await page.getByRole('button', { name: 'Decline' }).click();
@@ -71,13 +74,14 @@ test('Replay after decline restores plate, food, cover and bin, and ends on the 
   expect(await requests(page)).toBe(1);
 });
 
-test('Vegetables preset and a saved accept show the static state without a new request', async ({ page }) => {
+test('A saved accept shows the static state without a new request; the dish config selects nothing', async ({ page }) => {
   await ready(page, '/?scene=dinner&saved=accept');
   expect((await state(page)).visual).toBe('accepted-pose');
-  await page.getByRole('button', { name: 'Host', exact: true }).click();
-  await page.getByRole('button', { name: 'Vegetables' }).click();
-  await expect(page.getByRole('button', { name: 'Vegetables' })).toHaveAttribute('aria-pressed', 'true');
+  // `dish` stays in SceneConfig for integration compatibility; changing it changes nothing.
+  await page.evaluate(() => (window as any).__showcase.setConfig({ category: 'dinner', dish: 'vegetables' }));
   await page.waitForTimeout(300);
+  await page.getByRole('button', { name: 'Host', exact: true }).click();
+  await expect(page.locator('[data-bind="presets"] button')).toHaveCount(0);
   expect(await requests(page)).toBe(0);
 });
 

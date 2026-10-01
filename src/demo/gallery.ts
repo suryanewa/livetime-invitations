@@ -3,7 +3,7 @@ import './study.css';
 import { createInvitation, type InvitationHandle, type SceneRegistry } from '../core/controller.ts';
 import { presetOf } from '../core/config.ts';
 import type { CanonicalPose, Category, Mode, ResourceState, SceneConfig } from '../core/types.ts';
-import { CATEGORY_LABEL, OBJECT_LABEL, POSE_TEXT, PRESETS } from './fixtures.ts';
+import { CATEGORY_LABEL, OBJECT_LABEL, POSE_TEXT, presetAt } from './fixtures.ts';
 import { posterUrl } from './posters.ts';
 
 /**
@@ -28,7 +28,7 @@ const POSES: { pose: CanonicalPose; label: string; hint: string }[] = [
   { pose: 'accepted', label: 'Accepted', hint: 'plays the accept' },
   { pose: 'declined', label: 'Declined', hint: 'plays the decline' },
 ];
-/** Preset sets: A shows every scene's first curated preset, B its second. */
+/** Preset sets: A shows every scene's first curated preset, B its second (Dinner has one look, shown in both). */
 const SETS = ['A', 'B'];
 /** A scene that had to load first plays this long after it is ready, once its canvas has faded in. */
 const AFTER_READY_MS = 300;
@@ -71,7 +71,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 
 const settled = (state: ResourceState) => state === 'ready' || state === 'fallback';
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const presetFor = (p: Pick) => PRESETS[p.category][p.set]!;
+const presetFor = (p: Pick) => presetAt(p.category, p.set);
 const poseLabel = (pose: CanonicalPose) => POSES.find((p) => p.pose === pose)!.label;
 
 function mount(config: SceneConfig, mode: Mode): InvitationHandle {
@@ -177,7 +177,7 @@ function renderMatrix() {
     ...ORDER.map((category) => {
       const head = document.createElement('div');
       head.className = 'g-head';
-      const { label } = PRESETS[category][set]!;
+      const { label } = presetAt(category, set);
       head.innerHTML = `<b>${CATEGORY_LABEL[category]}</b><span>${label}</span>`;
       head.title = `${OBJECT_LABEL[category]} · ${label}`;
       return head;
@@ -190,7 +190,7 @@ function renderMatrix() {
       row.setAttribute('aria-labelledby', `g-row-${pose}`);
       row.innerHTML = `<h2 class="g-row__label" id="g-row-${pose}">${label} <span>${hint}</span></h2>`;
       for (const category of ORDER) {
-        const preset = PRESETS[category][set]!;
+        const preset = presetAt(category, set);
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'g-cell';
