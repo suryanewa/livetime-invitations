@@ -178,7 +178,7 @@ export function netInnerRadius(t: number, ux: number, uz: number, pose: NetPose)
 export const RIM_HINGE = new Vector3(0, 1.53, -0.0071);
 export const BOARD_PIVOT = new Vector3(0, 2.0847, -0.1249);
 /** Recoil limits (degrees). */
-export const RECOIL_LIMIT = { rimDeg: 1.5, boardDeg: 0.4 } as const;
+export const RECOIL_LIMIT = { rimDeg: 3, boardDeg: 0.8 } as const;
 
 const _q = new Vector3();
 /**

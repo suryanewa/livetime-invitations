@@ -22,13 +22,13 @@ import type { CanonicalPose, SequenceName } from '../../core/types.ts';
  *   orientation the master's seam cross was fitted to (`GUEST_TURN`).
  * - The gathers (host pass and both shots) rise into their release with exactly the flight's
  *   launch velocity (C1 release).
- * - Contacts with the floor squash the ball (volume-preserving, ≤ 8 %, along the floor normal)
+ * - Contacts with the floor squash the ball (volume-preserving, ≤ 10 %, along the floor normal)
  *   and hold it on the floor for a few milliseconds while it compresses (`squash`, `ballDrop`
  *   on `ball_secondary`); the authored centre path is untouched.
  * - The made shot drives a ball-following net bulge (`NetPose`: the rows round the ball open
  *   just enough to clear it, the net stretches while the ball drags it, and once the ball's top
- *   has left the bottom it rebounds and settles) and a small damped recoil of the rim on its
- *   bracket hinge (≤ 1.2°) and of the board on its arm (≤ 0.3°), zero again 0.6 s after contact.
+ *   has left the bottom it rebounds and settles) and a damped recoil of the rim on its bracket
+ *   hinge (peak 2.5°) and of the board on its arm (peak 0.6°), zero again 0.6 s after contact.
  */
 
 export const DURATIONS = { host: 1.2, accept: 1.7, decline: 1.6 } as const;
@@ -426,7 +426,7 @@ const SPINS: Record<SequenceName, Spin[]> = {
  * compresses (CONTACT_HOLD) the drawn ball stays on the floor, then rejoins the authored path
  * with zero relative speed, so the bounce reads as a contact rather than a reflection.
  */
-export const SQUASH = { max: 0.08, refSpeed: 6.5, hz: 11, zeta: 0.5, end: 0.32 } as const;
+export const SQUASH = { max: 0.1, refSpeed: 6.5, hz: 11, zeta: 0.5, end: 0.32 } as const;
 const SQ_W = 2 * Math.PI * SQUASH.hz;
 const SQ_WD = SQ_W * Math.sqrt(1 - SQUASH.zeta * SQUASH.zeta);
 const SQ_PEAK_AT = Math.atan(SQ_WD / (SQUASH.zeta * SQ_W)) / SQ_WD;
@@ -473,9 +473,11 @@ function contact(seq: SequenceName, t: number, out: SportsFrame): void {
 export const HOOP_SETTLED = 0.6;
 /** Rim and board recoil: peak pitch (rad), frequency and damping of each spring. */
 export const RECOIL = {
-  // Firmly damped: tipping back past rest would close the bracket plate's 1.5 mm gap to the board.
-  rim: { peak: (1.2 * Math.PI) / 180, hz: 5, zeta: 0.45 },
-  board: { peak: (0.3 * Math.PI) / 180, hz: 3.5, zeta: 0.3 },
+  // Sized to read at stage size (a 390 px stage). The rim is firmly damped: its back-swing past
+  // rest (−0.29°) must not close the bracket plate's 1.5 mm gap to the board (it moves the
+  // plate's top 1.1 mm).
+  rim: { peak: (2.5 * Math.PI) / 180, hz: 4.5, zeta: 0.55 },
+  board: { peak: (0.6 * Math.PI) / 180, hz: 3.5, zeta: 0.3 },
 } as const;
 /** Unit step response of a damped spring (x(0) = 0, x′(0) = 0: C1 at the onset). */
 function stepResponse(u: number, hz: number, zeta: number): number {

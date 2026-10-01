@@ -319,7 +319,7 @@ describe('Sports v1.2 spin, squash and hoop recoil', () => {
   });
 
   it('squash is bounded, volume-preserving and along the floor normal; the drawn ball never enters the floor', () => {
-    expect(SQUASH.max).toBeLessThanOrEqual(0.08);
+    expect(SQUASH.max).toBeLessThanOrEqual(0.1);
     for (const seq of ['host', 'accept', 'decline'] as const) {
       expect(IMPACTS[seq].length).toBe(2);
       let peak = 0, prev = at(seq, 0);
@@ -332,7 +332,7 @@ describe('Sports v1.2 spin, squash and hoop recoil', () => {
         expect(sh * sh * sv).toBeCloseTo(1, 12);
         expect(f.ballPos.y + f.ballDrop - BALL_R * sv).toBeGreaterThanOrEqual(-1e-9);
         // No pops: the squash and the drawn centre (authored path + contact hold) change smoothly.
-        expect(Math.abs(f.squash - prev.squash)).toBeLessThan(0.012);
+        expect(Math.abs(f.squash - prev.squash)).toBeLessThan(0.015);
         expect(Math.abs(f.ballPos.y + f.ballDrop - prev.ballPos.y - prev.ballDrop)).toBeLessThan(0.02);
         prev = f;
       }
@@ -340,7 +340,7 @@ describe('Sports v1.2 spin, squash and hoop recoil', () => {
     }
   });
 
-  it('rim and board recoil: tiny, bounded, C1 and back to exactly zero (no clip into the board)', () => {
+  it('rim and board recoil: visible, bounded, C1 and back to exactly zero (no clip into the board)', () => {
     const max = { rim: 0, board: 0, rimMin: 0 };
     let prev = at('accept', CONTACT_AT - H), prevRate = 0;
     for (let i = Math.round(CONTACT_AT * 1000); i <= Math.round((CONTACT_AT + HOOP_SETTLED) * 1000) + 5; i++) {
@@ -349,18 +349,19 @@ describe('Sports v1.2 spin, squash and hoop recoil', () => {
       max.rimMin = Math.min(max.rimMin, f.rimPitch);
       max.board = Math.max(max.board, Math.abs(f.boardPitch));
       const rate = (f.rimPitch - prev.rimPitch) / H;
-      expect(Math.abs(rate - prevRate), `rim rate jump at ${i} ms`).toBeLessThan(0.02);
+      expect(Math.abs(rate - prevRate), `rim rate jump at ${i} ms`).toBeLessThan(0.04);
       prevRate = rate;
       prev = f;
     }
     const deg = 180 / Math.PI;
     expect(max.rim * deg).toBeLessThanOrEqual(RECOIL_LIMIT.rimDeg);
-    expect(max.rim * deg).toBeGreaterThan(0.5);
+    expect(max.rim * deg).toBeGreaterThan(2);
     expect(max.board * deg).toBeLessThanOrEqual(RECOIL_LIMIT.boardDeg);
-    expect(max.board * deg).toBeGreaterThan(0.1);
+    expect(max.board * deg).toBeGreaterThan(0.45);
     // Tipping back past rest would push the plate's top edge into the board face (1.5 mm gap).
     const plateHeight = RIM_BRACKET.max.y - RIM_HINGE.y;
-    expect(-max.rimMin * plateHeight).toBeLessThan(0.0015);
+    expect(max.rimMin * deg).toBeGreaterThanOrEqual(-0.5);
+    expect(Math.sin(-max.rimMin) * plateHeight).toBeLessThan(0.0015);
   });
 });
 
