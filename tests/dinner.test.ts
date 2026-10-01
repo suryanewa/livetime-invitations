@@ -160,7 +160,6 @@ describe('Dinner choreography', () => {
     // neighbours do not share (smooth acceleration changes every step alike). Allowed: the height
     // kinks only where the rim rock passes level (it switches the rim it rocks on: a rigid contact).
     const h = 0.001;
-    const kink = (prev: number, cur: number, next: number) => Math.abs(cur - prev) > 0.01 + 4 * Math.max(Math.abs(prev - (2 * prev - cur)), Math.abs(next - cur), 1e-9) && Math.abs(cur - prev) > 4 * Math.abs(next - cur);
     for (const seq of ['host', 'accept'] as const) {
       const vel = (t: number) => {
         const a = at(seq, t), b = at(seq, t + h);
@@ -178,7 +177,6 @@ describe('Dinner choreography', () => {
         }
       }
     }
-    void kink;
   });
 
   it('covering and uncovering never pass the cover through the plate or the table (real master geometry)', () => {

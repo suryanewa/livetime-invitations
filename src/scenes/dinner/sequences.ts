@@ -58,7 +58,6 @@ export const COVER_DIR = new Vector3(COVER_SEATED.x - COVER_POISED.x, 0, COVER_S
 
 const euler = new Euler();
 const rk = new Vector3();
-const pivot = new Vector3();
 /**
  * Cover pose from its untilted path point `base` (where cover_authored would be, level), a lean θ
  * about up × dir (θ > 0 dips the rim on the +dir side) and a pivot `k` in cover space: the pivot
