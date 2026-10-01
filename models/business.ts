@@ -1,0 +1,309 @@
+import {
+  type Box3,
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  type Material,
+  type Mesh,
+  MeshStandardMaterial,
+  type Object3D,
+  PointLight,
+  Vector3,
+} from 'three';
+import { ContactShadow } from '../src/render/contactShadow.ts';
+import { group, mesh } from './geometry.ts';
+import type { MaterialVariants } from './imported.ts';
+import { LanyardStrand } from './lanyard.ts';
+import {
+  BUSINESS_BOUNDS, BUSINESS_NODES, CARD, CARD_OFFSET_Y, D_RING, FACE, HANG_PIVOT, LANYARD_SPREAD, LANYARD_TOP_Y, READER, SCANNER_POS, STRAP,
+  STRAP_TAB_TOP, type CardTemplate,
+} from './businessContract.ts';
+import { collectNodes, type ModelContext } from './types.ts';
+
+export * from './businessContract.ts';
+
+/**
+ * Business v1.2 on the scan-to-CAD masters.
+ *
+ * `buildBusinessFrame` is the recipe's builder (scripts/masters/recipes/business.ts): only the
+ * scene's empty contract nodes. Everything visible comes from the badge and reader masters.
+ * `rigBusiness` is the runtime rig over the loaded GLB: the runtime strap (the master's woven
+ * strap material on the existing curve rig, plus a sewn tab folded round the D-ring's bar), the
+ * reader's LED status light and its spill, the gasket press, contact shadows and the dark
+ * template (KHR_materials_variants).
+ */
+
+export type StatusLit = 'off' | 'accept' | 'decline';
+
+/** What the Business scene drives: the master rig here, or the v1.1 keycard rig (lookdev). */
+export interface BusinessRig {
+  root: Object3D;
+  nodes: Record<string, Object3D>;
+  shadows: ContactShadow[];
+  bounds: Box3;
+  /** Hinged hook gate (rotation about x), or null. */
+  gate: Object3D | null;
+  /** Recompute strap curves from the anchor and the clip's current world transform. */
+  updateLanyard(): void;
+  setTemplate(template: CardTemplate): void;
+  /** Status light: which colour, and how far up its short rise it is (0–1). */
+  setStatus(lit: StatusLit, level: number): void;
+  /** Scan press: how far the glass gives (stage units, ≥ 0). */
+  setPress(depth: number): void;
+  dispose(): void;
+}
+
+/** Recipe builder: the scene's empty contract nodes (the masters provide every mesh). */
+export function buildBusinessFrame(_ctx: ModelContext): Object3D {
+  const root = group('business_root');
+  group('card_authored', root).position.copy(HANG_PIVOT);
+  group('lanyard_anchor', root).position.set(HANG_PIVOT.x, LANYARD_TOP_Y, HANG_PIVOT.z);
+  group('lanyard_curve', root);
+  group('scanner_root', root).position.copy(SCANNER_POS);
+  group('card_shadow', root).position.set(HANG_PIVOT.x, 0.002, HANG_PIVOT.z);
+  group('scanner_shadow', root).position.set(SCANNER_POS.x + 0.04, 0.002, SCANNER_POS.z - 0.02);
+  return root;
+}
+
+/**
+ * Status light (premium, no bloom, Master §5): the LED bar glows by emission in the status
+ * token, its halo (the master's led_glow quad) fades in over it and the spill light tints the
+ * card. Green sits brighter than red, so the two differ in value as well as hue.
+ */
+export const STATUS_COLOURS = { accept: '#3BE08A', decline: '#E53E3E' } as const;
+export const GLOW = {
+  /** LED bar emissive intensity per status (below tone-mapping compression). */
+  led: { accept: 1, decline: 0.85 },
+  /** Halo opacity and emissive intensity. */
+  halo: { opacity: 0.9, intensity: 0.75 },
+  /** Spill light intensity (tints the card at the scan beat without washing its print). */
+  spill: 0.35,
+} as const;
+/** Spill light offset along the reading-face normal from the LED: no hotspot on the glass. */
+export const STATUS_SPILL_LIFT = 0.6;
+/** Idle LED lens (off): a neutral dark, not the master's green tint, so idle never reads as "accepted". */
+const LED_OFF = new Color(0.018, 0.02, 0.019);
+
+/**
+ * Sewn strap tab: the master strap folded round the D-ring's top bar, both layers sewn together
+ * up to STRAP_TAB_TOP (the master's bar-tack stitching sits on it). Clip space, box section.
+ */
+export function strapTabGeometry(): BufferGeometry {
+  const { width, thickness, weaveTile } = STRAP;
+  const layer = 0.0045 * (CARD.width / 0.744); // layer centre off the mid-plane (scan 0.003)
+  const bar = D_RING.topY, r = D_RING.wire + thickness / 2;
+  // Centreline in (y, z): front layer down, over the bar top, back layer up.
+  const pts: [number, number][] = [];
+  const leg = (s: number, side: number): [number, number] => [STRAP_TAB_TOP + (bar - STRAP_TAB_TOP) * s, side * (layer + (r - layer) * s * s * (3 - 2 * s))];
+  for (let i = 0; i <= 8; i++) pts.push(leg(i / 8, 1));
+  for (let i = 1; i < 16; i++) {
+    const a = (i / 16) * Math.PI;
+    pts.push([bar + Math.sin(a) * r, Math.cos(a) * r]);
+  }
+  for (let i = 8; i >= 0; i--) pts.push(leg(i / 8, -1));
+  const n = pts.length;
+  // Four faces (outer, edge +x, inner, edge −x), each with its own vertices for crisp normals.
+  const pos: number[] = [], nor: number[] = [], uv: number[] = [], idx: number[] = [];
+  let len = 0;
+  const lens = pts.map((p, i) => (i ? (len += Math.hypot(p[0] - pts[i - 1]![0], p[1] - pts[i - 1]![1])) : 0));
+  const tangent = (i: number) => {
+    const a = pts[Math.max(0, i - 1)]!, b = pts[Math.min(n - 1, i + 1)]!;
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return [(b[0] - a[0]) / l, (b[1] - a[1]) / l] as const;
+  };
+  const hw = width / 2, ht = thickness / 2;
+  // Face definitions: [offset along x, offset along section normal, normal x, normal along section normal]
+  const faces: [[number, number], [number, number], [number, number]][] = [
+    [[-hw, ht], [hw, ht], [0, 1]],
+    [[hw, ht], [hw, -ht], [1, 0]],
+    [[hw, -ht], [-hw, -ht], [0, -1]],
+    [[-hw, -ht], [-hw, ht], [-1, 0]],
+  ];
+  for (const [a, b, [nx, nn]] of faces) {
+    const base = pos.length / 3;
+    for (let i = 0; i < n; i++) {
+      const [ty, tz] = tangent(i);
+      // Section normal: the tangent turned 90° in the y–z plane (points out of the fold).
+      const sy = -tz, sz = ty;
+      for (const [ox, on] of [a, b]) {
+        pos.push(ox, pts[i]![0] + sy * on, pts[i]![1] + sz * on);
+        const ny = sy * nn, nz = sz * nn;
+        const l = Math.hypot(nx, ny, nz) || 1;
+        nor.push(nx / l, ny / l, nz / l);
+        uv.push((ox / width + 0.5) * (width / weaveTile), lens[i]! / weaveTile);
+      }
+    }
+    for (let i = 0; i < n - 1; i++) {
+      const k = base + i * 2;
+      idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('normal', new BufferAttribute(new Float32Array(nor), 3));
+  g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2));
+  g.setIndex(idx);
+  return g;
+}
+
+/** Strap layers leave the sewn tab at these clip-space z offsets (front, back). */
+const LAYER_Z = 0.0045 * (CARD.width / 0.744);
+
+function meshesUnder(o: Object3D): Mesh[] {
+  const out: Mesh[] = [];
+  o.traverse((c) => {
+    if ((c as Mesh).isMesh) out.push(c as Mesh);
+  });
+  return out;
+}
+
+/**
+ * Runtime rig over the loaded GLB. `variants`: the GLB's templates (KHR_materials_variants:
+ * light = the master's print, dark = the generated ink print).
+ */
+export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: CardTemplate = 'light', variants?: MaterialVariants): BusinessRig {
+  const dir = lib.direction;
+  const nodes = collectNodes(root, BUSINESS_NODES);
+  const authored = nodes.card_authored!;
+  const anchor = nodes.lanyard_anchor!;
+
+  // ── Strap: the master's woven strap material, carried in the GLB on a decimated stub ──
+  const carrier = meshesUnder(nodes.strap_material!)[0];
+  const fabric = (carrier?.material as Material | undefined) ?? lib.get('mat_fabric');
+  for (const m of meshesUnder(nodes.strap_material!)) m.geometry.dispose();
+  nodes.strap_material!.removeFromParent();
+  const tab = mesh('strap_tab', strapTabGeometry(), fabric, authored);
+  tab.castShadow = true;
+  const strandLength = LANYARD_TOP_Y - (HANG_PIVOT.y + STRAP_TAB_TOP) + 0.02;
+  const strands: [LanyardStrand, LanyardStrand] = [
+    new LanyardStrand(strandLength, STRAP.width, STRAP.thickness, STRAP.weaveTile),
+    new LanyardStrand(strandLength, STRAP.width, STRAP.thickness, STRAP.weaveTile),
+  ];
+  strands.forEach((s, i) => (mesh(`lanyard_strand_${i}`, s.geometry, fabric, nodes.lanyard_curve).frustumCulled = false));
+  const facing = new Vector3(0, 0, 1);
+  const top = new Vector3(), attach = new Vector3(), up = new Vector3();
+  const updateLanyard = () => {
+    root.updateMatrixWorld(true);
+    up.set(0, 1, 0).transformDirection(authored.matrixWorld);
+    strands.forEach((s, i) => {
+      const side = i === 0 ? -1 : 1;
+      top.set(anchor.position.x + side * LANYARD_SPREAD, anchor.position.y, anchor.position.z);
+      attach.set(0, STRAP_TAB_TOP, side * LAYER_Z);
+      authored.localToWorld(attach);
+      root.worldToLocal(attach);
+      s.update(top, attach, facing, up);
+    });
+  };
+
+  // ── Status light: the LED bar, its halo quad and a spill light ──
+  const ledMesh = meshesUnder(nodes.scanner_light!)[0]!;
+  const led = (ledMesh.material as MeshStandardMaterial).clone();
+  led.name = 'reader_led_status';
+  led.color.copy(LED_OFF);
+  led.emissiveMap = null; // the master's map is a green-tinted mask; the status sets the colour
+  led.emissive.set('#000000');
+  led.emissiveIntensity = 0;
+  ledMesh.material = led;
+  const haloMesh = meshesUnder(nodes.scanner_glow!)[0]!;
+  const halo = (haloMesh.material as MeshStandardMaterial).clone();
+  halo.name = 'reader_led_halo';
+  // Base colour black (texture rgb ignored), shape from the texture's alpha, colour by emission.
+  halo.color.set('#000000');
+  halo.emissiveMap = null;
+  halo.emissive.set('#000000');
+  halo.emissiveIntensity = 0;
+  halo.transparent = true;
+  halo.depthWrite = false;
+  halo.opacity = 0;
+  haloMesh.material = halo;
+  haloMesh.renderOrder = 1;
+  haloMesh.userData.noShadowCast = true;
+  ledMesh.userData.noShadowCast = true;
+  const spill = new PointLight('#ffffff', 0, 1.3, 2);
+  spill.name = 'scanner_spill';
+  spill.position.copy(FACE.led).add(new Vector3(0, 0, STATUS_SPILL_LIFT));
+  nodes.scanner_face!.add(spill);
+  let lastStatus: StatusLit | null = null, lastLevel = -1;
+  const setStatus = (lit: StatusLit, level: number) => {
+    const k = lit === 'off' ? 0 : Math.min(1, Math.max(0, level));
+    if (lit === lastStatus && k === lastLevel) return;
+    lastStatus = lit;
+    lastLevel = k;
+    if (lit === 'off' || k === 0) {
+      led.emissive.set('#000000');
+      led.emissiveIntensity = 0;
+      halo.emissive.set('#000000');
+      halo.emissiveIntensity = 0;
+      halo.opacity = 0;
+      spill.intensity = 0;
+      return;
+    }
+    const colour = STATUS_COLOURS[lit];
+    led.emissive.set(colour);
+    led.emissiveIntensity = GLOW.led[lit] * k;
+    halo.emissive.set(colour);
+    halo.emissiveIntensity = GLOW.halo.intensity * GLOW.led[lit];
+    halo.opacity = GLOW.halo.opacity * k;
+    spill.color.set(colour);
+    spill.intensity = GLOW.spill * k;
+  };
+
+  // ── Gasket press: the glass and what is printed on it give; the gasket under it compresses ──
+  const pad = nodes.scanner_pad!, gasket = nodes.scanner_gasket!;
+  const padRest = pad.position.clone();
+  const gasketDepth = FACE.gasketFront - FACE.gasketBack;
+  const setPress = (depth: number) => {
+    const d = Math.max(0, depth);
+    pad.position.copy(padRest);
+    pad.position.z -= d; // scanner_face space: +z is the glass normal
+    gasket.scale.set(1, 1, Math.max(0.05, 1 - d / gasketDepth));
+  };
+
+  // ── Contact shadows (blobs under the card and the reader) ──
+  const replaceShadow = (name: string, shadow: ContactShadow) => {
+    const placeholder = root.getObjectByName(name)!;
+    shadow.position.copy(placeholder.position);
+    placeholder.parent!.add(shadow);
+    placeholder.removeFromParent();
+    return shadow;
+  };
+  const cardShadow = replaceShadow('card_shadow', new ContactShadow({
+    name: 'card_shadow', shape: 'rect', width: CARD.width, depth: 0.1, spread: [1.1, 3],
+    opacity: dir.shadow.opacity * 0.7, line: 0, color: dir.shadow.color,
+  }));
+  const scannerShadow = replaceShadow('scanner_shadow', new ContactShadow({
+    name: 'scanner_shadow', shape: 'rect', width: READER.width, depth: READER.front - READER.back, spread: [1.08, 1.3],
+    opacity: dir.shadow.opacity, line: 0.5, color: dir.shadow.color,
+  }));
+  cardShadow.setHeight(HANG_PIVOT.y + CARD_OFFSET_Y - CARD.height / 2, 0.9);
+  nodes.card_shadow = cardShadow;
+  nodes.scanner_shadow = scannerShadow;
+
+  const setTemplate = (next: CardTemplate) => {
+    if (variants?.names.includes(next)) variants.select(next);
+  };
+  setTemplate(template);
+  setStatus('off', 0);
+  updateLanyard();
+
+  return {
+    root,
+    nodes,
+    shadows: [cardShadow, scannerShadow],
+    bounds: BUSINESS_BOUNDS.clone(),
+    gate: nodes.clip_gate!,
+    updateLanyard,
+    setTemplate,
+    setStatus,
+    setPress,
+    dispose() {
+      strands.forEach((s) => s.dispose());
+      tab.geometry.dispose();
+      cardShadow.dispose();
+      scannerShadow.dispose();
+      led.dispose();
+      halo.dispose();
+      spill.removeFromParent();
+    },
+  };
+}
