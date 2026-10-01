@@ -2,7 +2,7 @@ import { Box3, type Camera, type Object3D, Quaternion, Vector3, type WebGLRender
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/party/party.glb?url';
 import {
-  armPoint, LID, LID_CLOSED_BOX, PLATTER, PLATTER_TOP, PLAYER, RECORD, rigRecordPlayer, setStatusLit, TONEARM, type RecordLabel, type RecordPlayerRig,
+  armPoint, FRAME_MARGIN_X, LID, LID_CLOSED_BOX, PLATTER, PLATTER_TOP, PLAYER, RECORD, rigRecordPlayer, setStatusLit, TONEARM, type RecordLabel, type RecordPlayerRig,
 } from '../../../models/recordPlayer.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
@@ -20,6 +20,9 @@ export function partyFramePoints(): Vector3[] {
   const pts: Vector3[] = [];
   const hx = PLAYER.width / 2, hz = PLAYER.depth / 2;
   for (const x of [-hx, hx]) for (const z of [-hz, hz]) for (const y of [0, PLAYER.deck]) pts.push(new Vector3(x, y, z));
+  // The side margin: the stage breathes round the plinth as it did in v1.1.
+  const mx = hx + FRAME_MARGIN_X;
+  for (const x of [-mx, mx]) for (const z of [-hz, hz]) for (const y of [0, PLAYER.deck]) pts.push(new Vector3(x, y, z));
   // Lid: the extended closed box's corners turned about the hinge, open and closed.
   const box = LID_CLOSED_BOX;
   for (const angle of [LID.open, LID.closed]) {
@@ -124,7 +127,7 @@ export class PartyScene implements SceneInstance {
     const n = this.rig.nodes;
     n.record_authored!.position.copy(f.recordPos);
     n.record_authored!.rotation.set(f.recordTilt, 0, 0);
-    n.record_secondary!.rotation.set(f.wobble, f.spin, 0);
+    n.record_secondary!.rotation.set(f.wobble, f.spin, f.wobbleZ);
     n.platter!.rotation.set(0, f.spin, 0);
     n.tonearm_pivot!.rotation.set(0, f.armYaw, 0);
     n.tonearm_lift!.rotation.set(f.armPitch, 0, 0);

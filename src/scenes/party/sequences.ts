@@ -1,6 +1,5 @@
 import { Vector3 } from 'three';
 import { cubicBezier, EASE, lerp, seg, smoothstep } from '../../motion/curves.ts';
-import { dampedSettle } from '../../motion/curves.ts';
 import { PLATTER_TOP, RECORD } from '../../../models/recordContract.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 import { ALIGNED, ARM, CUEING, DURATIONS, HOVER, LEVEL_BY, LID_CLOSED, LID_OPEN, PLAY_AT, RPM_33, SEATED, SPIN } from './poses.ts';
@@ -17,8 +16,12 @@ export interface PartyFrame {
   recordPos: Vector3;
   /** record_authored rotation.x: label tipped towards the camera while presented. */
   recordTilt: number;
-  /** record_secondary rotation.x: tiny contact settle (edge never dips below the platter). */
+  /**
+   * record_secondary rotation.x / rotation.z: the settle's tilt vector (its low side precesses
+   * round the rim; the edge never dips below the mat). Zero outside the settle beat.
+   */
   wobble: number;
+  wobbleZ: number;
   /** Record and platter rotation.y (they turn together once seated). */
   spin: number;
   armYaw: number;
@@ -29,7 +32,7 @@ export interface PartyFrame {
 
 export function newFrame(): PartyFrame {
   return frameFor('guest-ready', {
-    recordPos: new Vector3(), recordTilt: 0, wobble: 0, spin: 0, armYaw: 0, armPitch: 0, lid: 0, status: 'off',
+    recordPos: new Vector3(), recordTilt: 0, wobble: 0, wobbleZ: 0, spin: 0, armYaw: 0, armPitch: 0, lid: 0, status: 'off',
   });
 }
 
@@ -37,6 +40,7 @@ export function frameFor(pose: CanonicalPose, out: PartyFrame): PartyFrame {
   out.recordPos.copy(pose === 'host-ready' ? HOVER.pos : SEATED);
   out.recordTilt = pose === 'host-ready' ? HOVER.tilt : 0;
   out.wobble = 0;
+  out.wobbleZ = 0;
   out.spin = pose === 'accepted' ? SPIN.total : 0;
   out.armYaw = pose === 'accepted' ? ARM.played : ARM.parked;
   out.armPitch = pose === 'accepted' ? ARM.contact : 0;
@@ -54,8 +58,21 @@ export function recordHeight(f: PartyFrame): number {
 /** Weighted lowering: unhurried start, controlled descent, soft set-down exactly at 0.75 s. */
 const LOWER = cubicBezier(0.42, 0, 0.22, 1);
 const TILT_OUT = cubicBezier(0.45, 0, 0.3, 1);
-/** Seat-and-settle: contact at 0.75 s, the record rocks on its edge and is still by 1.00 s. */
-export const SETTLE = { at: 0.75, amplitude: 0.008, hz: 4.5, zeta: 0.5, end: 0.25 } as const;
+/** The record is level by 0.44 s, still above LEVEL_BY (the spindle top plus a 5 cm margin). */
+const TILT_LEVEL_AT = 0.44;
+/**
+ * Seat-and-settle: contact at 0.75 s, then the record settles like a coin on a table: a small
+ * tilt whose low side runs round the rim (precession, `hz` turns per second) while the tilt
+ * decays (`tau`) and is windowed to exactly zero at `end`. The record turns about its lowest rim
+ * point, so its centre rises by R·sin(tilt) and no point ever dips below the mat. Unlike a rock
+ * between two edges, the contact point never jumps, so the motion is smooth (C¹) throughout.
+ */
+export const SETTLE = { at: 0.75, amplitude: 0.011, hz: 3.2, tau: 0.09, rampIn: 0.05, end: 0.3, phase: 2.2 } as const;
+/** Settle tilt magnitude (rad) at u seconds after contact: smooth in, decaying, exactly 0 at end. */
+export function settleTilt(u: number): number {
+  if (u <= 0 || u >= SETTLE.end) return 0;
+  return SETTLE.amplitude * smoothstep(seg(u, 0, SETTLE.rampIn)) * Math.exp(-u / SETTLE.tau) * (1 - smoothstep(seg(u, SETTLE.end * 0.55, SETTLE.end)));
+}
 function host(t: number, out: PartyFrame): void {
   frameFor('guest-ready', out);
   if (t < 0.2) {
@@ -67,15 +84,19 @@ function host(t: number, out: PartyFrame): void {
     // Lower onto the spindle: level and centred before the hole reaches the spindle top.
     const s = LOWER(seg(t, 0.2, SETTLE.at));
     out.recordPos.lerpVectors(ALIGNED.pos, SEATED, s);
-    out.recordTilt = lerp(ALIGNED.tilt, 0, TILT_OUT(seg(t, 0.2, 0.48)));
+    out.recordTilt = lerp(ALIGNED.tilt, 0, TILT_OUT(seg(t, 0.2, TILT_LEVEL_AT)));
   } else {
-    // Contact at 0.75 s, a tiny damped rock to 1.00 s, then hold.
+    // Contact at 0.75 s (zero speed), the precessing settle, still by 1.05 s, then hold.
     out.recordPos.copy(SEATED);
     out.recordTilt = 0;
     const u = t - SETTLE.at;
-    out.wobble = u < SETTLE.end ? dampedSettle(u, SETTLE.amplitude, SETTLE.hz, SETTLE.zeta, SETTLE.end) * smoothstep(seg(u, 0, 0.04)) : 0;
-    // Rocking on its lowest edge: lift the centre so nothing dips below the mat.
-    out.recordPos.y += RECORD.radius * Math.abs(Math.sin(out.wobble));
+    const tilt = settleTilt(u);
+    const phi = SETTLE.phase + 2 * Math.PI * SETTLE.hz * u;
+    out.wobble = tilt * Math.cos(phi);
+    out.wobbleZ = tilt * Math.sin(phi);
+    // The disc's true tilt under rotation.x then rotation.z: cos θ = cos x·cos z.
+    const cosTilt = Math.cos(out.wobble) * Math.cos(out.wobbleZ);
+    out.recordPos.y += RECORD.radius * Math.sqrt(Math.max(0, 1 - cosTilt * cosTilt));
   }
   out.status = 'off';
 }

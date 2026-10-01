@@ -156,10 +156,15 @@ export function lidExtendLocal() {
 export const STATUS_KEY = fromMaster(0.753, -0.336, 0.447);
 
 /**
- * Complete motion bounds: open lid, hovering record, parked and playing arm, plus a symmetric
+ * Side margin (scene units) beside the plinth: the framing breathes as v1.1 did (the player
+ * fills 74.6 % of the stage width; tests/party.test.ts "Party framing").
+ */
+export const FRAME_MARGIN_X = 0.17;
+/**
+ * Complete motion bounds: open lid, hovering record, parked and playing arm, plus the symmetric
  * framing margin on x. The camera fits `partyFramePoints` (silhouette samples) inside them.
  */
-export const PARTY_BOUNDS = new Box3(new Vector3(-PLAYER.width / 2 - 0.13, 0, -1.9), new Vector3(PLAYER.width / 2 + 0.13, 2.02, PLAYER.depth / 2 + 0.05));
+export const PARTY_BOUNDS = new Box3(new Vector3(-PLAYER.width / 2 - FRAME_MARGIN_X, 0, -1.9), new Vector3(PLAYER.width / 2 + FRAME_MARGIN_X, 2.02, PLAYER.depth / 2 + 0.05));
 
 /**
  * Yaw that puts the stylus on the groove at `radius` from the spindle (the arm's outer solution,

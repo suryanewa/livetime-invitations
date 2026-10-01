@@ -38,6 +38,11 @@ import type { Quat, RawImage, SceneRecipe } from '../types.ts';
  * - Label presets: KHR_materials_variants `paper` (the master's olive print, default in the file,
  *   never selected by the app), `coral` and `cobalt`: the label field recoloured to the v1.1 label
  *   colours with its rings, bars, ring and square kept as darker ink (`labelPrint`, below).
+ * - Lid shadows (rig): the shell casts but does not receive (its own top panel stair-stepped on its
+ *   inside back wall mid-close under the studio's fixed PCF taps).
+ * - Framing (contract): silhouette frame points plus a 0.17 side margin, so the player fills the
+ *   stage as v1.1 did (74.6 % of its width).
+ * - Full write-up, measured contract and export report: docs/scenes/party-v1.2.md.
  * - Textures: the vinyl's 8192×4 groove normal and anisotropy LUTs kept exact (automatic); the
  *   plinth's brushed normal exact; the three label prints exact lossless (flat print, crisp edges);
  *   the plinth ORM lossy q90 at source size (1024²).

@@ -140,6 +140,12 @@ export function rigRecordPlayer(root: Object3D, lib: ModelContext['lib'], label:
   nodes.player_shadow = bodyShadow;
 
   extendLid(nodes.lid_hinge!);
+  // The shell does not receive shadows. Mid-close the key grazes its inside back wall, and the
+  // shadow of its own top panel there stair-stepped under the studio's 16 fixed PCF taps (a
+  // saw-tooth terminator). Nothing else ever shadows the cover (it is the topmost part), so only
+  // that self-shadow is lost. The stage sets receiveShadow at setContent, so it is re-asserted
+  // per draw (shadow-pass casting is unaffected).
+  for (const m of meshesOf(nodes.lid_hinge!)) if (materialOf(m).name === 'tt_lid') m.onBeforeRender = () => { m.receiveShadow = false; };
   shareMasterMaterials(root, nodes.tonearm_rest!);
 
   // The key's own material: a clone of the master aluminium, so lighting it touches nothing else.
