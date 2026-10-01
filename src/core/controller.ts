@@ -544,11 +544,13 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
 
   /**
    * Tier detail on the live stage and library: Low and Static drop the shadowed key (freeing its
-   * shadow map), the gobo and the plaster relief; Low also simplifies materials.
+   * shadow map), the gobo and the plaster relief; Low also simplifies materials: the library's,
+   * and through the scene's optional hook those it imported from masters (models/imported.ts).
    */
   function applyTierDetail(tier: Tier) {
     const full = tier === 'normal' || tier === 'high';
     libraries.get(direction)?.setLowDetail(tier === 'low');
+    scene?.setLowDetail?.(tier === 'low');
     stage?.premium?.setShadows(full);
     stage?.premium?.setLowDetail(!full);
   }

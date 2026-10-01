@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { Box3, Color, MeshStandardMaterial, OrthographicCamera, Vector3 } from 'three';
-import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
+import { join } from 'node:path';
+import { Box3, Matrix4, OrthographicCamera, Vector3 } from 'three';
+import type { Node } from '@gltf-transform/core';
+import type { KHRMaterialsVariants } from '@gltf-transform/extensions';
+import { listTextureSlots } from '@gltf-transform/functions';
 import { cameraDirection, fitCameraToBounds } from '../src/render/camera.ts';
 import { SEAM_FRAME } from '../src/render/ballMaterial.ts';
-import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, POLE, RIM, RIM_CENTER, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES } from '../models/sportsContract.ts';
-import { buildSportsGeometry } from '../models/sportsPremium.ts';
+import {
+  BALL_AT, BALL_R, BOARD, HOOP_ROOT, HOOP_SCALE, NET, NET_OPEN_RADIUS, netOpenScale, netRestRadius, POLE, RIM, RIM_CENTER, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES,
+} from '../models/sportsContract.ts';
+import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
 import {
   CONTACT_AT, DURATIONS, frameFor, GRAVITY, LANDINGS, MADE_LAND_AT, MISS_LAND_AT, MISS_POINT, NET_DRAG, NET_EXIT, NET_HOLD, newFrame, PASS_LAND_AT, RELEASE_AT, sampleSequence,
   type SportsFrame,
 } from '../src/scenes/sports/sequences.ts';
-import { farLayerShade, NET_FAR_SHADE, NET_FLARE_WIDEN, NET_STRETCH, SPORTS_WALL_Z } from '../models/sports.ts';
+import { farLayerShade, NET_FAR_SHADE, NET_STRETCH, SPORTS_WALL_Z } from '../models/sports.ts';
 import { COVE_RADIUS } from '../src/render/studio.ts';
 import { BLEND_MARGIN, blendClearance, hoopDistance, sportsFramePoints, sportsInterruptCut } from '../src/scenes/sports/index.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
@@ -104,7 +109,8 @@ describe('Sports choreography', () => {
         const d = below - dy;
         if (d <= 0 || d >= depth) continue;
         const frac = d / depth;
-        const radius = (RIM.innerRadius + (NET.bottomRadius - RIM.innerRadius) * frac) * (1 + f.netFlare * NET_FLARE_WIDEN * frac ** 1.3);
+        // The master net's measured inner envelope, opened by the rig's deformation.
+        const radius = netRestRadius(frac) * netOpenScale(frac, f.netFlare);
         const halfChord = Math.sqrt(Math.max(0, BALL_R * BALL_R - dy * dy));
         expect(horizontal(p, RIM_CENTER) + halfChord).toBeLessThan(radius + 1e-6);
       }
@@ -297,28 +303,119 @@ describe('Sports framing and model contract', () => {
     expect(fill).toBeLessThanOrEqual(0.75);
   });
 
-  it('the model provides every required node, a rim on the contract and a net in net space', () => {
-    const direction = DIRECTIONS.L2;
-    const cache = new Map<string, MeshStandardMaterial>();
-    const lib = {
-      direction,
-      get: (n: string) => cache.get(n) ?? (cache.set(n, new MeshStandardMaterial({ name: n, color: new Color(direction.surfaces[n]!.color) })), cache.get(n)!),
-      unique: (n: string) => new MeshStandardMaterial({ name: n }),
-      dispose() {},
-    } as unknown as MaterialLibrary;
-    const root = buildSportsGeometry({ lib }, 'orange');
-    for (const n of SPORTS_NODES) expect(root.getObjectByName(n), n).toBeTruthy();
-    const rim = root.getObjectByName('rim')!;
-    const net = root.getObjectByName('net')!;
-    expect(net.position.distanceTo(RIM_LOCAL)).toBeLessThan(1e-6);
-    root.updateMatrixWorld(true);
-    const rimBox = new Box3().setFromObject(rim, true);
-    const c = rimBox.getCenter(new Vector3());
-    expect(c.distanceTo(RIM_CENTER)).toBeLessThan(0.03);
-    net.updateMatrixWorld(true);
-    const netBox = new Box3().setFromObject(net, true);
-    expect(netBox.max.y).toBeLessThanOrEqual(RIM_CENTER.y + 0.03);
-    expect(netBox.min.y).toBeGreaterThan(RIM_CENTER.y - NET.depth - 0.06);
+  it('the open net clears the ball and leaves rows already wider than the ball alone', () => {
+    // Fully open, every row of the net is at least NET_OPEN_RADIUS from the rim axis.
+    for (let t = 0; t <= 1; t += 0.01) expect(netRestRadius(t) * netOpenScale(t, 1)).toBeGreaterThanOrEqual(NET_OPEN_RADIUS - 1e-9);
+    expect(NET_OPEN_RADIUS).toBeGreaterThan(BALL_R + 0.05);
+    // At rest nothing moves, and the top rows (wider than the open radius) never move.
+    for (let t = 0; t <= 1; t += 0.05) expect(netOpenScale(t, 0)).toBe(1);
+    expect(netOpenScale(0, 1)).toBe(1);
+    // The rest envelope starts at the rim's inner radius.
+    expect(Math.abs(netRestRadius(0) - RIM.innerRadius)).toBeLessThan(0.005);
+  });
+});
+
+/** The exported runtime GLB (pnpm models sports), measured with gltf-transform. */
+describe('Sports runtime GLB matches the contract', async () => {
+  const doc = await createIO().read(join(import.meta.dirname, '..', 'assets', 'scenes', 'sports', 'sports.glb'));
+  const node = (name: string) => findNode(doc, name);
+  const worldOf = (n: Node) => new Matrix4().fromArray(n.getWorldMatrix());
+  /** Every vertex under `n`, in sports_root space. */
+  const vertices = (n: Node) => {
+    const out: Vector3[] = [];
+    const toRoot = worldOf(node('sports_root')).invert();
+    n.traverse((c) => {
+      const m = toRoot.clone().multiply(worldOf(c));
+      for (const prim of c.getMesh()?.listPrimitives() ?? []) {
+        const pos = prim.getAttribute('POSITION')!;
+        const e = [0, 0, 0];
+        for (let i = 0; i < pos.getCount(); i++) out.push(new Vector3(...(pos.getElement(i, e) as [number, number, number])).applyMatrix4(m));
+      }
+    });
+    return out;
+  };
+
+  it('has every contract node exactly once', () => {
+    for (const n of SPORTS_NODES) expect(() => node(n), n).not.toThrow();
+  });
+
+  it('the ball is the master at BALL_R, centred on ball_secondary', () => {
+    const box = boxIn(node('ball_mesh'), node('ball_secondary'));
+    const size = box.max.clone().sub(box.min);
+    for (const k of ['x', 'y', 'z'] as const) expect(Math.abs(size[k] / 2 - BALL_R)).toBeLessThan(0.002);
+    expect(box.max.clone().add(box.min).length() / 2).toBeLessThan(0.002);
+    // A mapped contract node is an empty transform at its pivot with unit scale (quantisation's
+    // node scale/offset lands on its `_mesh` holder child), so spins and squash compose cleanly.
+    const ball = node('ball_mesh');
+    expect(ball.getMesh()).toBeNull();
+    expect(ball.getScale()).toEqual([1, 1, 1]);
+    expect(new Vector3(...ball.getTranslation()).length()).toBeLessThan(1e-6);
+    expect(node('ball_mesh_mesh').getParentNode()).toBe(ball);
+    expect((node('ball_mesh_mesh').getExtras() as { noShadowCast?: boolean }).noShadowCast).toBe(true);
+  });
+
+  it('declares its WebP textures (EXT_texture_webp, required) and keeps normal maps lossless', () => {
+    const webp = doc.getRoot().listExtensionsUsed().find((e) => e.extensionName === 'EXT_texture_webp');
+    expect(webp?.isRequired()).toBe(true);
+    for (const t of doc.getRoot().listTextures()) {
+      expect(t.getMimeType()).toBe('image/webp');
+      const img = t.getImage()!;
+      // RIFF....WEBPVP8L = lossless bitstream, VP8 = lossy.
+      const chunk = new TextDecoder().decode(img.subarray(12, 16));
+      if (listTextureSlots(t).some((s) => /normal/i.test(s))) expect(chunk, t.getName()).toBe('VP8L');
+    }
+  });
+
+  it('the rim ring is centred on RIM_CENTER with the contract inner radius', () => {
+    const ring = vertices(node('rim')).filter((v) => Math.abs(v.y - RIM_CENTER.y) <= RIM.tube * 1.05 && v.z > RIM_CENTER.z - RIM.innerRadius - 2 * RIM.tube);
+    const radii = ring.map((v) => Math.hypot(v.x - RIM_CENTER.x, v.z - RIM_CENTER.z)).filter((r) => r > 0.3);
+    expect(Math.abs(Math.min(...radii) - RIM.innerRadius)).toBeLessThan(0.003);
+    expect(Math.abs(Math.max(...radii) - (RIM.innerRadius + 2 * RIM.tube))).toBeLessThan(0.003);
+    expect(HOOP_SCALE).toBeCloseTo(0.88692, 4);
+  });
+
+  it('the net hangs in net space at RIM_LOCAL, within NET.depth, outside its measured envelope', () => {
+    const net = node('net');
+    expect(new Vector3(...net.getTranslation()).distanceTo(RIM_LOCAL)).toBeLessThan(1e-4);
+    expect(net.listChildren().filter((c) => c.getMesh()).length).toBe(3);
+    const vs = vertices(net);
+    let top = -Infinity, bottom = Infinity;
+    for (const v of vs) {
+      top = Math.max(top, v.y);
+      bottom = Math.min(bottom, v.y);
+      const t = (RIM_CENTER.y - v.y) / NET.depth;
+      if (t < 0 || t > 1) continue;
+      expect(Math.hypot(v.x - RIM_CENTER.x, v.z - RIM_CENTER.z)).toBeGreaterThan(netRestRadius(t) - 0.012);
+    }
+    expect(top).toBeLessThanOrEqual(RIM_CENTER.y + 0.005);
+    expect(Math.abs(RIM_CENTER.y - bottom - NET.depth)).toBeLessThan(0.003);
+  });
+
+  it('the board matches BOARD and the stand reaches its back', () => {
+    const box = new Box3().setFromPoints(vertices(node('backboard')));
+    const h = HOOP_ROOT;
+    expect(box.min.x).toBeCloseTo(h.x - BOARD.width / 2, 2);
+    expect(box.max.x).toBeCloseTo(h.x + BOARD.width / 2, 2);
+    expect(box.min.y).toBeCloseTo(BOARD.centerY - BOARD.height / 2, 2);
+    expect(box.max.y).toBeCloseTo(BOARD.centerY + BOARD.height / 2, 2);
+    expect(box.max.z).toBeCloseTo(h.z + BOARD.front, 2);
+    expect(box.min.z).toBeCloseTo(h.z + BOARD.front - BOARD.thickness, 2);
+    // The chrome back plate touches the board's back; the pole stays behind it.
+    const hardware = new Box3().setFromPoints(vertices(node('hoop_hardware')));
+    expect(hardware.max.z).toBeCloseTo(h.z + BOARD.front - BOARD.thickness, 2);
+    const stand = vertices(node('hoop_stand'));
+    expect(Math.min(...stand.map((v) => v.y))).toBeCloseTo(0, 3);
+    // Above the base, the pole, clamp and arm stay behind the back plate.
+    expect(Math.max(...stand.filter((v) => v.y > 0.5).map((v) => v.z))).toBeLessThanOrEqual(hardware.max.z - 0.01);
+  });
+
+  it('stores the cream ball as a material variant and nothing is left unbound', () => {
+    const variants = doc.getRoot().listExtensionsUsed().find((e) => e.extensionName === 'KHR_materials_variants') as KHRMaterialsVariants | undefined;
+    expect(variants?.listVariants().map((v) => v.getName())).toEqual(['orange', 'cream']);
+    const names = doc.getRoot().listMaterials().map((m) => m.getName());
+    expect(names).toContain('ball_leather');
+    expect(names).toContain('ball_leather_cream');
+    for (const m of doc.getRoot().listMaterials()) expect(m.getName(), 'every material is named').not.toBe('');
   });
 });
 

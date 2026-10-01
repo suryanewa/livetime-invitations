@@ -1,8 +1,11 @@
 import { Box3, type Camera, type Object3D, Vector3, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
-import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, type BallPreset, type SportsRig } from '../../../models/sports.ts';
+import {
+  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, NET_OPEN_RADIUS, NET_STRETCH, netRestRadius, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, type BallPreset, type SportsRig,
+} from '../../../models/sports.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
+import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { DURATIONS, frameFor, newFrame, sampleSequence, type SportsFrame } from './sequences.ts';
@@ -24,8 +27,11 @@ export function sportsFramePoints(sequences: readonly SequenceName[] = ['host', 
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) pts.push(new Vector3(HOOP_ROOT.x + (sx * BOARD.width) / 2, BOARD.centerY + (sy * BOARD.height) / 2, HOOP_ROOT.z + BOARD.front));
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2;
-    pts.push(new Vector3(RIM_CENTER.x + Math.cos(a) * 0.42, RIM_CENTER.y, RIM_CENTER.z + Math.sin(a) * 0.42));
-    pts.push(new Vector3(RIM_CENTER.x + Math.cos(a) * NET.bottomRadius * 1.3, RIM_CENTER.y - NET.depth * 1.3, RIM_CENTER.z + Math.sin(a) * NET.bottomRadius * 1.3));
+    const ring = RIM.innerRadius + 2 * RIM.tube;
+    pts.push(new Vector3(RIM_CENTER.x + Math.cos(a) * ring, RIM_CENTER.y, RIM_CENTER.z + Math.sin(a) * ring));
+    // The net's bottom, opened and stretched (made shot).
+    const open = NET_OPEN_RADIUS + 0.05, low = NET.depth * (1 + NET_STRETCH);
+    pts.push(new Vector3(RIM_CENTER.x + Math.cos(a) * open, RIM_CENTER.y - low, RIM_CENTER.z + Math.sin(a) * open));
     pts.push(new Vector3(HOOP_ROOT.x + Math.cos(a) * POLE.baseRadius, 0, HOOP_ROOT.z + POLE.z + Math.sin(a) * POLE.baseRadius));
   }
   return pts;
@@ -36,9 +42,14 @@ const BOARD_BOX = new Box3(
   new Vector3(HOOP_ROOT.x - BOARD.width / 2, BOARD.centerY - BOARD.height / 2, HOOP_ROOT.z + BOARD.front - BOARD.thickness),
   new Vector3(HOOP_ROOT.x + BOARD.width / 2, BOARD.centerY + BOARD.height / 2, HOOP_ROOT.z + BOARD.front),
 );
-/** Rim tube centre radius (the model's torus) and the net's radius at depth fraction t (its lattice profile). */
+/** Rim tube centre radius (the master's ring). */
 const RING_R = RIM.innerRadius + RIM.tube;
-const netRadius = (t: number) => RING_R + (NET.bottomRadius - RING_R) * (0.72 * t + 0.28 * t * t);
+/**
+ * The net as a shell of revolution: from its measured inner envelope (NET.profile) outwards by
+ * 2 × NET_SHELL (cords, knots and the far side of each diamond).
+ */
+const NET_SHELL = 0.03;
+const netMid = (t: number) => netRestRadius(t) + NET_SHELL;
 /** Pole base plate height above the floor. */
 const POLE_BASE_H = 0.07;
 /** Surface gap the ball must keep from every hoop part along a blend. */
@@ -52,7 +63,7 @@ export function hoopDistance(p: Vector3): number {
   // The net is a surface of revolution: its nearest point lies in p's meridian plane.
   for (let i = 0; i <= 24; i++) {
     const t = i / 24;
-    d = Math.min(d, Math.hypot(r - netRadius(t), dy + NET.depth * t));
+    d = Math.min(d, Math.hypot(r - netMid(t), dy + NET.depth * t) - NET_SHELL);
   }
   d = Math.min(d, BOARD_BOX.distanceToPoint(p));
   const pr = Math.hypot(p.x - HOOP_ROOT.x, p.z - (HOOP_ROOT.z + POLE.z));
@@ -136,6 +147,11 @@ export class SportsScene implements SceneInstance {
     return sportsInterruptCut(this.rig.nodes.ball_authored!.position, this.frame);
   }
 
+  /** Low tier for the imported ball, board, rim and net materials (the library handles the stand). */
+  setLowDetail(enabled: boolean): void {
+    setImportedLowDetail(this.root, enabled);
+  }
+
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
     const scene = this.root.parent ?? this.root;
     await renderer.compileAsync(scene, camera);
@@ -146,6 +162,7 @@ export class SportsScene implements SceneInstance {
 
   dispose(): void {
     this.rig.dispose();
+    disposeImported(this.root);
     this.root.traverse((o) => (o as { geometry?: { dispose(): void } }).geometry?.dispose());
     this.root.removeFromParent();
   }
@@ -181,8 +198,11 @@ export const sportsScene: SceneModule = {
     const gltf = await new GLTFLoader().parseAsync(await fetchGlb(glbUrl, signal), '');
     const root = gltf.scene.getObjectByName('sports_root');
     if (!root) throw Object.assign(new Error('missing sports_root'), { reason: 'asset-failure' as const });
+    // Ball presets live in the GLB (KHR_materials_variants); read them before detaching the root.
+    const variants = await loadMaterialVariants(gltf);
     root.removeFromParent();
     bindMaterialsByName(root, library);
-    return new SportsScene(rigSports(root, library, config.ball), config);
+    prepareImported(root, library, variants.materials);
+    return new SportsScene(rigSports(root, library, config.ball, variants), config);
   },
 };

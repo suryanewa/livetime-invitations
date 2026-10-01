@@ -111,3 +111,53 @@ test('Cream preset and a saved decline show the static state without a new reque
   await page.waitForTimeout(300);
   expect(await requests(page)).toBe(0);
 });
+
+test('Low tier on the imported masters: toggles, restores exactly, and a dispose at Low frees every texture', async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await ready(page);
+  const c = 'window.__showcase.controller';
+  const settle = () => page.waitForTimeout(400);
+  const still = () => page.evaluate(`${c}.captureStill(256, 1)`) as Promise<string>;
+  const info = () => page.evaluate(`${c}.renderInfo()`) as Promise<{ textures: number; geometries: number }>;
+  const tier = async (t: string) => {
+    await page.evaluate(`${c}.setQualityTier('${t}')`);
+    await expect.poll(async () => (await state(page) as unknown as { tier: string }).tier).toBe(t);
+    await settle();
+  };
+  const category = async (literal: string) => {
+    await page.evaluate((l) => (window as any).__showcase.setConfig(new Function(`return (${l})`)()), literal);
+    await expect.poll(async () => (await state(page)).resource, { timeout: 30_000 }).toBe('ready');
+    await settle();
+  };
+  await page.evaluate(`${c}.setReducedMotion(true)`);
+  await settle();
+  const normal = await still();
+
+  // Low: the imported normal maps (and the key's shadow) go; Normal brings them back exactly.
+  await tier('low');
+  expect(await stillDiff(page, normal, await still())).toBeGreaterThan(0.2);
+  await tier('normal');
+  expect(await stillDiff(page, normal, await still())).toBeLessThan(0.3);
+
+  // Baseline: one round trip at Normal (the second visit settles 2 shared textures above the first).
+  const away = '{ category: "party", songId: "sample-track-a", label: "coral" }';
+  const back = '{ category: "sports", ball: "orange" }';
+  await category(away);
+  await category(back);
+  const baseline = await info();
+  // Disposed while Low, twice: the maps the Low tier held aside are freed with the scene (before
+  // the fix each such visit left the ball's and hoop's five normal maps allocated).
+  for (let i = 0; i < 2; i++) {
+    await tier('low');
+    await category(away);
+    await category(back);
+    await tier('normal');
+    const now = await info();
+    expect(now.textures, `visit ${i + 1} after a dispose at Low`).toBeLessThanOrEqual(baseline.textures);
+    expect(now.geometries).toBeLessThanOrEqual(baseline.geometries);
+  }
+  expect(errors).toEqual([]);
+});

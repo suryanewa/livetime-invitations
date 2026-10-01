@@ -69,6 +69,13 @@ export interface SceneInstance {
   interruptCut?(): boolean;
   /** Called once per rendered frame, after sampling and simulation, before drawing. */
   beforeRender?(): void;
+  /**
+   * Low tier for materials outside the locked library (imported scan-to-CAD masters,
+   * `models/imported.ts`): the controller calls it next to `MaterialLibrary.setLowDetail`
+   * whenever the tier is applied, with `true` on Low. Optional: scenes without imported
+   * materials omit it.
+   */
+  setLowDetail?(enabled: boolean): void;
   /** Warm shader programs for every material/preset variant before declaring ready. */
   precompile?(renderer: WebGLRenderer, camera: Camera): Promise<void>;
   dispose(): void;

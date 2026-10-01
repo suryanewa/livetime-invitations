@@ -2,7 +2,7 @@ import { type BufferGeometry, type Object3D, SphereGeometry, TorusGeometry, Vect
 import { beveledPlate, filletPolyline, group, mergeParts, mesh, perforationRow, roundedBox } from './geometry.ts';
 import { place, turned } from './recordParts.ts';
 import { markNoShadowCast } from './shadowProxy.ts';
-import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, POLE, RIM, RIM_LOCAL, type BallPreset } from './sportsContract.ts';
+import { BALL_AT, BALL_R, BOARD as MASTER_BOARD, HOOP_ROOT, POLE, RIM, RIM_LOCAL, type BallPreset } from './sportsContract.ts';
 import { backerFrame, type BoardChannel, baseGeometry, boardGeometry, boltHead, channelLiner, netGeometry, outlineFrame, outlinePlate } from './sportsParts.ts';
 import type { ModelContext } from './types.ts';
 
@@ -23,7 +23,17 @@ import type { ModelContext } from './types.ts';
  * Every contract dimension, pivot and node lives in sportsContract.ts; this file only builds.
  * Static parts that share a material are merged (one draw each): 8 visible draw calls. The
  * target and the perforation strip are children of `backboard`, so they follow any board move.
+ *
+ * Since v1.2 the runtime GLB takes the ball, board, rim and net from the scan-to-CAD masters
+ * (scripts/masters/recipes/sports.ts) and only the stand from here: `buildSportsGeometry(ctx,
+ * preset, { parts: 'stand' })` builds the empty contract nodes plus the pole, base, clamp, arm and
+ * the chrome back plate and trim ring, fitted to the master board (contract BOARD). The full v1.1
+ * model (`parts: 'all'`, lookdev only) keeps its own board dimensions (V11_BOARD).
  */
+
+/** The v1.1 code-authored board (lookdev model only; the runtime board is the master's, contract BOARD). */
+const BOARD = { width: 1.4, height: 0.92, thickness: 0.06, centerY: 2.08, front: 0.03 } as const;
+type BoardDims = { width: number; height: number; thickness: number; centerY: number; front: number };
 
 type Lib = ModelContext['lib'];
 
@@ -51,28 +61,58 @@ const CHANNEL: BoardChannel = {
   inner: { hx: TARGET.w / 2 - TARGET.line - TARGET.gap, hy: TARGET.h / 2 - TARGET.line - TARGET.gap, r: Math.max(0.001, TARGET.rInner - TARGET.gap) },
 };
 /** Hidden arm from the pole to the board's back plate. */
-const ARM_Y = BOARD.centerY + 0.02;
+const armY = (board: BoardDims) => board.centerY + 0.02;
+const ARM_Y = armY(BOARD);
 const BASE_TOP = 0.17;
 /** Rim bracket: a mounting plate on the board face under the ring (12 mm clear of the bottom chamfer), and a flange under the ring. */
 const BRACKET = { w: 0.25, h: 0.066, t: 0.008, y: BOARD_BOTTOM + CHAMFER + 0.012 + 0.033 };
 
-export function buildSportsGeometry(ctx: ModelContext, preset: BallPreset = 'orange'): Object3D {
+export interface SportsBuildOptions {
+  /** 'all': the v1.1 code-authored model (lookdev). 'stand': contract nodes and the stand only (export with masters). */
+  parts?: 'all' | 'stand';
+}
+
+export function buildSportsGeometry(ctx: ModelContext, preset: BallPreset = 'orange', options: SportsBuildOptions = {}): Object3D {
   const { lib } = ctx;
+  const standOnly = options.parts === 'stand';
   const root = group('sports_root');
 
   const ball = group('ball_authored', root);
   ball.position.copy(BALL_AT.guest);
   const secondary = group('ball_secondary', ball);
-  mesh('ball_mesh', new SphereGeometry(BALL_R, 48, 32), lib.get(preset === 'orange' ? 'mat_ball_orange' : 'mat_ball_cream'), secondary);
+  if (!standOnly) mesh('ball_mesh', new SphereGeometry(BALL_R, 48, 32), lib.get(preset === 'orange' ? 'mat_ball_orange' : 'mat_ball_cream'), secondary);
   group('ball_shadow', root).position.set(BALL_AT.guest.x, 0.002, BALL_AT.guest.z);
 
   const hoop = group('hoop_root', root);
   hoop.position.copy(HOOP_ROOT);
-  buildStand(lib, hoop);
-  buildBoard(lib, hoop);
-  buildRim(lib, hoop);
+  if (standOnly) {
+    buildMasterStand(lib, hoop);
+  } else {
+    buildStand(lib, hoop);
+    buildBoard(lib, hoop);
+    buildRim(lib, hoop);
+  }
   group('hoop_shadow', root).position.set(HOOP_ROOT.x, 0.002, HOOP_ROOT.z + POLE.z);
   return root;
+}
+
+/** Ink stand behind the master board: weighted base, pole, clamp, arm; chrome trim ring and back plate. */
+function buildMasterStand(lib: Lib, hoop: Object3D): void {
+  const z = POLE.z;
+  const board = MASTER_BOARD;
+  const y = armY(board);
+  const back = board.front - board.thickness;
+  const base = place(baseGeometry(POLE.baseRadius, 0.066, BASE_TOP), { z });
+  const pole = place(turned([[POLE.radius, BASE_TOP - 0.01], [POLE.radius, POLE.top - 0.012, 0.012], [0, POLE.top]], { segments: 28, filletSegments: 3 }), { z });
+  const clamp = place(turned([[0, -0.07], [0.062, -0.07, 0.008], [0.062, 0.07, 0.008], [0, 0.07]], { segments: 20, filletSegments: 2 }), { y, z });
+  // Arm from inside the clamp to the back plate (which sits on the board's flat back).
+  const plateT = 0.012;
+  const armFrom = z, armTo = back - plateT;
+  const arm = place(roundedBox(0.075, 0.1, armTo - armFrom, 0.018, 2), { y, z: (armFrom + armTo) / 2 });
+  mesh('hoop_stand', mergeParts([{ geometry: base }, { geometry: pole }, { geometry: clamp }, { geometry: arm }]), lib.get('mat_body_ink'), hoop);
+  const trim = place(turned([[0.046, 0], [0.071, 0, 0.002], [0.071, 0.005, 0.002], [0.05, 0.008, 0.002], [0.046, 0.008]], { segments: 40, filletSegments: 2 }), { y: BASE_TOP, z });
+  const backPlate = place(beveledPlate(0.42, 0.3, plateT, 0.03, 0.003, 1), { y, z: back - plateT / 2 });
+  mesh('hoop_hardware', mergeParts([{ geometry: trim }, { geometry: backPlate }]), lib.get('mat_metal'), hoop);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

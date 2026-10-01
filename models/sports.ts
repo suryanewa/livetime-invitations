@@ -1,9 +1,10 @@
-import { type BufferAttribute, type BufferGeometry, Float32BufferAttribute, Matrix4, type Mesh, type Object3D, Vector3 } from 'three';
+import { type BufferAttribute, type BufferGeometry, Float32BufferAttribute, type Material, Matrix4, type Mesh, type Object3D, Vector3 } from 'three';
 import { cameraDirection } from '../src/render/camera.ts';
 import { ContactShadow } from '../src/render/contactShadow.ts';
-import { BALL_R, NET, POLE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES, type BallPreset, type NetDeform } from './sportsContract.ts';
+import { BALL_R, NET, netOpenScale, POLE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES, type BallPreset, type NetDeform } from './sportsContract.ts';
 import { buildSportsGeometry } from './sportsPremium.ts';
-import { applyShadowProxies } from './shadowProxy.ts';
+import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
+import type { MaterialVariants } from './imported.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
 export * from './sportsContract.ts';
@@ -28,8 +29,11 @@ export type SportsModel = SportsRig & BuiltModel;
 
 /**
  * Radial net deformation on the net's own vertices (net space: y = 0 at the rim, negative
- * downward). Lower rows widen with `flare` and the whole net lengthens with `stretch`, so the
- * swish reads without cloth simulation. Works on any net geometry the model provides.
+ * downward). Rows narrower than the ball open with `flare` (`netOpenScale`: at flare 1 the inner
+ * envelope is max(rest, NET_OPEN_RADIUS)) and the whole net lengthens with `stretch`, so the
+ * swish reads without cloth simulation. Works on any net geometry the model provides: since v1.2
+ * the master net's strands, loops and knots (three meshes under `net`), each vertex scaled by the
+ * factor of its own rest depth, so knots stay on their cords.
  *
  * GLB export quantises positions (normalised Int16 plus a node scale/offset), so the net is
  * first rebuilt as float geometry in net space: dequantised vertices, the node transforms baked
@@ -56,6 +60,13 @@ export function netDeform(net: Object3D): NetDeform {
     const attr = new Float32BufferAttribute(base.slice(), 3);
     m.geometry.setAttribute('position', attr);
     m.geometry.setAttribute('color', farLayerShade(base, toCamera));
+    // Imported rope materials do not use vertex colours by default; the shade needs them.
+    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+      if (!(mat as Material & { vertexColors: boolean }).vertexColors) {
+        (mat as Material & { vertexColors: boolean }).vertexColors = true;
+        mat.needsUpdate = true;
+      }
+    }
     m.geometry.deleteAttribute('normal');
     m.geometry.computeVertexNormals();
     m.frustumCulled = false;
@@ -80,8 +91,7 @@ export function netDeform(net: Object3D): NetDeform {
         const a = attr.array as Float32Array;
         for (let i = 0; i < a.length; i += 3) {
           const x = base[i]!, y = base[i + 1]!, z = base[i + 2]!;
-          const d = Math.min(1, Math.max(0, -y / NET.depth));
-          const widen = 1 + flare * NET_FLARE_WIDEN * d ** 1.3;
+          const widen = netOpenScale(-y / NET.depth, flare);
           a[i] = x * widen;
           a[i + 1] = y < 0 ? y * (1 + stretch * NET_STRETCH) : y;
           a[i + 2] = z * widen;
@@ -112,11 +122,15 @@ export function farLayerShade(base: Float32Array, toCamera: Vector3): Float32Buf
   return new Float32BufferAttribute(colors, 3);
 }
 
-/** Deformation gains (shared with the choreography's clearance checks). */
-export const NET_FLARE_WIDEN = 0.32;
+/** Lengthening gain at stretch 1 (shared with the choreography's clearance checks). */
 export const NET_STRETCH = 0.3;
 
-export function rigSports(root: Object3D, lib: ModelContext['lib'], preset: BallPreset = 'orange'): SportsRig {
+/**
+ * `variants`: the GLB's ball presets (KHR_materials_variants, `loadMaterialVariants`): the master
+ * ball's orange and cream albedos. Without them (the code-authored lookdev model) presets swap the
+ * library's shader balls by name.
+ */
+export function rigSports(root: Object3D, lib: ModelContext['lib'], preset: BallPreset = 'orange', variants?: MaterialVariants): SportsRig {
   const dir = lib.direction;
   applyShadowProxies(root);
   const nodes = collectNodes(root, SPORTS_NODES);
@@ -137,6 +151,10 @@ export function rigSports(root: Object3D, lib: ModelContext['lib'], preset: Ball
   nodes.hoop_shadow = hoopShadow;
 
   const setPreset = (next: BallPreset) => {
+    if (variants?.names.includes(next)) {
+      variants.select(next);
+      return;
+    }
     const want = lib.get(next === 'orange' ? 'mat_ball_orange' : 'mat_ball_cream');
     nodes.ball_mesh!.traverse((o) => {
       const m = o as Mesh;
@@ -156,6 +174,7 @@ export function rigSports(root: Object3D, lib: ModelContext['lib'], preset: Ball
     dispose() {
       ballShadow.dispose();
       hoopShadow.dispose();
+      disposeShadowProxies(root);
     },
   };
 }

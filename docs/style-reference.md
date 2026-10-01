@@ -1,3 +1,19 @@
+# Style reference — v1.2 · the scan-to-CAD rebuilds
+
+**v1.2 (2026-10-01).** Surya asked that every interaction use the new models: *"buttery smooth and the same conceptually, but higher fidelity with the physics and our new models."* The objects are now the scan-to-CAD rebuilds (`models/masters/*.glb`: realistic PBR objects with textured materials, rebuilt from Meshy scans). **The interface, the studio (key, gobo, fill, environment, plaster sweep, finish) and the camera are unchanged** from v1.1 below; so are the beats and durations unless a scene records otherwise. Budgets are waived for this pass: the export report states what ships.
+
+- **Import path:** `scripts/masters/` (per-scene recipes; `scripts/masters/README.md`) merges the masters with the code-authored parts we keep into one runtime GLB. Imported materials keep their own textures and extensions; a material renamed to a library name is driven by the locked library instead.
+- **Metals** without a library material get their own copy of the studio environment at 1.1 (`ownEnv`), so polished steel reads as metal, not gunmetal, under the 0.52 scene environment.
+- **Low tier** also simplifies imported materials (no normal, clearcoat-normal or sheen maps; own environment 0.8), reversibly (`models/imported.ts`).
+- **Textures** ship as WebP (`EXT_texture_webp`): colour and ORM maps lossy q90, capped at 2048; normal, anisotropy and lookup-table textures exact (lossless).
+
+### Sports (v1.2)
+
+- **Ball:** the basketball master (81k triangles; albedo, ORM and normal maps at 2048×1365, clearcoat 0.2) at r 0.25, its great-circle seam cross facing the guest at guest-ready as the v1.1 shader ball did. The master's curved seams bow towards the cross, as on the scanned ball. **Cream preset:** a second albedo generated from the orange one (panels remapped to `#EFE4CD`-family cream, pebble mottling kept, seams unchanged), stored as a material variant; the v1.1 coral equator and limb darkening are not carried over.
+- **Hoop:** the master's board (dark wood frame, grey laminate face, white target), red powder-coated rim on its bracket, zinc steel hardware and a 20-strand twisted-rope net, scaled so the rim's inner diameter stays 1.6× the ball's. The v1.1 cream board, ink backer frame, coral target inlay and perforation row are replaced by the master's own design.
+- **Stand:** the v1.1 ink pole, ogee base, clamp and arm with the chrome trim ring and a back plate on the master board (code-authored).
+- **Net:** the master's net is narrower than the ball at rest; the made shot opens it (`netOpenScale`) and the far layer keeps its 0.8 shade.
+
 # Style reference — direction L2 "Satin Enamel · premium" · v1.1
 
 **v1.1 (2026-09-29).** Surya approved the premium pass at checkpoint 2b ("go with premium… high fidelity and masterful texturing, lighting and scene work"), with the orthographic camera and the two-tier cake. L2 keeps L's identity (palette, silhouettes, one enamel insert, the perforation row) and upgrades surfaces, construction, light and finish. v1.0 (below) still defines the palette and object rules unless a v1.1 rule replaces them.
