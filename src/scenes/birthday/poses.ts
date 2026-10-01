@@ -47,7 +47,13 @@ export const OUT_LEN = 0.125;
 export const WISP_START = each((i) => 0.6 + 0.018 * i);
 export const WISP_LEN = 0.3;
 export const WISP_OPACITY = 0.42;
-export const WISP_RISE = 0.09;
+/**
+ * A wisp leaves the wick: its foot stays on the wick tip while the curl unfurls upward (its
+ * height grows from WISP_GROW_FROM to full), and it only lifts off (WISP_RISE, cubic ease-in) as
+ * it dissolves, so the smoke never floats detached above a candle while it is visible.
+ */
+export const WISP_RISE = 0.07;
+export const WISP_GROW_FROM = 0.4;
 
 /** Decline path keys. */
 export const BIN_AT = BIN_POS;

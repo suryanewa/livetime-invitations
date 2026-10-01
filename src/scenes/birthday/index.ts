@@ -106,6 +106,7 @@ export class BirthdayScene implements SceneInstance {
       c.wisp.visible = wo > 0.001;
       (c.wisp.material as MeshBasicMaterial).opacity = wo;
       c.wisp.position.y = c.flame.position.y + 0.01 + (f.wispRise[i] ?? 0);
+      c.wisp.scale.y = f.wispGrow[i] ?? 1;
     });
     n.bin_root!.position.copy(f.binPos);
     n.bin_root!.visible = f.binVisible;

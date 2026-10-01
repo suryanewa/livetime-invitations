@@ -28,7 +28,11 @@ import type { MaterialPolicy, MaterialVariantSpec, NodeMap, Quat, SceneRecipe } 
  *   the candles are contract nodes and stay separate.
  * - Shadows: the joined frosting (≈200k triangles) skips the shadow pass; `cake_shadow_proxy`
  *   (decimated from it, under cake_secondary so it follows the yaw, the carry and the lean)
- *   casts instead. Candles cast their own shadows (1.5k triangles each; they move on their own).
+ *   casts instead. Each candle casts through its own proxy (`candle_NN_shadow_proxy`, under
+ *   candle_NN so it lowers and is carried with it): not for the triangles but because the wax's
+ *   stripe LUT is a `map`, and three's shared shadow depth material keeps the last caster's map;
+ *   after the scene is disposed it re-uploaded that LUT (one leaked texture per Birthday visit,
+ *   tests/browser/birthday.spec.ts). Proxies carry no map.
  * - Presets (variants vanilla, cocoa): the master ships a blue palette (powder-blue body, cornflower
  *   rosettes; tools/cake_palette.py in the Models repo). The default materials are recoloured to
  *   vanilla here (ivory body, warm-white piping, vanilla-cream rosettes, white pearls, by
@@ -47,7 +51,7 @@ const lin = (hex: string): [number, number, number, number] => {
 
 /** Frosting palettes (sRGB). */
 export const PALETTE = {
-  vanilla: { body: '#F3E9D8', piping: '#FFFDF8', rosette: '#EEDBB8', pearl: '#FFFFFF' },
+  vanilla: { body: '#F3E9D8', piping: '#FFFDF8', rosette: '#F3E3C7', pearl: '#FFFFFF' },
   cocoa: { body: '#5E3727', piping: '#94603F', rosette: '#4A281A', pearl: '#F4EADB' },
 } as const;
 
@@ -95,6 +99,7 @@ export const recipe: SceneRecipe = {
   shadowProxies: [
     { name: 'tray_shadow_proxy', from: ['tray'], parent: 'birthday_root', ratio: 0.02, error: 0.01 },
     { name: 'cake_shadow_proxy', from: ['frosting_cake_buttercream', 'frosting_cake_piping', 'frosting_cake_rosette', 'frosting_cake_pearl'], parent: 'cake_secondary', ratio: 0.01, error: 0.02 },
+    ...BIRTHDAY_CANDLE_IDS.map((id) => ({ name: `candle_${id}_shadow_proxy`, from: [`candle_${id}_wax`], parent: `candle_${id}`, ratio: 0.12, error: 0.02 })),
   ],
   variants: ['vanilla', 'cocoa'],
   materialVariants: cocoa,

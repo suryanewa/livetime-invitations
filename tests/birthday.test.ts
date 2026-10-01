@@ -21,7 +21,7 @@ import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
 const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
 const pose = (p: CanonicalPose) => frameFor(p, newFrame());
-const ARRAYS = ['drop', 'flameScale', 'flameOpacity', 'flameLean', 'wispOpacity', 'wispRise'] as const;
+const ARRAYS = ['drop', 'flameScale', 'flameOpacity', 'flameLean', 'wispOpacity', 'wispRise', 'wispGrow'] as const;
 const SCALARS = ['cakeYaw', 'cakeLean', 'wickLean', 'flaps'] as const;
 const DEG = Math.PI / 180;
 
@@ -96,7 +96,7 @@ describe('Birthday choreography', () => {
           const name = names[k]!;
           const m = /^(flameScale|flameLean|flameOpacity)\[(\d)\]$/.exec(name);
           if (m && Math.min(a.flameOpacity[+m[2]!]!, c.flameOpacity[+m[2]!]!) < 1e-9) continue;
-          const w = /^wispRise\[(\d)\]$/.exec(name);
+          const w = /^(?:wispRise|wispGrow)\[(\d)\]$/.exec(name);
           if (w && Math.min(a.wispOpacity[+w[1]!]!, c.wispOpacity[+w[1]!]!) < 1e-9) continue;
           const d2 = Math.abs(ca[k]! - 2 * cb[k]! + cc[k]!);
           // Positions: the bin's 2.8-unit slide-in peaks near 1100 units/s²; allow 3000 (jumps > 0.3 units/s).
@@ -160,6 +160,8 @@ describe('Birthday choreography', () => {
       for (let k = 0; k < CANDLE_COUNT; k++) {
         expect(f.wispOpacity[k]!).toBeLessThanOrEqual(WISP_OPACITY + 1e-9);
         if (i < 600 || i >= 1000) expect(f.wispOpacity[k]).toBe(0);
+        // While it reads (over half its peak) the wisp's foot stays on the wick: no floating smoke.
+        if (f.wispOpacity[k]! >= WISP_OPACITY / 2) expect(f.wispRise[k]!).toBeLessThan(0.03);
       }
     }
     expect(at('accept', 1.4).wickLean).toBe(0);
@@ -354,11 +356,23 @@ describe('Birthday runtime GLB matches the contract', async () => {
     }
   });
 
-  it('shadow proxies cast for the stand and the cake (and follow the cake: under cake_secondary)', () => {
+  it('shadow proxies cast for the stand, the cake (under cake_secondary) and each candle (under candle_NN)', () => {
     expect(node('cake_shadow_proxy').getParentNode()).toBe(node('cake_secondary'));
     expect(node('tray_shadow_proxy').getParentNode()).toBe(node('birthday_root'));
     for (const n of ['cake_shadow_proxy', 'tray_shadow_proxy']) expect((node(n).getExtras() as { shadowProxy?: boolean }).shadowProxy).toBe(true);
     expect((node('tray_mesh').getExtras() as { noShadowCast?: boolean }).noShadowCast).toBe(true);
+    // Each candle casts through a map-free proxy that lowers with it (the wax's LUT map must not
+    // reach three's shared shadow depth material, which outlives the scene).
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const id = String(i + 1).padStart(2, '0');
+      const proxy = node(`candle_${id}_shadow_proxy`);
+      expect(proxy.getParentNode()).toBe(node(`candle_${id}`));
+      expect((proxy.getExtras() as { shadowProxy?: boolean }).shadowProxy).toBe(true);
+      expect((node(`candle_${id}_wax_mesh`).getExtras() as { noShadowCast?: boolean }).noShadowCast).toBe(true);
+      const b = boxIn(proxy, node(`candle_${id}`));
+      expect(Math.abs(b.max.y - CANDLE.height)).toBeLessThan(0.01);
+      expect(b.min.y).toBeLessThan(0.01);
+    }
   });
 
   it('carries vanilla (default) and cocoa frostings as material variants; stand and candles keep the master colours', () => {

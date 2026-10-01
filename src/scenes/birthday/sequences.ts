@@ -4,7 +4,7 @@ import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 import {
   BIN_AT, BIN_FROM, CANDLE_COUNT, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LAND_SPEED, CANDLE_SETTLE, CANDLE_START, CARRY, CARRY_FROM, CARRY_LEAN, CARRY_TO,
   DROP_TO, DROPPED, DURATIONS, FLAME_RISE, FLAME_START, HOVER_OVER_BIN, LEAN, LEAN_FADE, LEAN_MAX, ON_STAND, OUT_LEN, OUT_START, PRESENT_YAW, WICK_LEAN,
-  WISP_LEN, WISP_OPACITY, WISP_RISE, WISP_START,
+  WISP_GROW_FROM, WISP_LEN, WISP_OPACITY, WISP_RISE, WISP_START,
 } from './poses.ts';
 
 /**
@@ -30,6 +30,8 @@ export interface BirthdayFrame {
   wickLean: number;
   wispOpacity: number[];
   wispRise: number[];
+  /** Wisp height as a fraction of its full curl (1 at rest). */
+  wispGrow: number[];
   binPos: Vector3;
   binVisible: boolean;
   /** Flap opening fraction (0 closed, 1 open). */
@@ -41,7 +43,7 @@ const filled = (v: number) => Array.from({ length: CANDLE_COUNT }, () => v);
 export function newFrame(): BirthdayFrame {
   return frameFor('guest-ready', {
     cakePos: new Vector3(), cakeYaw: 0, cakeLean: 0, cakeVisible: true, drop: filled(0), flameScale: filled(1), flameOpacity: filled(1),
-    flameLean: filled(0), wickLean: 0, wispOpacity: filled(0), wispRise: filled(0), binPos: new Vector3(), binVisible: false, flaps: 0,
+    flameLean: filled(0), wickLean: 0, wispOpacity: filled(0), wispRise: filled(0), wispGrow: filled(1), binPos: new Vector3(), binVisible: false, flaps: 0,
   });
 }
 
@@ -60,6 +62,7 @@ export function frameFor(pose: CanonicalPose, out: BirthdayFrame): BirthdayFrame
   out.wickLean = 0;
   setAll(out.wispOpacity, 0);
   setAll(out.wispRise, 0);
+  setAll(out.wispGrow, 1);
   out.binPos.copy(pose === 'declined' ? BIN_AT : BIN_FROM);
   out.binVisible = pose === 'declined';
   out.flaps = 0;
@@ -122,8 +125,10 @@ function accept(t: number, out: BirthdayFrame): void {
     // 0.60–0.99: at most one faint wisp per candle, dissolving upward.
     const w = seg(t, WISP_START[i]!, WISP_START[i]! + WISP_LEN);
     out.wispOpacity[i] = w > 0 && w < 1 ? WISP_OPACITY * Math.sin(Math.PI * w) ** 2 : 0;
-    // Back to rest once the wisp has dissolved (invisible), so the accepted pose is exact.
-    out.wispRise[i] = w < 1 ? WISP_RISE * easeOutCubic(w) : 0;
+    // Rooted on the wick while it unfurls; lifts off only as it fades. Back to rest once the
+    // wisp has dissolved (invisible), so the accepted pose is exact.
+    out.wispRise[i] = w < 1 ? WISP_RISE * w * w * w : 0;
+    out.wispGrow[i] = w > 0 && w < 1 ? WISP_GROW_FROM + (1 - WISP_GROW_FROM) * easeOutCubic(w) : 1;
   }
 }
 

@@ -105,3 +105,57 @@ test('Graphics loss shows the shared declined Birthday poster and responses stil
   await expect.poll(async () => (await state(page)).response.persistence).toBe('saved');
   await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /shared-declined/);
 });
+
+test('Frosting variants and the Low tier on the cake master: visible, exact round trips, no leaks', async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await ready(page);
+  const c = 'window.__showcase.controller';
+  const settle = () => page.waitForTimeout(400);
+  const still = () => page.evaluate(`${c}.captureStill(256, 1)`) as Promise<string>;
+  const info = () => page.evaluate(`${c}.renderInfo()`) as Promise<{ textures: number; geometries: number }>;
+  const config = async (literal: string, reload = false) => {
+    await page.evaluate((l) => (window as any).__showcase.setConfig(new Function(`return (${l})`)()), literal);
+    if (reload) await expect.poll(async () => (await state(page)).resource, { timeout: 30_000 }).toBe('ready');
+    await settle();
+  };
+  const tier = async (t: string) => {
+    await page.evaluate(`${c}.setQualityTier('${t}')`);
+    await expect.poll(async () => (await state(page) as unknown as { tier: string }).tier).toBe(t);
+    await settle();
+  };
+  await page.evaluate(`${c}.setReducedMotion(true)`);
+  await settle();
+  const vanilla = await still();
+
+  // Cocoa is a KHR_materials_variants switch on the frosting: a large change; vanilla comes back exactly.
+  await config('{ category: "birthday", cake: "cocoa" }');
+  expect(await stillDiff(page, vanilla, await still())).toBeGreaterThan(2);
+  await config('{ category: "birthday", cake: "vanilla" }');
+  expect(await stillDiff(page, vanilla, await still())).toBeLessThan(0.3);
+
+  // Low tier (shadow map off for the master's proxies) and back.
+  await tier('low');
+  expect(await stillDiff(page, vanilla, await still())).toBeGreaterThan(0.2);
+  await tier('normal');
+  expect(await stillDiff(page, vanilla, await still())).toBeLessThan(0.3);
+
+  // Leaving and re-entering the scene (once at Low) frees the master, the wisps and the flames.
+  const away = '{ category: "party", songId: "sample-track-a", label: "coral" }';
+  const back = '{ category: "birthday", cake: "vanilla" }';
+  await config(away, true);
+  await config(back, true);
+  const baseline = await info();
+  for (let i = 0; i < 2; i++) {
+    if (i === 1) await tier('low');
+    await config(away, true);
+    await config(back, true);
+    await tier('normal');
+    const now = await info();
+    expect(now.textures, `visit ${i + 1}`).toBeLessThanOrEqual(baseline.textures);
+    expect(now.geometries).toBeLessThanOrEqual(baseline.geometries);
+  }
+  expect(errors).toEqual([]);
+});
