@@ -2,6 +2,15 @@
 
 ## v1.2 (2026-10-01): scan-to-CAD masters
 
+> **Studio pass v1.3 in progress (docs/studio-pass-brief.md).** The infrastructure commit removed the grades that
+> compensated for the v1.1 peach studio, so the masters' materials stand as authored: Party `PLINTH_TONE`, the lid's
+> satin outer coat (the interior split stays), `tt_spindle` and the label's wedge and sliver (the prints are the
+> master's art recoloured); Dinner's `finishDish` lathe polish and the trim's roughness 0.12; Birthday's darker
+> vanilla (back to `#F3E9D8` at the master's roughness); Sports' `LEATHER_GRADE`; Business' chrome polish. The CSS
+> vignette and grain over the stage are gone, and the stage renders through a perspective lens (18°, the shared
+> angle, `framePoints` fitted). Statements below marked *(removed in v1.3)* record v1.2 only. The studio is still
+> v1.1's (rig `v1.1`, `src/render/rigs/`), so the stage token `#F8E4C8` still matches it; v1.3 replaces this section.
+
 Surya asked that every interaction use the new models: *"buttery smooth and the same conceptually, but higher fidelity with the physics and our new models."* The invitation objects are now the scan-to-CAD rebuilds: eight realistic PBR objects with textured materials, rebuilt by design.inc from Meshy scans (`models/masters/*.glb`; generators in `github.com/suryanewa/scan-to-cad-rebuilds`).
 
 - **The object look is owned by the masters and the recipes,** not by the v1.1 "Satin Enamel" object rules. `models/masters/*.glb` gives the geometry and materials. Each scene's recipe (`scripts/masters/recipes/<scene>.ts`, with a Decisions block at the top) gives the scale, pivots, joins, material policies and preset variants, plus a few load-time finishes in the scene's rig (named below). Where a v1.1 or v1.0 object statement further down disagrees with this section, this section wins; those statements are marked *superseded* and kept for the record.
@@ -19,9 +28,9 @@ Surya asked that every interaction use the new models: *"buttery smooth and the 
 - **Object:** the turntable master at `TT_SCALE` 1.132 (the plinth is 2.1 wide, as in v1.1, with the deck at 0.341). It has a brushed-steel plinth on rubber feet, a platter with a rubber mat and spindle, a record with its label, and a gimballed tonearm with a counterweight, headshell and cartridge. Its cue lever, arm lift and hinged smoked dust cover are also the master's. A turned chrome **tonearm rest** with a black-anodised cradle is added by the scaffold: the master's arm is posed playing and has no rest. Its materials are exact copies of the master's chrome and anodising, so the export folds them into one material each.
 - **Materials of note:**
   - Every master material is kept and renamed `tt_*`.
-  - The brushed steel keeps 92 % of its luminance and 40 % of its chroma (`PLINTH_TONE`), so it reads graphite-taupe rather than bronze under the warm key.
-  - The spindle is turned steel (`tt_spindle`, grey 0.42, roughness 0.24) instead of mirror chrome.
-  - The dust cover is lengthened in place (`extendLid`) so that, closed, it encloses the platter, knob and counterweight. It is split by face orientation into a satin outer coat (clearcoat 0.25 / 0.5, roughness 0.55) and a darker, uncoated interior with baked occlusion (`LID_LOOK`), so it stays dark smoked plastic through the close. The lid does not receive shadows.
+  - The brushed steel keeps 92 % of its luminance and 40 % of its chroma (`PLINTH_TONE`), so it reads graphite-taupe rather than bronze under the warm key. *(removed in v1.3)*
+  - The spindle is turned steel (`tt_spindle`, grey 0.42, roughness 0.24) instead of mirror chrome. *(removed in v1.3)*
+  - The dust cover is lengthened in place (`extendLid`) so that, closed, it encloses the platter, knob and counterweight. It is split by face orientation into a satin outer coat (clearcoat 0.25 / 0.5, roughness 0.55; *removed in v1.3*) and a darker, uncoated interior with baked occlusion (`LID_LOOK`), so it stays dark smoked plastic through the close. The lid does not receive shadows.
   - The vinyl's 8192×4 groove normal and anisotropy LUTs are kept exact.
   - The status is the start/stop key cap, which lights green `#3BE08A`. The v1.1 perforation row and status lens are gone.
 - **Physics upgrades:**
@@ -30,7 +39,7 @@ Surya asked that every interaction use the new models: *"buttery smooth and the 
   - The gimballed cue lifts, swings and lowers on the master bearing, and the counterweight pitches with it.
   - The platter spins up through a belt-drive lag (95 % of speed in ≈0.35 s) and brakes on a smootherstep.
   - The lid closes as one damped hinge (a Beta(2, 4) profile) from the master's 27.6° lean.
-- **Presets:** coral and cobalt label prints are variants of the master's label (`labelPrint`: the master's olive field and ink re-inked in linear light). They carry v1.1's quarter wedge and butter sliver, so the accept spin reads at stage size.
+- **Presets:** coral and cobalt label prints are variants of the master's label (`labelPrint`: the master's olive field and ink re-inked in linear light). They carry v1.1's quarter wedge and butter sliver, so the accept spin reads at stage size. *(removed in v1.3)*
 - **Presentation tilt:** the hovering record tips 0.65 rad toward the camera (was 0.9), so it stays below the key's broad specular lobe and reads black.
 - **Known gaps:** the shared director's interruption blend can turn the record back by up to π. The tonearm cue is small at stage size. The extended lid reads as a second box when closed. The settle is subtle on purpose. See `docs/scenes/party-v1.2.md`.
 
@@ -48,13 +57,13 @@ Surya asked that every interaction use the new models: *"buttery smooth and the 
   - The carried cake leans like a pendulum (≤ 1.8°) and is upright before the drop.
   - Over the bin, the cake's own materials darken with height ("bin shade"), so it sinks into shade instead of staying key-lit.
 - **Presets** (variants of the four frosting materials):
-  - **Vanilla:** body `#E0D3BF` at roughness 0.58, piping `#FFFCF6`, rosettes `#F7EFE1`, pearls white.
+  - **Vanilla:** body `#E0D3BF` at roughness 0.58, piping `#FFFCF6`, rosettes `#F7EFE1`, pearls white. *(removed in v1.3)*
   - **Cocoa:** body `#5E3727`, piping `#94603F`, rosettes `#4A281A`, pearls `#F4EADB`.
 - **Known gaps:** the flames are the stylised v1.1 shader, not the master's cream teardrop. The candles are only a few pixels wide on a phone. The lean is subtle. The lookdev identity tile still builds the v1.1 cake. See `docs/scenes/birthday-v1.2.md`.
 
 ### Sports (v1.2)
 
-- **Ball:** the basketball master (81k triangles; albedo, ORM and normal maps at 2048×1365, clearcoat 0.2) at r 0.25. Its great-circle seam cross faces the guest at guest-ready, as the v1.1 shader ball's did. The master's curved seams bow towards the cross, as on the scanned ball. A load-time multiply (`LEATHER_GRADE`) deepens the orange to about (222, 82, 24) at guest-ready. **Cream preset:** a second albedo generated from the orange one, with the panels remapped to ivory (236, 229, 212) so the lit side separates from the peach stage by hue. The pebble mottling and seams are kept, and it is stored as a material variant. The v1.1 coral equator and limb darkening are not carried over.
+- **Ball:** the basketball master (81k triangles; albedo, ORM and normal maps at 2048×1365, clearcoat 0.2) at r 0.25. Its great-circle seam cross faces the guest at guest-ready, as the v1.1 shader ball's did. The master's curved seams bow towards the cross, as on the scanned ball. A load-time multiply (`LEATHER_GRADE`) deepened the orange to about (222, 82, 24) at guest-ready *(removed in v1.3)*. **Cream preset:** a second albedo generated from the orange one, with the panels remapped to ivory (236, 229, 212) so the lit side separates from the peach stage by hue. The pebble mottling and seams are kept, and it is stored as a material variant. The v1.1 coral equator and limb darkening are not carried over.
 - **Hoop:** the master's board (dark wood frame, grey laminate face, white target), red powder-coated rim on its bracket, zinc steel hardware and a 20-strand twisted-rope net. It is scaled so the rim's inner diameter stays 1.6× the ball's. The v1.1 cream board, ink backer frame, coral target inlay and perforation row are replaced by the master's own design.
 - **Stand:** the v1.1 ink pole, ogee base, clamp and arm, with the chrome trim ring and a back plate on the master board (code-authored).
 - **Net:** the master's net is narrower than the ball at rest. On the made shot a **ball-following bulge** (`NetPose`, `netOpening`) opens each row just enough to clear the ball at that height, with strands, loops and knots moving together. The net stretches (≤ 20 %) while the ball drags it, then rebounds and settles to exactly rest 0.6 s after contact. The far layer keeps its 0.8 shade. *(The v1.2 foundation's uniform `netOpenScale` flare is superseded.)*
@@ -71,7 +80,7 @@ Surya asked that every interaction use the new models: *"buttery smooth and the 
 
 - **Plate:** the porcelain plate master (clearcoated porcelain, with a gilt band on the rim that has its own environment at 1.1), 1.6 across as in v1.1. The reveal shows the plate itself, the gilt rim catching the key. The v1.1 perforation row, ink foot line and cream glaze are replaced by the master's own design.
 - **Cloche:** the silver cloche master's dome assembly (dome, lip bead, two bands, finial, ring handle) at the plate's scale (`DISH_SCALE` 0.8399). Its own tray is dropped and the plate takes its place.
-  - **Dome:** polished silver with a **lathe-polish anisotropy**: 0.3 along the meridians (rotation π/2), roughness 0.2, own environment 0.9, set at load by `finishDish` in `models/dinner.ts`. The softbox stretches into soft vertical highlight bands with darker reflections between them. An isotropic finish of the master's near-white silver read pale and frosted in the cream studio. The first ship (0.5 at roughness 0.18) read as a ribbed dome of light and dark gores; v1.2.1 settled on 0.3 / 0.2.
+  - **Dome:** polished silver with a **lathe-polish anisotropy**: 0.3 along the meridians (rotation π/2), roughness 0.2, own environment 0.9, set at load by `finishDish` in `models/dinner.ts`. The softbox stretches into soft vertical highlight bands with darker reflections between them. An isotropic finish of the master's near-white silver read pale and frosted in the cream studio. The first ship (0.5 at roughness 0.18) read as a ribbed dome of light and dark gores; v1.2.1 settled on 0.3 / 0.2. *(removed in v1.3)*
   - **Bead, bands, finial and handle:** softened to roughness 0.12 at own environment 0.8, so they shade like metal rather than pale lines.
   - The v1.1 coral knob is gone with the master's ring handle.
 - **Motion:** the beats and durations are the same. The reveal is handle-led (the guest-side rim tips up first). Every set-down lands the leading rim first, and the ≤ 1° rim rock follows on, C1. A change of mind rewinds the showing outcome along its own path instead of cutting (see `docs/spec-revisions.md`).
@@ -82,7 +91,7 @@ Surya asked that every interaction use the new models: *"buttery smooth and the 
 - **Object:** the badge master at ×1.5: a printed card in a clear vinyl holder (0.744 × 1.164) with side clips, a chrome D-ring, swivel and **closed snap hook**, and a woven blue strap. The reader master is at ×0.72 (0.92 × 1.37): a brushed-steel wedge body on a plinth, with a black glass face leaning 11.6°, a window gasket, an LED bar with its glow and an NFC mark. One stage unit is 76.3 mm: the printed card's width, 0.472 master units at ×1.5, is a CR80 card's 54 mm short side.
 - **Materials of note:**
   - The clear holder is drawn as a clear sheet: no diffuse, its reflection added at full strength, the master's roughness 0.03 and specular kept, and 14 % dimming. The recipe's `transmissionToAlpha` 0.35 is in the GLB, but a plain alpha blend read as a white veil.
-  - The chrome is polished in the recipe (roughness 0.1, base 0.6), so it reads as metal.
+  - The chrome is polished in the recipe (roughness 0.1, base 0.6), so it reads as metal. *(removed in v1.3)*
   - The master's static strap is dropped. The v1.1 runtime lanyard rig draws the strands in the master's own woven material (`badge_strap`: albedo, normal, ORM and sheen), from a sewn tab folded round the D-ring.
   - **Status:** the master's LED (`emissiveStrength` 1) plus a lit **status tile** (0.30 × 0.19) on the lower glass, with a dark check (accept) or minus (decline). It glows green `#3BE08A` (LED 1.0, tile 0.72) or red `#E53E3E` (LED 0.85, tile 0.66). The tile reads by shape without colour and stays in view under the pressed card.
 - **Physics upgrades:**

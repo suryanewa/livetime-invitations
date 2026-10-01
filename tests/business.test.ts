@@ -813,4 +813,10 @@ describe('Business runtime GLB matches the contract', async () => {
     expect(vinyl.getAlphaMode()).toBe('BLEND');
     expect(vinyl.getAlpha()).toBeCloseTo(0.35, 6);
   });
+
+  it('the chrome hardware is the master’s (roughness 0.3, base 0.86): no studio regrade', () => {
+    const chrome = doc.getRoot().listMaterials().find((m) => m.getName() === 'badge_chrome')!;
+    expect(chrome.getRoughnessFactor()).toBeCloseTo(0.3, 3);
+    for (const k of chrome.getBaseColorFactor().slice(0, 3)) expect(k).toBeGreaterThan(0.8);
+  });
 });

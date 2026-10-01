@@ -358,7 +358,7 @@ describe('Party runtime GLB matches the contract (master at TT_SCALE)', () => {
     expect(tex('tt_label_cobalt')).not.toBe(tex('tt_label_coral'));
   });
 
-  it('label prints: a bold wedge and sliver on one side and dark ink, so the turn reads at stage size', () => {
+  it('label prints: the master’s own print recoloured (field to the preset, marks as dark ink), nothing painted on', () => {
     // A synthetic print: the master's olive field everywhere, one texel of its ink.
     const size = 64, img = { data: new Uint8Array(size * size * 3), width: size, height: size, channels: 3 as const };
     for (let i = 0; i < img.data.length; i += 3) img.data.set([134, 128, 94], i);
@@ -369,23 +369,25 @@ describe('Party runtime GLB matches the contract (master at TT_SCALE)', () => {
       return 0.2126 * l(c[0]!) + 0.7152 * l(c[1]!) + 0.0722 * l(c[2]!);
     };
     const contrast = (a: ArrayLike<number>, b: ArrayLike<number>) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+    const fields = { coral: [255, 113, 74], cobalt: [47, 84, 201] } as const;
     for (const preset of ['coral', 'cobalt'] as const) {
       const out = labelPrint(preset)(img).data;
-      const texel = (deg: number, r: number) => {
-        const a = (deg * Math.PI) / 180;
-        const x = Math.floor(size / 2 + Math.cos(a) * r * (size / 2)), y = Math.floor(size / 2 - Math.sin(a) * r * (size / 2));
-        return out.subarray((y * size + x) * 3, (y * size + x) * 3 + 3);
-      };
-      const field = texel(0, 0.6), wedge = texel(175, 0.6), sliver = texel(226, 0.6), opposite = texel(355, 0.6);
-      expect([...field], preset).toEqual([...opposite]);
-      // Luminance contrast (WCAG ratio) on top of the hue contrast: coral/navy ≈ 4.3, cobalt/coral ≈ 2.4.
-      expect(contrast(field, wedge), `${preset} wedge`).toBeGreaterThan(2);
-      expect(contrast(field, sliver), `${preset} sliver`).toBeGreaterThan(1.3);
+      // Every field texel takes the preset colour, at every angle: no wedge, no sliver (v1.2's
+      // painted marks were removed in the studio pass; the master's own art carries the spin).
+      const colours = new Set<string>();
+      for (let i = 0; i < out.length; i += 3) if (i !== inkAt) colours.add(`${out[i]},${out[i + 1]},${out[i + 2]}`);
+      expect([...colours], preset).toEqual([fields[preset].join(',')]);
       // Ink: coral ≈ 5.2, cobalt ≈ 3.0 (the first pass’s 3.7 and 2.4).
-      expect(contrast(field, out.subarray(inkAt, inkAt + 3)), `${preset} ink`).toBeGreaterThan(preset === 'coral' ? 5 : 2.9);
-      // Asymmetric: the wedge covers a quarter turn, so half a turn later it is the field.
-      expect([...texel(175, 0.6)]).not.toEqual([...texel(355, 0.6)]);
+      expect(contrast(out.subarray(0, 3), out.subarray(inkAt, inkAt + 3)), `${preset} ink`).toBeGreaterThan(preset === 'coral' ? 5 : 2.9);
     }
+  });
+
+  it('the brushed steel plinth keeps the master’s own base colour (no studio regrade)', () => {
+    const steel = doc.getRoot().listMaterials().find((m) => m.getName() === 'tt_brushed_steel')!;
+    const [r, g, b] = steel.getBaseColorFactor();
+    expect(r).toBeCloseTo(0.20155625378383743, 5);
+    expect(g).toBeCloseTo(0.17788841597328695, 5);
+    expect(b).toBeCloseTo(0.15292615198613213, 5);
   });
 
   it('the scaffold rest shares the master’s chrome and black anodising (one material each, clearcoat kept)', () => {
@@ -681,7 +683,7 @@ describe('Party dust cover look (the decline flash fix)', () => {
     expect(outs.some((f) => f.n.y > 0.99)).toBe(true);
   });
 
-  it('the inside is darker and uncoated, with occlusion deepest under the top panel; the outside is a satin coat', () => {
+  it('the inside is darker and uncoated, with occlusion deepest under the top panel; the outside keeps the master’s coat', () => {
     expect(innerMaterial.name).toBe('tt_lid_inner');
     expect(inner.material).toBe(innerMaterial);
     expect(innerMaterial.clearcoat).toBe(0);
@@ -698,12 +700,10 @@ describe('Party dust cover look (the decline flash fix)', () => {
     expect(lo).toBeGreaterThanOrEqual(LID_LOOK.inner.aoDeep - 1e-6);
     expect(hi).toBeLessThanOrEqual(LID_LOOK.inner.aoRim + 1e-6);
     expect(atTop).toBeLessThan(LID_LOOK.inner.aoDeep + 0.05);
-    // Outside: a thinner, rougher coat than the master's near-mirror (0.6 at 0.08).
-    expect(physical.clearcoat).toBe(LID_LOOK.outer.clearcoat);
-    expect(physical.clearcoatRoughness).toBe(LID_LOOK.outer.clearcoatRoughness);
-    expect(physical.roughness).toBe(LID_LOOK.outer.roughness);
-    expect(physical.clearcoatRoughness).toBeGreaterThanOrEqual(0.4);
-    expect(physical.clearcoat).toBeLessThanOrEqual(0.3);
+    // Outside: the master's own coat, untouched (studio pass v1.3 removed the satin regrade).
+    expect(physical.clearcoat).toBe(0.6);
+    expect(physical.clearcoatRoughness).toBe(0.08);
+    expect(physical.roughness).toBe(0.3);
   });
 });
 

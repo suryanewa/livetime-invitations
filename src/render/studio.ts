@@ -3,18 +3,12 @@ import {
   BufferGeometry,
   CanvasTexture,
   Color,
-  DirectionalLight,
-  HemisphereLight,
   LinearFilter,
   Mesh,
   MeshStandardMaterial,
   NoColorSpace,
-  Object3D,
-  PCFShadowMap,
   ShaderChunk,
   RepeatWrapping,
-  type Scene,
-  SpotLight,
   SRGBColorSpace,
   type Texture,
   type WebGLRenderer,
@@ -22,23 +16,13 @@ import {
 import { keepPixels } from './textures.ts';
 
 /**
- * Premium studio (fidelity pass): a sunlit key with a soft-edged foliage gobo, a seamless
- * paper sweep that receives real soft shadows, and a quiet hemisphere fill. Everything is
- * procedural (no HDRI, no downloads). Low tier drops the shadow map and the plaster relief and
- * keeps a small copy of the gobo, leaving the contact-shadow rig; camera, silhouette, light and
- * timing are unchanged.
+ * Studio kit (shared by the rigs in src/render/rigs/): the v1.1 foliage gobo, the limewash
+ * plaster, the seamless cove sweep and the noise-free PCF filter. Everything is procedural and
+ * seeded (no HDRI, no downloads), so every render and poster matches.
  */
 
-export const STUDIO = {
-  // Late-afternoon sun: warm key, cool sky fill, warm bounce off the plaster.
-  key: { color: '#FFF1DE', intensity: 15, position: [-4.2, 7.8, 5.4] as const, angle: 0.6, penumbra: 0.7, decay: 0 },
-  fill: { sky: '#E3E9EF', ground: '#D6C7B2', intensity: 0.3 },
-  bounce: { color: '#FFE8D2', intensity: 0.14, position: [3, 1.2, 4] as const },
-  sweep: { color: '#EAE3D6', roughness: 0.93 },
-  shadow: { mapSize: 1024, radius: 6, bias: -0.0004, normalBias: 0.012 },
-  /** Default backdrop wall (objects reach z ≈ −1.2). */
-  wallZ: -3.2,
-} as const;
+/** Default backdrop wall (objects reach z ≈ −1.2). */
+export const DEFAULT_WALL_Z = -3.2;
 
 /**
  * Sun-through-palms cookie. Two depths of foliage: a far layer, heavily blurred and faint, and
@@ -211,7 +195,7 @@ export function plasterTextures(size = 512): { normal: Texture; albedo: Texture 
 /** Radius of the backdrop cove: the floor starts curving up at z = wallZ + COVE_RADIUS. */
 export const COVE_RADIUS = 1.6;
 
-export function sweepGeometry(wallZ: number = STUDIO.wallZ): BufferGeometry {
+export function sweepGeometry(wallZ: number = DEFAULT_WALL_Z): BufferGeometry {
   const width = 16, depth = 7, height = 8, radius = COVE_RADIUS, segs = 24;
   // Profile in (z, y): front edge → floor → cove arc → wall top.
   const profile: [number, number][] = [];
@@ -244,24 +228,13 @@ export function sweepGeometry(wallZ: number = STUDIO.wallZ): BufferGeometry {
   return g;
 }
 
-export function createSweep(color: string = STUDIO.sweep.color, wallZ: number = STUDIO.wallZ): Mesh {
-  const g = sweepGeometry(wallZ);
-  const plaster = plasterTextures();
-  const m = new MeshStandardMaterial({ name: 'mat_sweep', color: new Color(color), roughness: STUDIO.sweep.roughness, metalness: 0, map: plaster.albedo, normalMap: plaster.normal });
-  m.normalScale.set(0.55, 0.55);
-  const mesh = new Mesh(g, m);
-  mesh.name = 'studio_sweep';
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
 /**
  * three's PCF rotates 5 taps per pixel with interleaved gradient noise, which dithers wide
  * penumbrae. Swap it (spot/directional path only) for 16 fixed Vogel taps, each a hardware
  * bilinear compare: smooth, noise-free soft shadows, and unlike VSM no extra draw calls.
  */
 let pcfPatched = false;
-function smoothPcf(): void {
+export function smoothPcf(): void {
   if (pcfPatched) return;
   pcfPatched = true;
   const noisy = /float phi = interleavedGradientNoise\( gl_FragCoord\.xy \) \* PI2;\s*shadow = \([\s\S]*?\) \* 0\.2;/;
@@ -280,20 +253,8 @@ function smoothPcf(): void {
   );
 }
 
-export interface PremiumStudio {
-  key: SpotLight;
-  sweep: Mesh;
-  /** Shadows on (Normal/High) or off (Low/Static); off frees the shadow map. */
-  setShadows(enabled: boolean): void;
-  /** Low/Static: drop the gobo cookie and the plaster relief (GPU copies freed); reversible. */
-  setLowDetail(enabled: boolean): void;
-  /** Move the backdrop wall (rebuilds the sweep geometry only when it changes). */
-  setWall(wallZ?: number): void;
-  dispose(): void;
-}
-
-/** A small copy of the gobo cookie for the Low tier (same pattern, softer edges). */
-function downsampledCookie(full: Texture, size: number): Texture {
+/** A small copy of a gobo cookie for the Low tier (same pattern, softer edges). */
+export function downsampledCookie(full: Texture, size: number): Texture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
@@ -306,88 +267,68 @@ function downsampledCookie(full: Texture, size: number): Texture {
   return tex;
 }
 
-/** Add the premium key/fill/sweep to a scene that already has the PMREM environment. */
-export function createPremiumStudio(renderer: WebGLRenderer, scene: Scene, target: Object3D): PremiumStudio {
-  smoothPcf();
-  renderer.shadowMap.type = PCFShadowMap;
-  const key = new SpotLight(STUDIO.key.color, STUDIO.key.intensity, 0, STUDIO.key.angle, STUDIO.key.penumbra, STUDIO.key.decay);
-  key.name = 'studio_key';
-  key.position.set(...STUDIO.key.position);
-  key.target = target;
-  key.map = foliageCookie();
-  key.castShadow = true;
-  key.shadow.mapSize.set(STUDIO.shadow.mapSize, STUDIO.shadow.mapSize);
-  key.shadow.radius = STUDIO.shadow.radius;
-  key.shadow.bias = STUDIO.shadow.bias;
-  key.shadow.normalBias = STUDIO.shadow.normalBias;
-  key.shadow.camera.near = 4;
-  key.shadow.camera.far = 20;
+export interface SweepOptions {
+  color: string;
+  roughness: number;
+  /** Limewash plaster relief and mottle (v1.1); false = a clean painted cove. */
+  plaster?: boolean;
+  /** Plaster relief strength. */
+  normalScale?: number;
+  wallZ?: number;
+}
 
-  const fill = new HemisphereLight(STUDIO.fill.sky, STUDIO.fill.ground, STUDIO.fill.intensity);
-  const bounce = new DirectionalLight(STUDIO.bounce.color, STUDIO.bounce.intensity);
-  bounce.position.set(...STUDIO.bounce.position);
-  const sweep = createSweep();
-  scene.add(key, fill, bounce, sweep);
+export interface SweepBackdrop {
+  mesh: Mesh;
+  /** Rebuilds the geometry only when the wall moves. */
+  setWall(wallZ?: number): void;
+  /** Low tier: drop the plaster relief (GPU copy freed; the canvas stays, so it returns). */
+  setLowDetail(enabled: boolean): void;
+  dispose(): void;
+}
 
-  const setShadows = (enabled: boolean) => {
-    renderer.shadowMap.enabled = enabled;
-    key.castShadow = enabled;
-    if (!enabled && key.shadow.map) {
-      // Free the depth target (and its depth texture); three rebuilds it when shadows return.
-      key.shadow.map.dispose();
-      key.shadow.map = null;
-    }
-    renderer.shadowMap.needsUpdate = true;
-  };
-  setShadows(true);
-
-  const cookie = key.map!;
-  const sweepMaterial = sweep.material as MeshStandardMaterial;
-  const relief = sweepMaterial.normalMap!;
-  let lowCookie: Texture | null = null;
+/**
+ * Seamless cove sweep backdrop: floor that curves up into a back wall, receiving the key's
+ * shadow. Scenes whose motion reaches far back (the Birthday bin) push the wall back through
+ * `setWall` so the cove never meets an object.
+ */
+export function createSweepBackdrop(renderer: WebGLRenderer, options: SweepOptions): SweepBackdrop {
+  let wall = options.wallZ ?? DEFAULT_WALL_Z;
+  const plaster = options.plaster === false ? null : plasterTextures();
+  const material = new MeshStandardMaterial({
+    name: 'mat_sweep',
+    color: new Color(options.color),
+    roughness: options.roughness,
+    metalness: 0,
+    map: plaster?.albedo ?? null,
+    normalMap: plaster?.normal ?? null,
+  });
+  const scale = options.normalScale ?? 0.55;
+  material.normalScale.set(scale, scale);
+  const mesh = new Mesh(sweepGeometry(wall), material);
+  mesh.name = 'studio_sweep';
+  mesh.receiveShadow = true;
   let lowDetail = false;
-  const setLowDetail = (enabled: boolean) => {
-    if (enabled === lowDetail) return;
-    lowDetail = enabled;
-    // Low keeps the dappled sun at 192² (0.14 MiB instead of 2.25): the cookie also dims and
-    // warms the key on every object, so dropping it would brighten and cool the whole scene.
-    lowCookie ??= downsampledCookie(cookie, 192);
-    key.map = enabled ? lowCookie : cookie;
-    sweepMaterial.normalMap = enabled ? null : relief;
-    sweepMaterial.needsUpdate = true;
-    // The canvases stay, so each map uploads again when it returns.
-    if (enabled) {
-      cookie.dispose();
-      relief.dispose();
-    } else {
-      lowCookie.dispose();
-    }
-  };
-
-  let wall: number = STUDIO.wallZ;
-  const setWall = (wallZ: number = STUDIO.wallZ) => {
-    if (wallZ === wall) return;
-    wall = wallZ;
-    sweep.geometry.dispose();
-    sweep.geometry = sweepGeometry(wallZ);
-    renderer.shadowMap.needsUpdate = true;
-  };
-
   return {
-    key,
-    sweep,
-    setShadows,
-    setLowDetail,
-    setWall,
+    mesh,
+    setWall(wallZ = DEFAULT_WALL_Z) {
+      if (wallZ === wall) return;
+      wall = wallZ;
+      mesh.geometry.dispose();
+      mesh.geometry = sweepGeometry(wallZ);
+      renderer.shadowMap.needsUpdate = true;
+    },
+    setLowDetail(enabled) {
+      if (!plaster || enabled === lowDetail) return;
+      lowDetail = enabled;
+      material.normalMap = enabled ? null : plaster.normal;
+      material.needsUpdate = true;
+      if (enabled) plaster.normal.dispose();
+    },
     dispose() {
-      scene.remove(key, fill, bounce, sweep);
-      cookie.dispose();
-      lowCookie?.dispose();
-      key.shadow.map?.dispose();
-      sweep.geometry.dispose();
-      relief.dispose();
-      sweepMaterial.map?.dispose();
-      sweepMaterial.dispose();
+      mesh.geometry.dispose();
+      plaster?.normal.dispose();
+      plaster?.albedo.dispose();
+      material.dispose();
     },
   };
 }

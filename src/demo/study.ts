@@ -114,7 +114,7 @@ async function main() {
       <span class="s-pill">${STUDY_RECORD.selection ? `Selected: ${STUDY_RECORD.selection.choice}` : 'Neither direction selected — awaiting Surya'}</span>`),
   );
 
-  const stage = Stage.create({ preserveDrawingBuffer: true });
+  const stage = Stage.create({ preserveDrawingBuffer: true, projection: 'orthographic' });
   if (!stage) {
     wrap.append(el('p', {}, 'WebGL2 is unavailable in this browser, so the study cannot render.'));
     return;

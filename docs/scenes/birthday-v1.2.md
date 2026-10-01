@@ -59,7 +59,9 @@ Files: `scripts/masters/recipes/birthday.ts` (the recipe, with a Decisions block
     warm-white piping `#FFFDF8`, ivory-cream rosettes `#F3E3C7` and white pearls. This is close to the original ivory
     rebuild's `#EEDFC5` / `#F3E8D4`. The first rosette tone, `#EEDBB8`, read as caramel under the warm key, so it was
     lightened.
-    **v1.2.1:** the body is now `#E0D3BF` with roughness 0.58 (the master's is 0.42), the piping `#FFFCF6`, the
+    **Studio pass v1.3:** back to the palette above at the master's own roughness; the v1.2.1 darkening below was a
+    compensation for the v1.1 peach stage, removed so the ivory is judged under the new rigs.
+    **v1.2.1 (removed in v1.3):** the body was `#E0D3BF` with roughness 0.58 (the master's is 0.42), the piping `#FFFCF6`, the
     rosettes `#F7EFE1` and the pearls white. At `#F3E9D8` the lit body sat in the tone mapper's shoulder, so the
     tiers rendered as a flat ivory cut-out on the peach stage and the swags lost their relief. The deeper, more
     neutral body keeps the shading, and the lighter piping now stands out from it, as on cocoa. A first try at

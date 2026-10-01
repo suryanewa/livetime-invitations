@@ -106,7 +106,9 @@ Other changes made along the way:
   draws the holder as a clear sheet: no diffuse, its reflection added at full strength (CustomBlending
   ONE / ONE_MINUS_SRC_ALPHA), 14 % dimming (v1.2.2; 8 % read milky), the master's roughness (0.03)
   and specular kept.
-- **Chrome.** `badge_chrome` polished in the recipe (roughness 0.1, base 0.6) so it reads as metal.
+- **Chrome.** The master's `chrome_hardware` as authored (roughness 0.3, base 0.86), own environment 1.1. v1.2.1
+  polished it in the recipe (roughness 0.1, base 0.6) because it read as white satin plastic in the v1.1 beige
+  studio; the studio pass v1.3 removed that grade.
 - **Templates.** KHR_materials_variants: `light` is the master's own 2048 × 1536 print; `dark` is
   `badge_card_print_dark`, a deterministic pixel function (`darkPrint`): stock → ink `#1F2226`,
   black type → warm white `#F2EEE6`, the grey signature panel → lifted ink, cobalt lifted to

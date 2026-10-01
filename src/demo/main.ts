@@ -25,6 +25,7 @@ import { MockResponseAdapter, type MockMode, MOCK_DELAYS } from './mockAdapter.t
 import { CATEGORY_LABEL, EVENTS, HOST_ACTION, LIVE_CATEGORIES, OBJECT_LABEL, POSE_TEXT, PRESET_LEGEND, PRESETS, SONGS, songTitle } from './fixtures.ts';
 import { posterUrl } from './posters.ts';
 import { collectionThumb } from './collection.ts';
+import { DEFAULT_RIG, RIGS, rigNames } from '../render/rigRegistry.ts';
 
 const scenes: SceneRegistry = {
   party: () => import('../scenes/party/index.ts').then((m) => m.partyScene),
@@ -147,6 +148,16 @@ let adapter: MockResponseAdapter | null = null;
 let hostPrepared = false;
 /** Dev/test: ?saved=accept|decline simulates an authoritative response loaded from the app. */
 const savedParam = new URLSearchParams(location.search).get('saved');
+/**
+ * `?rig=<name>` picks a studio rig from src/render/rigs/ for comparison, on a local dev host only
+ * (as the Models viewer accepts `?env=`); everywhere else the production rig renders.
+ */
+const LOCAL_HOST = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(location.hostname);
+const rigParam = LOCAL_HOST ? new URLSearchParams(location.search).get('rig') : null;
+if (rigParam && !RIGS.has(rigParam)) console.warn(`Unknown rig "${rigParam}"; registered: ${rigNames().join(', ')}`);
+const rig = rigParam && RIGS.has(rigParam) ? rigParam : DEFAULT_RIG;
+/** `?camera=ortho` (local only): the v1.1 orthographic camera, for before/after composition checks. */
+const projection = LOCAL_HOST && new URLSearchParams(location.search).get('camera') === 'ortho' ? 'orthographic' : 'perspective';
 let initialResponse: 'accept' | 'decline' | undefined = savedParam === 'accept' || savedParam === 'decline' ? savedParam : undefined;
 if (initialResponse) mode = 'guest';
 const requests: ResponseRequest[] = [];
@@ -189,7 +200,7 @@ function mount() {
     mode,
     initialResponse,
     direction: 'L2',
-    stage: { premium: true },
+    stage: { rig, projection },
     reducedMotion: motionOverridden ? !motionOn : undefined,
     scenes,
     posterFor: posterUrl,
@@ -449,6 +460,9 @@ if (import.meta.env.DEV) {
     },
     requests,
     events,
+    /** Registered studio rigs and the one this page renders (capture tooling). */
+    rigs: rigNames(),
+    rig,
     setConfig(next: SceneConfig) {
       const switched = next.category !== category;
       config = next;

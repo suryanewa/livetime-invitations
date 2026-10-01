@@ -3,6 +3,9 @@
  * Uses the system Google Chrome through playwright-core — no browser download.
  *
  *   node --experimental-strip-types scripts/capture.ts study [baseUrl]
+ *   pnpm capture rigs [baseUrl] [rig,…] [--ortho]   studio rigs × scenes → outputs/rigs/ (src/render/rigs/README.md)
+ *   pnpm capture stagecolor [baseUrl] [rig,…]       a rig's measured backdrop colour (stage tokens)
+ *   CAPTURE_STAGE_ONLY=1 pnpm capture <scene>       posters, stills and clips staged in outputs/<scene>/ only
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -531,6 +534,223 @@ async function captureTiming() {
   await browser.close();
 }
 
+// ── Studio rigs (src/render/rigs/): like-for-like stills and the measured stage colour ──────────
+
+const RIG_SCENES = ['business', 'party', 'birthday', 'sports', 'dinner'] as const;
+type RigScene = (typeof RIG_SCENES)[number];
+const RIG_POSES = [
+  ['guest-ready', '(s) => s.controller.setMode("guest")'],
+  ['accepted', '(s) => s.controller.chooseResponse("accept")'],
+] as const;
+
+/** One showcase page on a virtual clock (reduced motion snaps every pose), opened at `url`. */
+async function openShowcase(browser: Awaited<ReturnType<typeof launch>>, url: string) {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 1000 }, deviceScaleFactor: 1 });
+  page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && console.error('[page]', m.text()));
+  await page.clock.install();
+  await page.goto(url);
+  const call = <T,>(fn: string, ...args: unknown[]) =>
+    page.evaluate(([f, a]) => new Function('s', 'a', `return (${f})(s, a)`)((window as any).__showcase, a), [fn, args] as const) as Promise<T>;
+  const tick = (ms: number) => page.clock.runFor(ms);
+  const waitReady = async () => {
+    for (let i = 0; i < 400; i++) {
+      if ((await call<string>('(s) => s.state?.resource')) === 'ready') return;
+      await tick(50);
+      await page.waitForTimeout(10);
+    }
+    throw new Error(`scene never became ready (${url})`);
+  };
+  const reset = async () => {
+    await page.evaluate(() => (document.querySelector('[data-action="reset"]') as HTMLButtonElement).click());
+    await waitReady();
+  };
+  await waitReady();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  await tick(1000);
+  return { page, call, tick, waitReady, reset };
+}
+
+/** Mean sRGB (0–255) of the central 20 % × 20 % of an image data URL, measured in the page. */
+function centralMean(page: Page, dataUrl: string): Promise<[number, number, number]> {
+  return page.evaluate(async (src) => {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    const x0 = Math.round(c.width * 0.4), y0 = Math.round(c.height * 0.4);
+    const w = Math.round(c.width * 0.2), h = Math.round(c.height * 0.2);
+    const d = ctx.getImageData(x0, y0, w, h).data;
+    const sum = [0, 0, 0];
+    for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) sum[k]! += d[i + k]!;
+    const n = d.length / 4;
+    return sum.map((v) => v / n) as [number, number, number];
+  }, dataUrl);
+}
+
+const hex = (rgb: readonly number[]) => `#${rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+
+/** Compose labelled rows of stills into one PNG data URL (drawn in the page; no image library). */
+function contactSheet(page: Page, title: string, rows: { label: string; cells: { label: string; url: string }[] }[], cell = 360): Promise<string> {
+  return page.evaluate(async ([t, rs, size]) => {
+    const pad = 16, head = 44, rowHead = 26, labelW = 150;
+    const cols = Math.max(1, ...rs.map((r) => r.cells.length));
+    const c = document.createElement('canvas');
+    c.width = labelW + cols * (size + pad) + pad;
+    c.height = head + rs.length * (size + rowHead + pad) + pad;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#FBFAF7';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = '#23241C';
+    ctx.font = '600 20px system-ui, sans-serif';
+    ctx.fillText(t, pad, 30);
+    for (let r = 0; r < rs.length; r++) {
+      const y = head + r * (size + rowHead + pad);
+      ctx.font = '600 16px system-ui, sans-serif';
+      ctx.fillStyle = '#23241C';
+      ctx.fillText(rs[r]!.label, pad, y + rowHead + size / 2);
+      for (let k = 0; k < rs[r]!.cells.length; k++) {
+        const x = labelW + k * (size + pad);
+        const img = new Image();
+        img.src = rs[r]!.cells[k]!.url;
+        await img.decode();
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = '#5B5D4E';
+        ctx.fillText(rs[r]!.cells[k]!.label, x, y + 17);
+        ctx.drawImage(img, x, y + rowHead, size, size);
+      }
+    }
+    return c.toDataURL('image/png');
+  }, [title, rows, cell] as const);
+}
+
+/** The rig list argument: after the optional base URL, ignoring `--flags`. */
+function rigArg(): string | undefined {
+  const rest = process.argv.slice(3).filter((a) => !a.startsWith('--'));
+  return rest[0]?.startsWith('http') ? rest[1] : rest[0];
+}
+
+/** Every registered rig name, as the showcase reports it. */
+async function rigNames(browser: Awaited<ReturnType<typeof launch>>): Promise<string[]> {
+  const page = await browser.newPage();
+  await page.goto(`${base}/`);
+  await page.waitForFunction(() => (window as any).__showcase?.rigs, null, { timeout: 30_000 });
+  const names = await page.evaluate(() => (window as any).__showcase.rigs as string[]);
+  await page.close();
+  return names;
+}
+
+/** The rigs named on the command line (`a,b`), else every registered rig. */
+async function requestedRigs(browser: Awaited<ReturnType<typeof launch>>, arg: string | undefined): Promise<string[]> {
+  const all = await rigNames(browser);
+  if (!arg) return all;
+  const asked = arg.split(',').map((s) => s.trim()).filter(Boolean);
+  const unknown = asked.filter((r) => !all.includes(r));
+  if (unknown.length) throw new Error(`Unknown rig(s) ${unknown.join(', ')}; registered: ${all.join(', ')}`);
+  return asked;
+}
+
+/**
+ * Backdrop colour of a rig: each scene loaded through the real stage with its content hidden
+ * (backdrop, lights and camera fit as in production), mean sRGB of the central 20 %.
+ */
+async function measureStageColor(browser: Awaited<ReturnType<typeof launch>>, rig: string) {
+  const perScene: Record<string, string> = {};
+  const all: [number, number, number][] = [];
+  for (const scene of RIG_SCENES) {
+    const s = await openShowcase(browser, `${base}/?scene=${scene}&rig=${encodeURIComponent(rig)}`);
+    await s.call('(s) => s.controller.setReducedMotion(true)');
+    await s.call('(s) => s.controller.setMode("guest")');
+    await s.tick(400);
+    const url = await s.call<string | null>('(s) => s.controller.captureStill(720, 1, "image/png", undefined, { empty: true })');
+    if (!url) throw new Error(`${rig}/${scene}: no still`);
+    const rgb = await centralMean(s.page, url);
+    perScene[scene] = hex(rgb);
+    all.push(rgb);
+    await s.page.close();
+  }
+  const mean = [0, 1, 2].map((k) => all.reduce((a, c) => a + c[k]!, 0) / all.length);
+  return { rig, stageColor: hex(mean), perScene };
+}
+
+/**
+ * `pnpm capture rigs <baseUrl> [rig,…]`: every rig (or the listed ones) × every scene, guest-ready
+ * and accepted for each preset, 720² through the real stage, into outputs/rigs/<rig>/; a contact
+ * sheet per rig, a cross-rig sheet per scene (outputs/rigs/_compare/) and each rig's measured
+ * stage colour. Never writes into assets/.
+ */
+async function captureRigs() {
+  const root = join(import.meta.dirname, '..', 'outputs', 'rigs');
+  const browser = await launch();
+  const rigs = await requestedRigs(browser, rigArg());
+  // `--ortho`: the v1.1 orthographic camera (before/after composition checks), into <rig>-ortho/.
+  const ortho = process.argv.includes('--ortho');
+  const lens = ortho ? '&camera=ortho' : '';
+  const byScene: Record<string, { label: string; cells: { label: string; url: string }[] }[]> = {};
+  for (const rig of rigs) {
+    const dir = join(root, ortho ? `${rig}-ortho` : rig);
+    await mkdir(dir, { recursive: true });
+    const sheetRows: { label: string; cells: { label: string; url: string }[] }[] = [];
+    let sheetPage: Page | null = null;
+    for (const scene of RIG_SCENES) {
+      const plan = SCENE_CAPTURE[scene as RigScene];
+      const s = await openShowcase(browser, `${base}/?scene=${scene}&rig=${encodeURIComponent(rig)}${lens}`);
+      const cells: { label: string; url: string }[] = [];
+      for (const [key, literal] of plan.presets) {
+        await s.reset();
+        await s.call(`(s) => s.setConfig(${literal})`);
+        await s.waitReady();
+        await s.call('(s) => s.controller.setReducedMotion(true)');
+        await s.tick(100);
+        for (const [pose, action] of RIG_POSES) {
+          await s.call(action);
+          await s.tick(400);
+          const url = await s.call<string | null>('(s) => s.controller.captureStill(720, 1)');
+          if (!url) throw new Error(`${rig}/${scene}/${key}/${pose}: no still`);
+          await saveDataUrl(join(dir, `${scene}-${key}-${pose}.png`), url);
+          cells.push({ label: `${key} · ${pose}`, url });
+        }
+      }
+      sheetRows.push({ label: scene, cells });
+      (byScene[scene] ??= []).push({ label: rig, cells });
+      if (sheetPage) await s.page.close();
+      else sheetPage = s.page;
+      console.log(`${rig}/${scene}: ${cells.length} stills`);
+    }
+    const sheet = await contactSheet(sheetPage!, `Rig ${rig}${ortho ? ' (orthographic)' : ''}`, sheetRows);
+    await saveDataUrl(join(dir, 'sheet.png'), sheet);
+    await sheetPage!.close();
+    if (!ortho) {
+      const color = await measureStageColor(browser, rig);
+      await writeFile(join(dir, 'stagecolor.json'), JSON.stringify(color, null, 2));
+      console.log(`${rig}: stage colour ${color.stageColor} ${JSON.stringify(color.perScene)}`);
+    }
+  }
+  // Cross-rig comparison: one sheet per scene, a row per rig.
+  const compare = join(root, '_compare');
+  await mkdir(compare, { recursive: true });
+  const page = await browser.newPage();
+  for (const scene of RIG_SCENES) {
+    const sheet = await contactSheet(page, `${scene} · ${rigs.join(' / ')}${ortho ? ' (orthographic)' : ''}`, byScene[scene]!);
+    await saveDataUrl(join(compare, `${scene}${ortho ? '-ortho' : ''}.png`), sheet);
+  }
+  await browser.close();
+  console.log('Saved to', root);
+}
+
+/** `pnpm capture stagecolor <baseUrl> <rig>`: the rig's backdrop colour for the stage tokens. */
+async function captureStageColor() {
+  const browser = await launch();
+  for (const rig of await requestedRigs(browser, rigArg())) {
+    const color = await measureStageColor(browser, rig);
+    console.log(JSON.stringify(color));
+  }
+  await browser.close();
+}
+
 async function captureLookdev() {
   await mkdir(outDir, { recursive: true });
   const browser = await launch();
@@ -558,4 +778,6 @@ else if (mode === 'thumbs') await captureThumbs();
 else if (mode === 'business' || mode === 'party' || mode === 'birthday' || mode === 'sports' || mode === 'dinner') await captureScene(mode);
 else if (mode === 'skeleton') await captureSkeleton();
 else if (mode === 'motion') await captureMotion();
+else if (mode === 'rigs') await captureRigs();
+else if (mode === 'stagecolor') await captureStageColor();
 else throw new Error(`Unknown capture mode ${mode}`);

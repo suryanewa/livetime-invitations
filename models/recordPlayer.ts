@@ -101,31 +101,22 @@ export function extendLid(hinge: Object3D): void {
 }
 
 /**
- * The smoked cover's look while it swings (decline). Outside: the master's clearcoat is a near
- * mirror (0.6 at roughness 0.08 over a roughness-0.3 base). The cover's front wall, the face
- * uppermost while it is open, meets the key's mirror direction at about 32° open, which the
- * Beta(2, 4) close passes at its speed peak. The wall is flat, the camera orthographic and the key
- * far, so every texel shares one half-vector and the whole wall flashed pale cream at once for
- * about six frames. A satin coat (thinner, rougher clearcoat, rougher base, lower specular)
- * spreads that glint over a wider arc at a much lower peak, so it reads as a sheen passing over
- * the same dark plastic (decline frame diff peak 4.2 → 2.7, docs/scenes/party-v1.2.md). Inside: its own darker, non-coated material with occlusion baked into
- * vertex colours (darkest in the deep corner under the top panel, lightest at the open rim), so the
- * interior reads as the shaded inside of a smoked box at every angle (the shell does not receive
- * shadows, see rigRecordPlayer).
+ * The smoked cover's interior (v1.2.1; the studio pass v1.3 kept it): its own darker, non-coated
+ * material with occlusion baked into vertex colours (darkest in the deep corner under the top
+ * panel, lightest at the open rim), so the interior reads as the shaded inside of a smoked box at
+ * every angle (the shell does not receive shadows, see rigRecordPlayer). The outside keeps the
+ * master's own clearcoat (v1.2.1's satin outer coat, fitted to the v1.1 cream softbox and the
+ * orthographic camera, was removed in v1.3).
  */
 export const LID_LOOK = {
-  outer: { clearcoat: 0.25, clearcoatRoughness: 0.5, roughness: 0.55, specularIntensity: 0.5 },
   inner: { tint: 0.7, roughness: 0.6, specularIntensity: 0.5, aoDeep: 0.6, aoRim: 1 },
 } as const;
-
-/** The spindle's turned steel (rigRecordPlayer): linear grey and roughness. */
-export const SPINDLE_LOOK = { color: 0.42, roughness: 0.24 } as const;
 
 /**
  * Splits the extended shell (`tt_lid`) into its outside and its inside: a triangle whose face
  * normal points towards the closed box's centre is inside. The inside becomes its own mesh
  * (`lid_shell_inner`, sibling under lid_hinge) with `tt_lid_inner`, and the outside keeps the
- * master material with LID_LOOK.outer. Idempotent (`userData.lidSplit`). Returns the inner
+ * master material as authored. Idempotent (`userData.lidSplit`). Returns the inner
  * material (owned by the rig) or null when there is no shell.
  */
 export function splitLidInterior(hinge: Object3D): MeshPhysicalMaterial | null {
@@ -176,13 +167,6 @@ export function splitLidInterior(hinge: Object3D): MeshPhysicalMaterial | null {
   innerMaterial.roughness = LID_LOOK.inner.roughness;
   innerMaterial.specularIntensity = LID_LOOK.inner.specularIntensity;
   innerMaterial.vertexColors = true;
-  if (outerMaterial.isMeshPhysicalMaterial) {
-    outerMaterial.clearcoat = LID_LOOK.outer.clearcoat;
-    outerMaterial.clearcoatRoughness = LID_LOOK.outer.clearcoatRoughness;
-    outerMaterial.specularIntensity = LID_LOOK.outer.specularIntensity;
-  }
-  outerMaterial.roughness = LID_LOOK.outer.roughness;
-  outerMaterial.needsUpdate = true;
 
   const innerMesh = new ThreeMesh(innerGeometry, innerMaterial);
   innerMesh.name = 'lid_shell_inner';
@@ -241,16 +225,6 @@ export function rigRecordPlayer(root: Object3D, lib: ModelContext['lib'], label:
   statusMaterial.userData = { ...statusMaterial.userData, statusOff: { color: statusMaterial.color.clone(), metalness: statusMaterial.metalness, roughness: statusMaterial.roughness } };
   keyMesh.material = statusMaterial;
 
-  // The spindle's own material: the master's mirror chrome (0.89, roughness 0.07) only reflects
-  // the studio's even cream softbox, so the thin post read as a flat pale rectangle on the label.
-  // Darker turned steel with a little roughness takes the key as a highlight down one side and
-  // shades round the cylinder, so it reads as a metal pin. Touches nothing else.
-  const spindleMesh = meshesOf(root.getObjectByName('spindle')!)[0]!;
-  const spindleMaterial = (materialOf(spindleMesh) as MeshStandardMaterial).clone();
-  spindleMaterial.name = 'tt_spindle';
-  spindleMaterial.color.setScalar(SPINDLE_LOOK.color);
-  spindleMaterial.roughness = SPINDLE_LOOK.roughness;
-  spindleMesh.material = spindleMaterial;
 
   const setLabel = (next: RecordLabel) => {
     if (variants?.names.includes(next)) {
@@ -277,7 +251,6 @@ export function rigRecordPlayer(root: Object3D, lib: ModelContext['lib'], label:
       bodyShadow.dispose();
       statusMaterial.dispose();
       lidInner?.dispose();
-      spindleMaterial.dispose();
       disposeShadowProxies(root);
     },
   };

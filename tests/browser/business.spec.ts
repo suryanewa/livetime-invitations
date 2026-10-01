@@ -137,7 +137,8 @@ test('The lit status (LED and tile) keeps its colour, reads by shape at phone si
   await guest(page);
   await page.getByRole('button', { name: /Motion/ }).click();
   expect((await state(page)).reducedMotion).toBe(true);
-  // Window and glass boxes as fractions of the square stage (fixed camera and bounds).
+  // Window and glass boxes as fractions of the square stage (fixed camera and bounds; they hold
+  // for the v1.3 perspective lens as for the v1.1 orthographic camera).
   const measure = () => page.evaluate(async () => {
     const url = (window as any).__showcase.controller.captureStill(540, 1, 'image/png') as string;
     const img = new Image();
@@ -169,9 +170,11 @@ test('The lit status (LED and tile) keeps its colour, reads by shape at phone si
     }
     // The glyph: dark pixels inside the lit tile (shape only, no colour): its rows' extent.
     let gy0 = Infinity, gy1 = -Infinity, glyph = 0;
-    // Inset past the tile's rounded corners (the glass shows there) to the glyph's columns.
-    const inset = Math.round((tx1 - tx0) * 0.2);
-    for (let y = ty0 + 2; y <= ty1 - 2; y++) {
+    // Inset past the tile's rounded corners (the glass shows there) to the glyph's columns, and
+    // past its top and bottom edges: through the perspective lens (v1.3) the tile's edges are
+    // not quite level, so the glass showed at the bounding box's corner rows.
+    const inset = Math.round((tx1 - tx0) * 0.25), vInset = Math.max(2, Math.round((ty1 - ty0) * 0.12));
+    for (let y = ty0 + vInset; y <= ty1 - vInset; y++) {
       for (let x = tx0 + inset; x <= tx1 - inset; x++) {
         const i = (y * width + x) * 4;
         if (Math.max(data[i]!, data[i + 1]!, data[i + 2]!) < 90) { glyph++; gy0 = Math.min(gy0, y); gy1 = Math.max(gy1, y); }

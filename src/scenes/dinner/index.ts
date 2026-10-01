@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/dinner/dinner.glb?url';
 import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import {
-  COVER, COVER_PROFILE, COVER_TOP, finishDish, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
+  COVER, COVER_PROFILE, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
   type DinnerRig,
 } from '../../../models/dinner.ts';
 import { flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
@@ -192,10 +192,8 @@ export const dinnerScene: SceneModule = {
     binRoot.removeFromParent();
     bindMaterialsByName(root, library);
     bindMaterialsByName(binRoot, library);
-    // The plate and cloche masters keep their own PBR materials: own environment for the
-    // silver and the gilt, the Low tier's registry (models/imported.ts). The dome's anisotropic
-    // finish replaces its material first, so the registry holds the material that is drawn.
-    finishDish(root);
+    // The plate and cloche masters keep their own PBR materials as authored: own environment for
+    // the silver and the gilt, the Low tier's registry (models/imported.ts).
     prepareImported(root, library);
     return new DinnerScene(rigDinner(root, binRoot, library), config);
   },

@@ -38,9 +38,9 @@ import type { SceneRecipe } from '../types.ts';
  *   glass. Body, bezel, plinth and back panel are static and joined per material.
  * - LED and glow: emissiveStrength 1 (the rig drives the status colour and intensity, starting
  *   dark); the glow quad casts no shadow. The rig adds a status tile (check / minus) on the pad.
- * - Chrome: the master's chrome_hardware (roughness 0.3, base 0.86) read as white satin plastic in
- *   this beige studio; polished to roughness 0.1 with a 0.6 base it shows dark reflections and
- *   reads as chrome (v1.2.1).
+ * - Chrome: the master's chrome_hardware as authored (roughness 0.3, base 0.86). v1.2.1 polished it
+ *   to roughness 0.1 with a 0.6 base because it read as white satin plastic in the v1.1 beige
+ *   studio; the studio pass v1.3 removed that grade so it is judged under a rig with reflections.
  * - Templates: KHR_materials_variants light (the master's print) / dark (`badge_card_print_dark`,
  *   a pixel function over the master's print, models/businessPrint.ts; the card's edge stock
  *   goes to the family ink by factor). Both prints lossless at source size (2048 × 1536).
@@ -65,7 +65,7 @@ export const recipe: SceneRecipe = {
       materials: {
         woven_fabric_blue: { rename: 'badge_strap' },
         woven_fabric_blue_stitch: { rename: 'badge_strap_stitch' },
-        chrome_hardware: { rename: 'badge_chrome', ownEnv: 1.1, roughness: 0.1, baseColorFactor: [0.6, 0.61, 0.63, 1] },
+        chrome_hardware: { rename: 'badge_chrome', ownEnv: 1.1 },
         clear_vinyl: { rename: 'badge_vinyl', transmissionToAlpha: 0.35 },
         clip_plastic_grey: { rename: 'badge_clip_plastic' },
         card_stock: { rename: 'badge_card_stock' },

@@ -15,7 +15,8 @@ import {
   CONTACT_AT, DURATIONS, frameFor, GRAVITY, HOOP_SETTLED, IMPACTS, LANDINGS, MADE_LAND_AT, MISS_LAND_AT, MISS_POINT, NET_DRAG, NET_EXIT, newFrame, PASS_LAND_AT, RELEASE_AT,
   ROLLS, sampleSequence, SHOT_AXES, SHOT_BACKSPIN, SKID, SQUASH, type SportsFrame,
 } from '../src/scenes/sports/sequences.ts';
-import { farLayerShade, LEATHER_GRADE, NET_FAR_SHADE, SPORTS_WALL_Z } from '../models/sports.ts';
+import * as sportsModel from '../models/sports.ts';
+import { farLayerShade, NET_FAR_SHADE, SPORTS_WALL_Z } from '../models/sports.ts';
 import { COVE_RADIUS } from '../src/render/studio.ts';
 import { BLEND_MARGIN, blendClearance, hoopDistance, sportsFramePoints, sportsInterruptCut } from '../src/scenes/sports/index.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
@@ -493,6 +494,14 @@ describe('Sports runtime GLB matches the contract', async () => {
     expect((node('ball_mesh_mesh').getExtras() as { noShadowCast?: boolean }).noShadowCast).toBe(true);
   });
 
+  it('both ball presets keep the master leather’s neutral base colour (the albedo carries the look)', () => {
+    for (const name of ['ball_leather', 'ball_leather_cream']) {
+      const m = doc.getRoot().listMaterials().find((x) => x.getName() === name);
+      expect(m, name).toBeDefined();
+      for (const k of m!.getBaseColorFactor().slice(0, 3)) expect(k, name).toBeCloseTo(1, 5);
+    }
+  });
+
   it('declares its WebP textures (EXT_texture_webp, required) and keeps normal maps lossless', () => {
     const webp = doc.getRoot().listExtensionsUsed().find((e) => e.extensionName === 'EXT_texture_webp');
     expect(webp?.isRequired()).toBe(true);
@@ -580,13 +589,10 @@ describe('sports look guards', () => {
     expect(screenUp.y).toBeGreaterThan(0.9);
   });
 
-  it('the leather grade cools the orange without crushing it and leaves black seams black', () => {
-    const g = LEATHER_GRADE.ball_leather!;
-    // Linear multipliers: hue moves from red towards orange (green up, red down), black stays black.
-    expect(g[0]).toBeLessThan(1);
-    expect(g[1]).toBeGreaterThan(1);
-    for (const k of g) expect(k).toBeGreaterThan(0.7);
-    expect(LEATHER_GRADE.ball_leather_cream).toBeDefined();
+  it('the ball renders as the master authored it: no runtime leather grade', () => {
+    // v1.2's LEATHER_GRADE multiplied the master's albedo to suit the v1.1 peach stage; the studio
+    // pass removed it. The GLB side (neutral base colour on both presets) is checked below.
+    expect('LEATHER_GRADE' in sportsModel).toBe(false);
   });
 
   it('the net far layer is shaded darker than the near layer, smoothly', () => {

@@ -22,8 +22,8 @@ import type { Quat, RawImage, SceneRecipe } from '../types.ts';
  *   ORM and normal maps are shared. `setPreset` switches with `loadMaterialVariants`.
  *   v1.2 fidelity pass: the cream is a cooler ivory (236, 229, 212; was 239, 228, 205) so its lit
  *   side separates from the peach stage by hue instead of merging with it. The orange albedo is
- *   kept exactly as authored; its look is graded at load (models/sports.ts `LEATHER_GRADE`),
- *   because the recipe has no pixel function for a default-variant material.
+ *   kept exactly as authored and renders as authored (v1.2's load-time LEATHER_GRADE multiply,
+ *   fitted to the v1.1 peach stage, was removed in the studio pass v1.3).
  * - Hoop: `basketball-hoop.glb` at HOOP_SCALE (rim inner radius 0.451 → 0.4 = 1.6 × BALL_R),
  *   no rotation (+z already faces the player), aligned so the rim-ring centre lands on RIM_LOCAL
  *   (the v1.1 rim centre, so every authored arc is unchanged).

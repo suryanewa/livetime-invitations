@@ -26,7 +26,11 @@ minus its tray). Recipe: `scripts/masters/recipes/dinner.ts`; contract: `models/
 - **Seat.** The bead's outer flank rests on the coupe rim's slope just inside the gilt band (contact at
   r ≈ 0.646, measured against the plate's upward-facing vertices in 1 mm radial bins, clearance 0.1 mm). The dome
   covers the whole well and the gilt band stays visible all round it.
-- **Silver (re-tuned in the fix pass).** The first pass (dome uniform roughness 0.20 at own environment 1.35;
+- **Silver (studio pass v1.3: the master's, as authored).** `finishDish` and the trim roughness 0.12 were removed:
+  the dome renders with the master's polished roughness map and no anisotropy, the bead, bands, finial and handle at
+  their near-mirror 0.065–0.09. The lathe polish below compensated for a near-white mirror reflecting the v1.1 cream
+  studio; the metal is judged again under the new rigs (own environment 0.9 / 0.8 kept until the rigs settle
+  `ownEnv`). v1.2 record: the first pass (dome uniform roughness 0.20 at own environment 1.35;
   bead, bands, finial and handle at the master's 0.065–0.09 and 1.1) read pale and frosted, clearly less metallic
   than the v1.1 cloche: the master's near-white silver (F0 0.97) mirroring the cream studio has almost no dark
   values, the dome's lower half took the floor's colour, and the trim read as pale whitish lines. Tellingly, the

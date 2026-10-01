@@ -60,7 +60,9 @@ the squash and the spin. `refresh()` rests the net and the recoil.
 
 ## Look
 
-- **Orange leather**: the master's albedo (sRGB 223, 64, 10 median, matched to the scan) rendered
+- **Orange leather (studio pass v1.3)**: the master's albedo renders as authored; the `LEATHER_GRADE` multiply
+  described next was a compensation for the v1.1 peach stage and was removed (the judges re-check the ball under
+  the new rigs). v1.2 record: the master's albedo (sRGB 223, 64, 10 median, matched to the scan) rendered
   at (238, 78, 33), hue 13°, in this studio. That is hotter than both the Models viewer, which
   shows the master at (212, 70, 24), hue 15°, under a grey studio, and the v1.1 ball at
   (232, 114, 52), hue 21°. A load-time linear multiply on the material colour

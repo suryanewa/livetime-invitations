@@ -23,9 +23,9 @@ import type { CanonicalPose } from '../core/types.ts';
 
 type Variant = { key: string; label: string; dir: DirectionId; stage: StageOptions };
 const VARIANTS: Variant[] = [
-  { key: 'current', label: 'Current L (checkpoint 2)', dir: 'L', stage: {} },
-  { key: 'premium-ortho', label: 'Premium L2 · orthographic', dir: 'L2', stage: { premium: true } },
-  { key: 'premium-persp', label: 'Premium L2 · long-lens perspective', dir: 'L2', stage: { premium: true, projection: 'perspective', fov: 18 } },
+  { key: 'current', label: 'Current L (checkpoint 2)', dir: 'L', stage: { projection: 'orthographic' } },
+  { key: 'premium-ortho', label: 'Premium L2 · orthographic', dir: 'L2', stage: { rig: 'v1.1', projection: 'orthographic' } },
+  { key: 'premium-persp', label: 'Premium L2 · long-lens perspective', dir: 'L2', stage: { rig: 'v1.1', projection: 'perspective', fov: 18 } },
 ];
 
 let simplify: Simplify | undefined;

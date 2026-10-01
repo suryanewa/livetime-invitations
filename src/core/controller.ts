@@ -19,6 +19,7 @@ import { FixedStepper } from '../motion/spring.ts';
 import { hasWebGL2, resetWebGL2Probe } from '../render/createRenderer.ts';
 import { type DirectionId, LOCKED_DIRECTION, MaterialLibrary } from '../render/materials.ts';
 import { QualityMonitor, TIER_DPR, type Tier } from '../render/quality.ts';
+import { DEFAULT_RIG } from '../render/rigRegistry.ts';
 import { Stage, type StageOptions } from '../render/stage.ts';
 
 /**
@@ -35,8 +36,8 @@ export interface InvitationOptions extends CreateInvitationOptions {
   /** Material direction; defaults to the approved LOCKED_DIRECTION (L2, style-reference v1.1). */
   direction?: DirectionId;
   /**
-   * Studio options (premium lighting, projection). Omitted, the stage uses the approved premium
-   * studio ({ premium: true }); options passed replace that default, so set premium explicitly.
+   * Studio options: the rig (src/render/rigs/, by name) and the projection. Omitted, or without a
+   * rig, the stage uses the production rig (DEFAULT_RIG) through the perspective product lens.
    */
   stage?: Omit<StageOptions, 'canvas' | 'preserveDrawingBuffer'>;
   posterFor?: PosterResolver;
@@ -63,8 +64,11 @@ export interface InvitationHandle extends InvitationController {
   getState(): InvitationState;
   retryGraphics(): void;
   setQualityTier(tier: Tier): void;
-  /** Tooling only (posters, review captures): render the current pose to an image URL. */
-  captureStill(size: number, dpr?: number, type?: string, quality?: number): string | null;
+  /**
+   * Tooling only (posters, review captures): render the current pose to an image URL. `empty`
+   * renders the bare stage (content hidden for that frame) for the stage-colour measurement.
+   */
+  captureStill(size: number, dpr?: number, type?: string, quality?: number, options?: { empty?: boolean }): string | null;
   /** Tooling only (resource checks): live GPU object counts, or null without a stage. */
   renderInfo(): { geometries: number; textures: number; programs: number } | null;
 }
@@ -299,7 +303,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     try {
       if (!stage) {
         dropLostCanvas();
-        stage = Stage.create(options.stage ?? { premium: true });
+        stage = Stage.create({ ...options.stage, rig: options.stage?.rig ?? DEFAULT_RIG });
         if (!stage) {
           setResource('fallback', 'webgl-unavailable');
           return;
@@ -551,8 +555,8 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     const full = tier === 'normal' || tier === 'high';
     libraries.get(direction)?.setLowDetail(tier === 'low');
     scene?.setLowDetail?.(tier === 'low');
-    stage?.premium?.setShadows(full);
-    stage?.premium?.setLowDetail(!full);
+    stage?.setShadows(full);
+    stage?.setLowDetail(!full);
   }
 
   /** A resize clears the drawing buffer; draw the current pose at once so no blank frame shows. */
@@ -804,10 +808,10 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       return { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 };
     },
 
-    captureStill(size: number, dpr = 2, type = 'image/png', quality?: number) {
+    captureStill(size: number, dpr = 2, type = 'image/png', quality?: number, captureOptions?: { empty?: boolean }) {
       if (!stage || !scene || resource !== 'ready') return null;
       scene.beforeRender?.();
-      const url = stage.snapshot(size, size, dpr, type, quality);
+      const url = stage.snapshot(size, size, dpr, type, quality, captureOptions?.empty);
       resize();
       requestFrame();
       return url;

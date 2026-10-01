@@ -40,21 +40,18 @@ import type { Quat, RawImage, SceneRecipe } from '../types.ts';
  * - Materials: every master material keeps its look, renamed `tt_*`. Metals (plinth, aluminium,
  *   chrome) get their own environment at 1.1 automatically (metalness ≥ 0.5).
  * - Label presets: KHR_materials_variants `paper` (the master's olive print, default in the file,
- *   never selected by the app), `coral` and `cobalt`: the label field recoloured to the v1.1 label
- *   colours with its rings, bars, ring and square kept as dark ink, plus the v1.1 label's bold
- *   quarter wedge (in the other preset's colour) and butter sliver (`labelPrint`, below). The
- *   vinyl's sheen is rotationally symmetric and the master's marks are small, so without the
- *   wedge the accept beat's 1.1-turn spin hardly read at stage size.
+ *   never selected by the app), `coral` and `cobalt`: the master's own print recoloured, its field
+ *   to the v1.1 label colours and its rings, bars, ring and square kept as dark ink (`labelPrint`,
+ *   below). Studio pass v1.3 removed v1.2's quarter wedge and butter sliver painted into the print:
+ *   the master's off-centre square is the asymmetric mark the accept spin reads by.
  * - Lid shadows (rig): the shell casts but does not receive (its own top panel stair-stepped on its
  *   inside back wall mid-close under the studio's fixed PCF taps). v1.2.1: the rig splits the shell
  *   into outside and inside; the inside gets its own darker, uncoated material with baked
- *   occlusion, and the outside a satin coat, so the cover stays dark smoked plastic through the
- *   decline swing (no cream flash at the key's mirror angle). recordPlayer.ts, LID_LOOK.
- * - Plinth tone (v1.2.1): the brushed steel's base factor keeps 92 % of its luminance and 40 % of
- *   its chroma (PLINTH_TONE), so it reads as dark graphite-taupe metal in the warm studio, not
- *   bronze. Its textures are untouched.
- * - Spindle (rig, v1.2.1): its own darker turned-steel clone of the chrome (SPINDLE_LOOK); the
- *   mirror chrome read as a flat pale post on the label.
+ *   occlusion (recordPlayer.ts, LID_LOOK). The outside keeps the master's clearcoat (v1.2.1's satin
+ *   coat, fitted to the v1.1 cream softbox, was removed in the studio pass v1.3).
+ * - Materials (v1.3): the brushed steel plinth and the spindle chrome render as the master authored
+ *   them; v1.2.1's PLINTH_TONE (40 % chroma) and SPINDLE_LOOK (turned grey) compensated for the
+ *   v1.1 peach studio and were removed in the studio pass.
  * - Framing (contract): silhouette frame points plus a 0.17 side margin, so the player fills the
  *   stage as v1.1 did (74.6 % of its width).
  * - Full write-up, measured contract and export report: docs/scenes/party-v1.2.md.
@@ -63,20 +60,6 @@ import type { Quat, RawImage, SceneRecipe } from '../types.ts';
  *   the plinth ORM lossy q90 at source size (1024²).
  */
 
-/**
- * The plinth's brushed steel, toned towards graphite: the master's factor (linear 0.202, 0.178,
- * 0.153) keeps its luminance's 92 % and 40 % of its chroma. Under the studio's warm key and cream
- * softbox the master's own value read warm bronze, against the dark graphite-taupe of the master's
- * renders; this keeps it a dark brushed metal with a hint of warmth. Its ORM, normal and
- * anisotropy are untouched.
- */
-const PLINTH_TONE = ((): [number, number, number, number] => {
-  const c = [0.20155625378383743, 0.17788841597328695, 0.15292615198613213];
-  const l = 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
-  const [r, g, b] = c.map((x) => 0.92 * (l + 0.4 * (x - l)));
-  return [r!, g!, b!, 1];
-})();
-
 const yawQuat = (yaw: number): Quat => [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)];
 
 /** Master label colours (sRGB, measured): the olive field and its darker printed ink. */
@@ -84,21 +67,12 @@ const FIELD = [134, 128, 94] as const;
 const INK = [80, 74, 56] as const;
 /**
  * Preset prints: field and ink (darker than the first pass so the master's bars, square and rings
- * read at stage size), plus the v1.1 label's bold wedge in the other preset's colour with its
- * butter sliver (PRINT_COLORS in src/render/print.ts): an asymmetric mark that makes the turn read.
+ * read at stage size), on the master's own art.
  */
 const LABEL = {
-  coral: { field: [255, 113, 74], ink: [84, 22, 12], wedge: [29, 49, 128] },
-  cobalt: { field: [47, 84, 201], ink: [6, 10, 40], wedge: [255, 113, 74] },
+  coral: { field: [255, 113, 74], ink: [84, 22, 12] },
+  cobalt: { field: [47, 84, 201], ink: [6, 10, 40] },
 } as const;
-const SLIVER = [237, 180, 73] as const;
-/**
- * The wedge in the print's polar frame (angle counter-clockwise from +u, image v up; radius in
- * units of the label disc, which fills the image): a quarter sector on the side the master's
- * marks leave clear (its title bars sit at 60°–120° and 240°–300°, the square at 0°), then the
- * sliver. It runs to the disc's edge and the master's rings and centre ring print over it.
- */
-const WEDGE = { from: (130 / 180) * Math.PI, to: (220 / 180) * Math.PI, sliver: (232 / 180) * Math.PI, radius: 1 } as const;
 
 const lin = (c: number) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
 const srgb = (x: number) => Math.round(255 * Math.min(1, Math.max(0, x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055)));
@@ -113,36 +87,21 @@ const luma = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.07
  */
 export function labelPrint(preset: keyof typeof LABEL) {
   const field = LABEL[preset].field.map(lin), ink = LABEL[preset].ink.map(lin);
-  const wedge = LABEL[preset].wedge.map(lin), sliver = SLIVER.map(lin);
   const lf = luma(...(FIELD.map(lin) as [number, number, number])), li = luma(...(INK.map(lin) as [number, number, number]));
   const LUT = new Float32Array(256).map((_, i) => lin(i));
   const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
   return (img: RawImage): RawImage => {
     const out = new Uint8Array(img.data.length);
     const ch = img.channels;
-    const cx = img.width / 2, cy = img.height / 2, rpx = Math.min(cx, cy) * WEDGE.radius;
-    const base = [0, 0, 0];
-    for (let y = 0, i = 0; y < img.height; y++) {
-      for (let x = 0; x < img.width; x++, i += ch) {
-        // Wedge and sliver coverage, anti-aliased over one texel: signed texel distances to the
-        // sector's edge rays (positive inside; both sectors are under 180°) and to its rim.
-        const px = x + 0.5 - cx, py = cy - (y + 0.5);
-        const rr = Math.hypot(px, py), a = Math.atan2(py, px);
-        const toward = (edge: number) => rr * Math.sin(a - edge);
-        const rim = clamp01(rpx - rr + 0.5);
-        const inFrom = clamp01(toward(WEDGE.from) + 0.5), pastTo = clamp01(toward(WEDGE.to) + 0.5);
-        const cw = rim * inFrom * (1 - pastTo);
-        const cs = rim * pastTo * clamp01(-toward(WEDGE.sliver) + 0.5);
-        for (let k = 0; k < 3; k++) base[k] = field[k]! * (1 - cw - cs) + wedge[k]! * cw + sliver[k]! * cs;
-        const r = LUT[img.data[i]!]!, g = LUT[img.data[i + 1]!]!, b = LUT[img.data[i + 2]!]!;
-        const l = luma(r, g, b);
-        const w = clamp01((lf - l) / (lf - li));
-        // Darker than the ink (the spindle ring's heavier stroke, the surround outside the disc):
-        // the preset's ink darkened in proportion, so every mark keeps its relative weight.
-        const deep = l < li ? l / li : 1;
-        for (let k = 0; k < 3; k++) out[i + k] = srgb((base[k]! + (ink[k]! - base[k]!) * w) * deep);
-        if (ch === 4) out[i + 3] = img.data[i + 3]!;
-      }
+    for (let i = 0; i < img.data.length; i += ch) {
+      const r = LUT[img.data[i]!]!, g = LUT[img.data[i + 1]!]!, b = LUT[img.data[i + 2]!]!;
+      const l = luma(r, g, b);
+      const w = clamp01((lf - l) / (lf - li));
+      // Darker than the ink (the spindle ring's heavier stroke, the surround outside the disc):
+      // the preset's ink darkened in proportion, so every mark keeps its relative weight.
+      const deep = l < li ? l / li : 1;
+      for (let k = 0; k < 3; k++) out[i + k] = srgb((field[k]! + (ink[k]! - field[k]!) * w) * deep);
+      if (ch === 4) out[i + 3] = img.data[i + 3]!;
     }
     return { ...img, data: out };
   };
@@ -158,7 +117,7 @@ export const recipe: SceneRecipe = {
       scale: TT_SCALE,
       align: { node: 'plinth', point: [0.5, 0, 0.5], to: fromMaster(0.0125, -0.66, 0.115).toArray() },
       materials: {
-        brushed_steel_plinth: { rename: 'tt_brushed_steel', baseColorFactor: PLINTH_TONE },
+        brushed_steel_plinth: { rename: 'tt_brushed_steel' },
         rubber_feet: { rename: 'tt_rubber_feet' },
         machined_aluminium: { rename: 'tt_aluminium' },
         black_anodised: { rename: 'tt_black_anodised' },

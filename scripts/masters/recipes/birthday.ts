@@ -40,10 +40,11 @@ import type { MaterialPolicy, MaterialVariantSpec, NodeMap, Quat, SceneRecipe } 
  *   baseColorFactor; the shipped structure, the original ivory rebuild's warmth); cocoa is a
  *   KHR_materials_variants copy of the same four materials (chocolate body, milk-chocolate
  *   piping, dark rosettes, ivory pearls). Stand and candles keep the master's colours.
- * - v1.2.1 vanilla: body #E0D3BF at roughness 0.58 (was #F3E9D8 at the master's 0.42). The lighter
- *   body sat in the tone mapper's shoulder and rendered as a flat ivory cut-out on the peach stage.
- *   The deeper, more neutral body keeps the tiers' shading, and the piping (#FFFCF6) and rosettes
- *   (#F7EFE1) read lighter against it.
+ * - Vanilla (studio pass v1.3): back to the ivory rebuild's palette (body #F3E9D8, piping
+ *   #FFFDF8, rosettes #F3E3C7) at the master's own roughness. v1.2.1 had darkened the body to
+ *   #E0D3BF at roughness 0.58 (piping #FFFCF6, rosettes #F7EFE1) because the ivory sat in the
+ *   tone mapper's shoulder and read as a flat cut-out on the v1.1 peach stage: a compensation for
+ *   the studio, judged again under the new rigs.
  * - Materials keep the master's clearcoat and the pearls' iridescence; renamed `cake_*` so no
  *   library name (and no other scene) collides. Textures: the candles' 256×4 wax LUTs only (kept
  *   exact by the LUT rule).
@@ -56,7 +57,7 @@ const lin = (hex: string): [number, number, number, number] => {
 
 /** Frosting palettes (sRGB). */
 export const PALETTE = {
-  vanilla: { body: '#E0D3BF', piping: '#FFFCF6', rosette: '#F7EFE1', pearl: '#FFFFFF' },
+  vanilla: { body: '#F3E9D8', piping: '#FFFDF8', rosette: '#F3E3C7', pearl: '#FFFFFF' },
   cocoa: { body: '#5E3727', piping: '#94603F', rosette: '#4A281A', pearl: '#F4EADB' },
 } as const;
 
@@ -68,13 +69,7 @@ const candleNodes: Record<string, NodeMap> = Object.fromEntries(
   MASTER_CANDLES.map(({ node }, i) => [node, { rename: `candle_${BIRTHDAY_CANDLE_IDS[i]}_wax`, parent: `candle_${BIRTHDAY_CANDLE_IDS[i]}`, pivot: { node, point: 'bottom' } }]),
 );
 
-/**
- * Frosting roughness: the body is a step more matte than the master's 0.42, so under the warm key
- * its diffuse falloff (not a sheen) carries the tiers' form; the piping keeps the master's.
- */
-export const ROUGHNESS = { body: 0.58, piping: 0.4, rosette: 0.4, pearl: 0.22 } as const;
-
-const frostingPolicy = (key: keyof typeof FROSTING): MaterialPolicy => ({ rename: FROSTING[key], baseColorFactor: lin(PALETTE.vanilla[key]), roughness: ROUGHNESS[key] });
+const frostingPolicy = (key: keyof typeof FROSTING): MaterialPolicy => ({ rename: FROSTING[key], baseColorFactor: lin(PALETTE.vanilla[key]) });
 
 const cocoa: MaterialVariantSpec[] = (Object.keys(FROSTING) as (keyof typeof FROSTING)[]).map((key) => ({
   variant: 'cocoa', of: FROSTING[key], name: `${FROSTING[key]}_cocoa`, baseColorFactor: lin(PALETTE.cocoa[key]),

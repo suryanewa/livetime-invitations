@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { Box3, BoxGeometry, Color, Euler, Group, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, type Object3D, OrthographicCamera, Texture, Vector3 } from 'three';
-import { DOME_ANISOTROPY, DOME_ROUGHNESS, finishDish, type DinnerRig } from '../models/dinner.ts';
+import { Box3, Color, Euler, Group, Matrix4, Mesh, MeshStandardMaterial, type Object3D, OrthographicCamera, Vector3 } from 'three';
+import * as dinnerModel from '../models/dinner.ts';
+import type { DinnerRig } from '../models/dinner.ts';
 import { VisualDirector } from '../src/core/visualDirector.ts';
 import type { Node } from '@gltf-transform/core';
 import { listTextureSlots } from '@gltf-transform/functions';
@@ -321,10 +322,16 @@ describe('Dinner runtime GLB matches the contract (plate and cloche masters, no 
     for (const m of doc.getRoot().listMaterials()) {
       if (m.getName().startsWith('cloche_') || m.getName() === 'plate_gilt_metal') expect((m.getExtras() as { ownEnv?: number }).ownEnv, m.getName()).toBe(m.getName() === 'cloche_dome' ? 0.9 : m.getName() === 'plate_gilt_metal' ? 1.1 : 0.8);
     }
-    // Bead, bands, finial and handle: softened from the master's near-mirror 0.065–0.09.
+    // Studio pass v1.3: the silver is the master's. Bead, bands, finial and handle keep their
+    // near-mirror 0.065–0.09; the dome keeps its polished roughness map and no anisotropy.
     for (const name of ['cloche_beads', 'cloche_finial', 'cloche_handle']) {
-      expect(doc.getRoot().listMaterials().find((m) => m.getName() === name)!.getRoughnessFactor(), name).toBeCloseTo(0.12, 6);
+      const r = doc.getRoot().listMaterials().find((m) => m.getName() === name)!.getRoughnessFactor();
+      expect(r, name).toBeGreaterThanOrEqual(0.06);
+      expect(r, name).toBeLessThanOrEqual(0.095);
     }
+    const dome = doc.getRoot().listMaterials().find((m) => m.getName() === 'cloche_dome')!;
+    expect(dome.getMetallicRoughnessTexture()).not.toBeNull();
+    expect(dome.getExtension('KHR_materials_anisotropy')).toBeNull();
     const webp = doc.getRoot().listExtensionsUsed().find((e) => e.extensionName === 'EXT_texture_webp');
     expect(webp?.isRequired()).toBe(true);
     for (const t of doc.getRoot().listTextures()) {
@@ -444,29 +451,11 @@ describe('Dinner motion continuity (checkpoint 4)', () => {
   });
 });
 
-describe('Dinner silver finish at load (finishDish)', () => {
-  it('turns the dome into an anisotropic physical metal, keeping its own-environment extras', () => {
-    const map = new Texture();
-    const dome = new MeshStandardMaterial({ name: 'cloche_dome', color: new Color(0.97, 0.96, 0.915), metalness: 1, roughness: 1, roughnessMap: map, metalnessMap: map });
-    dome.userData.ownEnv = 0.9;
-    const mesh = new Mesh(new BoxGeometry(), dome);
-    const other = new Mesh(new BoxGeometry(), new MeshStandardMaterial({ name: 'cloche_beads', roughness: 0.12 }));
-    const root = new Group().add(mesh, other);
-    finishDish(root);
-    const m = mesh.material as MeshPhysicalMaterial;
-    expect(m).toBeInstanceOf(MeshPhysicalMaterial);
-    expect(m.name).toBe('cloche_dome');
-    expect(m.roughness).toBe(DOME_ROUGHNESS);
-    expect(m.roughnessMap).toBeNull();
-    expect(m.anisotropy).toBe(DOME_ANISOTROPY);
-    expect(m.anisotropyRotation).toBeCloseTo(Math.PI / 2, 12);
-    expect(m.metalness).toBe(1);
-    expect(m.color.r).toBeCloseTo(0.97, 6);
-    expect(m.userData.ownEnv).toBe(0.9);
-    expect((other.material as MeshStandardMaterial).roughness).toBe(0.12);
-    // Idempotent.
-    finishDish(root);
-    expect(mesh.material).toBe(m);
+describe('Dinner silver at load', () => {
+  it('has no load-time finish: the dome renders as the master authored it', () => {
+    // v1.2's finishDish (uniform roughness 0.2, anisotropy 0.3) was a grade for the v1.1 cream
+    // studio; the GLB side (roughness map kept, no anisotropy) is checked with the materials above.
+    for (const name of ['finishDish', 'DOME_ROUGHNESS', 'DOME_ANISOTROPY']) expect(name in dinnerModel, name).toBe(false);
   });
 });
 
