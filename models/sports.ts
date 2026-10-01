@@ -1,7 +1,10 @@
-import { type BufferAttribute, type BufferGeometry, Float32BufferAttribute, type Material, Matrix4, type Mesh, type Object3D, Vector3 } from 'three';
+import { type BufferAttribute, Float32BufferAttribute, type Material, Matrix4, type Mesh, type Object3D, Quaternion, Vector3 } from 'three';
 import { cameraDirection } from '../src/render/camera.ts';
 import { ContactShadow } from '../src/render/contactShadow.ts';
-import { BALL_R, NET, netOpenScale, POLE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES, type BallPreset, type NetDeform } from './sportsContract.ts';
+import {
+  BALL_R, BOARD_PIVOT, NET, NET_BULGE, netBulgeCover, netOffsetWeight, netRestRadius, netRestY, netSnapWeight, POLE, recoilPoint, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES,
+  type BallPreset, type NetDeform,
+} from './sportsContract.ts';
 import { buildSportsGeometry } from './sportsPremium.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import type { MaterialVariants } from './imported.ts';
@@ -10,8 +13,8 @@ import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } fro
 export * from './sportsContract.ts';
 
 /**
- * Sports runtime rig over the hierarchy (built or GLB-loaded): contact shadows, the keyed net
- * deformation and ball presets.
+ * Sports runtime rig over the hierarchy (built or GLB-loaded): contact shadows, the net
+ * deformation, the hoop recoil and ball presets.
  */
 
 export interface SportsRig {
@@ -20,6 +23,9 @@ export interface SportsRig {
   shadows: ContactShadow[];
   ballShadow: ContactShadow;
   net: NetDeform;
+  recoil: HoopRecoil;
+  /** `ball_mesh`'s rest orientation (the master's seam frame); spins compose in front of it. */
+  ballRest: Quaternion;
   bounds: typeof SPORTS_BOUNDS;
   setPreset(preset: BallPreset): void;
   dispose(): void;
@@ -28,23 +34,29 @@ export interface SportsRig {
 export type SportsModel = SportsRig & BuiltModel;
 
 /**
- * Radial net deformation on the net's own vertices (net space: y = 0 at the rim, negative
- * downward). Rows narrower than the ball open with `flare` (`netOpenScale`: at flare 1 the inner
- * envelope is max(rest, NET_OPEN_RADIUS)) and the whole net lengthens with `stretch`, so the
- * swish reads without cloth simulation. Works on any net geometry the model provides: since v1.2
- * the master net's strands, loops and knots (three meshes under `net`), each vertex scaled by the
- * factor of its own rest depth, so knots stay on their cords.
+ * Net deformation on the net's own vertices (net space: y = 0 at the rim, negative downward),
+ * driven by a NetPose (`netOpening` in the contract): a bulge that travels down with the made
+ * ball, the drag stretch and the rebound snap. Works on any net geometry the model provides:
+ * since v1.2 the master net's strands, loops and knots (three meshes under `net`). Every vertex
+ * moves by a function of its rest depth and radial direction only, so cords, loops and knots at
+ * one place move together and the knots stay on their cords.
+ *
+ * Per frame the depth-only part of the bulge (the Gaussian cover minus the rest envelope) and the
+ * snap weight are tabulated over NET_TABLE rows; each vertex then needs one lookup, one dot
+ * product and the soft ramp (78k vertices in well under a millisecond).
  *
  * GLB export quantises positions (normalised Int16 plus a node scale/offset), so the net is
  * first rebuilt as float geometry in net space: dequantised vertices, the node transforms baked
  * in, the net node reset to RIM_LOCAL. Deforming the raw quantised array would wrap and tear.
  */
+const NET_TABLE = 512;
 export function netDeform(net: Object3D): NetDeform {
   const hoop = net.parent!;
   hoop.updateWorldMatrix(true, true);
   const toHoop = new Matrix4().copy(hoop.matrixWorld).invert();
   const toCamera = cameraDirection().transformDirection(toHoop);
-  const meshes: { attr: BufferAttribute; base: Float32Array; geometry: BufferGeometry }[] = [];
+  interface NetMesh { attr: BufferAttribute; base: Float32Array; row: Float32Array; dir: Float32Array }
+  const meshes: NetMesh[] = [];
   const v = new Vector3();
   const m4 = new Matrix4();
   net.traverse((o) => {
@@ -53,9 +65,16 @@ export function netDeform(net: Object3D): NetDeform {
     m4.multiplyMatrices(toHoop, m.matrixWorld);
     const src = m.geometry.getAttribute('position') as BufferAttribute;
     const base = new Float32Array(src.count * 3);
+    // Per vertex: rest depth as a table coordinate (−1 above the rim: never moves) and the unit
+    // radial direction from the rim axis.
+    const row = new Float32Array(src.count);
+    const dir = new Float32Array(src.count * 2);
     for (let i = 0; i < src.count; i++) {
       v.fromBufferAttribute(src, i).applyMatrix4(m4).sub(RIM_LOCAL);
       base[i * 3] = v.x; base[i * 3 + 1] = v.y; base[i * 3 + 2] = v.z;
+      row[i] = v.y < 0 ? Math.min(1, -v.y / NET.depth) * (NET_TABLE - 1) : -1;
+      const r = Math.hypot(v.x, v.z) || 1;
+      dir[i * 2] = v.x / r; dir[i * 2 + 1] = v.z / r;
     }
     const attr = new Float32BufferAttribute(base.slice(), 3);
     m.geometry.setAttribute('position', attr);
@@ -70,7 +89,7 @@ export function netDeform(net: Object3D): NetDeform {
     m.geometry.deleteAttribute('normal');
     m.geometry.computeVertexNormals();
     m.frustumCulled = false;
-    meshes.push({ attr, base, geometry: m.geometry });
+    meshes.push({ attr, base, row, dir });
   });
   // Baked: the net node sits at the rim centre and every mesh under it is untransformed.
   net.traverse((o) => {
@@ -82,21 +101,80 @@ export function netDeform(net: Object3D): NetDeform {
   net.position.copy(RIM_LOCAL);
   net.quaternion.identity();
   net.scale.set(1, 1, 1);
-  let last = { flare: 0, stretch: 0 };
+
+  // Depth tables, rebuilt per deformed frame: H = cover − rest envelope, Q = snap weight; and
+  // the offset weight (the ball's drift only pushes rows near it).
+  const H = new Float32Array(NET_TABLE), Q = new Float32Array(NET_TABLE), W = new Float32Array(NET_TABLE);
+  for (let j = 0; j < NET_TABLE; j++) Q[j] = netSnapWeight(j / (NET_TABLE - 1));
+  const { ramp } = NET_BULGE;
+  let resting = true;
   return {
-    update(flare, stretch) {
-      if (flare === last.flare && stretch === last.stretch) return;
-      last = { flare, stretch };
-      for (const { attr, base } of meshes) {
+    update(pose) {
+      if (!pose.active) {
+        if (resting) return;
+        resting = true;
+        for (const { attr, base } of meshes) {
+          (attr.array as Float32Array).set(base);
+          attr.needsUpdate = true;
+        }
+        return;
+      }
+      resting = false;
+      const by = netRestY(pose.ball.y, pose.stretch);
+      for (let j = 0; j < NET_TABLE; j++) {
+        const t = j / (NET_TABLE - 1);
+        const dy = -t * NET.depth - by;
+        H[j] = netBulgeCover(dy) - netRestRadius(t);
+        W[j] = netOffsetWeight(dy);
+      }
+      const ox = pose.ball.x, oz = pose.ball.z, snap = pose.snap, k = 1 + pose.stretch;
+      for (const { attr, base, row, dir } of meshes) {
         const a = attr.array as Float32Array;
-        for (let i = 0; i < a.length; i += 3) {
-          const x = base[i]!, y = base[i + 1]!, z = base[i + 2]!;
-          const widen = netOpenScale(-y / NET.depth, flare);
-          a[i] = x * widen;
-          a[i + 1] = y < 0 ? y * (1 + stretch * NET_STRETCH) : y;
-          a[i + 2] = z * widen;
+        for (let i = 0, n = row.length; i < n; i++) {
+          const r = row[i]!;
+          if (r < 0) continue;
+          const j = r | 0, f = r - j, j1 = j + 1 < NET_TABLE ? j + 1 : j;
+          const ux = dir[i * 2]!, uz = dir[i * 2 + 1]!;
+          const w = W[j]! + (W[j1]! - W[j]!) * f;
+          const x = (ox * ux + oz * uz) * w + H[j]! + (H[j1]! - H[j]!) * f;
+          const open = x <= 0 ? 0 : x < ramp ? (x * x) / (2 * ramp) : x - ramp / 2;
+          const d = open - snap * (Q[j]! + (Q[j1]! - Q[j]!) * f);
+          const i3 = i * 3;
+          a[i3] = base[i3]! + ux * d;
+          a[i3 + 1] = base[i3 + 1]! * k;
+          a[i3 + 2] = base[i3 + 2]! + uz * d;
         }
         attr.needsUpdate = true;
+      }
+    },
+  };
+}
+
+/**
+ * Hoop recoil on the nodes: the board pitches about its pivot on the arm's back plate, the rim
+ * (and the net hanging from its hooks) about its hinge on the bracket plate and with the board.
+ * Rest transforms are captured once, so a recoil of 0 restores them exactly.
+ */
+export interface HoopRecoil {
+  set(boardPitch: number, rimPitch: number): void;
+}
+export function hoopRecoil(backboard: Object3D, rim: Object3D, net: Object3D): HoopRecoil {
+  const rest = [backboard, rim, net].map((n) => ({ n, p: n.position.clone(), q: n.quaternion.clone() }));
+  const qx = new Quaternion();
+  const axis = new Vector3(1, 0, 0);
+  const p = new Vector3();
+  let last = [0, 0];
+  return {
+    set(boardPitch, rimPitch) {
+      if (boardPitch === last[0] && rimPitch === last[1]) return;
+      last = [boardPitch, rimPitch];
+      const [b, r, n] = rest as [typeof rest[0], typeof rest[0], typeof rest[0]];
+      // Board: about its own origin (the pivot), so only its rotation changes.
+      b.n.position.copy(BOARD_PIVOT).add(p.copy(b.p).sub(BOARD_PIVOT).applyAxisAngle(axis, boardPitch));
+      b.n.quaternion.copy(qx.setFromAxisAngle(axis, boardPitch)).multiply(b.q);
+      for (const c of [r, n]) {
+        recoilPoint(c.p, boardPitch, rimPitch, c.n.position);
+        c.n.quaternion.copy(qx.setFromAxisAngle(axis, boardPitch + rimPitch)).multiply(c.q);
       }
     },
   };
@@ -121,9 +199,6 @@ export function farLayerShade(base: Float32Array, toCamera: Vector3): Float32Buf
   }
   return new Float32BufferAttribute(colors, 3);
 }
-
-/** Lengthening gain at stretch 1 (shared with the choreography's clearance checks). */
-export const NET_STRETCH = 0.3;
 
 /**
  * `variants`: the GLB's ball presets (KHR_materials_variants, `loadMaterialVariants`): the master
@@ -162,13 +237,17 @@ export function rigSports(root: Object3D, lib: ModelContext['lib'], preset: Ball
     });
   };
   setPreset(preset);
+  // The net is rebaked at RIM_LOCAL first, so the recoil captures its final rest transform.
+  const net = netDeform(nodes.net!);
 
   return {
     root,
     nodes,
     shadows: [ballShadow, hoopShadow],
     ballShadow,
-    net: netDeform(nodes.net!),
+    net,
+    recoil: hoopRecoil(nodes.backboard!, nodes.rim!, nodes.net!),
+    ballRest: nodes.ball_mesh!.quaternion.clone(),
     bounds: SPORTS_BOUNDS.clone(),
     setPreset,
     dispose() {

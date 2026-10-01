@@ -2,13 +2,16 @@ import { Box3, type Camera, type Object3D, Vector3, type WebGLRenderer } from 't
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
-  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, NET_OPEN_RADIUS, NET_STRETCH, netRestRadius, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, type BallPreset, type SportsRig,
+  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netInnerRadius, netRestRadius, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, type BallPreset, type SportsRig,
 } from '../../../models/sports.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
-import { DURATIONS, frameFor, newFrame, sampleSequence, type SportsFrame } from './sequences.ts';
+import { CONTACT_AT, DURATIONS, frameFor, newFrame, sampleSequence, type SportsFrame } from './sequences.ts';
+
+/** Outer net silhouette beyond its inner envelope (cords, knots, the far layer's thickness). */
+const NET_OUTSET = 0.05;
 
 /** Silhouette samples of every Sports path: the hoop, the pass, the made shot and the airball. */
 export function sportsFramePoints(sequences: readonly SequenceName[] = ['host', 'accept', 'decline']): Vector3[] {
@@ -23,16 +26,29 @@ export function sportsFramePoints(sequences: readonly SequenceName[] = ['host', 
     for (let t = 0; t <= DURATIONS[seq] + 1e-9; t += 0.02) sphere(sampleSequence(seq, t, f).ballPos.clone());
   }
   sphere(BALL_AT.host);
-  // Hoop: board corners, rim ring, net bottom, pole base.
-  for (const sx of [-1, 1]) for (const sy of [-1, 1]) pts.push(new Vector3(HOOP_ROOT.x + (sx * BOARD.width) / 2, BOARD.centerY + (sy * BOARD.height) / 2, HOOP_ROOT.z + BOARD.front));
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
+  // Hoop: the board's eight corners (its top-back edge is the silhouette at the 15° elevation),
+  // rim ring, pole base.
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const z of [BOARD.front, BOARD.front - BOARD.thickness]) {
+    pts.push(new Vector3(HOOP_ROOT.x + (sx * BOARD.width) / 2, BOARD.centerY + (sy * BOARD.height) / 2, HOOP_ROOT.z + z));
+  }
+  const dirs = Array.from({ length: 16 }, (_, i) => [Math.cos((i / 16) * Math.PI * 2), Math.sin((i / 16) * Math.PI * 2)] as const);
+  for (const [cx, sz] of dirs) {
     const ring = RIM.innerRadius + 2 * RIM.tube;
-    pts.push(new Vector3(RIM_CENTER.x + Math.cos(a) * ring, RIM_CENTER.y, RIM_CENTER.z + Math.sin(a) * ring));
-    // The net's bottom, opened and stretched (made shot).
-    const open = NET_OPEN_RADIUS + 0.05, low = NET.depth * (1 + NET_STRETCH);
-    pts.push(new Vector3(RIM_CENTER.x + Math.cos(a) * open, RIM_CENTER.y - low, RIM_CENTER.z + Math.sin(a) * open));
-    pts.push(new Vector3(HOOP_ROOT.x + Math.cos(a) * POLE.baseRadius, 0, HOOP_ROOT.z + POLE.z + Math.sin(a) * POLE.baseRadius));
+    pts.push(new Vector3(RIM_CENTER.x + cx * ring, RIM_CENTER.y, RIM_CENTER.z + sz * ring));
+    pts.push(new Vector3(HOOP_ROOT.x + cx * POLE.baseRadius, 0, HOOP_ROOT.z + POLE.z + sz * POLE.baseRadius));
+  }
+  // The net at rest and wherever the made shot's swish carries it (bulge, stretch, snap).
+  const netAt = (fr: SportsFrame) => {
+    for (const [cx, sz] of dirs) {
+      for (const t of [0.25, 0.5, 0.75, 1]) {
+        const r = netInnerRadius(t, cx, sz, fr.net) + NET_OUTSET, y = -t * NET.depth * (1 + fr.net.stretch);
+        pts.push(new Vector3(RIM_CENTER.x + cx * r, RIM_CENTER.y + y, RIM_CENTER.z + sz * r));
+      }
+    }
+  };
+  netAt(newFrame());
+  if (sequences.includes('accept')) {
+    for (let t = CONTACT_AT; t <= DURATIONS.accept + 1e-9; t += 0.02) netAt(sampleSequence('accept', t, f));
   }
   return pts;
 }
