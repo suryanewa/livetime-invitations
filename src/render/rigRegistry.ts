@@ -17,7 +17,7 @@ export const RIGS: ReadonlyMap<string, Rig> = new Map(
 );
 
 /** The production rig: what the controller uses when the embedder names none. */
-export const DEFAULT_RIG = 'v1.1';
+export const DEFAULT_RIG = 'neutral-room';
 
 export function rigNames(): string[] {
   return [...RIGS.keys()];

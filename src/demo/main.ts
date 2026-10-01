@@ -2,7 +2,7 @@
  * DIRECTION CONTRACT (showcase shell)
  * THESIS: the object is the hero; the interface is a precise instrument beside it. Refuses
  *   the dashboard-of-cards demo page.
- * OWN-WORLD: warm white page, #F8E4C8 stage, ink type, segmented controls on a #EEECE6 track,
+ * OWN-WORLD: warm white page, #D5D2CD stage (the production rig's measured backdrop), ink type, segmented controls on a #EEECE6 track,
  *   one perforation-dot rule echoing the objects' signature. System sans (pinned by spec).
  * STORY: host prepares the card → previews as guest → guest answers → simulated save status.
  * FIRST VIEWPORT: phone-width invitation (event, stage, controls) left; the collection rail

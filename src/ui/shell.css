@@ -4,7 +4,7 @@
  */
 :root {
   /* Measured from the rendered studio backdrop (posters), so stage, fallback and render match. */
-  --lt-stage: #f8e4c8;
+  --lt-stage: #d5d2cd;
   --lt-text: #202320;
   --lt-text-2: #585c57;
   --lt-muted: #dcddd5;
