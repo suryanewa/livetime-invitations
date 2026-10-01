@@ -1,17 +1,20 @@
-import { Box3, type Camera, type MeshBasicMaterial, type Object3D, type Vector3, type WebGLRenderer } from 'three';
+import { Box3, type Camera, type MeshBasicMaterial, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/birthday/birthday.glb?url';
 import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import { rigBirthday, type BirthdayRig } from '../../../models/birthday.ts';
 import { BIN_POS, BIN_YAW, WALL_Z } from '../../../models/birthdayContract.ts';
-import { FLAME_SCALE, type CakePreset } from '../../../models/cake.ts';
+import type { CakePreset } from '../../../models/cake.ts';
 import { flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
+import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { birthdayFramePoints } from './framing.ts';
 import { DURATIONS, LEAN, ON_STAND } from './poses.ts';
-import { frameFor, newFrame, sampleSequence, type BirthdayFrame } from './sequences.ts';
+import { frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from './sequences.ts';
+
+const UP = new Vector3(0, 1, 0);
 
 export class BirthdayScene implements SceneInstance {
   readonly category = 'birthday' as const;
@@ -24,6 +27,7 @@ export class BirthdayScene implements SceneInstance {
 
   private readonly frame = newFrame();
   private preset: CakePreset;
+  private readonly qYaw = new Quaternion();
 
   constructor(readonly rig: BirthdayRig, config: Extract<SceneConfig, { category: 'birthday' }>) {
     this.root = rig.root;
@@ -58,6 +62,11 @@ export class BirthdayScene implements SceneInstance {
     return f.binVisible || !f.cakeVisible || f.cakePos.distanceTo(ON_STAND) > 1e-3;
   }
 
+  /** Low tier for the imported stand, frosting and candle materials (the library handles the rest). */
+  setLowDetail(enabled: boolean): void {
+    setImportedLowDetail(this.root, enabled);
+  }
+
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
     // Warm both frostings, the bin and the wisps (made visible for the compile only).
     const scene = this.root.parent ?? this.root;
@@ -73,6 +82,7 @@ export class BirthdayScene implements SceneInstance {
 
   dispose(): void {
     this.rig.dispose();
+    disposeImported(this.root);
     this.root.traverse((o) => (o as { geometry?: { dispose(): void } }).geometry?.dispose());
     this.root.removeFromParent();
   }
@@ -82,19 +92,20 @@ export class BirthdayScene implements SceneInstance {
     const n = this.rig.nodes;
     n.cake_authored!.position.copy(f.cakePos);
     n.cake_authored!.visible = f.cakeVisible;
-    n.cake_secondary!.rotation.set(0, f.cakeYaw, 0);
+    // Carry lean about the horizontal axis across the carry, then the presentation yaw about the cake's own axis.
+    n.cake_secondary!.quaternion.setFromAxisAngle(LEAN_AXIS, f.cakeLean).multiply(this.qYaw.setFromAxisAngle(UP, f.cakeYaw));
     this.rig.candles.forEach((c, i) => {
-      c.candle.position.y = c.seatedY + f.drop[i]!;
-      const s = f.flameScale[i]!, o = f.flameOpacity[i]!;
+      c.candle.position.y = c.seatedY + (f.drop[i] ?? 0);
+      const s = Math.max(f.flameScale[i] ?? 0, 0.0001), o = f.flameOpacity[i] ?? 0;
       c.flame.visible = o > 0.001;
-      c.flame.scale.setScalar(FLAME_SCALE * Math.max(s, 0.0001));
-      c.flame.rotation.set(LEAN.x * f.flameLean[i]!, 0, LEAN.z * f.flameLean[i]!);
+      c.flame.scale.set(c.flameSize.x * s, c.flameSize.y * s, c.flameSize.z * s);
+      c.flame.rotation.set(LEAN.x * (f.flameLean[i] ?? 0), 0, LEAN.z * (f.flameLean[i] ?? 0));
       c.flameMaterial.uniforms.uOpacity!.value = o;
       c.wick.rotation.set(LEAN.x * f.wickLean, 0, LEAN.z * f.wickLean);
-      const wo = f.wispOpacity[i]!;
+      const wo = f.wispOpacity[i] ?? 0;
       c.wisp.visible = wo > 0.001;
       (c.wisp.material as MeshBasicMaterial).opacity = wo;
-      c.wisp.position.y = c.flame.position.y + 0.01 + f.wispRise[i]!;
+      c.wisp.position.y = c.flame.position.y + 0.01 + (f.wispRise[i] ?? 0);
     });
     n.bin_root!.position.copy(f.binPos);
     n.bin_root!.visible = f.binVisible;
@@ -120,11 +131,14 @@ export const birthdayScene: SceneModule = {
     const root = cake.scene.getObjectByName('birthday_root');
     const binRoot = bin.scene.getObjectByName('bin_root');
     if (!root || !binRoot) throw Object.assign(new Error('missing birthday nodes'), { reason: 'asset-failure' as const });
+    // Frosting presets live in the GLB (KHR_materials_variants); read them before detaching the root.
+    const variants = await loadMaterialVariants(cake);
     root.removeFromParent();
     binRoot.removeFromParent();
     bindMaterialsByName(root, library);
+    prepareImported(root, library, variants.materials);
     bindMaterialsByName(binRoot, library);
-    const rig = rigBirthday(root, binRoot, library, config.cake);
+    const rig = rigBirthday(root, binRoot, library, config.cake, variants);
     return new BirthdayScene(rig, config);
   },
 };
