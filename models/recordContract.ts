@@ -72,8 +72,12 @@ export const TONEARM = {
   drop: s(PIVOT_M[1] - TIP_M[1]),
   /** The master's authored arm yaw: stylus on the lead-in groove (RECORD.grooveOuter). */
   cueYaw: Math.atan2(TIP_M[0] - PIVOT_M[0], TIP_M[2] - PIVOT_M[2]),
-  /** Yaw on its rest: swung out 0.333 rad (19°) towards the front-right corner. */
-  parkedYaw: -0.04,
+  /**
+   * Yaw on its rest: swung out 0.413 rad (23.7°) from the cue towards the front-right corner, so
+   * the parked headshell and cartridge sit beside the platter, clear of its silver rim (as a real
+   * arm parks), not over it.
+   */
+  parkedYaw: 0.04,
   /** Lift (rotation.x) that clears the record by ≈3 cm at the stylus. */
   liftedPitch: -0.035,
   /** Arm frame point (x across, z along) where the rest post's saddle meets the tube's underside. */

@@ -1,4 +1,4 @@
-import { type BufferGeometry, Matrix4, MeshStandardMaterial, type Object3D, RingGeometry, SphereGeometry, TorusGeometry, Vector2, Vector3, Shape, ExtrudeGeometry } from 'three';
+import { type BufferGeometry, Color, LinearSRGBColorSpace, Matrix4, MeshPhysicalMaterial, MeshStandardMaterial, type Object3D, RingGeometry, SphereGeometry, TorusGeometry, Vector2, Vector3, Shape, ExtrudeGeometry } from 'three';
 import { filletPolyline, group, mergeParts, mesh, perforationRow, roundedBox, wire, type ProfilePoint } from './geometry.ts';
 import { PLATTER as PLATTER_V12, PLATTER_TOP as PLATTER_TOP_V12, PLAYER as PLAYER_V12, REST, TONEARM as TONEARM_V12, type RecordLabel } from './recordContract.ts';
 import { cap, circleContour, knurlBand, place, planCircle, planContour, planRoundedRect, profile, sweep, transformed, turned } from './recordParts.ts';
@@ -14,8 +14,8 @@ import type { ModelContext } from './types.ts';
  * and joined under, the two contact-shadow placeholders, and the tonearm rest the master lacks.
  *
  * The rest (a turned chrome post with a black-anodised cradle) sits under the parked tube at
- * REST; its materials are named after the master's (`tt_chrome`, `tt_black_anodised`) and the rig
- * swaps in the master's own material instances at load, so it matches the master's finish.
+ * REST; its materials are exact copies of the master's chrome and black anodising (`restMaterial`),
+ * which the export's dedup folds into the master's own, so it matches the master's finish.
  */
 export function buildPartyScaffold(_ctx: ModelContext): Object3D {
   const root = group('party_root');
@@ -26,8 +26,20 @@ export function buildPartyScaffold(_ctx: ModelContext): Object3D {
   return root;
 }
 
-/** Placeholder materials named after the master's; the rig rebinds them to the master's instances. */
-const restMaterial = (name: string, color: string, metalness: number, roughness: number) => new MeshStandardMaterial({ name, color, metalness, roughness });
+/**
+ * The rest's materials are exact copies of the master's `chrome` and `black_anodised` (factors as
+ * stored in vintage-turntable.glb, clearcoat included), under the recipe's renamed names, so the
+ * export's dedup folds them into the master's own materials: one `tt_chrome` and one
+ * `tt_black_anodised` in the GLB (tests/party.test.ts checks it), no runtime rebinding.
+ */
+const restMaterial = (name: string, rgb: readonly [number, number, number], metalness: number, roughness: number, clearcoat?: { factor: number; roughness: number }) => {
+  const color = new Color().setRGB(...rgb, LinearSRGBColorSpace);
+  return clearcoat
+    ? new MeshPhysicalMaterial({ name, color, metalness, roughness, clearcoat: clearcoat.factor, clearcoatRoughness: clearcoat.roughness })
+    : new MeshStandardMaterial({ name, color, metalness, roughness });
+};
+const MASTER_CHROME = [0.8879231178794776, 0.8879231178794776, 0.8879231178794776] as const;
+const MASTER_BLACK_ANODISED = [0.006048833020386069, 0.006048833020386069, 0.006512090790025684] as const;
 
 function buildTonearmRest(root: Object3D): void {
   const rest = group('tonearm_rest', root);
@@ -43,7 +55,7 @@ function buildTonearmRest(root: Object3D): void {
     [0, -0.001], [0.026, -0.001], [0.026, 0.004, 0.0015], [0.016, 0.009, 0.003], [0.0075, 0.016, 0.004], [0.0075, saddle - 0.024],
     [0.011, saddle - 0.02, 0.002], [0.011, saddle - 0.013, 0.002], [0, saddle - 0.013],
   ], { segments: 28, filletSegments: 2 });
-  mesh('rest_post', post, restMaterial('tt_chrome', '#E2E2E2', 1, 0.07), rest);
+  mesh('rest_post', post, restMaterial('tt_chrome', MASTER_CHROME, 1, 0.07), rest);
   // Cradle across the tube (local x): a padded saddle block with two low prongs, the tube's own
   // radius clear between them, so the parked tube rests in it and lifts out cleanly.
   const across = tubeR * 2 + 0.006;
@@ -53,7 +65,7 @@ function buildTonearmRest(root: Object3D): void {
     { geometry: place(roundedBox(0.008, 0.011, 0.02, 0.0035, 1), { x: -(across / 2 + 0.004), y: saddle + 0.0005 }) },
     { geometry: place(roundedBox(0.008, 0.011, 0.02, 0.0035, 1), { x: across / 2 + 0.004, y: saddle + 0.0005 }) },
   ]);
-  mesh('rest_cradle', cradle, restMaterial('tt_black_anodised', '#0F0F10', 0.3, 0.34), rest);
+  mesh('rest_cradle', cradle, restMaterial('tt_black_anodised', MASTER_BLACK_ANODISED, 0.3, 0.34, { factor: 0.3, roughness: 0.3 }), rest);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

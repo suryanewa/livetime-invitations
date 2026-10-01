@@ -12,7 +12,8 @@ import {
 import { extendLid, type RecordPlayerRig } from '../models/recordPlayer.ts';
 import { fitCameraToBounds } from '../src/render/camera.ts';
 import { PartyScene, partyFramePoints } from '../src/scenes/party/index.ts';
-import { ARM, DURATIONS, LEVEL_BY, PLAY_AT, RPM_33, SPIN } from '../src/scenes/party/poses.ts';
+import { ARM, DURATIONS, HOVER, LEVEL_BY, PLAY_AT, RPM_33, SPIN, TILT_MAX_SHEEN } from '../src/scenes/party/poses.ts';
+import { labelPrint } from '../scripts/masters/recipes/party.ts';
 import { blendLift, frameFor, newFrame, sampleSequence, SETTLE, settleTilt, spinProgress, STEADY, type PartyFrame } from '../src/scenes/party/sequences.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 import { readPartyDoc, threeFromDoc } from './partyGlb.ts';
@@ -85,6 +86,17 @@ describe('Party choreography', () => {
     expect(at('accept', PLAY_AT - 0.001).status).toBe('off');
     expect(at('accept', PLAY_AT).status).toBe('lit');
     for (let i = 0; i <= 1400; i += 10) expect(at('decline', i / 1000).status).toBe('off');
+  });
+
+  it('the presentation tilt stays below the key’s specular lobe on the vinyl, and only decreases on the host path', () => {
+    expect(HOVER.tilt).toBeLessThanOrEqual(TILT_MAX_SHEEN);
+    let prev = at('host', 0).recordTilt;
+    expect(prev).toBe(HOVER.tilt);
+    for (let i = 1; i <= DURATIONS.host * 1000; i++) {
+      const cur = at('host', i / 1000).recordTilt;
+      expect(cur).toBeLessThanOrEqual(prev + 1e-12);
+      prev = cur;
+    }
   });
 
   it('the record is level and centred before its hole reaches the spindle, and never dips into the mat', () => {
@@ -338,6 +350,45 @@ describe('Party runtime GLB matches the contract (master at TT_SCALE)', () => {
     expect(tex('tt_label_cobalt')).not.toBe(tex('tt_label_coral'));
   });
 
+  it('label prints: a bold wedge and sliver on one side and dark ink, so the turn reads at stage size', () => {
+    // A synthetic print: the master's olive field everywhere, one texel of its ink.
+    const size = 64, img = { data: new Uint8Array(size * size * 3), width: size, height: size, channels: 3 as const };
+    for (let i = 0; i < img.data.length; i += 3) img.data.set([134, 128, 94], i);
+    const inkAt = (size / 2 + 20) * size * 3 + (size / 2) * 3; // straight down, r ≈ 0.63 (field there)
+    img.data.set([80, 74, 56], inkAt);
+    const lum = (c: ArrayLike<number>) => {
+      const l = (v: number) => { const x = v / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+      return 0.2126 * l(c[0]!) + 0.7152 * l(c[1]!) + 0.0722 * l(c[2]!);
+    };
+    const contrast = (a: ArrayLike<number>, b: ArrayLike<number>) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+    for (const preset of ['coral', 'cobalt'] as const) {
+      const out = labelPrint(preset)(img).data;
+      const texel = (deg: number, r: number) => {
+        const a = (deg * Math.PI) / 180;
+        const x = Math.floor(size / 2 + Math.cos(a) * r * (size / 2)), y = Math.floor(size / 2 - Math.sin(a) * r * (size / 2));
+        return out.subarray((y * size + x) * 3, (y * size + x) * 3 + 3);
+      };
+      const field = texel(0, 0.6), wedge = texel(175, 0.6), sliver = texel(226, 0.6), opposite = texel(355, 0.6);
+      expect([...field], preset).toEqual([...opposite]);
+      // Luminance contrast (WCAG ratio) on top of the hue contrast: coral/navy ≈ 4.3, cobalt/coral ≈ 2.4.
+      expect(contrast(field, wedge), `${preset} wedge`).toBeGreaterThan(2);
+      expect(contrast(field, sliver), `${preset} sliver`).toBeGreaterThan(1.3);
+      // Ink: coral ≈ 5.2, cobalt ≈ 3.0 (the first pass’s 3.7 and 2.4).
+      expect(contrast(field, out.subarray(inkAt, inkAt + 3)), `${preset} ink`).toBeGreaterThan(preset === 'coral' ? 5 : 2.9);
+      // Asymmetric: the wedge covers a quarter turn, so half a turn later it is the field.
+      expect([...texel(175, 0.6)]).not.toEqual([...texel(355, 0.6)]);
+    }
+  });
+
+  it('the scaffold rest shares the master’s chrome and black anodising (one material each, clearcoat kept)', () => {
+    const mats = doc.getRoot().listMaterials();
+    for (const name of ['tt_chrome', 'tt_black_anodised']) expect(mats.filter((m) => m.getName() === name), name).toHaveLength(1);
+    expect(mats.find((m) => m.getName() === 'tt_black_anodised')!.getExtension('KHR_materials_clearcoat')).toBeTruthy();
+    const restMats = new Set<string>();
+    node('tonearm_rest').traverse((n) => n.getMesh()?.listPrimitives().forEach((p) => restMats.add(p.getMaterial()!.getName())));
+    expect([...restMats].sort()).toEqual(['tt_black_anodised', 'tt_chrome']);
+  });
+
   it('declares WebP textures and keeps the vinyl’s groove LUTs exact (8192 × 4, decoded texels equal the master’s)', async () => {
     const webp = doc.getRoot().listExtensionsUsed().find((e) => e.extensionName === 'EXT_texture_webp');
     expect(webp?.isRequired()).toBe(true);
@@ -492,6 +543,15 @@ describe('Party model clearances on the exported geometry', () => {
     }
     // It rests: the tube's underside is on the saddle (≤ 1.5 mm above it), not floating.
     expect(Math.min(...over.map((p) => p.y)) - saddleTop).toBeLessThan(0.0015);
+  });
+
+  it('parked, the headshell and cartridge sit beside the platter, well clear of its rim in plan', () => {
+    apply(pose('guest-ready'));
+    // Nearest point of the whole pitching arm (tube, headshell, cartridge) to the platter axis, in
+    // plan: 0.169 beyond the rim at the 0.04 rad parked yaw (0.115 at the first pass's −0.04).
+    let near = Infinity;
+    for (const p of surfacePoints(get('tonearm_lift'), 0.003)) near = Math.min(near, Math.hypot(p.x - PLATTER.x, p.z - PLATTER.z));
+    expect(near - PLATTER.radius).toBeGreaterThan(0.15);
   });
 
   it('playing, nothing on the arm but the stylus reaches the vinyl, and the arm never cuts the record or platter', () => {

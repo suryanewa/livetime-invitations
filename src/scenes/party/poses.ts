@@ -14,11 +14,20 @@ export const PLAY_AT = 0.5;
 /**
  * Pre-action presentation: hovering above the platter, label tipped towards the camera. High
  * enough that the tipped record's lowest edge clears the mat by 0.16 (its radius is 0.76).
+ *
+ * The tilt stays below the studio key's mirror angle on the vinyl. From about 0.8 rad up, the
+ * key's broad (anisotropic, roughness 0.38) specular lobe fills the disc, which then reads as a
+ * grey-silver CD with white rings, and it falls off within a few hundredths of a radian (the
+ * frame's dark area grows from 14k to 25k pixels between 0.85 and 0.80). At 0.65 the record reads
+ * black with a faint groove sheen, and the host path (0.65 → 0.30 → 0) never crosses that lobe,
+ * so its shade changes smoothly. TILT_MAX_SHEEN is the bound the test holds it under.
  */
 export const HOVER = {
   pos: new Vector3(PLATTER.x - 0.06, PLATTER_TOP + 0.76, PLATTER.z + 0.16),
-  tilt: 0.9,
+  tilt: 0.65,
 };
+/** Highest presentation tilt that stays clear of the key's specular lobe (measured, see HOVER). */
+export const TILT_MAX_SHEEN = 0.7;
 
 /** Aligned over the spindle, still slightly tipped (end of the 0–0.20 s beat). */
 export const ALIGNED = {

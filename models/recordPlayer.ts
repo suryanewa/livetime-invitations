@@ -98,22 +98,8 @@ export function extendLid(hinge: Object3D): void {
 }
 
 /**
- * The scaffold's rest carries placeholder materials named after the master's (`tt_chrome`,
- * `tt_black_anodised`): give it the master's own instances (textures, extensions, own environment).
- */
-function shareMasterMaterials(root: Object3D, rest: Object3D): void {
-  const byName = new Map<string, Material>();
-  const restMeshes = new Set(meshesOf(rest));
-  for (const m of meshesOf(root)) if (!restMeshes.has(m) && !byName.has(materialOf(m).name)) byName.set(materialOf(m).name, materialOf(m));
-  for (const m of restMeshes) {
-    const own = byName.get(materialOf(m).name);
-    if (own) m.material = own;
-  }
-}
-
-/**
  * Runtime rig over the Party hierarchy loaded from party.glb: contact shadows, the record's shadow
- * proxy, the extended dust cover, the rest's materials, the status key's own material and the
+ * proxy, the extended dust cover, the status key's own material and the
  * label presets (`variants`: the GLB's KHR_materials_variants; without them the label falls back
  * to the library's printed labels).
  */
@@ -146,7 +132,6 @@ export function rigRecordPlayer(root: Object3D, lib: ModelContext['lib'], label:
   // that self-shadow is lost. The stage sets receiveShadow at setContent, so it is re-asserted
   // per draw (shadow-pass casting is unaffected).
   for (const m of meshesOf(nodes.lid_hinge!)) if (materialOf(m).name === 'tt_lid') m.onBeforeRender = () => { m.receiveShadow = false; };
-  shareMasterMaterials(root, nodes.tonearm_rest!);
 
   // The key's own material: a clone of the master aluminium, so lighting it touches nothing else.
   const keyMesh = meshesOf(nodes.player_status!)[0]!;
