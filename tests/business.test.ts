@@ -1,14 +1,19 @@
-import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { Node } from '@gltf-transform/core';
 import { describe, expect, it } from 'vitest';
-import { Box3, Color, DoubleSide, Euler, Matrix3, type Mesh, MeshStandardMaterial, Object3D, PointLight, Raycaster, Vector3 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CARD, HOOK, type KeycardRig } from '../models/keycard.ts';
-import { cameraDirection } from '../src/render/camera.ts';
+import { Box3, BoxGeometry, Matrix4, Mesh, MeshStandardMaterial, Object3D, PointLight, Quaternion, Vector3 } from 'three';
+import {
+  BUSINESS_NODES, CARD, CARD_OFFSET_Y, FACE, GLOW, HOLDER_CLIPS, HOOK, hookCentreline, MM_PER_UNIT, PENDULUM, PRESS_DEPTH, READER, RIDE, SCANNER_POS, SLOT,
+  STATUS_COLOURS, type BusinessRig, type StatusLit,
+} from '../models/business.ts';
+import { darkPrint, DARK_PRINT, PRINT_COBALT } from '../models/businessPrint.ts';
+import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
+import { cameraDirection, createStageCamera, fitCameraToBounds } from '../src/render/camera.ts';
 import { LIGHT_RIG } from '../src/render/lighting.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { BusinessScene } from '../src/scenes/business/index.ts';
-import { DURATIONS, SCAN_AT, SCAN_TILT, SCAN_YAW, STATUS_COLOURS } from '../src/scenes/business/poses.ts';
-import { frameFor, newFrame, sampleSequence, type BusinessFrame } from '../src/scenes/business/sequences.ts';
+import { DURATIONS, HOOK_LIFT, HOST, POSE, SCAN_AT, SCAN_TILT } from '../src/scenes/business/poses.ts';
+import { cardRotation, frameFor, HOST_BEATS, newFrame, OUTCOME_BEATS, sampleSequence, type BusinessFrame } from '../src/scenes/business/sequences.ts';
 import type { SequenceName } from '../src/core/types.ts';
 
 const close = (a: BusinessFrame, b: BusinessFrame, eps = 1e-6) => {
@@ -16,12 +21,34 @@ const close = (a: BusinessFrame, b: BusinessFrame, eps = 1e-6) => {
   expect(Math.abs(a.rot.angleTo(b.rot))).toBeLessThan(eps);
   expect(a.cardOffset.distanceTo(b.cardOffset)).toBeLessThan(eps);
   expect(Math.abs(a.cardTilt - b.cardTilt)).toBeLessThan(eps);
+  expect(Math.abs(a.clipTilt - b.clipTilt)).toBeLessThan(eps);
+  expect(Math.abs(a.swivel - b.swivel)).toBeLessThan(eps);
   expect(Math.abs(a.gate - b.gate)).toBeLessThan(eps);
+  expect(Math.abs(a.glass - b.glass)).toBeLessThan(eps);
   expect(Math.abs(a.anchorX - b.anchorX)).toBeLessThan(eps);
   expect(Math.abs(a.anchorY - b.anchorY)).toBeLessThan(eps);
 };
 
 const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
+const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0);
+
+/** World (business_root) transform of a frame's card: centre and rotation. */
+function cardWorld(f: BusinessFrame): { centre: Vector3; rot: Quaternion } {
+  const rot = f.rot.clone().multiply(cardRotation(f));
+  return { centre: f.cardOffset.clone().applyQuaternion(f.rot).add(f.pivot), rot };
+}
+/** A card-space point in business_root space. */
+const cardPoint = (f: BusinessFrame, p: Vector3) => {
+  const { centre, rot } = cardWorld(f);
+  return p.clone().applyQuaternion(rot).add(centre);
+};
+/** A hook-space point (clip_pivot) in business_root space. */
+const hookPoint = (f: BusinessFrame, p: Vector3) => p.clone().applyAxisAngle(Y, f.swivel).applyAxisAngle(X, f.clipTilt).applyQuaternion(f.rot).add(f.pivot);
+
+/** Every pose value the sequences drive, for continuity checks. */
+const channels = (f: BusinessFrame) => [
+  f.pivot.x, f.pivot.y, f.pivot.z, f.cardOffset.x, f.cardOffset.y, f.cardOffset.z, f.cardTilt, f.clipTilt, f.swivel, f.gate, f.glass, f.anchorX, f.anchorY,
+];
 
 describe('Business choreography', () => {
   it('host starts at host-ready and ends exactly at guest-ready', () => {
@@ -40,7 +67,7 @@ describe('Business choreography', () => {
     for (let t = 0; t <= 1.5; t += 0.05) close(at('accept', t), at('decline', t));
   });
 
-  it('the indicator changes exactly once, at the contact beat', () => {
+  it('the indicator changes exactly once, at the contact beat, then rises within 0.1 s', () => {
     let changes = 0;
     let prev = at('accept', 0).status;
     for (let i = 1; i <= 1500; i++) {
@@ -50,7 +77,11 @@ describe('Business choreography', () => {
     }
     expect(changes).toBe(1);
     expect(at('accept', SCAN_AT - 0.001).status).toBe('off');
+    expect(at('accept', SCAN_AT - 0.001).statusLevel).toBe(0);
     expect(at('accept', SCAN_AT).status).toBe('lit');
+    expect(at('accept', SCAN_AT).statusLevel).toBeGreaterThan(0);
+    expect(at('accept', SCAN_AT + 0.1).statusLevel).toBe(1);
+    expect(frameFor('accepted', newFrame()).statusLevel).toBe(1);
   });
 
   it('has no discontinuities: consecutive 1 ms samples never jump', () => {
@@ -60,9 +91,32 @@ describe('Business choreography', () => {
         const cur = at(seq, i / 1000);
         expect(cur.pivot.distanceTo(prev.pivot)).toBeLessThan(0.02);
         expect(cur.rot.angleTo(prev.rot)).toBeLessThan(0.03);
+        expect(cardRotation(cur).angleTo(cardRotation(prev))).toBeLessThan(0.03);
+        expect(cur.cardOffset.distanceTo(prev.cardOffset)).toBeLessThan(0.02);
         expect(Math.abs(cur.anchorX - prev.anchorX)).toBeLessThan(0.02);
         expect(Math.abs(cur.gate - prev.gate)).toBeLessThan(0.05);
         prev = cur;
+      }
+    }
+  });
+
+  it('is C1 at every beat boundary: velocity never steps (except the released spring gate)', () => {
+    // Second differences over 1 ms: a velocity step of Δv shows as Δv·1 ms. The bound allows the
+    // curvature of the fastest authored arcs (|a| ≲ 200 u/s²) and nothing like a step.
+    for (const seq of ['host', 'accept', 'decline'] as const) {
+      let a = channels(at(seq, 0)), b = channels(at(seq, 0.001));
+      for (let i = 2; i <= DURATIONS[seq] * 1000; i++) {
+        const t = i / 1000;
+        const c = channels(at(seq, t));
+        c.forEach((v, k) => {
+          if (k === 9 && seq === 'host' && Math.abs(t - HOST_BEATS.gate[0]) < 0.003) return; // gate release
+          const d2 = Math.abs(v - 2 * b[k]! + a[k]!);
+          // Angles (cardTilt, clipTilt, swivel) turn fastest, the spring gate faster still; a step of 1 rad/s would read
+          // as 1e-3 here, a step of 0.8 u/s in position as 8e-4.
+          expect(d2, `${seq} t=${t} channel ${k}`).toBeLessThan(k === 10 ? 1e-4 : k === 9 ? 2.5e-3 : k >= 6 && k <= 8 ? 1e-3 : 8e-4);
+        });
+        a = b;
+        b = c;
       }
     }
   });
@@ -81,79 +135,183 @@ describe('Business choreography', () => {
     expect(DURATIONS.host).toBeGreaterThanOrEqual(0.9);
     expect(DURATIONS.host).toBeLessThanOrEqual(1.6);
   });
+});
 
-  it('host attach never passes the hook wire or gate through the card (slot only)', () => {
-    const { back, runY, hinge, radius, corner, gateLength } = HOOK;
-    // Static hook centreline in clip space: back leg, corner, horizontal run.
-    const hook: Vector3[] = [];
-    for (let y = -0.075; y >= runY + corner; y -= 0.004) hook.push(new Vector3(0, y, back));
-    for (let i = 0; i <= 8; i++) {
-      const a = (i / 8) * (Math.PI / 2);
-      hook.push(new Vector3(0, runY + corner - Math.sin(a) * corner, back + corner - Math.cos(a) * corner));
-    }
-    for (let z = back + corner; z <= hinge; z += 0.004) hook.push(new Vector3(0, runY, z));
-    const tol = 0.002;
-    const local = new Vector3();
+describe('Business host attach on the master snap hook', () => {
+  const hook = hookCentreline(0.003);
+  /** Gate centreline (hook space) at a rotation, pin → tip. */
+  const gate = (angle: number) => {
+    const pts: Vector3[] = [];
+    for (let s = 0.01; s <= HOOK.gateLength; s += 0.004) pts.push(new Vector3(0, -s, 0).applyAxisAngle(X, angle).add(HOOK.pin));
+    return pts;
+  };
+  /** Hook-space point → card space for a frame. */
+  const toCard = (f: BusinessFrame, p: Vector3) => {
+    const clip = p.clone().applyAxisAngle(Y, f.swivel).applyAxisAngle(X, f.clipTilt);
+    return clip.sub(f.cardOffset).applyQuaternion(cardRotation(f).invert());
+  };
+
+  it('never passes the hook wire or the gate through the holder: only through its slot', () => {
+    // 0.3 mm at the badge's real size: the strip bears on the wire, so contact is the norm.
+    const tol = 0.004;
+    const slotMid = (SLOT.top + SLOT.bottom) / 2, slotHalf = (SLOT.top - SLOT.bottom) / 2;
     let worst = Infinity;
-    for (let i = 0; i <= DURATIONS.host * 1000; i++) {
+    for (let i = 0; i <= DURATIONS.host * 1000; i += 2) {
       const f = at('host', i / 1000);
-      const pts = [...hook];
-      for (let s = 0; s <= gateLength; s += 0.004) pts.push(new Vector3(0, runY + Math.cos(f.gate) * s, hinge + Math.sin(f.gate) * s));
-      for (const p of pts) {
-        local.copy(p).sub(f.cardOffset);
-        // Undo the card tilt (rotation about x).
-        const c = Math.cos(-f.cardTilt), sn = Math.sin(-f.cardTilt);
-        const y = local.y * c - local.z * sn, z = local.y * sn + local.z * c;
-        const inSlab = Math.abs(z) < CARD.depth / 2 + radius - tol;
-        const inOutline = Math.abs(y) < CARD.height / 2 + radius - tol;
+      for (const [p, r] of [...hook.map((p) => [p, HOOK.tube] as const), ...gate(f.gate).map((p) => [p, HOOK.tube * 0.8] as const)]) {
+        const q = toCard(f, p);
+        const inSlab = Math.abs(q.z) < CARD.depth / 2 + r - tol;
+        const inOutline = Math.abs(q.y) < CARD.height / 2 + r - tol && Math.abs(q.x) < CARD.width / 2 + r - tol;
         if (!inSlab || !inOutline) continue;
-        // Inside the card's footprint: the wire must be within the slot opening.
-        const slotClear = CARD.slotH / 2 - radius - Math.abs(y - CARD.slotY);
-        worst = Math.min(worst, slotClear);
-        expect(slotClear, `t=${i / 1000} y=${y.toFixed(3)} z=${z.toFixed(3)}`).toBeGreaterThan(-tol);
+        // The wire is a swept circle: outside the holder's faces only the part of it that
+        // reaches past the face counts (its section there has radius √(r² − d²)).
+        const past = Math.abs(q.z) - CARD.depth / 2;
+        const reach = past <= 0 ? r : Math.sqrt(Math.max(0, r * r - past * past));
+        const clear = slotHalf - reach - Math.abs(q.y - slotMid);
+        worst = Math.min(worst, clear);
+        expect(clear, `t=${i / 1000} y=${q.y.toFixed(3)} z=${q.z.toFixed(3)}`).toBeGreaterThan(-tol);
       }
     }
+    // The wire does go through the slot (the card really is clipped on).
     expect(worst).toBeLessThan(0.02);
+  });
+
+  it('hangs from the U: the slot rides on the hook bottom and the gate closes after the strip is in', () => {
+    const f = at('host', DURATIONS.host);
+    const rideHook = new Vector3(0, HOOK.arcY - HOOK.arcR, 0);
+    expect(toCard(f, rideHook).distanceTo(RIDE)).toBeLessThan(1e-6);
+    expect(at('host', HOST_BEATS.gate[0] - 0.001).gate).toBe(HOST.gateOpen);
+    expect(at('host', HOST_BEATS.gate[1]).gate).toBe(0);
+    // The hook turns back on its eye and on its swivel to take the card, and is home by the drop.
+    expect(at('host', HOST_BEATS.present).clipTilt).toBeCloseTo(HOST.hookTilt, 6);
+    expect(Math.abs(at('host', HOST_BEATS.hung).clipTilt)).toBeLessThan(1e-9);
+    expect(Math.abs(at('host', HOST_BEATS.hung).swivel)).toBeLessThan(1e-9);
+  });
+
+  it('the swivel keeps the offered laminate off the key light mirror angle (no white flash)', () => {
+    const view = cameraDirection();
+    const key = new Vector3(...LIGHT_RIG.key.position).normalize();
+    const mirror = (n: Vector3) => (n.clone().multiplyScalar(2 * n.dot(view)).sub(view).angleTo(key) * 180) / Math.PI;
+    for (let t = 0; t <= DURATIONS.host; t += 0.005) {
+      const n = new Vector3(0, 0, 1).applyQuaternion(cardWorld(at('host', t)).rot);
+      expect(mirror(n), `t=${t.toFixed(3)}`).toBeGreaterThan(14);
+    }
   });
 });
 
-describe('Business departure (checkpoint 4)', () => {
-  /** Speeds sampled every millisecond: card pivot (u/s) and strap anchor x (u/s). */
-  const speeds = (seq: 'accept' | 'decline') => {
-    const out: { t: number; pivot: number; anchor: number }[] = [];
-    let prev = at(seq, 0);
-    for (let i = 1; i <= DURATIONS[seq] * 1000; i++) {
-      const cur = at(seq, i / 1000);
-      out.push({ t: i / 1000, pivot: cur.pivot.distanceTo(prev.pivot) * 1000, anchor: Math.abs(cur.anchorX - prev.anchorX) * 1000 });
-      prev = cur;
-    }
-    return out;
+describe('Business at the reader', () => {
+  /** Signed distance from the (pressed) glass plane, business_root space. */
+  const aboveGlass = (p: Vector3, glass = 0) => p.clone().sub(SCANNER_POS).sub(FACE.origin).dot(FACE.normal) - (FACE.glass - glass);
+  /** Face-space (u, v) of a point. */
+  const faceUV = (p: Vector3) => {
+    const d = p.clone().sub(SCANNER_POS).sub(FACE.origin);
+    return { u: d.x, v: d.dot(FACE.up) };
   };
+  const onFace = (p: Vector3) => {
+    const { u, v } = faceUV(p);
+    return Math.abs(u) < FACE.gasketHalfWidth + 0.05 && v > -0.9 && v < 0.85;
+  };
+  /** The holder's back: its clips (the thickest part) and the clear holder's back face. */
+  const cardBack = () => {
+    const pts: Vector3[] = [];
+    for (let i = 0; i <= 10; i++) {
+      for (let j = 0; j <= 14; j++) pts.push(new Vector3((i / 10 - 0.5) * CARD.width, (j / 14 - 0.5) * CARD.height, -CARD.depth / 2));
+    }
+    for (const sx of [-1, 1]) {
+      for (let j = 0; j <= 8; j++) pts.push(new Vector3(sx * HOLDER_CLIPS.x * 0.94, HOLDER_CLIPS.y0 + ((HOLDER_CLIPS.y1 - HOLDER_CLIPS.y0) * j) / 8, -HOLDER_CLIPS.halfDepth));
+    }
+    return pts;
+  };
+  const hook = hookCentreline(0.003);
 
-  it('the card leaves the pad from rest and never outruns its approach', () => {
-    for (const seq of ['accept', 'decline'] as const) {
-      const v = speeds(seq);
-      const approach = Math.max(...v.filter((s) => s.t <= 0.7).map((s) => s.pivot));
-      const approachAnchor = Math.max(...v.filter((s) => s.t <= 0.8).map((s) => s.anchor));
-      const departure = v.filter((s) => s.t >= 0.9);
-      // Peak about the approach's, not twice it.
-      expect(Math.max(...departure.map((s) => s.pivot))).toBeLessThanOrEqual(approach * 1.15);
-      expect(Math.max(...departure.map((s) => s.anchor))).toBeLessThanOrEqual(approachAnchor * 1.15);
-      // Eases in from rest: no speed step between consecutive milliseconds (the old leg
-      // jumped from 0 to 16 u/s in one), and it is still slow 30 ms after it starts.
-      for (let i = 1; i < departure.length; i++) {
-        expect(Math.abs(departure[i]!.pivot - departure[i - 1]!.pivot), `t=${departure[i]!.t}`).toBeLessThan(0.25);
-        expect(Math.abs(departure[i]!.anchor - departure[i - 1]!.anchor), `t=${departure[i]!.t}`).toBeLessThan(0.25);
+  it('lays the card flat on the 11.6° glass, clips touching, over the NFC mark with the LED clear', () => {
+    const f = at('accept', OUTCOME_BEATS.contact);
+    const n = new Vector3(0, 0, 1).applyQuaternion(cardWorld(f).rot);
+    expect(n.angleTo(FACE.normal)).toBeLessThan(1e-4);
+    expect(SCAN_TILT).toBeCloseTo(-FACE.lean, 9);
+    const gaps = cardBack().map((p) => aboveGlass(cardPoint(f, p)));
+    expect(Math.min(...gaps)).toBeGreaterThan(0);
+    expect(Math.min(...gaps)).toBeLessThan(0.005);
+    // The card (and the clip hardware above it) leave the LED bar in view.
+    const ledLeft = SCANNER_POS.x - FACE.ledHalfWidth;
+    const right = Math.max(...cardBack().map((p) => cardPoint(f, p).x), ...hook.map((h) => hookPoint(f, h).x + HOOK.tube));
+    const top = Math.max(...cardBack().map((p) => faceUV(cardPoint(f, p)).v));
+    expect(top < FACE.ledY0 || right < ledLeft).toBe(true);
+    expect(Math.max(...hook.map((h) => hookPoint(f, h).x)) + 0.05).toBeLessThan(ledLeft);
+  });
+
+  it('the press gives the glass 1 mm (the gasket takes it) and the card never passes into it', () => {
+    let maxGlass = 0;
+    for (let i = 600; i <= 1400; i++) {
+      const f = at('accept', i / 1000);
+      maxGlass = Math.max(maxGlass, f.glass);
+      for (const p of cardBack()) {
+        const w = cardPoint(f, p);
+        if (onFace(w)) expect(aboveGlass(w, f.glass), `t=${i / 1000}`).toBeGreaterThan(-1e-5);
       }
-      const start = departure.find((s) => s.pivot > 0.01)!;
-      expect(departure.find((s) => s.t >= start.t + 0.03)!.pivot).toBeLessThan(approach * 0.5);
+    }
+    expect(maxGlass).toBeCloseTo(PRESS_DEPTH, 6);
+    expect(PRESS_DEPTH * MM_PER_UNIT).toBeCloseTo(1, 6);
+    expect(PRESS_DEPTH).toBeLessThan(FACE.gasketFront - FACE.gasketBack);
+  });
+
+  it('the clip turns on the slot so the hook never passes into the reader', () => {
+    expect(HOOK_LIFT).toBeGreaterThan(0.3);
+    for (let i = 450; i <= 1500; i += 2) {
+      const f = at('accept', i / 1000);
+      for (const h of hook) {
+        const w = hookPoint(f, h);
+        if (onFace(w)) expect(aboveGlass(w, f.glass) - HOOK.tube, `t=${i / 1000}`).toBeGreaterThan(-1e-3);
+      }
+    }
+  });
+
+  it('approach and departure never touch the reader before or after contact', () => {
+    for (const [t0, t1] of [[0.15, OUTCOME_BEATS.contact], [OUTCOME_BEATS.depart, 1.5]] as const) {
+      for (let t = t0; t <= t1; t += 0.002) {
+        const f = at('accept', t);
+        for (const p of cardBack()) {
+          const w = cardPoint(f, p);
+          if (onFace(w)) expect(aboveGlass(w), `t=${t.toFixed(3)}`).toBeGreaterThan(-1e-5);
+        }
+      }
+    }
+    // The card at rest hangs clear of the reader's body.
+    const rest = frameFor('accepted', newFrame());
+    const right = Math.max(...cardBack().map((p) => cardPoint(rest, p).x)) ;
+    expect(right).toBeLessThan(SCANNER_POS.x - READER.width / 2 - 0.02);
+  });
+
+  it('pressed flat, the laminate never mirrors the key softbox into the lens (no print washout)', () => {
+    const view = cameraDirection();
+    const key = new Vector3(...LIGHT_RIG.key.position).normalize();
+    const mirror = (n: Vector3) => (n.clone().multiplyScalar(2 * n.dot(view)).sub(view).angleTo(key) * 180) / Math.PI;
+    for (const seq of ['accept', 'decline'] as const) {
+      for (let t = 0.55; t <= 1.15; t += 0.01) {
+        const n = new Vector3(0, 0, 1).applyQuaternion(cardWorld(at(seq, t)).rot);
+        expect(mirror(n), `${seq} t=${t.toFixed(2)}`).toBeGreaterThan(40);
+      }
+    }
+  });
+
+  it('leaves the glass from rest and never outruns its approach', () => {
+    const speed = (t: number) => at('accept', t + 0.0005).pivot.distanceTo(at('accept', t - 0.0005).pivot) * 1000;
+    let approach = 0;
+    for (let t = 0.15; t <= OUTCOME_BEATS.contact; t += 0.001) approach = Math.max(approach, speed(t));
+    let prev = speed(OUTCOME_BEATS.depart);
+    expect(prev).toBeLessThan(0.05);
+    for (let t = OUTCOME_BEATS.depart + 0.001; t < 1.5; t += 0.001) {
+      const v = speed(t);
+      expect(v).toBeLessThanOrEqual(approach * 1.15);
+      expect(Math.abs(v - prev), `t=${t.toFixed(3)}`).toBeLessThan(0.25);
+      prev = v;
     }
   });
 
   it('the strap anchor trails the clip on the way to rest', () => {
     const scan = at('accept', 1.0);
     const rest = at('accept', DURATIONS.accept);
-    for (let t = 1.1; t < DURATIONS.accept; t += 0.01) {
+    for (let t = OUTCOME_BEATS.depart; t < DURATIONS.accept; t += 0.01) {
       const f = at('accept', t);
       const clip = (f.pivot.x - scan.pivot.x) / (rest.pivot.x - scan.pivot.x);
       const anchor = (f.anchorX - scan.anchorX) / (rest.anchorX - scan.anchorX);
@@ -162,149 +320,182 @@ describe('Business departure (checkpoint 4)', () => {
   });
 });
 
-describe('Business legibility (checkpoint 4)', () => {
-  it('the shipped reader stands on an ink foot, and both glyphs are large and centred inside the window', async () => {
-    // The runtime GLB, not the builder: what ships is what is checked.
-    const file = await readFile(new URL('../assets/scenes/business/business.glb', import.meta.url));
-    const gltf = await new GLTFLoader().parseAsync(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer, '');
-    const root = gltf.scene;
-    root.updateMatrixWorld(true);
-    const foot = root.getObjectByName('scanner_foot') as Mesh;
-    expect((foot.material as MeshStandardMaterial).name).toBe('mat_body_ink');
-    // Extents in the window plane, in scene units (quantisation scale is in the node matrices).
-    const win = root.getObjectByName('scanner_light')!;
-    const origin = new Vector3().setFromMatrixPosition(win.matrixWorld);
-    const ux = new Vector3().setFromMatrixColumn(win.matrixWorld, 0).normalize();
-    const uy = new Vector3().setFromMatrixColumn(win.matrixWorld, 1).normalize();
-    const glyphs = ['scanner_symbol_accept', 'scanner_symbol_decline'].map((n) => root.getObjectByName(n)!);
-    /** In-plane extents of an object's meshes, skipping the glyph subtrees. */
-    const extent = (o: Object3D, skip: Object3D[] = []) => {
-      const v = new Vector3();
-      const e = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
-      const visit = (n: Object3D) => {
-        if (skip.includes(n)) return;
-        const p = (n as Mesh).isMesh ? (n as Mesh).geometry.getAttribute('position') : null;
-        for (let i = 0; p && i < p.count; i++) {
-          v.fromBufferAttribute(p, i).applyMatrix4(n.matrixWorld).sub(origin);
-          const x = v.dot(ux), y = v.dot(uy);
-          e.x0 = Math.min(e.x0, x); e.x1 = Math.max(e.x1, x); e.y0 = Math.min(e.y0, y); e.y1 = Math.max(e.y1, y);
-        }
-        n.children.forEach(visit);
-      };
-      visit(o);
-      return e;
-    };
-    const w = extent(win, glyphs);
-    for (const glyph of glyphs) {
-      const name = glyph.name;
-      expect(glyph.parent).toBe(win);
-      const g = extent(glyph);
-      // At least 60 % of the window's width (about 12 CSS px on a 328 px stage)...
-      expect(g.x1 - g.x0, name).toBeGreaterThanOrEqual(0.6 * (w.x1 - w.x0));
-      // ...centred, and clear of the window's rounded edge on every side.
-      expect(Math.abs((g.x1 + g.x0) / 2 - (w.x1 + w.x0) / 2), name).toBeLessThan(0.003);
-      expect(Math.abs((g.y1 + g.y0) / 2 - (w.y1 + w.y0) / 2), name).toBeLessThan(0.003);
-      expect(Math.min(g.x0 - w.x0, w.x1 - g.x1), name).toBeGreaterThan(0.02);
-      expect(Math.min(g.y0 - w.y0, w.y1 - g.y1), name).toBeGreaterThan(0.015);
-    }
-    // Minus bar: a stroke of at least 0.03 u (about 3 CSS px on a 328 px stage).
-    const minus = extent(glyphs[1]!);
-    expect(minus.y1 - minus.y0).toBeGreaterThanOrEqual(0.03);
+describe('Business physics and status', () => {
+  it('swings as a physical pendulum of the master card (about 1.8 Hz on the swivel)', () => {
+    const m = MM_PER_UNIT / 1000;
+    const d = -CARD_OFFSET_Y * m;
+    // A plate's in-plane swing is always slower than a point mass at its centre, and close to it.
+    const simple = Math.sqrt(9.81 / d) / (2 * Math.PI);
+    expect(PENDULUM.swingHz).toBeLessThan(simple);
+    expect(PENDULUM.swingHz).toBeGreaterThan(1.5);
+    expect(PENDULUM.pitchHz).toBeGreaterThan(PENDULUM.swingHz);
+    expect(PENDULUM.damping).toBeGreaterThan(0.2);
+    expect(PENDULUM.damping).toBeLessThan(0.7);
   });
 
-  it('the lit window glows by emission over the idle glass, below tone-mapping compression, green brighter than red', () => {
-    const nodes = Object.fromEntries(['card_authored', 'card_secondary', 'card_mesh', 'lanyard_anchor', 'scanner_light'].map((n) => [n, new Object3D()]));
-    const rig = {
-      root: new Object3D(), nodes, bounds: new Box3(), shadows: [{ setFootprint() {}, setHeight() {} }],
-      statusMaterial: new MeshStandardMaterial(), symbolMaterial: new MeshStandardMaterial(),
-      symbols: { accept: new Object3D(), decline: new Object3D() }, glow: { spill: new PointLight('#ffffff', 0) },
-      gate: null, updateLanyard() {}, setTemplate() {}, dispose() {},
-    } as unknown as KeycardRig;
-    const scene = new BusinessScene(rig, { direction: DIRECTIONS.L2 } as MaterialLibrary, { category: 'business', template: 'light' });
-    const glass = new Color(DIRECTIONS.L2.surfaces.mat_status!.color);
-    const lit: Record<'accept' | 'decline', Color> = { accept: new Color(), decline: new Color() };
-    for (const [pose, key] of [['accepted', 'accept'], ['declined', 'decline']] as const) {
-      scene.pose(pose);
-      const m = rig.statusMaterial;
-      expect(m.color.equals(glass), pose).toBe(true);
-      expect(`#${m.emissive.getHexString()}`).toBe(STATUS_COLOURS[key].toLowerCase());
-      lit[key].copy(m.emissive).multiplyScalar(m.emissiveIntensity);
-      // Neutral tone mapping starts compressing (and desaturating towards white) at 0.76.
-      expect(Math.max(lit[key].r, lit[key].g, lit[key].b), pose).toBeLessThan(0.76);
-      expect(rig.symbols[key].visible).toBe(true);
-      expect(rig.glow!.spill.intensity).toBeGreaterThan(0);
-      expect(rig.glow!.spill.intensity).toBeLessThan(0.5);
-    }
-    // A value step that survives deuteranopia (Machado 2009, severity 1): at least 2:1.
-    const deutLum = (c: Color) => {
+  it('the LED glows by emission below tone-mapping compression, green brighter than red', () => {
+    const lit = (k: 'accept' | 'decline') => {
+      const c = new MeshStandardMaterial().emissive.set(STATUS_COLOURS[k]);
+      return c.multiplyScalar(GLOW.led[k]);
+    };
+    const deutLum = (c: { r: number; g: number; b: number }) => {
       const r = 0.367322 * c.r + 0.860646 * c.g - 0.227968 * c.b;
       const g = 0.280085 * c.r + 0.672501 * c.g + 0.047413 * c.b;
       const b = -0.01182 * c.r + 0.04294 * c.g + 0.968881 * c.b;
       return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     };
-    expect((deutLum(lit.accept) + 0.05) / (deutLum(lit.decline) + 0.05)).toBeGreaterThanOrEqual(2);
+    for (const k of ['accept', 'decline'] as const) {
+      const c = lit(k);
+      expect(Math.max(c.r, c.g, c.b), k).toBeLessThan(0.76);
+    }
+    expect((deutLum(lit('accept')) + 0.05) / (deutLum(lit('decline')) + 0.05)).toBeGreaterThanOrEqual(2);
+    expect(GLOW.spill).toBeLessThan(0.5);
+  });
+
+  it('the scene drives the rig status, rise and press from the authored frame', () => {
+    const calls: { lit: StatusLit; level: number; press: number }[] = [];
+    let press = 0;
+    const names = ['card_authored', 'card_secondary', 'card_mesh', 'clip_pivot', 'lanyard_anchor'];
+    const nodes = Object.fromEntries(names.map((n) => [n, new Object3D()]));
+    const root = new Object3D();
+    nodes.card_authored!.add(nodes.card_secondary!);
+    nodes.card_secondary!.add(nodes.card_mesh!, nodes.clip_pivot!);
+    root.add(nodes.card_authored!, nodes.lanyard_anchor!);
+    const rig: BusinessRig = {
+      root, nodes, bounds: new Box3(), shadows: [{ setFootprint() {}, setHeight() {} } as never], gate: null,
+      updateLanyard() {}, setTemplate() {}, dispose() {},
+      setStatus(lit, level) { calls.push({ lit, level, press }); },
+      setPress(d) { press = d; },
+    };
+    const scene = new BusinessScene(rig, { direction: DIRECTIONS.L2 } as MaterialLibrary, { category: 'business', template: 'light' });
+    scene.pose('accepted');
+    expect(calls.at(-1)).toMatchObject({ lit: 'accept', level: 1 });
+    scene.pose('declined');
+    expect(calls.at(-1)).toMatchObject({ lit: 'decline', level: 1 });
     scene.pose('guest-ready');
-    expect(rig.statusMaterial.emissiveIntensity).toBe(0);
-    expect(rig.glow!.spill.intensity).toBe(0);
-    expect(rig.symbols.accept.visible || rig.symbols.decline.visible).toBe(false);
+    expect(calls.at(-1)!.lit).toBe('off');
+    scene.sample('accept', SCAN_AT + 0.03);
+    expect(calls.at(-1)!.lit).toBe('accept');
+    expect(calls.at(-1)!.level).toBeGreaterThan(0.2);
+    expect(calls.at(-1)!.level).toBeLessThan(1);
+    scene.sample('accept', (OUTCOME_BEATS.contact + 0.86) / 2);
+    expect(press).toBeCloseTo(PRESS_DEPTH, 6);
+    scene.sample('decline', 1.5);
+    expect(calls.at(-1)).toMatchObject({ lit: 'decline', level: 1 });
+    expect(press).toBe(0);
+    void PointLight;
   });
 
-  /** Card face normal (business_root space) for a sampled frame. */
-  const faceNormal = (f: BusinessFrame) => new Vector3(0, 0, 1).applyAxisAngle(new Vector3(1, 0, 0), f.cardTilt).applyQuaternion(f.rot);
-  /** Angle between the camera ray's mirror off a surface and the key light (the softbox sits beside it). */
-  const mirrorToKey = (n: Vector3) => {
-    const view = cameraDirection();
-    const mirror = n.clone().multiplyScalar(2 * n.dot(view)).sub(view);
-    return (mirror.angleTo(new Vector3(...LIGHT_RIG.key.position).normalize()) * 180) / Math.PI;
-  };
-
-  it('through the scan hold the laminate never mirrors the key softbox into the lens (no print washout)', () => {
-    // Flat to the reading face, the mirror falls 18° from the key: the print washed out to
-    // about 2.8x its rest luminance for the whole hold. Turned, it stays about 45° away.
-    expect(mirrorToKey(new Vector3(0, 0, 1).applyEuler(new Euler(SCAN_TILT, 0, 0)))).toBeLessThan(25);
-    for (const seq of ['accept', 'decline'] as const) {
-      for (let t = 0.55; t <= 1.15; t += 0.01) {
-        expect(mirrorToKey(faceNormal(at(seq, t))), `${seq} t=${t.toFixed(2)}`).toBeGreaterThan(40);
-      }
-      expect(mirrorToKey(faceNormal(at(seq, DURATIONS[seq])))).toBeGreaterThan(40);
-    }
-    expect(SCAN_YAW).toBeGreaterThan(0); // turned away from the key, which is on the left
-  });
-
-  it('turned at the reader, the card keeps clear of the shipped scanner through press, hold and departure', async () => {
-    const file = await readFile(new URL('../assets/scenes/business/business.glb', import.meta.url));
-    const gltf = await new GLTFLoader().parseAsync(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer, '');
-    const root = gltf.scene.getObjectByName('business_root')!;
-    root.removeFromParent();
+  it('pointer drag hit-tests the holder geometry, and only the holder', () => {
+    const names = ['card_authored', 'card_secondary', 'card_mesh', 'clip_pivot', 'lanyard_anchor'];
+    const nodes = Object.fromEntries(names.map((n) => [n, new Object3D()]));
+    const root = new Object3D();
+    nodes.card_authored!.add(nodes.card_secondary!);
+    nodes.card_secondary!.add(nodes.card_mesh!, nodes.clip_pivot!);
+    root.add(nodes.card_authored!, nodes.lanyard_anchor!);
+    nodes.card_mesh!.add(new Mesh(new BoxGeometry(CARD.width, CARD.height, CARD.depth)));
+    const rig: BusinessRig = {
+      root, nodes, bounds: new Box3(new Vector3(-1, 0, -0.6), new Vector3(1.4, 2.6, 0.6)), shadows: [{ setFootprint() {}, setHeight() {} } as never], gate: null,
+      updateLanyard() {}, setTemplate() {}, dispose() {}, setStatus() {}, setPress() {},
+    };
+    const scene = new BusinessScene(rig, { direction: DIRECTIONS.L2 } as MaterialLibrary, { category: 'business', template: 'light' });
+    scene.pose('guest-ready');
     root.updateMatrixWorld(true);
-    const solids = ['scanner_body', 'scanner_faceplate', 'scanner_bezel'].map((n) => root.getObjectByName(n) as Mesh);
-    for (const m of solids) (m.material as MeshStandardMaterial).side = DoubleSide; // see exits too
-    const box = new Box3();
-    solids.forEach((m) => box.expandByObject(m));
-    box.expandByScalar(0.05);
-    const down = new Vector3(0, -0.69, -0.724).normalize(); // into the reading face
-    const ray = new Raycaster();
-    const p = new Vector3(), n = new Vector3(), nm = new Matrix3();
-    let closest = Infinity;
-    for (let t = 0.62; t <= 1.32; t += 0.04) {
-      const f = at('accept', t);
-      for (let i = 0; i <= 10; i++) {
-        for (let j = 0; j <= 14; j++) {
-          // The card's back face, the side that meets the reader.
-          p.set((i / 10 - 0.5) * CARD.width, (j / 14 - 0.5) * CARD.height, -CARD.depth / 2)
-            .applyAxisAngle(new Vector3(1, 0, 0), f.cardTilt).add(f.cardOffset).applyQuaternion(f.rot).add(f.pivot);
-          if (!box.containsPoint(p)) continue;
-          ray.set(p, down);
-          const hit = ray.intersectObjects(solids, false)[0];
-          if (!hit) continue;
-          // Outside the reader the first surface below is entered (it faces the card), never exited.
-          n.copy(hit.face!.normal).applyMatrix3(nm.getNormalMatrix(hit.object.matrixWorld));
-          expect(n.dot(down), `t=${t.toFixed(2)} inside ${hit.object.name}`).toBeLessThan(0);
-          closest = Math.min(closest, hit.distance);
-        }
-      }
+    const camera = createStageCamera();
+    fitCameraToBounds(camera, rig.bounds, 1);
+    const c = new Vector3().setFromMatrixPosition(nodes.card_mesh!.matrixWorld).project(camera);
+    expect(scene.pointer.hitTest(c.x, c.y, camera)).toBe(true);
+    expect(scene.pointer.hitTest(c.x + 0.6, c.y, camera)).toBe(false);
+    const rect = scene.pointer.screenRect(camera)!;
+    expect(rect[0]).toBeLessThan(c.x);
+    expect(rect[2]).toBeGreaterThan(c.x);
+  });
+});
+
+describe('Business dark template print', () => {
+  it('maps the master print deterministically: stock → ink, black type → warm white, cobalt kept', () => {
+    const px = [[255, 255, 255], [0, 0, 0], [...PRINT_COBALT], [128, 128, 128]];
+    const img = { data: new Uint8Array(px.flat()), width: 4, height: 1, channels: 3 as const };
+    const out = darkPrint(img).data;
+    expect([...out.slice(0, 3)]).toEqual([...DARK_PRINT.ink]);
+    expect([...out.slice(3, 6)]).toEqual([...DARK_PRINT.type]);
+    expect([...out.slice(6, 9)]).toEqual([...DARK_PRINT.cobalt]);
+    expect([...darkPrint(img).data]).toEqual([...out]);
+    // Legibility: warm-white type on the ink field is far above 7:1.
+    const lum = (c: readonly number[]) => c.map((v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i]!, 0);
+    expect((lum(DARK_PRINT.type) + 0.05) / (lum(DARK_PRINT.ink) + 0.05)).toBeGreaterThan(7);
+    expect((lum(DARK_PRINT.cobalt) + 0.05) / (lum(DARK_PRINT.ink) + 0.05)).toBeGreaterThan(3);
+  });
+});
+
+describe('Business runtime GLB matches the contract', async () => {
+  const doc = await createIO().read(join(import.meta.dirname, '..', 'assets', 'scenes', 'business', 'business.glb'));
+  const node = (name: string) => findNode(doc, name);
+  const size = (b: { min: Vector3; max: Vector3 }) => b.max.clone().sub(b.min);
+  const mid = (b: { min: Vector3; max: Vector3 }) => b.max.clone().add(b.min).multiplyScalar(0.5);
+  const local = (n: Node) => new Matrix4().compose(new Vector3(...n.getTranslation()), new Quaternion(...n.getRotation()), new Vector3(...n.getScale()));
+
+  it('has every contract node exactly once, as empty transforms with unit scale where they move', () => {
+    for (const n of BUSINESS_NODES) expect(() => node(n), n).not.toThrow();
+    for (const n of ['card_secondary', 'clip_pivot', 'card_mesh', 'clip_gate', 'scanner_pad', 'scanner_gasket', 'scanner_light', 'scanner_glow']) {
+      expect(node(n).getMesh(), n).toBeNull();
+      expect(node(n).getScale(), n).toEqual([1, 1, 1]);
     }
-    expect(closest).toBeGreaterThan(0.01);
-    expect(closest).toBeLessThan(0.08); // still reads as held to the reader
+  });
+
+  it('the badge hangs on the swivel eye: holder size, offset and the hook as measured', () => {
+    expect(new Vector3(...node('clip_pivot').getTranslation()).length()).toBeLessThan(1e-6);
+    expect(new Vector3(...node('card_mesh').getTranslation()).distanceTo(new Vector3(0, CARD_OFFSET_Y, 0))).toBeLessThan(1e-4);
+    const holder = boxIn(node('card_holder_clear'), node('card_mesh'));
+    expect(size(holder).x).toBeCloseTo(0.496 * 1.5, 3);
+    expect(size(holder).y).toBeCloseTo(CARD.height, 3);
+    expect(size(holder).z).toBeCloseTo(CARD.depth, 3);
+    expect(mid(holder).length()).toBeLessThan(2e-3);
+    const clips = boxIn(node('holder_clip_left'), node('card_mesh'));
+    expect(-clips.min.z).toBeCloseTo(HOLDER_CLIPS.halfDepth, 3);
+    expect(-clips.min.x).toBeCloseTo(HOLDER_CLIPS.x, 3);
+    expect(new Vector3(...node('clip_gate').getTranslation()).distanceTo(HOOK.pin)).toBeLessThan(1e-4);
+    const hook = boxIn(node('clip_pivot'), node('clip_pivot'));
+    expect(hook.min.y).toBeCloseTo(HOOK.bottom, 3);
+    expect(hook.min.z).toBeCloseTo(HOOK.back, 3);
+    // The D-ring and the strap stitching stay with card_authored (they do not swing).
+    expect(node('d_ring').getParentNode()).toBe(node('card_authored'));
+    expect(node('strap_stitching').getParentNode()).toBe(node('card_authored'));
+  });
+
+  it('the reader stands on its plinth with the reading face, glass, gasket and LED as measured', () => {
+    const reader = boxIn(node('scanner_root'), node('scanner_root'));
+    expect(reader.min.y).toBeCloseTo(0, 3);
+    expect(size(reader).y).toBeCloseTo(READER.height, 2);
+    expect(size(reader).x).toBeCloseTo(READER.width, 3);
+    const face = node('scanner_face');
+    expect(new Vector3(...face.getTranslation()).distanceTo(FACE.origin)).toBeLessThan(1e-4);
+    expect(Y.clone().applyQuaternion(new Quaternion(...face.getRotation())).angleTo(FACE.up)).toBeLessThan(1e-3);
+    const glass = boxIn(node('scanner_pad_mesh'), node('scanner_face'));
+    expect(glass.max.z).toBeCloseTo(FACE.glass, 3);
+    expect(glass.max.x).toBeCloseTo(FACE.glassHalfWidth, 3);
+    const gasket = boxIn(node('scanner_gasket'), node('scanner_face'));
+    expect(gasket.min.z).toBeCloseTo(FACE.gasketBack, 3);
+    expect(gasket.max.z).toBeCloseTo(FACE.gasketFront, 3);
+    expect(node('scanner_gasket').getTranslation()[2]).toBeCloseTo(FACE.gasketBack, 4);
+    const led = boxIn(node('scanner_light'), node('scanner_face'));
+    expect(led.max.x).toBeCloseTo(FACE.ledHalfWidth, 3);
+    expect(led.min.y).toBeCloseTo(FACE.ledY0, 3);
+    expect(led.max.y).toBeCloseTo(FACE.ledY1, 3);
+    expect(local(node('scanner_glow')).elements[13]).toBeCloseTo(FACE.led.y, 4);
+  });
+
+  it('carries the templates as material variants and the print at source size', () => {
+    const json = doc.getRoot().listExtensionsUsed().map((e) => e.extensionName);
+    expect(json).toContain('KHR_materials_variants');
+    const mats = doc.getRoot().listMaterials().map((m) => m.getName());
+    for (const m of ['badge_card_print', 'badge_card_print_dark', 'badge_card_stock', 'badge_card_stock_dark', 'badge_strap', 'badge_vinyl', 'reader_led', 'reader_led_glow']) {
+      expect(mats, m).toContain(m);
+    }
+    const print = doc.getRoot().listMaterials().find((m) => m.getName() === 'badge_card_print_dark')!;
+    expect(print.getBaseColorTexture()!.getSize()).toEqual([2048, 1536]);
+    const vinyl = doc.getRoot().listMaterials().find((m) => m.getName() === 'badge_vinyl')!;
+    expect(vinyl.getAlphaMode()).toBe('BLEND');
+    expect(vinyl.getAlpha()).toBeCloseTo(0.35, 6);
   });
 });

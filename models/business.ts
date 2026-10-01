@@ -1,5 +1,8 @@
 import {
   type Box3,
+  CustomBlending,
+  OneFactor,
+  OneMinusSrcAlphaFactor,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -11,7 +14,7 @@ import {
   Vector3,
 } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
-import { group, mesh } from './geometry.ts';
+import { mesh } from './geometry.ts';
 import type { MaterialVariants } from './imported.ts';
 import { LanyardStrand } from './lanyard.ts';
 import {
@@ -21,6 +24,7 @@ import {
 import { collectNodes, type ModelContext } from './types.ts';
 
 export * from './businessContract.ts';
+export { buildBusinessFrame } from './businessFrame.ts';
 
 /**
  * Business v1.2 on the scan-to-CAD masters.
@@ -53,18 +57,6 @@ export interface BusinessRig {
   dispose(): void;
 }
 
-/** Recipe builder: the scene's empty contract nodes (the masters provide every mesh). */
-export function buildBusinessFrame(_ctx: ModelContext): Object3D {
-  const root = group('business_root');
-  group('card_authored', root).position.copy(HANG_PIVOT);
-  group('lanyard_anchor', root).position.set(HANG_PIVOT.x, LANYARD_TOP_Y, HANG_PIVOT.z);
-  group('lanyard_curve', root);
-  group('scanner_root', root).position.copy(SCANNER_POS);
-  group('card_shadow', root).position.set(HANG_PIVOT.x, 0.002, HANG_PIVOT.z);
-  group('scanner_shadow', root).position.set(SCANNER_POS.x + 0.04, 0.002, SCANNER_POS.z - 0.02);
-  return root;
-}
-
 /**
  * Status light (premium, no bloom, Master §5): the LED bar glows by emission in the status
  * token, its halo (the master's led_glow quad) fades in over it and the spill light tints the
@@ -79,8 +71,13 @@ export const GLOW = {
   /** Spill light intensity (tints the card at the scan beat without washing its print). */
   spill: 0.35,
 } as const;
-/** Spill light offset along the reading-face normal from the LED: no hotspot on the glass. */
-export const STATUS_SPILL_LIFT = 0.6;
+/**
+ * Spill light, face space, from the LED: up the face and out along its normal. A point light's
+ * mirror image in the glossy black glass falls where the camera's reflected ray from the light
+ * meets the glass; from here it lands above the glass on the steel bezel (broad and dim), never on
+ * the glass, while the light still tints the card on the scan spot below it.
+ */
+export const STATUS_SPILL = { up: 0.62, out: 0.4, distance: 2.4 } as const;
 /** Idle LED lens (off): a neutral dark, not the master's green tint, so idle never reads as "accepted". */
 const LED_OFF = new Color(0.018, 0.02, 0.019);
 
@@ -90,7 +87,7 @@ const LED_OFF = new Color(0.018, 0.02, 0.019);
  */
 export function strapTabGeometry(): BufferGeometry {
   const { width, thickness, weaveTile } = STRAP;
-  const layer = 0.0045 * (CARD.width / 0.744); // layer centre off the mid-plane (scan 0.003)
+  const layer = STRAP.layerZ; // layer centre off the mid-plane (master: ±0.0052 scan)
   const bar = D_RING.topY, r = D_RING.wire + thickness / 2;
   // Centreline in (y, z): front layer down, over the bar top, back layer up.
   const pts: [number, number][] = [];
@@ -146,8 +143,18 @@ export function strapTabGeometry(): BufferGeometry {
   return g;
 }
 
+/** Mean of the master strap's baked vertex shading (COLOR_0, 0.49–1.0). */
+export const STRAP_VERTEX_AO = 0.9;
+/**
+ * Clear vinyl holder: the GLB carries the recipe's transmission → alpha 0.35 (white at 35 %). As a
+ * plain alpha blend that is a white veil over the print (cobalt reads sky blue). A clear sheet
+ * adds its reflection and dims what is behind it a little, so the rig draws it that way: no
+ * diffuse, reflection added at full strength, 8 % dimming.
+ */
+export const VINYL = { dimming: 0.08 } as const;
+
 /** Strap layers leave the sewn tab at these clip-space z offsets (front, back). */
-const LAYER_Z = 0.0045 * (CARD.width / 0.744);
+const LAYER_Z = STRAP.layerZ;
 
 function meshesUnder(o: Object3D): Mesh[] {
   const out: Mesh[] = [];
@@ -170,6 +177,14 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
   // ── Strap: the master's woven strap material, carried in the GLB on a decimated stub ──
   const carrier = meshesUnder(nodes.strap_material!)[0];
   const fabric = (carrier?.material as Material | undefined) ?? lib.get('mat_fabric');
+  // The master strap carries vertex colours (COLOR_0) and the loader enabled them on its
+  // material; the runtime strands and tab have none, which would render black.
+  // Their mean (0.9) goes into the colour factor so the strap keeps the master's value.
+  if (fabric.vertexColors) {
+    fabric.vertexColors = false;
+    (fabric as MeshStandardMaterial).color.multiplyScalar(STRAP_VERTEX_AO);
+    fabric.needsUpdate = true;
+  }
   for (const m of meshesUnder(nodes.strap_material!)) m.geometry.dispose();
   nodes.strap_material!.removeFromParent();
   const tab = mesh('strap_tab', strapTabGeometry(), fabric, authored);
@@ -195,6 +210,20 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
     });
   };
 
+  // ── Clear vinyl holder: a clear sheet (reflection added, behind dimmed), not a white veil ──
+  nodes.card_mesh!.traverse((o) => {
+    const m = (o as Mesh).material as MeshStandardMaterial | undefined;
+    if (!(o as Mesh).isMesh || !m || m.name !== 'badge_vinyl' || m.blending === CustomBlending) return;
+    m.color.set('#000000');
+    m.opacity = VINYL.dimming;
+    m.transparent = true;
+    m.depthWrite = false;
+    m.blending = CustomBlending;
+    m.blendSrc = OneFactor;
+    m.blendDst = OneMinusSrcAlphaFactor;
+    m.needsUpdate = true;
+  });
+
   // ── Status light: the LED bar, its halo quad and a spill light ──
   const ledMesh = meshesUnder(nodes.scanner_light!)[0]!;
   const led = (ledMesh.material as MeshStandardMaterial).clone();
@@ -219,9 +248,9 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
   haloMesh.renderOrder = 1;
   haloMesh.userData.noShadowCast = true;
   ledMesh.userData.noShadowCast = true;
-  const spill = new PointLight('#ffffff', 0, 1.3, 2);
+  const spill = new PointLight('#ffffff', 0, STATUS_SPILL.distance, 2);
   spill.name = 'scanner_spill';
-  spill.position.copy(FACE.led).add(new Vector3(0, 0, STATUS_SPILL_LIFT));
+  spill.position.copy(FACE.led).add(new Vector3(0, STATUS_SPILL.up, STATUS_SPILL.out));
   nodes.scanner_face!.add(spill);
   let lastStatus: StatusLit | null = null, lastLevel = -1;
   const setStatus = (lit: StatusLit, level: number) => {

@@ -25,7 +25,7 @@ export const DARK_PRINT = {
   /** What black type becomes. */
   type: [242, 238, 230],
   /** Cobalt marks on ink: same hue, lifted so they read against the field. */
-  cobalt: [58, 98, 214],
+  cobalt: [64, 106, 224],
 } as const;
 
 const chroma = (r: number, g: number, b: number) => Math.max(r, g, b) - Math.min(r, g, b);

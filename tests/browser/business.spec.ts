@@ -132,7 +132,7 @@ test('Graphics loss falls back to a poster and responses still work', async ({ p
   await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /light-accepted/);
 });
 
-test('The lit status window keeps its colour: no clipping, no hotspot, green and red differ in hue and value', async ({ page }) => {
+test('The lit status LED keeps its colour: no clipping, no hotspot on the glass, green and red differ in hue and value', async ({ page }) => {
   await ready(page);
   await guest(page);
   await page.getByRole('button', { name: /Motion/ }).click();
@@ -150,7 +150,8 @@ test('The lit status window keeps its colour: no clipping, no hotspot, green and
     g.drawImage(img, 0, 0);
     const { data, width, height } = g.getImageData(0, 0, c.width, c.height);
     const inBox = (x: number, y: number, b: number[]) => x >= b[0]! * width && x <= b[2]! * width && y >= b[1]! * height && y <= b[3]! * height;
-    const WIN = [0.675, 0.67, 0.752, 0.732], GLASS = [0.52, 0.62, 0.78, 0.77];
+    // v1.2: the reader master's LED bar (with its glow) at the top of the glass, and the glass.
+    const WIN = [0.58, 0.41, 0.71, 0.49], GLASS = [0.49, 0.35, 0.79, 0.81];
     const lit: number[][] = [];
     let hot = 0;
     for (let y = 0; y < height; y++) {
@@ -182,7 +183,8 @@ test('The lit status window keeps its colour: no clipping, no hotspot, green and
   const decline = await measure();
 
   for (const [label, m] of [['accept', accept], ['decline', decline]] as const) {
-    expect(m.count, label).toBeGreaterThan(300);
+    // The LED bar is about 26 × 6 px on this 540 px still, its glow a few px round it.
+    expect(m.count, label).toBeGreaterThan(80);
     // No channel clips: the window reads as its token, not as mint or pink.
     expect(m.max, label).toBeLessThanOrEqual(245);
     // No specular hotspot from the spill light on the glass beside the window.
@@ -223,16 +225,18 @@ test('The card print keeps its colour through the scan hold: the laminate does n
       if (!blue[s] || label[s]) continue;
       const stack = [s];
       label[s] = ++next;
-      let size = 0;
+      let size = 0, touchesTop = false;
       while (stack.length) {
         const i = stack.pop()!;
         size++;
+        if (i < w * 3) touchesTop = true;
         const x = i % w;
         for (const j of [i - w, i + w, x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1]) {
           if (j >= 0 && j < w * h && blue[j] && !label[j]) { label[j] = next; stack.push(j); }
         }
       }
-      if (size > bestSize) { bestSize = size; best = next; }
+      // The strap is blue too: it runs off the top edge, the print's cobalt never does.
+      if (size > bestSize && !touchesTop) { bestSize = size; best = next; }
     }
     const lin = (v: number) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
     let sum = 0, n = 0;
