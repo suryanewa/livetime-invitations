@@ -14,7 +14,8 @@ import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { BusinessScene } from '../src/scenes/business/index.ts';
 import { DURATIONS, HOOK_LIFT, HOST, POSE, SCAN_AT, SCAN_TILT } from '../src/scenes/business/poses.ts';
 import {
-  blendReaderDepth, cardRotation, frameFor, HOST_BEATS, interruptCutFor, newFrame, OUTCOME_BEATS, sampleSequence, type BusinessFrame,
+  applyRecovery, blendReaderDepth, cardRotation, frameFor, HOST_BEATS, newFrame, OUTCOME_BEATS, planRecovery, RECOVER, recoveryFade, sampleSequence,
+  type BusinessFrame, type Recovery,
 } from '../src/scenes/business/sequences.ts';
 import type { SequenceName } from '../src/core/types.ts';
 
@@ -221,6 +222,20 @@ describe('Business host attach on the master snap hook', () => {
       if (Number.isNaN(t10) && c < 0.1 * HOST.hookTilt) t10 = t;
     }
     expect(t10 - t90).toBeGreaterThanOrEqual(0.25 / PENDULUM.pitchHz);
+  });
+
+  it('hands the offer straight on to the push, the slide and the swing: no near-stop between them', () => {
+    // v1.2.1 came to rest at the end of the offer (0.30 s) and again at the end of the push
+    // (0.42 s): 0.04 u/s, a stop-hop-stop. Each beat now hands its speed to the next.
+    const centre = (t: number) => cardWorld(at('host', t)).centre;
+    let peak = 0, low = Infinity, lowAt = 0;
+    for (let t = 0.05; t <= HOST_BEATS.leg + 0.15; t += 1 / 120) {
+      const v = centre(t + 1 / 120).distanceTo(centre(t)) * 120;
+      peak = Math.max(peak, v);
+      if (v < low) { low = v; lowAt = t; }
+    }
+    expect(low, `t=${lowAt.toFixed(3)}`).toBeGreaterThan(0.45);
+    expect(low / peak).toBeGreaterThan(0.2);
   });
 
   it('never stalls: the card keeps moving from the lift until it hangs (no 80 ms hold)', () => {
@@ -480,46 +495,90 @@ describe('Business against the shipped reader (business.glb geometry, not analyt
     expect(worst, worstAt).toBeGreaterThan(-0.0007);
   });
 
-  it('a change of mind cuts while the badge is at or near the reader, and blends elsewhere', () => {
+  /** Every change of mind the guest can make: accept ↔ decline at every 20 ms, and from the settled poses. */
+  const changes = () => {
+    const out: { label: string; from: BusinessFrame; vel: Vector3; into: SequenceName }[] = [];
     for (const seq of ['accept', 'decline'] as const) {
-      for (let t = OUTCOME_BEATS.contact - 0.2; t <= OUTCOME_BEATS.depart + 0.05; t += 0.02) expect(interruptCutFor(at(seq, t)), `${seq} t=${t.toFixed(2)}`).toBe(true);
-      for (const t of [0, 0.1, 0.2]) expect(interruptCutFor(at(seq, t)), `${seq} t=${t}`).toBe(false);
-      expect(interruptCutFor(frameFor(seq === 'accept' ? 'accepted' : 'declined', newFrame()))).toBe(false);
+      const into = seq === 'accept' ? 'decline' : 'accept';
+      for (let t = 0.02; t < DURATIONS[seq]; t += 0.02) {
+        const vel = at(seq, t).pivot.sub(at(seq, t - 0.001).pivot).multiplyScalar(1000);
+        out.push({ label: `${seq}@${t.toFixed(2)}`, from: at(seq, t), vel, into });
+      }
+      out.push({ label: `${seq} settled`, from: frameFor(seq === 'accept' ? 'accepted' : 'declined', newFrame()), vel: new Vector3(), into });
+    }
+    return out;
+  };
+  const recovered = (r: Recovery, into: SequenceName, t: number) => applyRecovery(r, t, at(into, t));
+
+  it('a change of mind starts at the pose on screen, with its velocity, and joins the new outcome C1', () => {
+    const ready = frameFor('guest-ready', newFrame());
+    for (const c of changes()) {
+      const r = planRecovery(c.from, c.vel, c.into);
+      // No cut: the first frame is the pose on screen.
+      close(recovered(r, c.into, 0), c.from, 1e-6);
+      // The eye leaves with the interrupted motion's velocity (scaled down only where it would carry
+      // the badge into the reader: never below a quarter of it on the way in, and only near contact).
+      const v0 = recovered(r, c.into, 1e-4).pivot.sub(recovered(r, c.into, 0).pivot).multiplyScalar(1e4);
+      expect(v0.distanceTo(r.vel), c.label).toBeLessThan(0.05);
+      // It ends exactly on the new outcome's path, with its velocity.
+      close(recovered(r, c.into, RECOVER), at(c.into, RECOVER), 1e-6);
+      const e = RECOVER - 1e-4;
+      const vEnd = recovered(r, c.into, RECOVER).pivot.sub(recovered(r, c.into, e).pivot).multiplyScalar(1e4);
+      const vAuth = at(c.into, RECOVER).pivot.sub(at(c.into, e).pivot).multiplyScalar(1e4);
+      expect(vEnd.distanceTo(vAuth), c.label).toBeLessThan(0.05);
+      // On its way it comes back by guest-ready (Master §6: through the ready pose): the eye turns
+      // within 0.2 of it (a sixth of the card's height) as the new outcome sets off; cut short in
+      // full flight, its momentum carries it a little wider.
+      let nearest = Infinity;
+      for (let t = 0; t <= RECOVER; t += 0.005) nearest = Math.min(nearest, recovered(r, c.into, t).pivot.distanceTo(ready.pivot));
+      expect(nearest, c.label).toBeLessThan(c.vel.length() < 2 ? 0.2 : 0.24);
     }
   });
 
-  it('wherever it blends, the straight 150 ms blend back to guest-ready stays out of the shipped reader', () => {
-    // The director's blend: position lerp and quaternion slerp of card_authored, clip_pivot and
-    // card_mesh (springs settled first). v1.2 had no cut and drove the card 8–12 mm into the glass.
-    const ready = frameFor('guest-ready', newFrame());
-    let blended = 0;
-    for (const seq of ['accept', 'decline'] as const) {
-      for (let t = 0; t <= DURATIONS[seq]; t += 0.01) {
-        const f = at(seq, t);
-        if (interruptCutFor(f)) continue;
-        blended++;
-        const qa = cardRotation(f), qb = cardRotation(ready);
-        const ca = new Quaternion().setFromEuler(new Euler(f.clipTilt, f.swivel, 0)), cb = new Quaternion().setFromEuler(new Euler(ready.clipTilt, ready.swivel, 0));
-        for (let k = 0; k <= 1; k += 1 / 30) {
-          const b = newFrame();
-          b.pivot.lerpVectors(f.pivot, ready.pivot, k);
-          b.rot.slerpQuaternions(f.rot, ready.rot, k);
-          b.cardOffset.lerpVectors(f.cardOffset, ready.cardOffset, k);
-          const card = new Quaternion().slerpQuaternions(qa, qb, k), clip = new Quaternion().slerpQuaternions(ca, cb, k);
-          for (const p of cardBack()) {
-            const w = p.clone().applyQuaternion(card).add(b.cardOffset).applyQuaternion(b.rot).add(b.pivot);
-            expect(clearance(w), `${seq} t=${t.toFixed(2)} k=${k.toFixed(2)}`).toBeGreaterThan(0);
-          }
-          for (const h of hook) {
-            const w = h.clone().applyQuaternion(clip).applyQuaternion(b.rot).add(b.pivot);
-            expect(clearance(w, 0, HOOK.tube), `${seq} t=${t.toFixed(2)} k=${k.toFixed(2)} hook`).toBeGreaterThan(0);
-          }
+  it('a change of mind never jumps: 1 ms steps stay small and the velocity never steps', () => {
+    for (const c of changes()) {
+      const r = planRecovery(c.from, c.vel, c.into);
+      let a = recovered(r, c.into, 0), b = recovered(r, c.into, 0.001);
+      for (let i = 2; i <= RECOVER * 1000 + 2; i++) {
+        const cur = recovered(r, c.into, i / 1000);
+        expect(cur.pivot.distanceTo(b.pivot), `${c.label} t=${i}`).toBeLessThan(0.012);
+        expect(cur.rot.angleTo(b.rot), `${c.label} t=${i}`).toBeLessThan(0.02);
+        const d2 = cur.pivot.clone().sub(b.pivot).sub(b.pivot.clone().sub(a.pivot)).length();
+        expect(d2, `${c.label} t=${i}`).toBeLessThan(4e-4);
+        a = b;
+        b = cur;
+      }
+      // The interrupted outcome's light fades out over the first 60 % of the recovery.
+      expect(recoveryFade(0)).toBe(1);
+      expect(recoveryFade(0.6 * RECOVER)).toBe(0);
+    }
+  });
+
+  it('every change of mind keeps the card and the hook out of the shipped reader', () => {
+    // v1.2 blended straight through the glass (8–12 mm); v1.2.1 cut instead (a 20.7 frame jump).
+    let worst = Infinity, worstAt = '', peeled = 0;
+    for (const c of changes()) {
+      const r = planRecovery(c.from, c.vel, c.into);
+      if (r.peel > 0) peeled++;
+      for (let t = 0; t <= RECOVER; t += 0.004) {
+        const f = recovered(r, c.into, t);
+        for (const p of cardBack()) {
+          const k = clearance(cardPoint(f, p), f.glass);
+          if (k < worst) { worst = k; worstAt = `${c.label} t=${t.toFixed(3)} card`; }
+        }
+        for (const h of hook) {
+          const k = clearance(hookPoint(f, h), f.glass, HOOK.tube);
+          if (k < worst) { worst = k; worstAt = `${c.label} t=${t.toFixed(3)} hook`; }
         }
       }
     }
-    expect(blended).toBeGreaterThan(40);
-    // The decision itself is that same blend measured against the reader as a solid.
+    // As at the press: the clips may bear on the glass (0.05 mm tolerance), nothing goes in.
+    expect(worst, worstAt).toBeGreaterThan(-0.0007);
+    expect(peeled).toBeGreaterThan(40);
+    // The peel is decided by the straight blend measured against the reader as a solid.
     expect(blendReaderDepth(at('accept', 0.9))).toBeGreaterThan(0);
+    expect(planRecovery(at('accept', 0.9), new Vector3(), 'decline').peel).toBeGreaterThan(0.1);
+    expect(planRecovery(frameFor('accepted', newFrame()), new Vector3(), 'decline').peel).toBe(0);
   });
 });
 
@@ -588,11 +647,31 @@ describe('Business physics and status', () => {
     scene.sample('decline', 1.5);
     expect(calls.at(-1)).toMatchObject({ lit: 'decline', level: 1 });
     expect(press).toBe(0);
-    // A change of mind is cut at the reader and blended away from it (the director asks the scene).
-    scene.sample('accept', 0.9);
+    // A change of mind at the reader: the scene takes the director's cut and starts the new outcome
+    // from the pose on screen, its light fading (no jump, no pop).
+    const mid = (OUTCOME_BEATS.contact + 0.86) / 2;
+    scene.sample('accept', mid);
+    const pressed = nodes.card_authored!.position.clone();
+    const shown = calls.at(-1)!.level;
     expect(scene.interruptCut()).toBe(true);
-    scene.sample('accept', 0.1);
-    expect(scene.interruptCut()).toBe(false);
+    scene.settle();
+    scene.pose('guest-ready');
+    scene.sample('decline', 0);
+    expect(nodes.card_authored!.position.distanceTo(pressed)).toBeLessThan(1e-9);
+    expect(calls.at(-1)).toMatchObject({ lit: 'accept', level: shown });
+    expect(press).toBeCloseTo(PRESS_DEPTH, 6);
+    scene.sample('decline', RECOVER / 2);
+    expect(nodes.card_authored!.position.distanceTo(pressed)).toBeGreaterThan(0.3);
+    expect(calls.at(-1)!.level).toBeLessThan(shown);
+    expect(press).toBe(0);
+    scene.sample('decline', RECOVER);
+    expect(calls.at(-1)!.lit).toBe('off');
+    // Any other pose drops a planned recovery.
+    scene.sample('accept', 0.9);
+    scene.interruptCut();
+    scene.pose('accepted');
+    scene.sample('decline', 0);
+    expect(nodes.card_authored!.position.distanceTo(frameFor('guest-ready', newFrame()).pivot)).toBeLessThan(1e-9);
     void PointLight;
   });
 

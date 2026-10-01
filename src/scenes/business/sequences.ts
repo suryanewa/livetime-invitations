@@ -116,18 +116,43 @@ const PUSH_DIR = hookToClip(new Vector3(0, 0, -1), HOST.hookTilt, HOST.swivel);
 const ENTERED_Z = HOOK.legZ;
 /** Spring gate: released, it snaps shut fast and lands without overshoot through the card. */
 const GATE_CLOSE = cubicBezier(0.3, 0.7, 0.3, 1);
-/** The offer's ease: an even lift (no quick first half), at rest at both ends. */
+/** The offer's tilt ease: an even turn (no quick first half), at rest at both ends. */
 const OFFER = cubicBezier(0.42, 0, 0.3, 1);
 /** Half-width (in arc lengths) of the eased start of the card's turn where the leg meets the U. */
 const TURN_EASE = 0.3;
 /**
- * Host beat times: the offer (hook turned back, card below the gate), the push through the gate,
- * the slide along the leg (ending at SLIDE_SPEED), the swing home round the U (starting at that
- * speed, ending at rest), the gate's spring close.
+ * Host beat times: the offer (hook turned back, card lifted to below the gate), the thread (push up
+ * through the gate, round a small corner onto the leg, slide along it; ending at SLIDE_SPEED), the
+ * swing home round the U (starting at that speed, ending at rest), the gate's spring close.
+ * `entered` is when the slot centres on the front leg (the strip is through the gate).
+ *
+ * v1.2.2: the offer hands its speed to the push (THREAD_SPEED) and the push rounds into the slide,
+ * so the card never stops between the lift and the swing (v1.2.1 came to rest at 0.30 s and again
+ * at 0.42 s: a stop-hop-stop).
  */
-export const HOST_BEATS = { present: 0.3, entered: 0.42, leg: 0.6, hung: 0.94, gate: [0.6, 0.72] as const } as const;
+export const HOST_BEATS = { present: 0.28, entered: 0.39, leg: 0.5, hung: 0.94, gate: [0.6, 0.72] as const } as const;
 /** Ride speed (stage units/s) where the leg meets the U: the slide hands over to the swing at it. */
-const SLIDE_SPEED = 0.32;
+const SLIDE_SPEED = 0.45;
+/** Ride speed (stage units/s) the offer hands to the push. */
+const THREAD_SPEED = 0.7;
+/**
+ * Corner between the push (hook −z) and the leg (hook −y): a quarter circle of this radius. The
+ * slot is 0.051 tall round a 0.033 wire, so the strip can turn down the leg only once the slot is
+ * within about 0.009 of centring on it.
+ */
+const CORNER = 0.006;
+/** The push, corner and leg as one path (arc lengths, hook space). */
+const THREAD = (() => {
+  const push = HOST.entryZ - ENTERED_Z - CORNER;
+  const corner = (Math.PI / 2) * CORNER;
+  const leg = HOOK_PATH.leg - CORNER;
+  return { push, corner, leg, length: push + corner + leg };
+})();
+
+/** How far before the pre-entry point the offer's curve already runs along the push (stage units). */
+const OFFER_LEAD = 0.24;
+/** End slope of the offer's ease, so its last stretch moves at THREAD_SPEED along the push. */
+const OFFER_END_SLOPE = (THREAD_SPEED * HOST_BEATS.present) / (3 * OFFER_LEAD);
 
 /** Cubic Hermite on [0, 1]: p0 → p1 with end slopes m0, m1 (per unit u). */
 function hermite(u: number, p0: number, p1: number, m0: number, m1: number): number {
@@ -135,41 +160,65 @@ function hermite(u: number, p0: number, p1: number, m0: number, m1: number): num
   return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
 }
 
-/** Arc length along HOOK_PATH at host time t (from the push's end): C1, at rest at both ends. */
+/**
+ * Ride position at host time t, as an arc length σ from the pre-entry point along the push, the
+ * corner, the leg and the U (THREAD then HOOK_PATH.arc). C1: it leaves the offer at THREAD_SPEED,
+ * meets the U at SLIDE_SPEED and comes to rest when the card hangs.
+ */
 export function hostRide(t: number): number {
-  const { entered, leg, hung } = HOST_BEATS;
-  if (t <= entered) return 0;
-  if (t >= hung) return HOOK_PATH.length;
-  if (t < leg) return hermite(seg(t, entered, leg), 0, HOOK_PATH.leg, 0, SLIDE_SPEED * (leg - entered));
-  return HOOK_PATH.leg + hermite(seg(t, leg, hung), 0, HOOK_PATH.arc, SLIDE_SPEED * (hung - leg), 0);
+  const { present, leg, hung } = HOST_BEATS;
+  if (t <= present) return 0;
+  if (t >= hung) return THREAD.length + HOOK_PATH.arc;
+  if (t < leg) return hermite(seg(t, present, leg), 0, THREAD.length, THREAD_SPEED * (leg - present), SLIDE_SPEED * (leg - present));
+  return THREAD.length + hermite(seg(t, leg, hung), 0, HOOK_PATH.arc, SLIDE_SPEED * (hung - leg), 0);
+}
+
+/**
+ * Ride point (hook space) at thread arc length σ; returns the arc length along HOOK_PATH (s, 0 =
+ * the gap on the front leg's centreline), negative while the strip is still outside the leg.
+ */
+function threadRide(sigma: number, out: Vector3): number {
+  const { push, corner } = THREAD;
+  if (sigma <= push) {
+    out.set(0, HOST.gapY, HOST.entryZ - sigma);
+    return sigma - push - CORNER;
+  }
+  if (sigma < push + corner) {
+    const th = (sigma - push) / CORNER;
+    out.set(0, HOST.gapY - CORNER + CORNER * Math.cos(th), ENTERED_Z + CORNER - CORNER * Math.sin(th));
+    // Count the corner as the 2·CORNER it replaces, linearly (only the sign and the leg matter).
+    return -CORNER + (2 * CORNER * (sigma - push)) / corner;
+  }
+  const s = sigma - push - corner + CORNER;
+  hookRide(s, out);
+  return s;
 }
 
 function host(t: number, out: BusinessFrame): void {
   frameFor('guest-ready', out);
-  const { present, entered, hung } = HOST_BEATS;
+  const { present, hung } = HOST_BEATS;
   if (t < present) {
     // Lift from host-ready to just below the gate, upright, while the host turns the hook back on
-    // its eye to take it; the last of the lift runs along the push direction.
-    const a = OFFER(seg(t, 0, present));
+    // its eye to take it; the last of the lift runs along the push direction and does not stop:
+    // it hands THREAD_SPEED to the push.
+    const u = seg(t, 0, present);
     h0.copy(HOST.offset);
     h1.copy(PRE_CENTRE);
     hc1.copy(h0).add(new Vector3(0, 0.2, -0.02));
-    hc2.copy(h1).addScaledVector(PUSH_DIR, -0.24);
-    cubicBezier3(out.cardOffset, h0, hc1, hc2, h1, a);
+    hc2.copy(h1).addScaledVector(PUSH_DIR, -OFFER_LEAD);
+    cubicBezier3(out.cardOffset, h0, hc1, hc2, h1, hermite(u, 0, 1, 0, OFFER_END_SLOPE));
+    const a = OFFER(u);
     out.cardTilt = lerp(HOST.tilt, PRE_TILT, a);
-    out.clipTilt = HOST.hookTilt * smoothstep(seg(t, 0, present * 0.8));
+    out.clipTilt = HOST.hookTilt * smoothstep(u);
     out.swivel = HOST.swivel * a;
-  } else if (t < entered) {
-    // Push: the strip passes up through the open gate's gap into the hook.
-    ride.set(0, HOST.gapY, lerp(HOST.entryZ, ENTERED_Z, EASE.travel(seg(t, present, entered))));
-    onTurnedHook(ride, -Math.PI / 2, HOST.hookTilt, HOST.swivel, out);
   } else {
+    // Push: the strip passes up through the open gate's gap into the hook and rounds onto the
+    // front leg (the card square to the wire, the hook held back); no stop between the beats.
     // Slide back along the leg, then round the U: the card stays square to the wire (−90° on the
     // leg, then −φ round the U) while the hook swings home by the same angle, so the card hangs
     // upright throughout and the hook carries it down. Where the leg meets the arc the turn eases
     // in over ±TURN_EASE arc lengths (a C1 ramp, within the slot's slack).
-    const s = hostRide(t);
-    hookRide(s, ride);
+    const s = threadRide(hostRide(t), ride);
     const x = s - HOOK_PATH.leg, h = TURN_EASE * HOOK_PATH.arc;
     const ramp = x >= h ? x : x <= -h ? 0 : ((x + h) * (x + h)) / (4 * h);
     const g = Math.min(1, ramp / HOOK_PATH.arc);
@@ -194,6 +243,11 @@ const SETTLE = { amplitude: 0.01, hz: 3, zeta: 0.55 };
 const qn = new Quaternion(), cardWorld = new Vector3();
 /** The strap anchor's last leg: an even ease, so it never outruns its approach (it covers the same ground in less time). */
 const ANCHOR_HOME = cubicBezier(0.4, 0, 0.35, 1);
+/**
+ * Lagged time the anchor's last leg starts (t = ANCHOR_DEPART + ANCHOR_LAG): v1.2.2 starts it with
+ * the clip's departure (was 1.1, i.e. 60 ms after it) so the strap swings over 0.36 s, not 0.3 s.
+ */
+const ANCHOR_DEPART = OUTCOME_BEATS.depart - ANCHOR_LAG;
 
 /** C1 damped settle: starts at `a` with zero velocity, fades to exactly 0 by `end`. */
 function settleC1(t: number, a: number, hz: number, zeta: number, end: number): number {
@@ -271,8 +325,8 @@ function outcome(t: number, out: BusinessFrame): void {
   // trails the card and the final frame equals the canonical pose exactly.
   const trailing = lagT < 0.15 ? POSE.ready.pivot.x
     : lagT < 0.7 ? lerp(POSE.ready.pivot.x, POSE.scan.pivot.x, EASE.travel(seg(lagT, 0.15, 0.7)))
-    : lagT < 1.1 ? POSE.scan.pivot.x
-    : lerp(POSE.scan.pivot.x, POSE.rest.pivot.x, ANCHOR_HOME(seg(lagT, 1.1, 1.4)));
+    : lagT < ANCHOR_DEPART ? POSE.scan.pivot.x
+    : lerp(POSE.scan.pivot.x, POSE.rest.pivot.x, ANCHOR_HOME(seg(lagT, ANCHOR_DEPART, 1.4)));
   out.anchorX = trailing;
   out.anchorY = out.pivot.y + ANCHOR_RISE;
   out.status = t >= SCAN_AT ? 'lit' : 'off';
@@ -289,9 +343,9 @@ export function sampleSequence(sequence: SequenceName, t: number, out: BusinessF
   return out;
 }
 
-void qb;
-
-// ── Change of mind: blend or cut ─────────────────────────────────────────────────────
+// ── Change of mind: the reader as a solid ───────────────────────────────────────────
+// v1.2.1 cut wherever the straight blend below would pass into the reader (v1.2 measured 8–12 mm);
+// v1.2.2 uses the same measure only to decide how far the recovery peels off the glass.
 /**
  * The reader as a solid for the interruption check (face space): everything behind the front
  * surface across the reader's width, from the floor to its top. The front surface is the glass
@@ -369,19 +423,153 @@ export function blendReaderDepth(f: BusinessFrame, steps = 24): number {
   return worst;
 }
 
-/**
- * A change of mind while the badge is at, or near, the reader: a straight blend back to
- * guest-ready would push it through the glass and the bezel (v1.2 measured 8–12 mm), so the scene
- * asks for a cut instead (Master §6 allows ≤150 ms; zero is valid). Anywhere else it blends.
- */
-export function interruptCutFor(f: BusinessFrame): boolean {
-  return blendReaderDepth(f) > 0;
-}
-
 const qc = new Quaternion(), qy = new Quaternion();
 /** The card's rotation in clip space for a frame (see BusinessFrame.cardTilt). */
 export function cardRotation(f: BusinessFrame, out = new Quaternion()): Quaternion {
   out.setFromAxisAngle(X, f.clipTilt);
   if (f.swivel !== 0) out.multiply(qy.setFromAxisAngle(Y, f.swivel));
   return out.multiply(qc.setFromAxisAngle(X, f.cardTilt - f.clipTilt));
+}
+
+// ── Change of mind: the scene's own recovery path (v1.2.2) ───────────────────────────
+/**
+ * A change of mind hands over from wherever the badge is (pressed on the glass, in the air on its
+ * approach, at rest beside the reader) to the new outcome without a cut and without the director's
+ * straight blend (which would pass through the reader). The scene asks the director to cut
+ * (`interruptCut` → true: a 0 ms switch to guest-ready and the new sequence from t = 0) and then
+ * draws the first RECOVER seconds of the new sequence as an offset that starts at the pose on
+ * screen and decays to nothing:
+ *
+ * - the eye (pivot) follows an offset from the new sequence's own path: the pose on screen's offset
+ *   decays by a smootherstep (gentle start, zero slope at both ends) and the old motion's velocity
+ *   by a Hermite velocity term, so it starts with that velocity and arrives on the authored path
+ *   with the authored velocity (C1 at both ends); a peel along the face normal makes the first move
+ *   a lift off the glass;
+ * - rotations and the card's turn on the hook hold for the first part of the peel (the card leaves
+ *   flat, as it arrived) and then ease onto the authored ones (zero slope at both ends);
+ * - the glass springs back exactly as far as the card has left it;
+ * - the old status light fades out (the new one lights at the contact beat as usual).
+ *
+ * The new outcome's first 0.15 s is a near-still anticipation at guest-ready, so the badge passes
+ * through the ready pose on its way, as Master §6 asks, and the sequence still ends 1.5 s after
+ * the change (the director's blend took 0.15 s more).
+ */
+export const RECOVER = 0.3;
+/** Peel along the face normal at full proximity (stage units, the bump's peak). */
+export const PEEL = 0.14;
+/** Fraction of the recovery the rotations hold while the card lifts off flat. */
+const ROT_HOLD = 0.18;
+
+export interface Recovery {
+  from: BusinessFrame;
+  /** Pivot velocity carried in from the interrupted motion (stage units/s, already scaled). */
+  vel: Vector3;
+  /** Peel amplitude (0 away from the reader). */
+  peel: number;
+}
+
+/** Smootherstep (C2): 0 → 1 with zero slope and curvature at both ends. */
+const smoother = (x: number) => x * x * x * (x * (6 * x - 15) + 10);
+/** Peel bump: 0 with zero slope at both ends, peak 1 at u = 0.4. */
+const peelBump = (u: number) => (u * u * (1 - u) ** 3) / 0.03456;
+const qOff = new Quaternion(), qI = new Quaternion(), rv = new Vector3();
+
+export function copyFrame(src: BusinessFrame, out: BusinessFrame): BusinessFrame {
+  out.pivot.copy(src.pivot);
+  out.rot.copy(src.rot);
+  out.clipTilt = src.clipTilt;
+  out.swivel = src.swivel;
+  out.cardOffset.copy(src.cardOffset);
+  out.cardTilt = src.cardTilt;
+  out.gate = src.gate;
+  out.anchorX = src.anchorX;
+  out.anchorY = src.anchorY;
+  out.status = src.status;
+  out.statusLevel = src.statusLevel;
+  out.glass = src.glass;
+  return out;
+}
+
+/** Status level of the interrupted outcome's light while it fades (×its level at the change). */
+export function recoveryFade(t: number): number {
+  return 1 - smoothstep(seg(t / RECOVER, 0, 0.6));
+}
+
+/**
+ * Overlay the recovery on `out`, which holds the new sequence's authored frame at t (t < RECOVER;
+ * the authored frame at t = 0 is exactly guest-ready).
+ */
+export function applyRecovery(r: Recovery, t: number, out: BusinessFrame): BusinessFrame {
+  if (t >= RECOVER) return out;
+  const u = Math.max(0, t) / RECOVER;
+  const u2 = u * u, u3 = u2 * u;
+  const h00 = 1 - smoother(u), h10 = (u3 - 2 * u2 + u) * RECOVER;
+  const f = r.from;
+  const authoredY = out.pivot.y;
+  out.pivot
+    .addScaledVector(rv.copy(f.pivot).sub(READY.pivot), h00)
+    .addScaledVector(r.vel, h10)
+    .addScaledVector(FACE_NORMAL, r.peel * peelBump(u));
+  const keep = 1 - smoother(seg(u, ROT_HOLD, 1));
+  // READY.rot is the identity: the offset rotation is the one on screen.
+  qOff.copy(f.rot).multiply(qb.copy(READY.rot).invert());
+  out.rot.premultiply(qI.identity().slerp(qOff, keep));
+  out.clipTilt += (f.clipTilt - READY.clipTilt) * keep;
+  out.swivel += (f.swivel - READY.swivel) * keep;
+  out.gate += (f.gate - READY.gate) * keep;
+  out.cardTilt += (f.cardTilt - READY.cardTilt) * keep;
+  // The card stays on the hook: its centre follows its turn on the slot (plus any residual of the
+  // pose on screen, e.g. a host frame, eased out with the rotations).
+  const onHook = cardOnHook(out.cardTilt, rv);
+  const resid = cardOnHook(f.cardTilt, c1).sub(f.cardOffset).multiplyScalar(-keep);
+  out.cardOffset.copy(onHook).add(resid);
+  out.anchorX += (f.anchorX - READY.anchorX) * (1 - smoother(u));
+  out.anchorY += out.pivot.y - authoredY;
+  // The glass gives back as far as the card has left it (the C1 contact ramp of the press).
+  const into = f.glass - rv.copy(out.pivot).sub(f.pivot).dot(FACE_NORMAL), h = 0.0008;
+  const glass = into >= h ? into : into <= -h ? 0 : ((into + h) * (into + h)) / (4 * h);
+  out.glass = Math.max(out.glass, Math.min(f.glass, glass));
+  return out;
+}
+
+const pathF = newFrame();
+/** Deepest readerDepth of the badge over a recovery into `sequence` (card and hook samples). */
+export function recoveryReaderDepth(r: Recovery, sequence: SequenceName, steps = 30): number {
+  let worst = -Infinity;
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * RECOVER;
+    applyRecovery(r, t, sampleSequence(sequence, t, pathF));
+    worst = Math.max(worst, frameReaderDepth(pathF));
+  }
+  return worst;
+}
+
+const fq = new Quaternion(), fc = new Quaternion(), fp = new Vector3();
+/** Deepest readerDepth of a frame's holder and hook samples. */
+export function frameReaderDepth(f: BusinessFrame): number {
+  cardRotation(f, fc);
+  e.set(f.clipTilt, f.swivel, 0);
+  fq.setFromEuler(e);
+  let worst = -Infinity;
+  for (const p of CARD_SAMPLES) worst = Math.max(worst, readerDepth(fp.copy(p).applyQuaternion(fc).add(f.cardOffset).applyQuaternion(f.rot).add(f.pivot)));
+  for (const p of HOOK_SAMPLES) worst = Math.max(worst, readerDepth(fp.copy(p).applyQuaternion(fq).applyQuaternion(f.rot).add(f.pivot), HOOK.tube));
+  return worst;
+}
+
+/**
+ * Plan the recovery from the pose on screen `from` (moving at `vel`) into `sequence`. Near the
+ * reader the badge peels off along the face normal; away from it (where a straight blend is clear)
+ * it does not. The carried velocity is kept whole unless it would carry the badge deeper into the
+ * reader than it already is (an approach cut short just before contact): then it is scaled down
+ * to the largest of 1, ¾, ½, ¼, 0 that keeps it clear. Deterministic.
+ */
+export function planRecovery(from: BusinessFrame, vel: Vector3, sequence: SequenceName): Recovery {
+  const peel = PEEL * smoothstep(seg(blendReaderDepth(from), -0.1, 0));
+  const r: Recovery = { from: copyFrame(from, newFrame()), vel: new Vector3(), peel };
+  const start = Math.max(0, frameReaderDepth(from));
+  for (const k of [1, 0.75, 0.5, 0.25, 0]) {
+    r.vel.copy(vel).multiplyScalar(k);
+    if (k === 0 || recoveryReaderDepth(r, sequence) <= start + 1e-4) break;
+  }
+  return r;
 }
