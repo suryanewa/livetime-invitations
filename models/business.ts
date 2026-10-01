@@ -171,9 +171,11 @@ export const STRAP_VERTEX_AO = 0.9;
  * Clear vinyl holder: the GLB carries the recipe's transmission → alpha 0.35 (white at 35 %). As a
  * plain alpha blend that is a white veil over the print (cobalt reads sky blue). A clear sheet
  * adds its reflection and dims what is behind it a little, so the rig draws it that way: no
- * diffuse, reflection added at full strength, 8 % dimming.
+ * diffuse, reflection added at full strength, 14 % dimming (v1.2.2; 8 % left the rim beyond the
+ * card reading milky and paler than the cream stage behind it: a clear sheet's rim reads a shade
+ * darker than what it covers, with the softbox's edge highlight on it).
  */
-export const VINYL = { dimming: 0.08 } as const;
+export const VINYL = { dimming: 0.14 } as const;
 
 /** Strap layers leave the sewn tab at these clip-space z offsets (front, back). */
 const LAYER_Z = STRAP.layerZ;

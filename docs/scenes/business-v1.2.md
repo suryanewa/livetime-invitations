@@ -11,6 +11,32 @@ numbers), `models/businessFrame.ts` (the recipe's builder: empty contract nodes 
 `src/scenes/business/{poses,sequences,drag,index}.ts`, `tests/business.test.ts`,
 `tests/browser/business.spec.ts`.
 
+## v1.2.2 fixes (three judges' review of 6a7f2a1)
+
+Frame differences below are the mean absolute RGB difference between consecutive 540 px frames of
+the 62.5 fps review clips (`outputs/business/frames-*`), as the judges measured them.
+
+| Finding | Fix | Guarded by |
+|---|---|---|
+| **Must fix.** A change of mind at 0.5 s (the card still in the air on its approach) cut straight to guest-ready: frames-change f0030 → f0031, diff 20.7, the largest jump in all five scenes. v1.2.1 cut from 0.38 s to 1.26 s. | **No cut and no straight blend.** The scene now draws the hand-over itself, without a change to the shared director: `interruptCut()` always answers true, and the scene uses the director's 0 ms cut (settle, pose guest-ready, new sequence from t = 0) as the hand-over point. In `interruptCut()` it plans a **recovery** (`planRecovery`, sequences.ts) from the pose on screen (drag offset included), moving at the velocity it had (a backward difference of the pure authored path). For the new outcome's first `RECOVER` = 0.3 s it draws `applyRecovery` over the authored frame. The eye follows an offset that starts at the pose on screen with the old velocity and decays to zero with zero slope (smootherstep position term plus a Hermite velocity term), so it is C1 at both ends. On top of that is a **peel along the face normal** (a u²(1−u)³ bump, peak 0.14, near the reader only, where `blendReaderDepth` says a straight blend would hit). Rotations and the card's turn on the hook hold for the first 18 % (the card leaves flat, as it arrived), then ease onto the authored ones. The glass springs back exactly as far as the card has left it. The old status light fades over the first 0.18 s instead of switching off, and the sway springs carry on through the change (the cut's `settle()` zeroed them: the 1.65° pop that coverage.md records). The new outcome's first 0.15 s is a near-still anticipation at guest-ready, so the badge passes by the ready pose: its eye turns 0.10–0.17 from the ready eye, at x −0.41 against −0.48. The new outcome still ends 1.5 s after the change (the director's blend took 0.15 s longer). The carried velocity is scaled down (to ¾, ½, ¼ or 0) where it would push the badge deeper into the reader than it already is; across all 150 changes tested it was never needed. | Unit (`Business against the shipped reader`): for accept ↔ decline interrupted every 20 ms and from both settled poses (150 changes), the first frame is the pose on screen, the start velocity equals the carried one, the end equals the authored frame with its velocity, the eye passes within 0.2 of ready (0.24 when cut short in full flight), 1 ms steps and second differences stay bounded (C1), and the card and hook stay out of the **shipped reader's** height field (glass give included, 0.05 mm contact tolerance). The scene test drives interruptCut → settle → pose → sample at the press: no jump, the old light fades, the glass returns. Clip `frames-change`: 3.65 → 1.75 → 2.46 → 3.94 across f0031–f0034 (the card reverses out of its approach, a smooth V), then up to 8.1 as the authored travel; the clip's maximum is 8.44, the new outcome's own departure (v1.2.1: 19.8 at the cut). Extra clips (a scratch recording, not shipped) of a change at the press (0.9 s), during the departure (1.25 s) and from the settled accepted pose ramp from rest to a maximum of 8.5, with no spike. |
+| **Must fix.** Host attach stop–hop–stop: motion nearly stopped at 0.30 s (end of the offer), the push came in a 5-frame burst, then it nearly stopped again at 0.42 s (end of the push, 21 changed px) before the swing. | The beats now hand over their speed. The offer's position ease ends at `THREAD_SPEED` 0.7 u/s along the push direction (its tilt and the hook's turn still end at rest). The push, a 6 mm-radius corner onto the front leg (`CORNER` 0.006: the slot has about 9 mm of slack round the wire, so the strip can turn down the leg only as it centres on it) and the slide along the leg are one arc-length path. One C1 Hermite in time takes it from 0.7 u/s to `SLIDE_SPEED` 0.45 u/s at the U. The swing round the U is unchanged in kind and now runs 0.50–0.94 s (was 0.60–0.94). Beats: offer 0–0.28, through the gate by 0.39, on the U at 0.50, hung 0.94; the gate closes 0.60–0.72 as before. | Unit: a new test checks that the card centre's speed never falls below 0.45 u/s (or 20 % of its peak) from 0.05 s until 0.15 s into the swing (v1.2.1: 0.04). The existing checks are unchanged and pass: slot clearance (the wire and gate pass through the holder only by its slot), mirror angle, hook speed below a free swing, swing ≥ a quarter period, C1. Clip `frames-host`: after the offer the differences run 0.89 → 0.79 (f19–f25) → 0.46 (f27–f30, the slide) → 1.44 (swing peak). The v1.2.1 minima were 0.08 and 0.04, and the f22–f24 burst (1.7) is gone. |
+| Minor: the strap swung to its rest angle fast on the departure (accept/decline f0072–f0095). | The strap anchor's last leg now starts with the clip's departure (`ANCHOR_DEPART`, t = 1.14; was 1.20), so it runs over 0.36 s, not 0.30 s, and still trails the clip. | Unit: the anchor trails the clip and never outruns its approach (existing). |
+| Minor: the clear holder's rim read milky and pale against the cream stage. | `VINYL.dimming` 0.08 → 0.14: the rim beyond the card now reads a shade darker than the stage behind it, with the softbox edge highlight on it, as a clear sheet does. The print under it dims by the same 6 %. Saturation and the washout ceiling are relative checks and still pass. | Stills (`capture-light-guest-ready.png`); browser washout test. |
+| Minor: the status tile is an addition beyond the brief (which named the master's `led`/`led_glow`). | Kept, for the reasons in v1.2.1: it is shape-coded, it stays in view while the card covers the LED, and it reads at 192 px. **Recorded as a deviation here; `docs/spec-revisions.md` is a shared file, so routed to the foundation owner:** "Business status: besides the master's LED bar, a lit tile on the lower glass carries a check (accept) or a minus (decline), so the outcome reads by shape and stays visible under the pressed card." | — |
+
+Not changed (reasons):
+
+- *The threading through the snap hook is too small to read at stage scale* (judge 1). It is the real
+  hardware at the badge's real size: the hook's gap is 2.7 mm and the leg 5 mm. Scaling the
+  hardware up or exaggerating the path would break the master's proportions. The visible beat is
+  the hook swinging home with the card, and that now flows without a stop.
+- *The strap is one wide ribbon with no twist* (judge 2). Twist would need a new strap rig (a
+  framed curve with roll), which is beyond a polish pass. The strap still trails the clip and swings
+  plausibly.
+- *The LED bar is hidden under the pressed card; the dark ink card's lower edge relies on the holder
+  rim* (judges 1–3). These are documented below under Known gaps. The tile carries the outcome, and
+  the darker vinyl rim (above) helps the dark card's outline a little.
+
 ## v1.2.1 fixes (inspection of 49bf0c1)
 
 | Finding | Fix | Guarded by |
@@ -78,7 +104,8 @@ Other changes made along the way:
 - **Clear vinyl.** The recipe applies `transmissionToAlpha 0.35` as the brief asks, and the GLB
   carries it. Drawn as a plain alpha blend that is a 35 % white veil over the print, so the rig
   draws the holder as a clear sheet: no diffuse, its reflection added at full strength (CustomBlending
-  ONE / ONE_MINUS_SRC_ALPHA), 8 % dimming, the master's roughness (0.03) and specular kept.
+  ONE / ONE_MINUS_SRC_ALPHA), 14 % dimming (v1.2.2; 8 % read milky), the master's roughness (0.03)
+  and specular kept.
 - **Chrome.** `badge_chrome` polished in the recipe (roughness 0.1, base 0.6) so it reads as metal.
 - **Templates.** KHR_materials_variants: `light` is the master's own 2048 × 1536 print; `dark` is
   `badge_card_print_dark`, a deterministic pixel function (`darkPrint`): stock → ink `#1F2226`,
@@ -87,7 +114,8 @@ Other changes made along the way:
 
 ## The choreography
 
-- **Host attach (1.2 s)** — see the table above. The master's snap hook is a closed C, so the card
+- **Host attach (1.2 s)** — see the tables above (v1.2.2: the offer, push, corner and slide hand
+  over their speed; the swing runs 0.50–0.94 s). The master's snap hook is a closed C, so the card
   cannot slide on vertically the way it did on v1.1's J-hook; it is threaded through the gate with
   the hook held back, then the hook swings home carrying it. A test checks that the hook wire and the
   gate pass through the holder only by its slot (0.3 mm tolerance at real size).
@@ -100,8 +128,10 @@ Other changes made along the way:
   the face normal (0.01 rad, C1) follows; friction damps the springs while the card is on the glass.
   The card then peels off along the normal to rest beside the reader (rest pivot
   (−0.24, 1.9, 0.42)); the strap anchor trails it and never outruns its approach.
-- **Change of mind.** Away from the reader the director blends (150 ms) to guest-ready and plays
-  the new outcome; at or near the reader the scene asks for a cut (see the table).
+- **Change of mind (v1.2.2).** The scene draws the hand-over itself from the pose on screen. It
+  peels off the glass along the face normal when it is near the reader, swings back by guest-ready
+  and joins the new outcome by 0.3 s, all C1 (see the v1.2.2 table). The director only provides the
+  0 ms switch.
 - **Physics.** A physical pendulum on the swivel at the master card's real size (plate
   0.744 × 1.164 hanging 0.835 below the eye): swing 1.78 Hz, pitch 1.83 Hz, damping ratio 0.4.
   Kicks: the travel start, the host's swing home (pitch −0.7 rad/s: the card's bottom carries on
@@ -130,7 +160,7 @@ Other changes made along the way:
 | Bounds | (−1.0, 0, −0.45) … (1.2, 2.34, 0.45) |
 | Pendulum | swing 1.782 Hz, pitch 1.832 Hz, ζ 0.4 |
 
-## Export report (`pnpm models business`, deterministic: same SHA twice, `4a79e621…`)
+## Export report (`pnpm models business`, deterministic: same SHA twice, `40056ccb…`; unchanged by v1.2.2, which is runtime only)
 
 ```
 triangles 76,236 · draw calls 21 · 43 nodes
@@ -144,10 +174,20 @@ triangles, 3 draw calls, no textures).
 
 ## Known gaps
 
-- **Change of mind is a cut at the reader.** Master §6 allows it, but it is a visible jump from the
-  reader to the ready pose. A blend that leaves along the face normal first would need the shared
-  `src/core/visualDirector.ts` to accept a scene path; its blend is also a linear lerp that starts
-  with a velocity step (both v1.1 and v1.2 behave so). Left to the foundation owner.
+- **Change of mind uses the director's cut as a hand-over (v1.2.2).** The shared
+  `src/core/visualDirector.ts` is unchanged. Business answers `interruptCut()` with true every time
+  and draws its own C1 recovery over the new sequence's first 0.3 s. That stretches the hook's
+  documented meaning ("a straight blend would pass objects through each other"). A first-class
+  scene path in the director (for example `interruptPath?()`) would make the contract explicit.
+  Routed to the foundation owner, together with the spec-revisions row for this behaviour: "Business
+  change of mind: no straight blend; the scene peels the card off the reader and joins the new
+  outcome over 0.3 s from the pose on screen (0 ms director cut as the hand-over)." The scene's
+  recovery also replaces the director's linear 150 ms blend away from the reader (its velocity
+  steps), and it keeps the sway springs (coverage.md's 1.65° settle pop no longer applies to
+  Business).
+- **Accept/decline anticipation.** The first 0.15 s lean comes to rest before the travel sets off
+  (frame differences dip to 0.2 at f0010 of `frames-accept`). It is an authored anticipation hold
+  that was not flagged and is unchanged.
 - **Status at the contact beat.** The tile is in view the moment it lights; the LED bar at the top of
   the glass is under the pressed card until the card leaves (it was the only signal in v1.2).
 - **Dark template.** The ink card's lower edge on the black glass still relies on the holder's clear
@@ -158,9 +198,12 @@ triangles, 3 draw calls, no textures).
   wire; the gate's swept path is checked as a centreline with 80 % of the wire radius; the shipped
   reader height field is sampled at 4 mm cells (max of the 3 × 3 round each point) with 0.7 mm of
   allowance where the clips press the glass.
+- **Timing (v1.2.2).** `pnpm capture timing http://127.0.0.1:5205`: host 1.213 s, accept 1.512 s,
+  decline 1.512 s.
 - **Not measured here.** `pnpm capture perf` cannot take both a scene and a base URL, so it was not
   re-run against this worktree's server. GPU textures stay at 57.4 MiB (budgets waived).
 - **Shared files.** `src/demo/fixtures.ts` (business alt text rows) is edited here and needs the
-  foundation owner's sign-off. The `docs/style-reference.md`, `docs/asset-manifest.md` and
+  foundation owner's sign-off. `docs/spec-revisions.md` needs two Business rows (the status tile and
+  the change-of-mind recovery, worded in the v1.2.2 table and above). The `docs/style-reference.md`, `docs/asset-manifest.md` and
   `docs/qualification.md` rows for Business v1.2 (reader ×0.72, the status tile, the timings
   above) are left to the foundation owner.

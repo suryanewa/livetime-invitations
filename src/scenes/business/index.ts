@@ -11,7 +11,9 @@ import { ANGLE_EPSILON, Spring } from '../../motion/spring.ts';
 import type { MaterialLibrary } from '../../render/materials.ts';
 import { clampDragTarget, touchesScanner } from './drag.ts';
 import { DURATIONS, SCAN_AT } from './poses.ts';
-import { cardRotation, frameFor, HOST_BEATS, interruptCutFor, newFrame, OUTCOME_BEATS, sampleSequence, type BusinessFrame } from './sequences.ts';
+import {
+  applyRecovery, cardRotation, frameFor, HOST_BEATS, newFrame, OUTCOME_BEATS, planRecovery, RECOVER, recoveryFade, sampleSequence, type BusinessFrame, type Recovery,
+} from './sequences.ts';
 
 /** Release/cancel blend onto the scanner approach (sub-spec: 350–600 ms). */
 const RELEASE_BLEND = 0.45;
@@ -36,6 +38,14 @@ export class BusinessScene implements SceneInstance {
 
   private readonly frame = newFrame();
   private readonly scratch = newFrame();
+  /**
+   * Change of mind (v1.2.2): the scene draws its own hand-over from the pose on screen into the new
+   * outcome (sequences.ts applyRecovery). `pendingRecovery` is planned when the director asks
+   * `interruptCut()` and survives its cut (settle, pose guest-ready) until the new sequence's first
+   * sample; `recovery` is then active for the first RECOVER seconds.
+   */
+  private recovery: (Recovery & { sequence: SequenceName; lit: StatusLit; level: number }) | null = null;
+  private pendingRecovery: (Recovery & { lit: StatusLit; level: number; springs: [number, number, number, number] }) | null = null;
   /**
    * The holder and card are one rigid body swinging on the swivel eye: a physical pendulum at the
    * master card's size (models/businessContract.ts PENDULUM, about 1.8 Hz), lightly damped.
@@ -78,6 +88,9 @@ export class BusinessScene implements SceneInstance {
   }
 
   pose(pose: CanonicalPose): void {
+    // Only the director's cut (pose guest-ready, then the new sequence) carries a planned recovery.
+    const pending = pose === 'guest-ready' ? this.pendingRecovery : null;
+    this.recovery = null;
     this.sequence = null;
     this.t = 0;
     this.cancelDrag();
@@ -85,13 +98,34 @@ export class BusinessScene implements SceneInstance {
     frameFor(pose, this.frame);
     const lit = pose === 'accepted' ? 'accept' : pose === 'declined' ? 'decline' : 'off';
     this.apply(this.frame, lit);
+    this.pendingRecovery = pending;
+  }
+
+  /** Authored frame at t, with the change-of-mind recovery while it lasts (pure in t). */
+  private authored(sequence: SequenceName, t: number, out: BusinessFrame): BusinessFrame {
+    sampleSequence(sequence, t, out);
+    const r = this.recovery;
+    if (r && r.sequence === sequence && t < RECOVER) applyRecovery(r, t, out);
+    return out;
   }
 
   sample(sequence: SequenceName, t: number): void {
+    const pending = this.pendingRecovery;
+    this.pendingRecovery = null;
+    if (pending && this.sequence === null && t === 0) {
+      const { springs, ...r } = pending;
+      this.recovery = { ...r, sequence };
+      // The sway carries on through the change (the cut's settle() zeroed it).
+      [this.swing.x, this.swing.v, this.pitch.x, this.pitch.v] = springs;
+      this.swing.settled = this.swing.x === 0 && this.swing.v === 0;
+      this.pitch.settled = this.pitch.x === 0 && this.pitch.v === 0;
+      this.rig.nodes.card_secondary!.rotation.set(this.pitch.x, 0, this.swing.x);
+    }
+    if (this.recovery && (this.recovery.sequence !== sequence || t >= RECOVER)) this.recovery = null;
     const prevT = this.sequence === sequence ? this.t : -1;
     this.sequence = sequence;
     this.t = t;
-    const f = sampleSequence(sequence, t, this.frame);
+    const f = this.authored(sequence, t, this.frame);
     if (this.dragging || this.releaseLeft > 0) {
       // The strap anchor moves with the dragged clip, so the fixed-length lanyard never stretches.
       f.pivot.add(this.dragOffset);
@@ -102,7 +136,16 @@ export class BusinessScene implements SceneInstance {
         f.rot.slerp(this.releaseRot, k * k * (3 - 2 * k));
       }
     }
-    const lit = f.status === 'lit' ? (sequence === 'accept' ? 'accept' : 'decline') : 'off';
+    let lit: StatusLit = f.status === 'lit' ? (sequence === 'accept' ? 'accept' : 'decline') : 'off';
+    const r = this.recovery;
+    if (lit === 'off' && r && r.lit !== 'off') {
+      // The interrupted outcome's light fades out rather than switching off.
+      const k = r.level * recoveryFade(t);
+      if (k > 0) {
+        lit = r.lit;
+        f.statusLevel = k;
+      }
+    }
     this.apply(f, lit);
     this.kicks(sequence, prevT, t);
   }
@@ -129,12 +172,27 @@ export class BusinessScene implements SceneInstance {
   }
 
   /**
-   * Change of mind at or near the reader: a straight blend back to guest-ready would carry the
-   * badge through the glass, so the director cuts instead (the frame is the pose on screen,
-   * drag offset included).
+   * Change of mind: the scene always takes the hand-over itself. It plans a recovery from the pose
+   * on screen (drag offset included), moving at the velocity it had, and asks the director for its
+   * 0 ms cut; the new sequence's first RECOVER seconds then start from that pose (applyRecovery).
+   * A straight blend would pass through the reader near it, and starts and ends with a velocity
+   * step everywhere else.
    */
   interruptCut(): boolean {
-    return interruptCutFor(this.frame);
+    const vel = new Vector3();
+    const seq = this.sequence;
+    if (seq && !this.dragging && this.releaseLeft === 0) {
+      // Velocity of the motion on screen (pure in t, so a backward difference is exact enough).
+      const dt = 1 / 120;
+      if (this.t >= dt) {
+        const now = this.authored(seq, this.t, this.scratch).pivot.clone();
+        vel.copy(now).sub(this.authored(seq, this.t - dt, this.scratch).pivot).divideScalar(dt);
+      }
+    }
+    // The new outcome is unknown here; both start the same way (identical motion), so plan for accept.
+    const plan = planRecovery(this.frame, vel, 'accept');
+    this.pendingRecovery = { ...plan, lit: this.lit, level: this.litLevel, springs: [this.swing.x, this.swing.v, this.pitch.x, this.pitch.v] };
+    return true;
   }
 
   settling(): boolean {
@@ -270,7 +328,7 @@ export class BusinessScene implements SceneInstance {
     };
 
     return {
-      enabled: () => this.sequence !== null && this.sequence !== 'host' && !this.releaseLeft && this.t >= 0.1 && this.t < APPROACH_T,
+      enabled: () => this.sequence !== null && this.sequence !== 'host' && !this.releaseLeft && !this.recovery && this.t >= 0.1 && this.t < APPROACH_T,
       hitTest: (x, y, camera) => {
         ndc.set(x, y);
         this.raycaster.setFromCamera(ndc, camera);
