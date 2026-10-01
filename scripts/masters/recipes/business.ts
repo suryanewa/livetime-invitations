@@ -25,21 +25,29 @@ import type { SceneRecipe } from '../types.ts';
  *   carries `badge_strap` (woven_fabric_blue: albedo, normal, ORM, sheen) into the GLB; the rig
  *   takes the material and deletes the stub. Its bar-tack stitching is kept on the runtime sewn
  *   tab round the D-ring. The tape edging is dropped (the strands have their own soft edges).
- * - Reader at READER_SCALE 1 (1.28 w × 1.9 h): the glass (1.16 × 1.58) takes the whole card with
- *   the LED bar clear above it. Aligned on the plinth's bottom centre at `scanner_root`.
+ * - Reader at READER_SCALE 0.72 (0.92 w × 1.37 h; v1.2.1, was 1): at 1 the reader was 56 % of the
+ *   frame height and the card 31 %, so the reader, not the badge, led the frame and the rail
+ *   thumbnail. At 0.72 the badge holder (57 × 89 mm at the badge's real scale) meets a 70 × 104 mm
+ *   reader, a real desk reader's proportions; its side clips still land on the glass (0.03 inside
+ *   its edges) and the card, pressed high, overhangs the reader's top as v1.1's did, leaving the
+ *   lower glass for the status tile. Aligned on the plinth's bottom centre at `scanner_root`.
  *   `front_assembly` → `scanner_face` (its 11.6° lean is the contact plane), `glass` →
  *   `scanner_pad` (pivot: the face origin, so pad space = face space) carrying the LED
  *   (`scanner_light`), its glow quad (`scanner_glow`) and the NFC mark: the press moves them in
  *   together. `window_gasket` → `scanner_gasket` (pivot: its back plane) compresses under the
  *   glass. Body, bezel, plinth and back panel are static and joined per material.
  * - LED and glow: emissiveStrength 1 (the rig drives the status colour and intensity, starting
- *   dark); the glow quad casts no shadow.
+ *   dark); the glow quad casts no shadow. The rig adds a status tile (check / minus) on the pad.
+ * - Chrome: the master's chrome_hardware (roughness 0.3, base 0.86) read as white satin plastic in
+ *   this beige studio; polished to roughness 0.1 with a 0.6 base it shows dark reflections and
+ *   reads as chrome (v1.2.1).
  * - Templates: KHR_materials_variants light (the master's print) / dark (`badge_card_print_dark`,
  *   a pixel function over the master's print, models/businessPrint.ts; the card's edge stock
  *   goes to the family ink by factor). Both prints lossless at source size (2048 × 1536).
  * - Runtime (models/business.ts, recorded here so the GLB's numbers are not misread): the vinyl
  *   ships at the brief's alpha 0.35, but the rig draws it as a clear sheet (no diffuse, its
- *   reflection added, 8 % dimming, satin roughness 0.22): a 35 % white veil washed the print out.
+ *   reflection added, 8 % dimming, the master's roughness 0.03 kept): a 35 % white veil washed the
+ *   print out.
  *   The strap material's vertex colours (master COLOR_0, mean 0.9) are folded into its colour
  *   factor, because the runtime strands carry none.
  * See docs/scenes/business-v1.2.md for the measured contract, the export report and the gaps.
@@ -57,7 +65,7 @@ export const recipe: SceneRecipe = {
       materials: {
         woven_fabric_blue: { rename: 'badge_strap' },
         woven_fabric_blue_stitch: { rename: 'badge_strap_stitch' },
-        chrome_hardware: { rename: 'badge_chrome', ownEnv: 1.1 },
+        chrome_hardware: { rename: 'badge_chrome', ownEnv: 1.1, roughness: 0.1, baseColorFactor: [0.6, 0.61, 0.63, 1] },
         clear_vinyl: { rename: 'badge_vinyl', transmissionToAlpha: 0.35 },
         clip_plastic_grey: { rename: 'badge_clip_plastic' },
         card_stock: { rename: 'badge_card_stock' },

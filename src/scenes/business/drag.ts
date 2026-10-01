@@ -8,7 +8,7 @@ import { PAD_CENTER } from './poses.ts';
  * actual (tilted) centre and corners. Never affects the chosen response.
  */
 
-export const DRAG_BOUNDS = { minX: -0.95, maxX: 0.72, maxY: 2.42, floor: 0.03 };
+export const DRAG_BOUNDS = { minX: -0.78, maxX: 0.72, maxY: 2.28, floor: 0.03 };
 export const CONTACT_RADIUS = 0.42;
 
 const corner = new Vector3();

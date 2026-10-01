@@ -11,6 +11,8 @@ import {
   MeshStandardMaterial,
   type Object3D,
   PointLight,
+  Shape,
+  ShapeGeometry,
   Vector3,
 } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
@@ -18,8 +20,8 @@ import { mesh } from './geometry.ts';
 import type { MaterialVariants } from './imported.ts';
 import { LanyardStrand } from './lanyard.ts';
 import {
-  BUSINESS_BOUNDS, BUSINESS_NODES, CARD, CARD_OFFSET_Y, D_RING, FACE, HANG_PIVOT, LANYARD_SPREAD, LANYARD_TOP_Y, READER, SCANNER_POS, STRAP,
-  STRAP_TAB_TOP, type CardTemplate,
+  BUSINESS_BOUNDS, BUSINESS_NODES, CARD, CARD_OFFSET_Y, D_RING, FACE, HANG_PIVOT, LANYARD_SPREAD, LANYARD_TOP_Y, READER, READER_SCALE, SCANNER_POS,
+  STATUS_TILE, STRAP, STRAP_TAB_TOP, type CardTemplate,
 } from './businessContract.ts';
 import { collectNodes, type ModelContext } from './types.ts';
 
@@ -68,16 +70,27 @@ export const GLOW = {
   led: { accept: 1, decline: 0.85 },
   /** Halo opacity and emissive intensity. */
   halo: { opacity: 0.9, intensity: 0.75 },
+  /** Status tile emissive intensity per status (below tone-mapping compression, like the LED). */
+  tile: { accept: 0.72, decline: 0.66 },
   /** Spill light intensity (tints the card at the scan beat without washing its print). */
-  spill: 0.35,
+  spill: 0.18,
 } as const;
 /**
- * Spill light, face space, from the LED: up the face and out along its normal. A point light's
- * mirror image in the glossy black glass falls where the camera's reflected ray from the light
- * meets the glass; from here it lands above the glass on the steel bezel (broad and dim), never on
- * the glass, while the light still tints the card on the scan spot below it.
+ * Spill light, face space: below the glass, out along the normal, under the status tile. The
+ * camera sees the face nearly along its normal (3.4° above it), so a point light's mirror image in
+ * the glossy glass lands just below the light: here on the steel lip under the glass, never on the
+ * glass. From there it warms the pressed card's lower edge in the status colour. (v1.2 hung it
+ * above the LED; with the card now pressed high, that lit the clip hardware green.)
  */
-export const STATUS_SPILL = { up: 0.62, out: 0.4, distance: 2.4 } as const;
+export const STATUS_SPILL = { v: STATUS_TILE.v, out: 0.16, distance: 1.6 } as const;
+/**
+ * Status tile glyphs (tile space, stage units, y up): a check for accept and a minus for decline,
+ * stroked in the reader's glass black across the lit tile, so the outcome reads by shape too.
+ */
+export const STATUS_GLYPHS = {
+  accept: [[-0.056, 0.002], [-0.02, -0.036], [0.058, 0.044]] as [number, number][],
+  decline: [[-0.058, 0], [0.058, 0]] as [number, number][],
+} as const;
 /** Idle LED lens (off): a neutral dark, not the master's green tint, so idle never reads as "accepted". */
 const LED_OFF = new Color(0.018, 0.02, 0.019);
 
@@ -86,7 +99,8 @@ const LED_OFF = new Color(0.018, 0.02, 0.019);
  * up to STRAP_TAB_TOP (the master's bar-tack stitching sits on it). Clip space, box section.
  */
 export function strapTabGeometry(): BufferGeometry {
-  const { width, thickness, weaveTile } = STRAP;
+  // A hair wider and thicker than the strands, whose ends tuck STRAP_TUCK into it (no coplanar faces).
+  const width = STRAP.width + TAB_INFLATE * 2, thickness = STRAP.thickness + TAB_INFLATE * 2, weaveTile = STRAP.weaveTile;
   const layer = STRAP.layerZ; // layer centre off the mid-plane (master: ±0.0052 scan)
   const bar = D_RING.topY, r = D_RING.wire + thickness / 2;
   // Centreline in (y, z): front layer down, over the bar top, back layer up.
@@ -143,6 +157,14 @@ export function strapTabGeometry(): BufferGeometry {
   return g;
 }
 
+/**
+ * The strands start STRAP_TUCK inside the sewn tab, which is TAB_INFLATE larger all round, so
+ * their open ends never show at the joint (v1.2 showed a dark wedge there: the inside of the
+ * front strand's open end) and the joint stays closed while the strap bends.
+ */
+export const STRAP_TUCK = 0.03;
+const TAB_INFLATE = 0.0008;
+
 /** Mean of the master strap's baked vertex shading (COLOR_0, 0.49–1.0). */
 export const STRAP_VERTEX_AO = 0.9;
 /**
@@ -155,6 +177,48 @@ export const VINYL = { dimming: 0.08 } as const;
 
 /** Strap layers leave the sewn tab at these clip-space z offsets (front, back). */
 const LAYER_Z = STRAP.layerZ;
+
+/** Rounded rectangle centred on the origin (xy plane, facing +z). */
+export function roundedTileGeometry(width: number, height: number, radius: number): BufferGeometry {
+  const w = width / 2, h = height / 2, r = Math.min(radius, w, h);
+  const shape = new Shape();
+  shape.moveTo(-w + r, -h);
+  shape.lineTo(w - r, -h);
+  shape.quadraticCurveTo(w, -h, w, -h + r);
+  shape.lineTo(w, h - r);
+  shape.quadraticCurveTo(w, h, w - r, h);
+  shape.lineTo(-w + r, h);
+  shape.quadraticCurveTo(-w, h, -w, h - r);
+  shape.lineTo(-w, -h + r);
+  shape.quadraticCurveTo(-w, -h, -w + r, -h);
+  return new ShapeGeometry(shape, 8);
+}
+
+/** A flat stroke along a polyline with round caps and joins (xy plane, facing +z). */
+export function strokeGeometry(points: readonly (readonly [number, number])[], width: number, segments = 12): BufferGeometry {
+  const pos: number[] = [];
+  const r = width / 2;
+  const tri = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => pos.push(ax, ay, 0, bx, by, 0, cx, cy, 0);
+  for (let i = 0; i + 1 < points.length; i++) {
+    const [ax, ay] = points[i]!, [bx, by] = points[i + 1]!;
+    const l = Math.hypot(bx - ax, by - ay) || 1;
+    const nx = (-(by - ay) / l) * r, ny = ((bx - ax) / l) * r;
+    tri(ax - nx, ay - ny, bx - nx, by - ny, bx + nx, by + ny);
+    tri(ax - nx, ay - ny, bx + nx, by + ny, ax + nx, ay + ny);
+  }
+  for (const [x, y] of points) {
+    for (let k = 0; k < segments; k++) {
+      const a0 = (k / segments) * Math.PI * 2, a1 = ((k + 1) / segments) * Math.PI * 2;
+      tri(x, y, x + Math.cos(a0) * r, y + Math.sin(a0) * r, x + Math.cos(a1) * r, y + Math.sin(a1) * r);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  const n = new Float32Array(pos.length);
+  for (let i = 2; i < n.length; i += 3) n[i] = 1;
+  g.setAttribute('normal', new BufferAttribute(n, 3));
+  return g;
+}
 
 function meshesUnder(o: Object3D): Mesh[] {
   const out: Mesh[] = [];
@@ -189,7 +253,7 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
   nodes.strap_material!.removeFromParent();
   const tab = mesh('strap_tab', strapTabGeometry(), fabric, authored);
   tab.castShadow = true;
-  const strandLength = LANYARD_TOP_Y - (HANG_PIVOT.y + STRAP_TAB_TOP) + 0.02;
+  const strandLength = LANYARD_TOP_Y - (HANG_PIVOT.y + STRAP_TAB_TOP - STRAP_TUCK) + 0.02;
   const strands: [LanyardStrand, LanyardStrand] = [
     new LanyardStrand(strandLength, STRAP.width, STRAP.thickness, STRAP.weaveTile),
     new LanyardStrand(strandLength, STRAP.width, STRAP.thickness, STRAP.weaveTile),
@@ -203,7 +267,7 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
     strands.forEach((s, i) => {
       const side = i === 0 ? -1 : 1;
       top.set(anchor.position.x + side * LANYARD_SPREAD, anchor.position.y, anchor.position.z);
-      attach.set(0, STRAP_TAB_TOP, side * LAYER_Z);
+      attach.set(0, STRAP_TAB_TOP - STRAP_TUCK, side * LAYER_Z);
       authored.localToWorld(attach);
       root.worldToLocal(attach);
       s.update(top, attach, facing, up);
@@ -250,15 +314,38 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
   ledMesh.userData.noShadowCast = true;
   const spill = new PointLight('#ffffff', 0, STATUS_SPILL.distance, 2);
   spill.name = 'scanner_spill';
-  spill.position.copy(FACE.led).add(new Vector3(0, STATUS_SPILL.up, STATUS_SPILL.out));
+  spill.position.set(0, STATUS_SPILL.v, STATUS_SPILL.out);
   nodes.scanner_face!.add(spill);
+  // Status tile on the lower glass (on the pad, so it gives with the glass at the press): lit in the
+  // status colour with a check or a minus in the glass's black across it. Hidden while idle, so the
+  // idle reader is the master's.
+  const tileMat = new MeshStandardMaterial({ name: 'reader_status_tile', color: '#000000', roughness: 0.5, metalness: 0 });
+  const glyphMat = new MeshStandardMaterial({ name: 'reader_status_glyph', color: '#070808', roughness: 0.55, metalness: 0 });
+  const tile = mesh('scanner_status_tile', roundedTileGeometry(STATUS_TILE.width, STATUS_TILE.height, STATUS_TILE.radius), tileMat, nodes.scanner_pad);
+  tile.position.set(0, STATUS_TILE.v, FACE.glass + 0.0006);
+  const glyphs = {
+    accept: mesh('scanner_status_check', strokeGeometry(STATUS_GLYPHS.accept, STATUS_TILE.stroke), glyphMat, tile),
+    decline: mesh('scanner_status_minus', strokeGeometry(STATUS_GLYPHS.decline, STATUS_TILE.stroke), glyphMat, tile),
+  };
+  for (const m of [tile, glyphs.accept, glyphs.decline]) {
+    m.castShadow = false;
+    m.receiveShadow = false;
+    m.userData.noShadowCast = true;
+  }
+  glyphs.accept.position.z = glyphs.decline.position.z = 0.0005;
+  tile.visible = false;
   let lastStatus: StatusLit | null = null, lastLevel = -1;
   const setStatus = (lit: StatusLit, level: number) => {
     const k = lit === 'off' ? 0 : Math.min(1, Math.max(0, level));
     if (lit === lastStatus && k === lastLevel) return;
     lastStatus = lit;
     lastLevel = k;
+    tile.visible = k > 0 && lit !== 'off';
+    glyphs.accept.visible = lit === 'accept';
+    glyphs.decline.visible = lit === 'decline';
     if (lit === 'off' || k === 0) {
+      tileMat.emissive.set('#000000');
+      tileMat.emissiveIntensity = 0;
       led.emissive.set('#000000');
       led.emissiveIntensity = 0;
       halo.emissive.set('#000000');
@@ -268,6 +355,8 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
       return;
     }
     const colour = STATUS_COLOURS[lit];
+    tileMat.emissive.set(colour);
+    tileMat.emissiveIntensity = GLOW.tile[lit] * k;
     led.emissive.set(colour);
     led.emissiveIntensity = GLOW.led[lit] * k;
     halo.emissive.set(colour);
@@ -332,6 +421,9 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
       scannerShadow.dispose();
       led.dispose();
       halo.dispose();
+      tileMat.dispose();
+      glyphMat.dispose();
+      for (const m of [tile, glyphs.accept, glyphs.decline]) m.geometry.dispose();
       spill.removeFromParent();
     },
   };

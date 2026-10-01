@@ -132,7 +132,7 @@ test('Graphics loss falls back to a poster and responses still work', async ({ p
   await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /light-accepted/);
 });
 
-test('The lit status LED keeps its colour: no clipping, no hotspot on the glass, green and red differ in hue and value', async ({ page }) => {
+test('The lit status (LED and tile) keeps its colour, reads by shape at phone size, and leaves no hotspot on the glass', async ({ page }) => {
   await ready(page);
   await guest(page);
   await page.getByRole('button', { name: /Motion/ }).click();
@@ -150,10 +150,12 @@ test('The lit status LED keeps its colour: no clipping, no hotspot on the glass,
     g.drawImage(img, 0, 0);
     const { data, width, height } = g.getImageData(0, 0, c.width, c.height);
     const inBox = (x: number, y: number, b: number[]) => x >= b[0]! * width && x <= b[2]! * width && y >= b[1]! * height && y <= b[3]! * height;
-    // v1.2: the reader master's LED bar (with its glow) at the top of the glass, and the glass.
-    const WIN = [0.58, 0.41, 0.71, 0.49], GLASS = [0.49, 0.35, 0.79, 0.81];
+    // v1.2.1: the LED bar at the top of the glass and the status tile on the lower glass (WIN),
+    // the tile alone (TILE), and the reader's glass round them.
+    const WIN = [0.59, 0.5, 0.74, 0.84], TILE = [0.59, 0.7, 0.74, 0.84], GLASS = [0.52, 0.45, 0.87, 0.9];
     const lit: number[][] = [];
     let hot = 0;
+    let tx0 = Infinity, tx1 = -Infinity, ty0 = Infinity, ty1 = -Infinity;
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const i = (y * width + x) * 4;
@@ -161,11 +163,22 @@ test('The lit status LED keeps its colour: no clipping, no hotspot on the glass,
         const hi = Math.max(...px), sat = hi - Math.min(...px);
         if (inBox(x, y, WIN)) {
           if (sat > 60) lit.push(px);
+          if (sat > 80 && hi > 150 && inBox(x, y, TILE)) { tx0 = Math.min(tx0, x); tx1 = Math.max(tx1, x); ty0 = Math.min(ty0, y); ty1 = Math.max(ty1, y); }
         } else if (inBox(x, y, GLASS) && hi >= 230 && sat > 60) hot++;
       }
     }
+    // The glyph: dark pixels inside the lit tile (shape only, no colour): its rows' extent.
+    let gy0 = Infinity, gy1 = -Infinity, glyph = 0;
+    // Inset past the tile's rounded corners (the glass shows there) to the glyph's columns.
+    const inset = Math.round((tx1 - tx0) * 0.2);
+    for (let y = ty0 + 2; y <= ty1 - 2; y++) {
+      for (let x = tx0 + inset; x <= tx1 - inset; x++) {
+        const i = (y * width + x) * 4;
+        if (Math.max(data[i]!, data[i + 1]!, data[i + 2]!) < 90) { glyph++; gy0 = Math.min(gy0, y); gy1 = Math.max(gy1, y); }
+      }
+    }
     const median = [0, 1, 2].map((k) => lit.map((p) => p[k]!).sort((a, b) => a - b)[lit.length >> 1]!);
-    return { median, max: Math.max(...lit.map((p) => Math.max(...p))), count: lit.length, hot };
+    return { median, max: Math.max(...lit.map((p) => Math.max(...p))), count: lit.length, hot, tile: { w: tx1 - tx0, h: ty1 - ty0 }, glyph, glyphTall: gy1 - gy0 };
   });
   // Relative luminance, and the same under deuteranopia (Machado 2009, severity 1).
   const lin = (v: number) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
@@ -183,13 +196,18 @@ test('The lit status LED keeps its colour: no clipping, no hotspot on the glass,
   const decline = await measure();
 
   for (const [label, m] of [['accept', accept], ['decline', decline]] as const) {
-    // The LED bar is about 26 × 6 px on this 540 px still, its glow a few px round it.
-    expect(m.count, label).toBeGreaterThan(80);
+    // The tile is about 50 × 32 px on this 540 px still (v1.2's LED bar alone was 26 × 6).
+    expect(m.count, label).toBeGreaterThan(600);
+    expect(m.tile.w, label).toBeGreaterThan(34);
+    expect(m.tile.h, label).toBeGreaterThan(20);
+    expect(m.glyph, label).toBeGreaterThan(25);
     // No channel clips: the window reads as its token, not as mint or pink.
     expect(m.max, label).toBeLessThanOrEqual(245);
     // No specular hotspot from the spill light on the glass beside the window.
     expect(m.hot, label).toBeLessThanOrEqual(5);
   }
+  // Without colour: the check spans several times the minus's height.
+  expect(accept.glyphTall).toBeGreaterThan(decline.glyphTall * 1.8);
   expect(accept.median[1]! - accept.median[0]!).toBeGreaterThan(90);
   expect(decline.median[0]! - decline.median[1]!).toBeGreaterThan(90);
   const ratio = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
@@ -239,40 +257,58 @@ test('The card print keeps its colour through the scan hold: the laminate does n
       if (size > bestSize && !touchesTop) { bestSize = size; best = next; }
     }
     const lin = (v: number) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-    let sum = 0, n = 0;
+    const lumAt = (i: number) => 0.2126 * lin(data[i]!) + 0.7152 * lin(data[i + 1]!) + 0.0722 * lin(data[i + 2]!);
+    let sum = 0, n = 0, x0 = w, x1 = 0, y0 = h, y1 = 0;
     for (let y = 2; y < h - 2; y++) {
       for (let x = 2; x < w - 2; x++) {
         let inside = true;
         for (let dy = -2; dy <= 2 && inside; dy++) for (let dx = -2; dx <= 2 && inside; dx++) inside = label[(y + dy) * w + x + dx] === best;
         if (!inside) continue;
-        const i = (y * w + x) * 4;
-        sum += 0.2126 * lin(data[i]!) + 0.7152 * lin(data[i + 1]!) + 0.0722 * lin(data[i + 2]!);
+        sum += lumAt((y * w + x) * 4);
         n++;
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
       }
     }
-    return { lum: sum / n, n };
+    // Saturation of the panel (sRGB (max − min) / max): a laminate veil adds white and turns the
+    // cobalt pale (v1.1's failure read lavender, about 0.3); more light on the print does not.
+    let sat = 0;
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        if (label[y * w + x] !== best) continue;
+        const i = (y * w + x) * 4;
+        const hi = Math.max(data[i]!, data[i + 1]!, data[i + 2]!), lo = Math.min(data[i]!, data[i + 1]!, data[i + 2]!);
+        sat += (hi - lo) / Math.max(1, hi);
+      }
+    }
+    return { lum: sum / n, n, sat: sat / n };
   });
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   await page.clock.runFor(1000);
   await page.evaluate(() => (window as any).__showcase.controller.chooseResponse('accept'));
   // Approach end, contact press, scan hold and settle (sub-spec 0.55–1.15 s).
-  const hold: number[] = [];
+  const hold: { lum: number; sat: number }[] = [];
   let at = 0;
   for (const t of [0.6, 0.75, 0.9, 1.05, 1.15]) {
     await page.clock.runFor(Math.round((t - at) * 1000));
     at = t;
     const p = await panel();
     expect(p.n, `t=${t}`).toBeGreaterThan(1500);
-    hold.push(p.lum);
+    hold.push(p);
   }
   await page.clock.runFor(1000);
   expect((await state(page)).visual).toBe('accepted-pose');
   const rest = await panel();
   expect(rest.n).toBeGreaterThan(1500);
-  // Within about 25 % of rest for the whole hold (it was 2.8x: pale lavender at the key beat).
-  const ratios = hold.map((l) => l / rest.lum);
-  expect(ratios.reduce((a, b) => a + b) / ratios.length).toBeLessThanOrEqual(1.25);
-  for (const r of ratios) expect(r).toBeLessThanOrEqual(1.3);
+  // A laminate veil adds white: the cobalt pales (v1.1's key-beat washout was 2.8x the rest
+  // luminance, pale lavender). Pressed flat on the 11.6° face the card also simply turns towards
+  // the key, so the print gets brighter as a whole (about 1.5x the hanging rest pose): the checks
+  // are the panel's saturation, which light alone barely changes, and a luminance ceiling well
+  // below the old failure. (v1.2 checked luminance within 1.25x of rest; with the card pressed
+  // higher on a smaller reader the honest lighting difference alone is 1.47x.)
+  for (const p of hold) {
+    expect(p.sat / rest.sat).toBeGreaterThanOrEqual(0.88);
+    expect(p.lum / rest.lum).toBeLessThanOrEqual(1.6);
+  }
 });
 
 test('An initially saved response shows its final pose without a new submission', async ({ page }) => {

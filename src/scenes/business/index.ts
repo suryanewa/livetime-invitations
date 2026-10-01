@@ -11,7 +11,7 @@ import { ANGLE_EPSILON, Spring } from '../../motion/spring.ts';
 import type { MaterialLibrary } from '../../render/materials.ts';
 import { clampDragTarget, touchesScanner } from './drag.ts';
 import { DURATIONS, SCAN_AT } from './poses.ts';
-import { cardRotation, frameFor, newFrame, OUTCOME_BEATS, sampleSequence, type BusinessFrame } from './sequences.ts';
+import { cardRotation, frameFor, HOST_BEATS, interruptCutFor, newFrame, OUTCOME_BEATS, sampleSequence, type BusinessFrame } from './sequences.ts';
 
 /** Release/cancel blend onto the scanner approach (sub-spec: 350–600 ms). */
 const RELEASE_BLEND = 0.45;
@@ -128,6 +128,15 @@ export class BusinessScene implements SceneInstance {
     this.lanyardDirty = true;
   }
 
+  /**
+   * Change of mind at or near the reader: a straight blend back to guest-ready would carry the
+   * badge through the glass, so the director cuts instead (the frame is the pose on screen,
+   * drag offset included).
+   */
+  interruptCut(): boolean {
+    return interruptCutFor(this.frame);
+  }
+
   settling(): boolean {
     return !this.swing.settled || !this.pitch.settled || this.releaseLeft > 0 || this.dragging;
   }
@@ -168,14 +177,18 @@ export class BusinessScene implements SceneInstance {
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
-    // Warm both template variants; status changes are uniforms and need no new program.
+    // Warm both template variants with the status tile shown (it is hidden while idle, and the
+    // compiler skips hidden meshes); colour and level changes are uniforms and need no new program.
     const other: CardTemplate = this.template === 'light' ? 'dark' : 'light';
     const scene = this.root.parent ?? this.root;
     this.beforeRender();
+    this.rig.setStatus('accept', 1);
     await renderer.compileAsync(scene, camera);
     this.rig.setTemplate(other);
+    this.rig.setStatus('decline', 1);
     await renderer.compileAsync(scene, camera);
     this.rig.setTemplate(this.template);
+    this.rig.setStatus(this.lit, this.litLevel);
   }
 
   dispose(): void {
@@ -187,8 +200,12 @@ export class BusinessScene implements SceneInstance {
   }
 
   // ── internals ─────────────────────────────────────────────────────────────
+  private lit: StatusLit = 'off';
+  private litLevel = 0;
   private apply(f: BusinessFrame, lit: StatusLit): void {
     const n = this.rig.nodes;
+    this.lit = lit;
+    this.litLevel = f.statusLevel;
     n.card_authored!.position.copy(f.pivot);
     n.card_authored!.quaternion.copy(f.rot);
     n.clip_pivot!.rotation.set(f.clipTilt, f.swivel, 0);
@@ -221,9 +238,10 @@ export class BusinessScene implements SceneInstance {
   private kicks(sequence: SequenceName, prevT: number, t: number): void {
     const crossed = (at: number) => prevT < at && t >= at;
     if (sequence === 'host') {
-      // The card rounds the U and swings on past hanging: the drop's momentum goes to the pitch.
-      if (crossed(0.64)) this.pitch.kick(0, 0.9);
-      if (crossed(0.64)) this.swing.kick(0, 0.4);
+      // The hook swings home carrying the card forward and down; as it stops under the eye the
+      // card's bottom carries on forward (pitch), with a little sideways sway.
+      if (crossed(HOST_BEATS.hung)) this.pitch.kick(0, -0.7);
+      if (crossed(HOST_BEATS.hung)) this.swing.kick(0, 0.3);
       return;
     }
     if (crossed(0.16)) this.swing.kick(0, -0.9);

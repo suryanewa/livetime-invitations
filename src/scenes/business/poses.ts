@@ -79,7 +79,7 @@ const SCAN = scanPose();
 export const POSE = {
   ready: { pivot: HANG_PIVOT.clone(), rot: new Euler(0, 0, 0) },
   scan: { pivot: SCAN.pivot, rot: SCAN.rot, cardTilt: SCAN.cardTilt },
-  rest: { pivot: new Vector3(-0.3, 1.98, 0.42), rot: new Euler(0, 0, -0.035) },
+  rest: { pivot: new Vector3(-0.24, 1.9, 0.42), rot: new Euler(0, 0, -0.035) },
 } as const;
 
 /** Card travel at the press: the hover gap plus the glass's give. */
@@ -88,9 +88,17 @@ export const PRESS_TRAVEL = SCAN_GAP + PRESS_DEPTH;
 // ── Host attach (clip space) ─────────────────────────────────────────────────────────
 /**
  * The snap hook is a closed C: the holder's strip enters through the gate gap with the card at
- * right angles to the front leg, the slot slides down the leg and round the U, and the card swings
- * down to hang. The hook turns back on its eye while it takes the card (HOST.hookTilt), so the
- * card is offered at 45° rather than flat.
+ * right angles to the front leg, the slot slides along the leg and round the U, and the hook swings
+ * down under the eye with the card hanging from it.
+ *
+ * v1.2.1: the host holds the hook turned back 80° on its eye (HOST.hookTilt), so its front leg is
+ * nearly level and its gate faces down; the card, hanging nearly upright below it, is pushed up
+ * through the gate. Square to the leg, the card then leans back only 10° (its laminate stays
+ * 48° from the key light's mirror angle), and while the slot rounds the U the card turns with the
+ * wire exactly as the hook swings down, so the card itself never pitches more than those 10°: the
+ * drop is the hook swinging home (a quarter of the pendulum's period or more), not the card
+ * flipping over. v1.2 offered the card face-up at 45° (11° from the mirror angle: the print washed
+ * out) and then dropped it to hanging in 0.1 s.
  */
 export const HOST = {
   /** Host-ready card pose (card centre in clip space, tilt about x). */
@@ -101,13 +109,9 @@ export const HOST = {
   /** Ride point in front of the gap before the push (hook space z). */
   entryZ: HOOK.legZ + 0.075,
   /** Hook tilt on its eye while taking the card (rad; + = its bottom back). */
-  hookTilt: Math.PI / 4,
-  /**
-   * The hook also turns on its swivel while it takes the card (rad, + = the card face towards
-   * the camera). Offered face-up at 45°, the card's laminate would pass the key light's mirror
-   * angle and flash white; turned on the swivel, it never does.
-   */
-  swivel: 0.6,
+  hookTilt: (80 * Math.PI) / 180,
+  /** The hook does not turn on its swivel (the swivel eye stays square in the D-ring). */
+  swivel: 0,
   /** Gate held open inwards (rad). */
   gateOpen: 1.95,
 } as const;

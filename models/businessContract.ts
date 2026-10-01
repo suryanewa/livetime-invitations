@@ -21,8 +21,14 @@ export type CardTemplate = 'light' | 'dark';
 
 /** Scan units → stage units for the badge: the holder (0.496 × 0.776 scan) is 0.744 × 1.164. */
 export const BADGE_SCALE = 1.5;
-/** Scan units → stage units for the reader (1.276 w × 1.902 h × 1.07 d). */
-export const READER_SCALE = 1;
+/**
+ * Scan units → stage units for the reader: 0.919 w × 1.369 h × 0.77 d. v1.2.1 shrank it from 1 so
+ * the badge leads the frame (at 1 the reader was 56 % of the frame height and the card 31 %): the
+ * holder's side clips still land on the glass (0.031 inside its edge), and the card, pressed high
+ * on the face, overhangs the reader's top as v1.1's card did, leaving the lower glass for the
+ * status display.
+ */
+export const READER_SCALE = 0.72;
 /**
  * Real-world size, for the physics: the master's card is 0.472 scan units wide and a CR80 card is
  * 54 mm wide, so one stage unit is 54 / (0.472 × BADGE_SCALE) ≈ 76.3 mm.
@@ -116,7 +122,7 @@ export const STRAP = { width: 0.146 * B, thickness: 0.0065 * B, layerZ: 0.0052 *
 export const STRAP_TAB_TOP = clipY(0.205);
 
 /** Guest-ready pivot (the swivel eye), business_root space. */
-export const HANG_PIVOT = new Vector3(-0.55, 2.3, 0.05);
+export const HANG_PIVOT = new Vector3(-0.48, 2.1, 0.05);
 /** Strap anchors: off-frame above the stage. */
 export const LANYARD_TOP_Y = 3.9;
 export const LANYARD_SPREAD = 0.13;
@@ -124,7 +130,7 @@ export const LANYARD_SPREAD = 0.13;
 // ── Reader ───────────────────────────────────────────────────────────────────────────
 const R = READER_SCALE;
 /** Reader placement: its plinth's bottom centre (business_root space). */
-export const SCANNER_POS = new Vector3(0.8, 0, -0.08);
+export const SCANNER_POS = new Vector3(0.74, 0, -0.06);
 /** Master offsets: plinth bottom y −0.952, plinth centre z −0.00425. */
 const RY = 0.952, RZ = 0.00425;
 export const READER = {
@@ -169,19 +175,27 @@ export function facePoint(u: number, v: number, w: number, out = new Vector3()):
 }
 
 /**
- * Where the card meets the reader (face space): its centre over the NFC mark, low enough and
- * left enough that the LED bar stays clear of the card and the clip hardware above it, with the
- * holder's side clips inside the glass.
+ * Where the card meets the reader (face space, stage units): centred, high on the glass. Its side
+ * clips (the thickest part, which bear on the glass) sit 0.03 inside the glass's top and side
+ * edges; the card's top half overhangs the reader's top edge (the body falls away behind it), so
+ * the card covers the NFC mark and leaves the lower glass, where the status tile lights, in view.
  */
-export const SCAN_SPOT = { u: -0.17, v: -0.15 } as const;
+export const SCAN_SPOT = { u: 0, v: 0.265 } as const;
+/**
+ * Status tile (runtime, models/business.ts): a lit rounded tile on the lower glass, below the
+ * pressed card and the NFC mark, with a dark check (accept) or minus (decline) cut into it, so the
+ * outcome reads by shape as well as colour, without zooming. Face space, stage units.
+ */
+export const STATUS_TILE = { v: -0.445, width: 0.3, height: 0.19, radius: 0.05, stroke: 0.04 } as const;
 /** Face space z of the card centre when its clips touch the glass. */
 export const SCAN_CONTACT_W = FACE.glass + HOLDER_CLIPS.halfDepth;
 
 /**
- * Gasket compression at the scan press: the glass (with the LED and target mark on it) gives
- * by 1 mm and the 1.07 mm gasket under it takes it. The card itself never deforms.
+ * Gasket compression at the scan press: the glass (with the LED, the target mark and the status
+ * tile on it) gives by 0.6 mm and the gasket under it (0.77 mm at READER_SCALE 0.72) takes it. The
+ * card itself never deforms.
  */
-export const PRESS_DEPTH = 1 / MM_PER_UNIT;
+export const PRESS_DEPTH = 0.6 / MM_PER_UNIT;
 
 export const BUSINESS_NODES = [
   'business_root', 'card_authored', 'card_secondary', 'card_mesh', 'clip_pivot', 'clip_gate', 'd_ring', 'strap_material',
@@ -204,4 +218,4 @@ export const PENDULUM = (() => {
 })();
 
 /** Complete motion bounds (every authored path), business_root space. */
-export const BUSINESS_BOUNDS = new Box3(new Vector3(-1.05, 0, -0.62), new Vector3(SCANNER_POS.x + READER.width / 2, 2.62, 0.6));
+export const BUSINESS_BOUNDS = new Box3(new Vector3(-1.0, 0, -0.45), new Vector3(SCANNER_POS.x + READER.width / 2, 2.34, 0.45));
