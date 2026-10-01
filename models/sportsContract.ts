@@ -50,7 +50,7 @@ export const RIM_BRACKET = new Box3(new Vector3(-0.2177, 1.5299, -0.007), new Ve
  * Net: 20 twisted-rope strands from 10 rim hooks, 6 knot rows, hanging NET.depth below the rim
  * centre. `profile` is its inner envelope: [depth fraction, smallest radius of any cord, knot or
  * loop vertex in that band] (horizontal, from the rim axis). The mini hoop's net is narrow: at rest
- * its waist (0.18) is smaller than the ball, so the made shot needs the net opened (`netOpenScale`).
+ * its waist (0.18) is smaller than the ball, so the made shot bulges it round the ball (`netOpening`).
  */
 export const NET = {
   depth: 0.6837,
@@ -78,21 +78,119 @@ export function netRestRadius(t: number): number {
 }
 
 /**
- * Radius the net opens to while the made ball passes through (flare 1): the ball plus its drift
- * inside the deeper master net (the authored path carries the ball up to 0.12 off the rim axis
- * towards its landing spot) plus a hair of margin. Rows already wider than this do not move.
- * v1.2 foundation value; a ball-following bulge (scene agent) can replace the uniform opening.
+ * The made shot's swish (v1.2 fidelity pass): a bulge that travels down the net with the ball.
+ *
+ * The net is deformed in net space (origin at the rim centre, y = 0 at the rim, negative down,
+ * axes parallel to hoop space). Every vertex moves as a function of its rest depth fraction t
+ * and its radial direction u only, so the cords, loops and knots at one place move together:
+ *
+ * - **Bulge** (radial, outwards): the row at rest depth y must clear the ball's cross-section in
+ *   direction u, i.e. reach the support o·u + c(dy) of the ball's disc at that height (o: the
+ *   ball's horizontal offset from the rim axis, c: its half-chord). The bulge uses a Gaussian
+ *   stand-in for c, (BALL_R + margin)·exp(−dy²/2σ²) with σ ≥ BALL_R + margin, which is ≥ c
+ *   everywhere and falls off smoothly above and below the ball. Rows already wider than that do
+ *   not move (a C1 soft ramp, so a row starts and stops moving without a kink). The side the
+ *   ball drifts towards bulges most; the far side stays put.
+ * - **Stretch**: the net lengthens while the ball drags its lower rows (y' = y · (1 + stretch)).
+ * - **Snap**: once the ball has left, the lower rows pull in past rest and settle (the rebound).
+ *
+ * Clearance is by construction: a vertex at radius ≥ netRestRadius(t) − NET_ENVELOPE_SLACK moves
+ * out by the bulge, so it ends at ≥ o·u + c + (margin − slack − ramp/2). The ball follows its
+ * authored path; the net follows the ball. Shared by the rig (`netDeform`) and the tests.
  */
-export const NET_OPEN_RADIUS = 0.375;
+export interface NetPose {
+  /** False: exactly at rest (the rig skips the net). */
+  active: boolean;
+  /** Ball centre in net space (deformed frame: y as the ball really is, below the rim < 0). */
+  ball: Vector3;
+  /** Lengthening fraction of the rows below the rim (0 at rest). */
+  stretch: number;
+  /** Inward pull of the lower rows in scene units (the rebound; 0 at rest, may be negative). */
+  snap: number;
+}
+
+export const newNetPose = (): NetPose => ({ active: false, ball: new Vector3(), stretch: 0, snap: 0 });
+
+/** How far inside the profile a master net vertex may sit (the GLB test's tolerance). */
+export const NET_ENVELOPE_SLACK = 0.012;
+/**
+ * Bulge shape: `margin` = slack + ramp/2 + a 0.008 gap the ball always keeps from the cords;
+ * `sigma` ≥ BALL_R + margin so the Gaussian covers the ball's half-chord; `ramp` = width of the
+ * soft start of each row's movement.
+ */
+export const NET_BULGE = { margin: 0.03, sigma: 0.3, ramp: 0.02 } as const;
+/** Top rows (above this depth fraction) never snap: they hang from the hooks. */
+const SNAP_FROM = 0.25;
+
+/** C1 ramp: 0 below 0, a parabola over [0, ε], then x − ε/2. */
+const softRamp = (x: number, eps: number) => (x <= 0 ? 0 : x < eps ? (x * x) / (2 * eps) : x - eps / 2);
+
+/** Rest depth (net space, ≤ 0) of the deformed height y under a stretch. */
+export const netRestY = (y: number, stretch: number) => (y < 0 ? y / (1 + stretch) : y);
+
+/** Bulge reach before the soft ramp: the Gaussian cover of the ball at rest-space distance dy. */
+export function netBulgeCover(dy: number): number {
+  const { margin, sigma } = NET_BULGE;
+  return (BALL_R + margin) * Math.exp(-(dy * dy) / (2 * sigma * sigma));
+}
 
 /**
- * Radial scale of the net at depth fraction t for a flare in [0, 1]: rows narrower than
- * NET_OPEN_RADIUS widen towards it, so at flare 1 the inner envelope is max(rest, open).
- * Shared by the rig's deformation and the clearance checks.
+ * Weight of the ball's horizontal drift in the bulge at rest-space distance dy: 1 wherever the
+ * ball has a cross-section (|dy| ≤ BALL_R, where clearance needs it), fading to 0 a quarter unit
+ * beyond, so rows far from the ball never feel its drift.
  */
-export function netOpenScale(t: number, flare: number): number {
-  const r = netRestRadius(t);
-  return 1 + flare * Math.max(0, NET_OPEN_RADIUS / r - 1);
+export function netOffsetWeight(dy: number): number {
+  const s = Math.min(1, Math.max(0, (Math.abs(dy) - BALL_R) / 0.25));
+  return 1 - s * s * (3 - 2 * s);
+}
+
+/** Weight of the snap at depth fraction t (0 for the top rows, 1 at the bottom). */
+export function netSnapWeight(t: number): number {
+  const s = Math.min(1, Math.max(0, (t - SNAP_FROM) / (1 - SNAP_FROM)));
+  return s * s * (3 - 2 * s);
+}
+
+/**
+ * Radial displacement (scene units, + outwards) of the net row at rest depth fraction t
+ * (0 rim … 1 bottom) in horizontal unit direction (ux, uz), for a net pose.
+ */
+export function netOpening(t: number, ux: number, uz: number, pose: NetPose): number {
+  if (!pose.active || t <= 0) return 0;
+  const tc = Math.min(1, t);
+  const dy = -tc * NET.depth - netRestY(pose.ball.y, pose.stretch);
+  const need = (pose.ball.x * ux + pose.ball.z * uz) * netOffsetWeight(dy) + netBulgeCover(dy);
+  return softRamp(need - netRestRadius(tc), NET_BULGE.ramp) - pose.snap * netSnapWeight(tc);
+}
+
+/** The net's deformed inner radius at rest depth fraction t in direction (ux, uz). */
+export function netInnerRadius(t: number, ux: number, uz: number, pose: NetPose): number {
+  return netRestRadius(t) + netOpening(t, ux, uz, pose);
+}
+
+// ── Hoop recoil: the rim on its bracket and the board on the arm answer the net's tug ──
+/**
+ * Pivots in hoop space, measured from the master at HOOP_SCALE (the `rim` and `backboard` nodes'
+ * origins in the exported GLB; tests/sports.test.ts checks them). Both pitch about +x: positive
+ * tips the front (+z) down. The rim hinges on the bracket plate's back-bottom edge (the edge it
+ * bears on, 1.5 mm proud of the board face), the board on the centre of its flat back (where the
+ * stand's back plate holds it).
+ */
+export const RIM_HINGE = new Vector3(0, 1.53, -0.0071);
+export const BOARD_PIVOT = new Vector3(0, 2.0847, -0.1249);
+/** Recoil limits (degrees). */
+export const RECOIL_LIMIT = { rimDeg: 1.5, boardDeg: 0.4 } as const;
+
+const _q = new Vector3();
+/**
+ * Hoop-space point p carried by the recoil: the rim's hinge pitch, then the board's (the rim is
+ * mounted on the board face). Pure; used by the rig (nodes) and the choreography (net space).
+ */
+export function recoilPoint(p: Vector3, boardPitch: number, rimPitch: number, out = new Vector3()): Vector3 {
+  _q.copy(p).sub(RIM_HINGE);
+  const c1 = Math.cos(rimPitch), s1 = Math.sin(rimPitch);
+  out.set(_q.x, _q.y * c1 - _q.z * s1, _q.y * s1 + _q.z * c1).add(RIM_HINGE).sub(BOARD_PIVOT);
+  const c2 = Math.cos(boardPitch), s2 = Math.sin(boardPitch);
+  return out.set(out.x, out.y * c2 - out.z * s2, out.y * s2 + out.z * c2).add(BOARD_PIVOT);
 }
 
 /** Ball rest positions (ball centre, sports_root space). */
@@ -114,12 +212,9 @@ export const BALL_AT = {
 /** Descending through rim height, the airball is this far screen-left of the rim centre. */
 export const MISS_OFFSET = 0.95;
 
-/**
- * Stylised net deformation hook (the model builds the net; the rig drives it). `flare` 0 is
- * at rest; positive values widen the lower rows and stretch the net downward.
- */
+/** Net deformation hook (the model builds the net; the rig drives it with a NetPose). */
 export interface NetDeform {
-  update(flare: number, stretch: number): void;
+  update(pose: NetPose): void;
 }
 
 /**
