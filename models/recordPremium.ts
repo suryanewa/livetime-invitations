@@ -1,11 +1,91 @@
-import { type BufferGeometry, Matrix4, type Object3D, RingGeometry, SphereGeometry, TorusGeometry, Vector2, Vector3, Shape, ExtrudeGeometry } from 'three';
+import { type BufferGeometry, Color, LinearSRGBColorSpace, Matrix4, MeshPhysicalMaterial, MeshStandardMaterial, type Object3D, RingGeometry, SphereGeometry, TorusGeometry, Vector2, Vector3, Shape, ExtrudeGeometry } from 'three';
 import { filletPolyline, group, mergeParts, mesh, perforationRow, roundedBox, wire, type ProfilePoint } from './geometry.ts';
-import { LID, PLATTER, PLAYER, RECORD, STATUS_MARK, TONEARM, type RecordLabel } from './recordContract.ts';
+import { PLATTER as PLATTER_V12, PLATTER_TOP as PLATTER_TOP_V12, PLAYER as PLAYER_V12, REST, TONEARM as TONEARM_V12, type RecordLabel } from './recordContract.ts';
 import { cap, circleContour, knurlBand, place, planCircle, planContour, planRoundedRect, profile, sweep, transformed, turned } from './recordParts.ts';
 import type { ModelContext } from './types.ts';
 
+// ═════════════════════════════════════════════════════════════════════════════
+// v1.2 scaffold: the code-authored parts of the master-based Party scene.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The builder half of the v1.2 Party scene (`scripts/masters/recipes/party.ts` merges the turntable
+ * master into it): `party_root`, the `player_body` group the master's static parts are anchored
+ * and joined under, the two contact-shadow placeholders, and the tonearm rest the master lacks.
+ *
+ * The rest (a turned chrome post with a black-anodised cradle) sits under the parked tube at
+ * REST; its materials are exact copies of the master's chrome and black anodising (`restMaterial`),
+ * which the export's dedup folds into the master's own, so it matches the master's finish.
+ */
+export function buildPartyScaffold(_ctx: ModelContext): Object3D {
+  const root = group('party_root');
+  group('player_body', root);
+  group('record_shadow', root).position.set(PLATTER_V12.x, PLATTER_TOP_V12 + 0.001, PLATTER_V12.z);
+  group('player_shadow', root).position.set(0, 0.002, 0);
+  buildTonearmRest(root);
+  return root;
+}
+
+/**
+ * The rest's materials are exact copies of the master's `chrome` and `black_anodised` (factors as
+ * stored in vintage-turntable.glb, clearcoat included), under the recipe's renamed names, so the
+ * export's dedup folds them into the master's own materials: one `tt_chrome` and one
+ * `tt_black_anodised` in the GLB (tests/party.test.ts checks it), no runtime rebinding.
+ */
+const restMaterial = (name: string, rgb: readonly [number, number, number], metalness: number, roughness: number, clearcoat?: { factor: number; roughness: number }) => {
+  const color = new Color().setRGB(...rgb, LinearSRGBColorSpace);
+  return clearcoat
+    ? new MeshPhysicalMaterial({ name, color, metalness, roughness, clearcoat: clearcoat.factor, clearcoatRoughness: clearcoat.roughness })
+    : new MeshStandardMaterial({ name, color, metalness, roughness });
+};
+const MASTER_CHROME = [0.8879231178794776, 0.8879231178794776, 0.8879231178794776] as const;
+const MASTER_BLACK_ANODISED = [0.006048833020386069, 0.006048833020386069, 0.006512090790025684] as const;
+
+function buildTonearmRest(root: Object3D): void {
+  const rest = group('tonearm_rest', root);
+  const deck = PLAYER_V12.deck;
+  rest.position.set(REST.x, deck, REST.z);
+  // Square to the tube, which runs at restAngle to the pivot→stylus line here.
+  rest.rotation.y = TONEARM_V12.parkedYaw + TONEARM_V12.restAngle;
+  // Saddle height above the deck; the tube (r ≈ 0.014) lies in the cradle at pitch 0.
+  const saddle = REST.y - deck;
+  const tubeR = TONEARM_V12.tubeRadius;
+  // Turned post: flanged foot on the deck, a slim stem, a collar under the cradle.
+  const post = turned([
+    [0, -0.001], [0.026, -0.001], [0.026, 0.004, 0.0015], [0.016, 0.009, 0.003], [0.0075, 0.016, 0.004], [0.0075, saddle - 0.024],
+    [0.011, saddle - 0.02, 0.002], [0.011, saddle - 0.013, 0.002], [0, saddle - 0.013],
+  ], { segments: 28, filletSegments: 2 });
+  mesh('rest_post', post, restMaterial('tt_chrome', MASTER_CHROME, 1, 0.07), rest);
+  // Cradle across the tube (local x): a padded saddle block with two low prongs, the tube's own
+  // radius clear between them, so the parked tube rests in it and lifts out cleanly.
+  const across = tubeR * 2 + 0.006;
+  const cradle = mergeParts([
+    { geometry: place(roundedBox(across + 0.02, 0.012, 0.02, 0.004, 1), { y: saddle - 0.007 }) },
+    // Low prongs (top 6 mm over the saddle): an interruption blend's yaw-derived lift clears them.
+    { geometry: place(roundedBox(0.008, 0.011, 0.02, 0.0035, 1), { x: -(across / 2 + 0.004), y: saddle + 0.0005 }) },
+    { geometry: place(roundedBox(0.008, 0.011, 0.02, 0.0035, 1), { x: across / 2 + 0.004, y: saddle + 0.0005 }) },
+  ]);
+  mesh('rest_cradle', cradle, restMaterial('tt_black_anodised', MASTER_BLACK_ANODISED, 0.3, 0.34, { factor: 0.3, roughness: 0.3 }), rest);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// v1.1 code-authored record player (lookdev tooling only since v1.2).
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** v1.1 contract numbers, frozen here: the v1.2 contract (recordContract.ts) is the master's. */
+const PLAYER = { width: 2.1, depth: 1.5, deck: 0.34 } as const;
+const PLATTER = { x: -0.3, z: 0.02, radius: 0.64, height: 0.05, spindleRadius: 0.016, spindleHeight: 0.045 } as const;
+const RECORD = { radius: 0.6, thickness: 0.02, labelRadius: 0.2, holeRadius: 0.02 } as const;
+const TONEARM = {
+  pivot: new Vector3(0.68, 0.44, -0.42), length: 0.98, drop: 0.44 - (PLAYER.deck + PLATTER.height + RECORD.thickness), parkedYaw: -0.102,
+  rest: new Vector3(0.6, 0.428, 0.36),
+} as const;
+const LID = { hinge: new Vector3(0, 0.36, -0.73), open: -1.32, width: 2.06, length: 1.46, height: 0.17, wall: 0.014 } as const;
+const STATUS_MARK = new Vector3(0.74, 0.11, PLAYER.depth / 2 + 0.003);
+
 /**
  * Party record player — premium production model (direction L2, style reference v1.1).
+ * Since v1.2 the runtime scene is the turntable master; this model remains for the lookdev page.
  *
  * Construction: parametric profile sweeps with analytic normals (models/recordParts.ts) — a
  * cream satin shell with a continuous top fillet over a coral enamel plinth with a soft
