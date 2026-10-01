@@ -152,6 +152,8 @@ Two equivalent ways; pick whichever reads better:
 
 Metals (metalness ≥ 0.5) get ownEnv 1.1 at runtime without a flag: the studio's 0.52 environment
 alone leaves polished metal gunmetal-grey (the cloche lesson).
+A studio rig that declares `metalEnvIntensity` (src/render/rigs/README.md) overrides every ownEnv
+value at runtime; the recipe values apply only under rigs that leave it out (v1.1).
 
 Extras of a node whose mesh has **several primitives** land on a `Group` at load, not on the meshes
 (GLTFLoader); the stage reads shadow flags from meshes. Masters are single-primitive per node, and

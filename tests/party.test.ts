@@ -382,6 +382,40 @@ describe('Party runtime GLB matches the contract (master at TT_SCALE)', () => {
     }
   });
 
+  it('the exported coral and cobalt prints stay asymmetric under rotation (the accept spin reads at stage size)', async () => {
+    // Replaces v1.2's wedge check: the master's own art must carry the spin. Ink coverage of the
+    // quarter sector holding the off-centre square (east of the spindle) against the opposite
+    // quarter, over the annulus between the spindle ring and the outer rings.
+    const sharp = loadSharp();
+    const lin = (v: number) => { const x = v / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+    const luma = (r: number, g: number, b: number) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    for (const name of ['tt_label_coral', 'tt_label_cobalt']) {
+      const tex = doc.getRoot().listMaterials().find((m) => m.getName() === name)!.getBaseColorTexture()!;
+      const { data, info } = await sharp(tex.getImage()!).raw().toBuffer({ resolveWithObject: true });
+      const { width: w, height: h, channels: ch } = info;
+      const at = (x: number, y: number) => { const i = (y * w + x) * ch; return luma(data[i]!, data[i + 1]!, data[i + 2]!); };
+      // The label disc fills the UV square: field at the centre-left, ink threshold halfway to the square's ink.
+      const field = at(Math.round(w * 0.3), Math.round(h * 0.5));
+      const squareInk = at(Math.round(w * 0.74), Math.round(h * 0.5));
+      expect(squareInk, `${name}: the master's square is printed east of the spindle`).toBeLessThan(field * 0.5);
+      const threshold = (field + squareInk) / 2;
+      const ink = [0, 0, 0, 0], area = [0, 0, 0, 0]; // sectors centred east, north, west, south (image space)
+      const R = w / 2;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const dx = x + 0.5 - R, dy = y + 0.5 - h / 2, r = Math.hypot(dx, dy) / R;
+        if (r < 0.22 || r > 0.85) continue;
+        const s = Math.round(((Math.atan2(-dy, dx) / (Math.PI / 2)) + 4) % 4) % 4;
+        area[s]!++;
+        if (at(x, y) < threshold) ink[s]!++;
+      }
+      const cover = ink.map((n, i) => n / area[i]!);
+      // The square's quarter against the opposite quarter: a clear margin (the square alone is ≈ 2 %).
+      expect(cover[0]! - cover[2]!, `${name}: east ${cover[0]!.toFixed(4)} vs west ${cover[2]!.toFixed(4)}`).toBeGreaterThan(0.015);
+      // And half a turn never maps the print onto itself in either axis.
+      expect(Math.abs(cover[1]! - cover[3]!), `${name}: north vs south`).toBeGreaterThan(0.005);
+    }
+  });
+
   it('the brushed steel plinth keeps the master’s own base colour (no studio regrade)', () => {
     const steel = doc.getRoot().listMaterials().find((m) => m.getName() === 'tt_brushed_steel')!;
     const [r, g, b] = steel.getBaseColorFactor();

@@ -1,4 +1,5 @@
 import {
+  type Box3,
   type ColorSpace,
   type DirectionalLight,
   type SpotLight,
@@ -72,6 +73,14 @@ export interface RigBuild {
   setLowDetail?(enabled: boolean): void;
   /** Move the backdrop wall back for scenes whose motion reaches far back (`scene.studio.wallZ`). */
   setWall?(wallZ?: number): void;
+  /**
+   * The content's motion bounds (world space), on every setContent and setBounds, after
+   * `ctx.target` has moved to their centre. Use it to size what depends on the scene's extent:
+   * a DirectionalLight key's orthographic shadow camera (left/right/top/bottom, then
+   * `shadow.camera.updateProjectionMatrix()`), a backdrop's reach. The scenes differ in size
+   * (Business is tall, Sports wide and deep).
+   */
+  setContent?(bounds: Box3): void;
   /** Free everything the build allocated (environment target, textures, geometries, materials). */
   dispose(): void;
 }
@@ -91,6 +100,15 @@ export interface RigDefinition {
   toneMapping: ToneMapping;
   /** scene.environmentIntensity (1.0 = physically plausible; v1.1 used 0.52). */
   environmentIntensity: number;
+  /**
+   * envMapIntensity for the materials that carry their own environment map (`userData.ownEnv`:
+   * polished and imported metals, which `scene.environmentIntensity` does not reach). Omitted,
+   * they keep their material values (recipe `ownEnv`: Dinner silver 0.8, dome 0.9, gilt, chrome,
+   * hoop steel and the cloche 1.1; Low tier 0.8), the compensations v1.1 was tuned with. Set it
+   * (1.0 for a physically plausible rig) and the Stage applies it to every ownEnv material on
+   * every tier, so the metals see the same environment strength as everything else.
+   */
+  metalEnvIntensity?: number;
   /** Declared for the comparison: does the key project a cookie (gobo)? */
   gobo: boolean;
   /** Declared for the comparison: what the backdrop is. */

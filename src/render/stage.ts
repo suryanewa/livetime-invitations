@@ -96,6 +96,7 @@ export class Stage {
     this.scene.environmentIntensity = rig.environmentIntensity;
     if (this.studio.objects.length) this.scene.add(...this.studio.objects);
     const key = this.studio.shadowKey;
+    if (rig.shadows && !key) console.warn(`Rig ${rig.name} declares shadows but its build() returns no shadowKey; no real-time shadow`);
     if (rig.shadows && key) {
       const sh = rig.shadows;
       if (sh.filter === 'vogel16') smoothPcf();
@@ -131,9 +132,15 @@ export class Stage {
     this.studio.setShadows?.(enabled);
   }
 
-  /** Low/Static tier: the rig drops its expensive detail (gobo resolution, backdrop relief). */
+  /**
+   * Low/Static tier: the rig drops its expensive detail (gobo resolution, backdrop relief). A rig
+   * that sets `metalEnvIntensity` keeps it on every tier: the material libraries' Low tier (called
+   * before this) softens ownEnv materials to 0.8 and restores their saved values on the way back,
+   * so the rig's value is applied again after them.
+   */
   setLowDetail(enabled: boolean): void {
     this.studio.setLowDetail?.(enabled);
+    if (this.content) this.applyMetalEnvIntensity(this.content);
   }
 
   get canvas(): HTMLCanvasElement {
@@ -166,6 +173,7 @@ export class Stage {
       }
       this.bounds.getCenter(this.aim.position);
       this.aim.updateMatrixWorld();
+      this.studio.setContent?.(this.bounds);
       this.fit();
     }
   }
@@ -183,10 +191,22 @@ export class Stage {
       m.envMap = env;
       m.needsUpdate = true;
     });
+    this.applyMetalEnvIntensity(object);
+  }
+
+  /** The rig's `metalEnvIntensity` on every ownEnv material under `object` (none declared: no-op). */
+  private applyMetalEnvIntensity(object: Object3D): void {
+    const intensity = this.rig.metalEnvIntensity;
+    if (intensity === undefined) return;
+    object.traverse((o) => {
+      const m = (o as Mesh).material as MeshStandardMaterial | MeshStandardMaterial[] | undefined;
+      for (const mat of Array.isArray(m) ? m : m ? [m] : []) if (mat.userData?.ownEnv) mat.envMapIntensity = intensity;
+    });
   }
 
   setBounds(bounds: Box3): void {
     this.bounds.copy(bounds);
+    this.studio.setContent?.(this.bounds);
     this.fit();
   }
 
@@ -218,7 +238,11 @@ export class Stage {
    */
   snapshot(cssWidth: number, cssHeight: number, dpr: number, type = 'image/png', quality?: number, empty = false): string {
     const hidden = empty && this.content?.visible ? this.content : null;
-    if (hidden) hidden.visible = false;
+    if (hidden) {
+      hidden.visible = false;
+      // The bare backdrop must not keep the content's shadow (shadowMap.autoUpdate may be off).
+      this.renderer.shadowMap.needsUpdate = true;
+    }
     const prev = { w: this.cssWidth, h: this.cssHeight, cap: this.dprCap };
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(cssWidth, cssHeight, false);

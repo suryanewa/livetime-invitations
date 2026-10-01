@@ -9,7 +9,10 @@ One rig is one file in this folder. Write `src/render/rigs/<name>.ts`; nothing e
   `import.meta.glob('./rigs/*.ts', { eager: true })`; the file name is the rig's name.
 - The showcase renders it at `http://127.0.0.1:5199/?scene=party&rig=<name>` (local hosts only; add
   `&camera=ortho` for the v1.1 orthographic camera). Everywhere else the production rig
-  (`DEFAULT_RIG` in the registry) renders.
+  (`DEFAULT_RIG` in the registry) renders. Under a `?rig=` other than the production rig the whole
+  stage follows the rig: the surround (`--lt-stage` on the stage element) is the rig's `stageColor`,
+  and no poster shows (the posters were captured under the production rig), so the stage waits on
+  its own colour and the Static tier shows the pose sentence.
 - `pnpm capture rigs <baseUrl> [rig,…]` renders it on all five scenes (below).
 
 The contract is in `src/render/rig.ts`. The Stage (`src/render/stage.ts`) owns the lifecycle; a rig never
@@ -26,6 +29,7 @@ export default defineRig({
   exposure: number,              // renderer.toneMappingExposure
   toneMapping: ToneMapping,      // three's NeutralToneMapping is the product pipeline
   environmentIntensity: number,  // scene.environmentIntensity (1.0 = physically plausible)
+  metalEnvIntensity?: number,    // envMapIntensity of every ownEnv metal (set 1.0; omitted = the material values)
   gobo: boolean,                 // declared: does the key project a cookie?
   backdrop: { kind: 'sweep' | 'table' | 'custom', color?, note? } | { kind: 'none' },   // declared
   shadows: { filter: 'vogel16' | 'pcf' | 'vsm', mapSize, radius, bias, normalBias, near?, far? } | null,
@@ -35,6 +39,7 @@ export default defineRig({
     shadowKey?: SpotLight | DirectionalLight | null,  // the Stage applies `shadows` to it
     backdrop?: Mesh | null,
     setShadows?(enabled), setLowDetail?(enabled), setWall?(wallZ?),
+    setContent?(bounds: Box3),   // the content's motion bounds: size a DirectionalLight's shadow camera
     dispose(),                   // free everything build() allocated
   },
 });
@@ -46,15 +51,35 @@ motion bounds), calls `build`, sets `scene.environment` / `environmentIntensity`
 `shadows` is set and `shadowKey` given, configures the key's shadow (map size, radius, biases, camera range),
 picks the shadow-map type (`vogel16` → v1.1's noise-free 16 fixed taps over three's PCF, page-wide; `pcf`;
 `vsm`) and turns shadows on. On every `setContent` it moves `ctx.target`, calls `setWall(scene.studio.wallZ)`
-and marks content meshes as casters/receivers (thin decals and transparent parts excluded).
+and marks content meshes as casters/receivers (thin decals and transparent parts excluded), gives the
+`ownEnv` materials the environment as their own map (with `metalEnvIntensity`, below), and calls
+`setContent(bounds)` with the content's motion bounds (also on `setBounds`). A rig that declares
+`shadows` but returns no `shadowKey` gets a console warning and no shadow map.
+
+**Metals (`metalEnvIntensity`).** Polished and imported metals carry their own copy of the environment
+(`userData.ownEnv`: the cloche, the Dinner silver, dome and gilt, the Business chrome, the hoop steel, and
+any imported material with metalness ≥ 0.5), so `scene.environmentIntensity` never reaches them; their
+`envMapIntensity` comes from the recipes (`ownEnv`: Dinner silver 0.8, dome 0.9, the rest 1.1; Low tier
+0.8), values tuned to make metal read under v1.1's 0.52 environment. Declare `metalEnvIntensity: 1` and
+the Stage sets every ownEnv material to it at `setContent` and again after each tier change (the
+libraries' Low tier softens them first), so the metals see the same environment as everything else.
+Omitted (v1.1), the material values stand and the render is unchanged. Caveat as in
+`scripts/masters/README.md`: a metal *variant* material only takes the environment (and this value) if
+it is on a mesh at `setContent`.
+
+**Scene extent (`setContent`).** A SpotLight key aimed at `ctx.target` needs nothing. A
+DirectionalLight key's orthographic shadow camera must cover the content: size
+`shadow.camera.left/right/top/bottom` from the bounds (plus the backdrop area the shadow falls on) and
+call `shadow.camera.updateProjectionMatrix()`. The scenes differ (Business is tall, Sports wide and
+deep), so a fixed ±5 frustum wastes resolution on the small ones.
 
 Tiers: Normal/High call `setShadows(true)` and `setLowDetail(false)`; Low/Static call `setShadows(false)`
 (the Stage disables the shadow map, clears the key's `castShadow` and frees its depth target, then calls your
 hook) and `setLowDetail(true)` (drop or downsample what is expensive: the gobo cookie, the backdrop's relief;
 must be reversible). On teardown the Stage removes `objects` and calls `dispose`.
 
-Rules every rig keeps (brief, "Rigs"): one key casts the real-time soft shadow; `environmentIntensity` 1.0 so
-metals, glass and vinyl reflect something with shape; deterministic (seeded procedural textures, no
+Rules every rig keeps (brief, "Rigs"): one key casts the real-time soft shadow; `environmentIntensity` 1.0 and
+`metalEnvIntensity` 1.0 so metals, glass and vinyl reflect something with shape; deterministic (seeded procedural textures, no
 downloads, no HDRI files); Low tier works; all five scenes stay lit and readable through every authored path
 (the airborne ball, the lifted cloche, the swinging card, the carried cake); report the measured stage colour.
 
@@ -129,6 +154,8 @@ pnpm capture stagecolor http://127.0.0.1:5199 neutral-room
 preset of every scene into `outputs/rigs/<rig>/<scene>-<preset>-<pose>.png`, a contact sheet per rig
 (`outputs/rigs/<rig>/sheet.png`), a cross-rig sheet per scene (`outputs/rigs/_compare/<scene>.png`), and the
 rig's measured stage colour (`outputs/rigs/<rig>/stagecolor.json`). It never writes into `assets/`.
+The cross-rig sheets hold only the rigs of that invocation: a run for a subset overwrites
+`_compare/<scene>.png` with that subset, so the integrator renders every rig in one run (no list).
 
 **Stage colour.** `stagecolor` (also run by `rigs`) loads each scene with the rig, hides the content for one
 frame (`captureStill(…, { empty: true })`: same light, camera and backdrop), and prints the mean sRGB of the
@@ -136,5 +163,10 @@ central 20 % × 20 %, per scene and averaged. Put the average in the rig's `stag
 the integrator sets `--lt-stage` (`src/ui/shell.css`) to the same value (`tests/rigs.test.ts` holds the
 production rig's `stageColor` and the token equal) and regenerates posters and thumbnails.
 
-v1.1 measures `#F6E0C5` (business `#F6E0C4`, party `#F6E0C4`, birthday `#F3DCC0`, sports `#FBE8CF`, dinner
+`tests/rigs.test.ts` enforces the rules for every rig except v1.1: `environmentIntensity` and
+`metalEnvIntensity` 1, `shadows` declared, and, when `outputs/rigs/<rig>/stagecolor.json` exists in the
+checkout, a `stageColor` within 2 levels per channel of the measurement.
+
+v1.1 is the one exception to "declare the measured colour": it keeps the shipped `#F8E4C8` token (what its
+posters and the interface were made with) and measures `#F6E0C5` (business `#F6E0C4`, party `#F6E0C4`, birthday `#F3DCC0`, sports `#FBE8CF`, dinner
 `#F3DDC1`) through the perspective lens: the palm shadow dapples the centre slightly below the token.

@@ -156,6 +156,12 @@ const LOCAL_HOST = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(location.
 const rigParam = LOCAL_HOST ? new URLSearchParams(location.search).get('rig') : null;
 if (rigParam && !RIGS.has(rigParam)) console.warn(`Unknown rig "${rigParam}"; registered: ${rigNames().join(', ')}`);
 const rig = rigParam && RIGS.has(rigParam) ? rigParam : DEFAULT_RIG;
+/**
+ * The posters (and the `--lt-stage` token) belong to the production rig. A comparison rig shows no
+ * poster (the stage waits on its own colour; Static shows the pose sentence) and paints the stage
+ * surround in its own measured colour, so poster, canvas and CSS agree under every `?rig=`.
+ */
+const comparisonRig = rig !== DEFAULT_RIG ? RIGS.get(rig)! : null;
 /** `?camera=ortho` (local only): the v1.1 orthographic camera, for before/after composition checks. */
 const projection = LOCAL_HOST && new URLSearchParams(location.search).get('camera') === 'ortho' ? 'orthographic' : 'perspective';
 let initialResponse: 'accept' | 'decline' | undefined = savedParam === 'accept' || savedParam === 'decline' ? savedParam : undefined;
@@ -188,6 +194,7 @@ function mount() {
   hostPrepared = false;
   const stage = $('[data-bind="stage"]');
   stage.replaceChildren();
+  if (comparisonRig) stage.style.setProperty('--lt-stage', comparisonRig.stageColor);
   adapter = new MockResponseAdapter((result) => {
     log('result', result.status === 'saved' ? `${result.requestId} saved ${result.response}` : `${result.requestId} error`);
     controller?.applyResponseResult(result);
@@ -203,7 +210,7 @@ function mount() {
     stage: { rig, projection },
     reducedMotion: motionOverridden ? !motionOn : undefined,
     scenes,
-    posterFor: posterUrl,
+    posterFor: comparisonRig ? undefined : posterUrl,
     describePose: (c, pose) => POSE_TEXT[c][pose],
     onResponseRequested: (req) => {
       requests.push(req);
