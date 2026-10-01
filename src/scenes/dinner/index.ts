@@ -167,9 +167,10 @@ export const dinnerScene: SceneModule = {
     bindMaterialsByName(root, library);
     bindMaterialsByName(binRoot, library);
     // The plate and cloche masters keep their own PBR materials: own environment for the
-    // silver and the gilt, the Low tier's registry (models/imported.ts).
-    prepareImported(root, library);
+    // silver and the gilt, the Low tier's registry (models/imported.ts). The dome's anisotropic
+    // finish replaces its material first, so the registry holds the material that is drawn.
     finishDish(root);
+    prepareImported(root, library);
     return new DinnerScene(rigDinner(root, binRoot, library), config);
   },
 };

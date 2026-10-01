@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { Box3, Color, Euler, Matrix4, MeshStandardMaterial, type Object3D, OrthographicCamera, Vector3 } from 'three';
+import { Box3, BoxGeometry, Color, Euler, Group, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, type Object3D, OrthographicCamera, Texture, Vector3 } from 'three';
+import { DOME_ANISOTROPY, DOME_ROUGHNESS, finishDish } from '../models/dinner.ts';
 import type { Node } from '@gltf-transform/core';
 import { listTextureSlots } from '@gltf-transform/functions';
 import { fitCameraToBounds } from '../src/render/camera.ts';
@@ -14,7 +15,7 @@ import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 import { BIN, buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
 import {
-  ACCEPT, coverBlendSafe, DURATIONS, frameFor, HOST_FLAT, HOST_TOUCH, newFrame, REVEAL_DIR, SAFE_SKIRT, sampleSequence, SETTLE_TILT, TIP,
+  ACCEPT, coverBlendSafe, coverLowering, DURATIONS, frameFor, HOST_FLAT, HOST_TOUCH, newFrame, REVEAL_DIR, SAFE_SKIRT, sampleSequence, SETTLE_TILT, TIP,
   type DinnerFrame,
 } from '../src/scenes/dinner/sequences.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
@@ -158,7 +159,8 @@ describe('Dinner choreography', () => {
   it('is C1: tilt, plan position and height change speed smoothly at every beat boundary (1 ms)', () => {
     // Velocity from 1 ms differences; a kink shows as a velocity step at one sample that its
     // neighbours do not share (smooth acceleration changes every step alike). Allowed: the height
-    // kinks only where the rim rock passes level (it switches the rim it rocks on: a rigid contact).
+    // kinks only at the instants the rim rock passes level (it switches the rim it rocks on: a
+    // rigid contact), i.e. at the flat beat and half-way through the rock; ±2 ms around each.
     const h = 0.001;
     for (const seq of ['host', 'accept'] as const) {
       const vel = (t: number) => {
@@ -168,11 +170,13 @@ describe('Dinner choreography', () => {
       const n = Math.round(DURATIONS[seq] * 1000) - 1;
       const v = Array.from({ length: n }, (_, i) => vel(i * h));
       const flat = seq === 'host' ? HOST_FLAT : ACCEPT.flat;
+      const settled = seq === 'host' ? DURATIONS.host : ACCEPT.settled;
+      const levelAt = [flat, flat + (settled - flat) / 2];
       for (let i = 2; i < n - 1; i++) {
         for (let c = 0; c < 5; c++) {
           const dv = Math.abs(v[i]![c]! - v[i - 1]![c]!);
           const around = Math.max(Math.abs(v[i - 1]![c]! - v[i - 2]![c]!), Math.abs(v[i + 1]![c]! - v[i]![c]!));
-          if (c === 4 && i / 1000 >= flat - 0.002) continue;
+          if (c === 4 && levelAt.some((x) => Math.abs(i / 1000 - x) <= 0.002)) continue;
           expect(dv, `${seq} channel ${c} at ${i} ms`).toBeLessThan(0.01 + 3 * around);
         }
       }
@@ -186,7 +190,7 @@ describe('Dinner choreography', () => {
         const f = at(seq, i / 1000);
         const gap = coverGap(f);
         // Resting or rocking on its rim (seated on the plate's slope or on the table): contact
-        // within the 2.5 mm surface bins; moving anywhere else: clear of the plate.
+        // within the 1 mm surface bins (BIN_W); moving anywhere else: clear of the plate.
         const onRim = (seq === 'host' && i / 1000 >= HOST_TOUCH) || (seq === 'accept' && (i / 1000 <= 0.1 || i / 1000 >= ACCEPT.touch));
         if (onRim) seatedGap = Math.min(seatedGap, gap);
         else expect(gap, `${seq} at ${i} ms`).toBeGreaterThan(-0.0003);
@@ -313,7 +317,11 @@ describe('Dinner runtime GLB matches the contract (plate and cloche masters, no 
     const names = doc.getRoot().listMaterials().map((m) => m.getName()).sort();
     expect(names).toEqual(['cloche_beads', 'cloche_dome', 'cloche_finial', 'cloche_handle', 'fx_shadow_proxy', 'plate_gilt_metal', 'plate_porcelain']);
     for (const m of doc.getRoot().listMaterials()) {
-      if (m.getName().startsWith('cloche_') || m.getName() === 'plate_gilt_metal') expect((m.getExtras() as { ownEnv?: number }).ownEnv, m.getName()).toBe(m.getName() === 'cloche_dome' ? 1.35 : 1.1);
+      if (m.getName().startsWith('cloche_') || m.getName() === 'plate_gilt_metal') expect((m.getExtras() as { ownEnv?: number }).ownEnv, m.getName()).toBe(m.getName() === 'cloche_dome' ? 0.9 : m.getName() === 'plate_gilt_metal' ? 1.1 : 0.8);
+    }
+    // Bead, bands, finial and handle: softened from the master's near-mirror 0.065–0.09.
+    for (const name of ['cloche_beads', 'cloche_finial', 'cloche_handle']) {
+      expect(doc.getRoot().listMaterials().find((m) => m.getName() === name)!.getRoughnessFactor(), name).toBeCloseTo(0.12, 6);
     }
     const webp = doc.getRoot().listExtensionsUsed().find((e) => e.extensionName === 'EXT_texture_webp');
     expect(webp?.isRequired()).toBe(true);
@@ -420,4 +428,43 @@ describe('Dinner motion continuity (checkpoint 4)', () => {
     expect(coverBlendSafe(at('accept', 0.7))).toBe(false);
     expect(SAFE_SKIRT).toBeGreaterThan(PLATE.rimHeight + 0.25);
   });
+
+  it('the host cover lowers through SAFE_SKIRT as it centres over the plate (0.60 s), without stopping', () => {
+    // The level path passes SAFE_SKIRT exactly at 0.60 s.
+    expect(coverLowering(0.6, COVER_SEATED.y + 1)).toBeCloseTo(SAFE_SKIRT, 12);
+    // The cover itself is centred there, still descending, and (tipped towards its landing rim)
+    // its lowest rim point is well clear of the plate's gilt rim.
+    const f = at('host', 0.6);
+    expect(plan(f.coverPos, COVER_SEATED)).toBeLessThan(0.01);
+    expect(at('host', 0.601).coverPos.y).toBeLessThan(f.coverPos.y);
+    expect(skirtLow(f)).toBeGreaterThan(PLATE.rimHeight + 0.2);
+    expect(skirtLow(f)).toBeLessThan(SAFE_SKIRT);
+  });
 });
+
+describe('Dinner silver finish at load (finishDish)', () => {
+  it('turns the dome into an anisotropic physical metal, keeping its own-environment extras', () => {
+    const map = new Texture();
+    const dome = new MeshStandardMaterial({ name: 'cloche_dome', color: new Color(0.97, 0.96, 0.915), metalness: 1, roughness: 1, roughnessMap: map, metalnessMap: map });
+    dome.userData.ownEnv = 0.9;
+    const mesh = new Mesh(new BoxGeometry(), dome);
+    const other = new Mesh(new BoxGeometry(), new MeshStandardMaterial({ name: 'cloche_beads', roughness: 0.12 }));
+    const root = new Group().add(mesh, other);
+    finishDish(root);
+    const m = mesh.material as MeshPhysicalMaterial;
+    expect(m).toBeInstanceOf(MeshPhysicalMaterial);
+    expect(m.name).toBe('cloche_dome');
+    expect(m.roughness).toBe(DOME_ROUGHNESS);
+    expect(m.roughnessMap).toBeNull();
+    expect(m.anisotropy).toBe(DOME_ANISOTROPY);
+    expect(m.anisotropyRotation).toBeCloseTo(Math.PI / 2, 12);
+    expect(m.metalness).toBe(1);
+    expect(m.color.r).toBeCloseTo(0.97, 6);
+    expect(m.userData.ownEnv).toBe(0.9);
+    expect((other.material as MeshStandardMaterial).roughness).toBe(0.12);
+    // Idempotent.
+    finishDish(root);
+    expect(mesh.material).toBe(m);
+  });
+});
+

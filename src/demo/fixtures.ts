@@ -66,6 +66,7 @@ export interface PresetOption {
   config: SceneConfig;
 }
 
+/** Curated presets per scene: two for most scenes, one for Dinner (see `presetAt`). */
 export const PRESETS: Record<Category, PresetOption[]> = {
   party: [
     { label: 'Coral label', config: { category: 'party', songId: 'sample-track-a', label: 'coral' } },
@@ -79,15 +80,20 @@ export const PRESETS: Record<Category, PresetOption[]> = {
     { label: 'Orange ball', config: { category: 'sports', ball: 'orange' } },
     { label: 'Cream ball', config: { category: 'sports', ball: 'cream' } },
   ],
-  dinner: [
-    { label: 'Pasta', config: { category: 'dinner', dish: 'pasta' } },
-    { label: 'Vegetables', config: { category: 'dinner', dish: 'vegetables' } },
-  ],
+  // Dinner (v1.2) is the silver cloche and the clean plate, no food (Surya, 2026-10-01): one look,
+  // no preset control. `dish` stays in its config for integration compatibility and selects nothing.
+  dinner: [{ label: 'Cloche and plate', config: { category: 'dinner', dish: 'pasta' } }],
   business: [
     { label: 'Light card', config: { category: 'business', template: 'light' } },
     { label: 'Dark card', config: { category: 'business', template: 'dark' } },
   ],
 };
+
+/** Preset `set` of a scene, or its only look when it has fewer (Dinner has one). */
+export function presetAt(category: Category, set: number): PresetOption {
+  const options = PRESETS[category];
+  return options[set] ?? options[0]!;
+}
 
 /** Plain-language pose descriptions for the text fallback when a poster cannot load. */
 export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | 'accepted' | 'declined', string>> = {
@@ -116,9 +122,9 @@ export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | '
     declined: 'The ball rests to the side of the hoop.',
   },
   dinner: {
-    'host-ready': 'A plate of food with the cover poised beside it.',
+    'host-ready': 'An empty plate with a silver cover poised above it.',
     'guest-ready': 'A covered dish.',
-    accepted: 'The cover is lifted and the food is revealed.',
+    accepted: 'The cover is lifted and set down beside the plate.',
     declined: 'The covered dish is in the bin.',
   },
 };

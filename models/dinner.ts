@@ -1,4 +1,4 @@
-import { type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
+import { type Mesh, MeshPhysicalMaterial, type MeshStandardMaterial, type Object3D } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { COVER, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
 import { buildDinnerGeometry } from './dinnerPremium.ts';
@@ -78,25 +78,40 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
 }
 
 /**
- * Polished-silver finish of the dome, at load (the recipe API cannot raise a roughness above its
- * map, only scale it down). The master's dome roughness map is near-uniform (G 23–34: roughness
- * 0.09–0.13, no visible lathe detail) and that near-mirror finish showed the studio softbox as hard
- * white windows and the floor as a flat grey. A uniform DOME_ROUGHNESS keeps a bright mirror polish
- * whose highlights read as soft bands; the bead, bands, finial and handle keep the master's own
- * (burnished, turned, buffed) values. The unused map is freed.
+ * Polished-silver finish of the dome, at load: the recipe API has no anisotropy policy and cannot
+ * raise a roughness above its map (a factor only scales it down). The master's dome roughness map
+ * is near-uniform (G 23–34: roughness 0.09–0.13, no visible lathe detail); as an isotropic
+ * near-mirror of a near-white F0 in the cream studio it read pale and frosted (v1.2 review). The
+ * dome becomes a MeshPhysicalMaterial with a uniform DOME_ROUGHNESS and DOME_ANISOTROPY along its
+ * meridians (the lathe polish: the softbox stretches into vertical bands with dark reflections
+ * between them, as the v1.1 cloche's brushed finish did). Its own environment (0.9) comes from the
+ * recipe's extras. The unused roughness map is freed. Call before `prepareImported`, so the
+ * replacement is the material registered for the Low tier and disposal.
  */
-export const DOME_ROUGHNESS = 0.2;
+export const DOME_ROUGHNESS = 0.18;
+export const DOME_ANISOTROPY = 0.5;
+/** Anisotropy direction in the dome's UV frame: π/2 runs along v, the meridians. */
+export const DOME_ANISOTROPY_ROTATION = Math.PI / 2;
 export function finishDish(root: Object3D): void {
   root.traverse((o) => {
-    const m = (o as Mesh).material as MeshStandardMaterial | undefined;
-    if (!(o as Mesh).isMesh || !m || m.name !== 'cloche_dome' || !m.roughnessMap) return;
-    const map = m.roughnessMap;
-    m.roughnessMap = null;
-    if (m.metalnessMap === map) m.metalnessMap = null;
-    m.roughness = DOME_ROUGHNESS;
-    m.metalness = 1;
-    m.needsUpdate = true;
-    map.dispose();
+    const mesh = o as Mesh;
+    const m = mesh.material as MeshStandardMaterial | undefined;
+    if (!mesh.isMesh || !m || m.name !== 'cloche_dome' || m instanceof MeshPhysicalMaterial) return;
+    const dome = new MeshPhysicalMaterial({
+      name: m.name,
+      color: m.color,
+      metalness: 1,
+      roughness: DOME_ROUGHNESS,
+      anisotropy: DOME_ANISOTROPY,
+      anisotropyRotation: DOME_ANISOTROPY_ROTATION,
+      side: m.side,
+      envMapIntensity: m.envMapIntensity,
+    });
+    dome.userData = { ...m.userData };
+    mesh.material = dome;
+    m.roughnessMap?.dispose();
+    if (m.metalnessMap && m.metalnessMap !== m.roughnessMap) m.metalnessMap.dispose();
+    m.dispose();
   });
 }
 

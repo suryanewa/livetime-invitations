@@ -14,11 +14,19 @@
 - **Stand:** the v1.1 ink pole, ogee base, clamp and arm with the chrome trim ring and a back plate on the master board (code-authored).
 - **Net:** the master's net is narrower than the ball at rest; the made shot opens it (`netOpenScale`) and the far layer keeps its 0.8 shade.
 
+### Dinner (v1.2)
+
+**No food (Surya, 2026-10-01).** The scene is the silver cloche and the clean plate only. The v1.1 pasta and vegetables and the code-authored plate and cloche (`models/dinnerParts.ts`) are deleted; there is no Dinner preset control, and `dish` stays in `SceneConfig` but selects nothing (one shared poster set). Details and every judgement call: `docs/scenes/dinner-v1.2.md` and the Decisions block in `scripts/masters/recipes/dinner.ts`.
+
+- **Plate:** the porcelain plate master (clearcoated porcelain, a gilt band on the rim with its own environment at 1.1), 1.6 across as in v1.1. The reveal shows the plate itself, the gilt rim catching the key. The v1.1 perforation row, ink foot line and cream glaze are replaced by the master's own design.
+- **Cloche:** the silver cloche master's dome assembly (dome, lip bead, two bands, finial, ring handle) at the plate's scale; its own tray is dropped and the plate takes its place. The dome is polished silver with a **lathe-polish anisotropy** (0.5 along the meridians, roughness 0.18, own environment 0.9, set at load by `finishDish`): the softbox stretches into vertical highlight bands with dark reflections between them, as the v1.1 brushed cloche did. An isotropic finish of the master's near-white silver read pale and frosted in the cream studio. The bead, bands, finial and handle are softened to roughness 0.12 at own environment 0.8, so they shade like metal rather than pale lines. The v1.1 coral knob is gone with the master's ring handle.
+- **Motion:** same beats and durations; the reveal is handle-led (the guest-side rim tips up first), every set-down lands the leading rim first, and the ≤1° rim rock follows on.
+
 # Style reference — direction L2 "Satin Enamel · premium" · v1.1
 
 **v1.1 (2026-09-29).** Surya approved the premium pass at checkpoint 2b ("go with premium… high fidelity and masterful texturing, lighting and scene work"), with the orthographic camera and the two-tier cake. L2 keeps L's identity (palette, silhouettes, one enamel insert, the perforation row) and upgrades surfaces, construction, light and finish. v1.0 (below) still defines the palette and object rules unless a v1.1 rule replaces them.
 
-Source of truth: `src/render/studio.ts` (key, fill, sweep, cookie, shadow filter, Low-tier detail), `src/render/lighting.ts` (L's hemisphere fill, kept under the premium key), `src/render/stage.ts` (shadow casters, backdrop wall), `src/render/camera.ts` (framing), `src/render/materials.ts` (`DIRECTIONS.L2`), `src/render/print.ts` (printed art, holo foil), `models/badgePremium.ts`, `models/cakeParts.ts`, `models/recordPremium.ts` + `models/recordParts.ts`, `models/disposalBin.ts`, `models/shadowProxy.ts`, `models/sportsPremium.ts` + `models/sportsParts.ts`, `src/render/ballMaterial.ts`, `models/dinnerPremium.ts` + `models/dinnerParts.ts`, `src/ui/shell.css` (stage finish).
+Source of truth: `src/render/studio.ts` (key, fill, sweep, cookie, shadow filter, Low-tier detail), `src/render/lighting.ts` (L's hemisphere fill, kept under the premium key), `src/render/stage.ts` (shadow casters, backdrop wall), `src/render/camera.ts` (framing), `src/render/materials.ts` (`DIRECTIONS.L2`), `src/render/print.ts` (printed art, holo foil), `models/badgePremium.ts`, `models/cakeParts.ts`, `models/recordPremium.ts` + `models/recordParts.ts`, `models/disposalBin.ts`, `models/shadowProxy.ts`, `models/sportsPremium.ts` + `models/sportsParts.ts`, `src/render/ballMaterial.ts`, `models/dinnerPremium.ts` + `models/dinnerParts.ts` (v1.1; since v1.2 Dinner is `scripts/masters/recipes/dinner.ts` + `models/dinner.ts`, and `dinnerParts.ts` is deleted), `src/ui/shell.css` (stage finish).
 
 ### Studio (all scenes)
 
@@ -90,7 +98,7 @@ SDF modelling (surface nets, gradient normals, Newton projection) for continuous
 
 ### Dinner: premium covered dish (M6)
 
-**Food shelved (Surya, 2026-09-29).** Dinner is judged on the dish unveiling: cloche, plate, reveal, settle, contact shadows, framing and disposal. The pasta and vegetables models from builder round 3 stay in place as frozen placeholders until the food is added later.
+**Food shelved (Surya, 2026-09-29).** Dinner is judged on the dish unveiling: cloche, plate, reveal, settle, contact shadows, framing and disposal. The pasta and vegetables models from builder round 3 stayed in place as frozen placeholders through v1.1. **Superseded in v1.2:** the food is removed for good (Surya, 2026-10-01: the scene is the cloche and the clean plate); see Dinner (v1.2) above.
 
 - **Cloche:** satin brushed metal (`mat_cloche`, roughness 0.3, anisotropy 0.7) with its **own copy of the stage environment at 1.1** (`SurfaceSpec.ownEnv`, assigned by `Stage.assignOwnEnvironment`). In r186 a material lit by `scene.environment` takes the scene-wide 0.52 and ignores its own intensity, which rendered the dome gunmetal. It reads as satin silver and still never mirrors the room. The polished lip bead uses `mat_cloche_polished` (roughness 0.18); the knob is the coral enamel insert.
 - **Plate:** cream glazed ceramic with a softened clearcoat (0.4 / 0.3). A sharp clearcoat aliased into a dashed line along the thin rolled rim at phone DPR. The whole-dot perforation row runs on the rim wall, and an ink foot line gives the silhouette.

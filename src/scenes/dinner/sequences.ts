@@ -137,7 +137,8 @@ function host(t: number, out: DinnerFrame): void {
     return;
   }
   // 0–0.2: a small preparatory rise of the poised cover. 0.2–0.6: it aligns over the plate as it
-  // comes down, passing SAFE_SKIRT exactly as it centres (0.60 s) without stopping, and keeps
+  // comes down, its level path passing SAFE_SKIRT exactly as it centres (0.60 s) without stopping
+  // (the cover itself is still tipped about 10° there, its low rim about 0.24 above the gilt), and keeps
   // lowering to land its leading (front) rim on the plate at HOST_TOUCH; then the back of the rim
   // comes down onto the plate by HOST_FLAT. The poised lean eases out over the whole approach, so
   // the cover is still tipped a little towards its landing side when it touches.
@@ -160,8 +161,11 @@ function host(t: number, out: DinnerFrame): void {
 
 /** Host lowering speed as the cover passes SAFE_SKIRT, centred, at 0.60 s (u/s). */
 const LOWER_SPEED = -1.1;
-/** Host base height 0.20–HOST_TOUCH: through SAFE_SKIRT at 0.60 s, landing softly on the seat. */
-function coverLowering(t: number, fromY: number): number {
+/**
+ * Host base height 0.20–HOST_TOUCH (the level path, before the lean about its pivot): through
+ * SAFE_SKIRT at 0.60 s, landing softly on the seat. Exported for the contract test.
+ */
+export function coverLowering(t: number, fromY: number): number {
   if (t < 0.6) return hermite(seg(t, 0.2, 0.6), fromY, 0, SAFE_SKIRT, LOWER_SPEED * 0.4);
   return hermite(seg(t, 0.6, HOST_TOUCH), SAFE_SKIRT, LOWER_SPEED * (HOST_TOUCH - 0.6), COVER_SEATED.y, 0);
 }
@@ -315,7 +319,8 @@ function decline(t: number, out: DinnerFrame): void {
 
 /**
  * Whether a straight interruption blend back to the seated cover is clean from this frame: the
- * cover is still (nearly) centred and above the safe skirt height, so its skirt clears the food.
+ * cover is still (nearly) centred, or close to centred and above the safe skirt height, so a
+ * straight blend down onto the seat never drags its rim across the plate's gilt rim.
  */
 export function coverBlendSafe(f: DinnerFrame): boolean {
   const offset = Math.hypot(f.coverPos.x - COVER_SEATED.x, f.coverPos.z - COVER_SEATED.z);
