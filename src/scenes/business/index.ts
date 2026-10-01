@@ -1,33 +1,29 @@
 import { Box3, type Camera, Plane, Quaternion, Raycaster, Vector2, Vector3, type Object3D, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/business/business.glb?url';
-import { bindLibraryMaterials, CARD, rigKeycard, type CardTemplate, type KeycardRig } from '../../../models/keycard.ts';
+import { CARD, PENDULUM, rigBusiness, type BusinessRig, type CardTemplate, type StatusLit } from '../../../models/business.ts';
+import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
+import { keycardBusinessRig, type KeycardRig } from '../../../models/keycard.ts';
+import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule, ScenePointer } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { ANGLE_EPSILON, Spring } from '../../motion/spring.ts';
 import type { MaterialLibrary } from '../../render/materials.ts';
 import { clampDragTarget, touchesScanner } from './drag.ts';
-import { DURATIONS, SCAN_AT, STATUS_COLOURS } from './poses.ts';
-import { frameFor, newFrame, sampleSequence, type BusinessFrame } from './sequences.ts';
-
-/**
- * Premium status light (no bloom, Master §5). The lit window keeps the idle glass colour and
- * glows by emission alone, so it renders close to its token instead of clipping to mint or
- * pink. Green sits brighter than red, so the two differ in value as well as hue (also under
- * deuteranopia). The spill tints the card at the scan beat without washing its print.
- */
-const GLOW = { spill: 0.35, window: { accept: 1, decline: 0.85 } };
+import { DURATIONS, SCAN_AT } from './poses.ts';
+import { cardRotation, frameFor, HOST_BEATS, interruptCutFor, newFrame, OUTCOME_BEATS, sampleSequence, type BusinessFrame } from './sequences.ts';
 
 /** Release/cancel blend onto the scanner approach (sub-spec: 350–600 ms). */
 const RELEASE_BLEND = 0.45;
 /** Where a released card rejoins the authored path: just before the contact beat. */
 const APPROACH_T = SCAN_AT - 0.08;
 const MAX_TILT = (12 * Math.PI) / 180;
-const DEG = Math.PI / 180;
 
 /** Final-beat damping: over the last 0.25 s a 0.5° sway decays to about 0.015°. */
 const SWAY_DAMP_WINDOW = 0.25;
 const SWAY_DAMP_RATE = 14;
+/** Pressed to the glass, friction stops the badge swinging (contact through departure). */
+const CONTACT_DAMP_RATE = 18;
 
 export class BusinessScene implements SceneInstance {
   readonly category = 'business' as const;
@@ -36,12 +32,16 @@ export class BusinessScene implements SceneInstance {
   readonly durations = DURATIONS;
   readonly animatedNodes: Object3D[];
   readonly pointer: ScenePointer;
+  readonly rig: BusinessRig;
 
   private readonly frame = newFrame();
   private readonly scratch = newFrame();
-  private readonly swing = new Spring({ frequency: 1.1, limit: MAX_TILT, epsilon: ANGLE_EPSILON, maxVelocity: 3 });
-  private readonly pitch = new Spring({ frequency: 1.3, limit: MAX_TILT, epsilon: ANGLE_EPSILON, maxVelocity: 3 });
-  private status: 'off' | 'accept' | 'decline' = 'off';
+  /**
+   * The holder and card are one rigid body swinging on the swivel eye: a physical pendulum at the
+   * master card's size (models/businessContract.ts PENDULUM, about 1.8 Hz), lightly damped.
+   */
+  private readonly swing = new Spring({ frequency: PENDULUM.swingHz, damping: PENDULUM.damping, limit: MAX_TILT, epsilon: ANGLE_EPSILON, maxVelocity: 3 });
+  private readonly pitch = new Spring({ frequency: PENDULUM.pitchHz, damping: PENDULUM.damping, limit: MAX_TILT, epsilon: ANGLE_EPSILON, maxVelocity: 3 });
   private sequence: SequenceName | null = null;
   private t = 0;
   private template: CardTemplate;
@@ -60,12 +60,13 @@ export class BusinessScene implements SceneInstance {
   private readonly plane = new Plane(new Vector3(0, 0, 1), 0);
   private readonly rect: [number, number, number, number] = [0, 0, 0, 0];
 
-  constructor(readonly rig: KeycardRig, private readonly library: MaterialLibrary, config: Extract<SceneConfig, { category: 'business' }>) {
-    this.root = rig.root;
-    this.bounds = rig.bounds.clone();
+  constructor(rig: BusinessRig | KeycardRig, library: MaterialLibrary, config: Extract<SceneConfig, { category: 'business' }>) {
+    this.rig = 'setStatus' in rig ? rig : keycardBusinessRig(rig, library);
+    this.root = this.rig.root;
+    this.bounds = this.rig.bounds.clone();
     this.template = config.template;
-    const n = rig.nodes;
-    this.animatedNodes = [n.card_authored!, n.card_mesh!, n.lanyard_anchor!, ...(rig.gate ? [rig.gate] : [])];
+    const n = this.rig.nodes;
+    this.animatedNodes = [n.card_authored!, n.clip_pivot!, n.card_mesh!, n.lanyard_anchor!, ...(this.rig.gate ? [this.rig.gate] : [])];
     this.pointer = this.createPointer();
     this.pose('guest-ready');
   }
@@ -113,9 +114,11 @@ export class BusinessScene implements SceneInstance {
       this.dragOffset.copy(this.releaseFrom).multiplyScalar(k * k * (3 - 2 * k));
     }
     // Each sequence's last beat damps the sway to rest, so the canonical end pose (which
-    // snaps the springs) never pops.
-    if (this.sequence && !this.dragging && DURATIONS[this.sequence] - this.t < SWAY_DAMP_WINDOW) {
-      const k = Math.exp(-dt * SWAY_DAMP_RATE);
+    // snaps the springs) never pops; against the glass, friction holds the badge still.
+    const end = this.sequence && !this.dragging && DURATIONS[this.sequence] - this.t < SWAY_DAMP_WINDOW;
+    const pressed = this.sequence && this.sequence !== 'host' && this.t >= OUTCOME_BEATS.contact - 0.06 && this.t < OUTCOME_BEATS.depart;
+    if (end || pressed) {
+      const k = Math.exp(-dt * (pressed ? CONTACT_DAMP_RATE : SWAY_DAMP_RATE));
       this.swing.damp(k);
       this.pitch.damp(k);
     }
@@ -123,6 +126,15 @@ export class BusinessScene implements SceneInstance {
     this.pitch.step(dt);
     this.rig.nodes.card_secondary!.rotation.set(this.pitch.x, 0, this.swing.x);
     this.lanyardDirty = true;
+  }
+
+  /**
+   * Change of mind at or near the reader: a straight blend back to guest-ready would carry the
+   * badge through the glass, so the director cuts instead (the frame is the pose on screen,
+   * drag offset included).
+   */
+  interruptCut(): boolean {
+    return interruptCutFor(this.frame);
   }
 
   settling(): boolean {
@@ -149,8 +161,7 @@ export class BusinessScene implements SceneInstance {
 
   /** Derived state (strap, shadow) from the current node transforms — used during blends. */
   refresh(): void {
-    const n = this.rig.nodes;
-    this.updateShadow(n.card_authored!.position, n.card_mesh!.position.y);
+    this.updateShadow();
     this.lanyardDirty = true;
   }
 
@@ -160,70 +171,64 @@ export class BusinessScene implements SceneInstance {
     this.rig.updateLanyard();
   }
 
+  /** Low tier for the imported badge and reader materials. */
+  setLowDetail(enabled: boolean): void {
+    setImportedLowDetail(this.root, enabled);
+  }
+
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
-    // Warm both template variants; status changes are uniforms and need no new program.
+    // Warm both template variants with the status tile shown (it is hidden while idle, and the
+    // compiler skips hidden meshes); colour and level changes are uniforms and need no new program.
     const other: CardTemplate = this.template === 'light' ? 'dark' : 'light';
     const scene = this.root.parent ?? this.root;
     this.beforeRender();
+    this.rig.setStatus('accept', 1);
     await renderer.compileAsync(scene, camera);
     this.rig.setTemplate(other);
+    this.rig.setStatus('decline', 1);
     await renderer.compileAsync(scene, camera);
     this.rig.setTemplate(this.template);
+    this.rig.setStatus(this.lit, this.litLevel);
   }
 
   dispose(): void {
     this.cancelDrag();
     this.rig.dispose();
+    disposeImported(this.root);
     this.root.traverse((o) => (o as { geometry?: { dispose(): void } }).geometry?.dispose());
     this.root.removeFromParent();
   }
 
   // ── internals ─────────────────────────────────────────────────────────────
-  private apply(f: BusinessFrame, lit: 'off' | 'accept' | 'decline'): void {
+  private lit: StatusLit = 'off';
+  private litLevel = 0;
+  private apply(f: BusinessFrame, lit: StatusLit): void {
     const n = this.rig.nodes;
+    this.lit = lit;
+    this.litLevel = f.statusLevel;
     n.card_authored!.position.copy(f.pivot);
     n.card_authored!.quaternion.copy(f.rot);
+    n.clip_pivot!.rotation.set(f.clipTilt, f.swivel, 0);
     n.card_mesh!.position.copy(f.cardOffset);
-    n.card_mesh!.rotation.set(f.cardTilt, 0, 0);
+    cardRotation(f, n.card_mesh!.quaternion);
     if (this.rig.gate) this.rig.gate.rotation.set(f.gate, 0, 0);
     n.lanyard_anchor!.position.set(f.anchorX, f.anchorY, f.pivot.z);
-    this.setStatus(lit);
-    this.updateShadow(f.pivot, f.cardOffset.y);
+    this.rig.setStatus(lit, f.statusLevel);
+    this.rig.setPress(f.glass);
+    this.updateShadow();
     this.lanyardDirty = true;
   }
 
-  private updateShadow(pivot: Vector3, cardOffsetY: number): void {
+  private readonly shadowAt = new Vector3();
+  private updateShadow(): void {
+    // Footprint under the card's centre; its height from the card's lowest edge.
+    const n = this.rig.nodes;
+    n.card_mesh!.updateWorldMatrix(true, false);
+    const c = this.shadowAt.setFromMatrixPosition(n.card_mesh!.matrixWorld);
+    this.root.worldToLocal(c);
     const shadow = this.rig.shadows[0]!;
-    shadow.setFootprint(pivot.x, pivot.z);
-    shadow.setHeight(pivot.y + cardOffsetY - CARD.height / 2, 0.9);
-  }
-
-  private setStatus(lit: 'off' | 'accept' | 'decline'): void {
-    if (lit === this.status) return;
-    this.status = lit;
-    const m = this.rig.statusMaterial;
-    const off = this.library.direction.surfaces.mat_status!;
-    if (lit === 'off') {
-      m.color.set(off.color);
-      m.emissive.set('#000000');
-      m.emissiveIntensity = 0;
-    } else if (this.rig.glow) {
-      // Premium: a lit panel with an ink glyph (LED-display contrast).
-      m.color.set(off.color);
-      m.emissive.set(STATUS_COLOURS[lit]);
-      m.emissiveIntensity = GLOW.window[lit];
-    } else {
-      m.color.set(STATUS_COLOURS[lit]);
-      m.emissive.set(STATUS_COLOURS[lit]);
-      m.emissiveIntensity = 0.9;
-    }
-    this.rig.symbols.accept.visible = lit === 'accept';
-    this.rig.symbols.decline.visible = lit === 'decline';
-    const glow = this.rig.glow;
-    if (glow) {
-      glow.spill.intensity = lit === 'off' ? 0 : GLOW.spill;
-      if (lit !== 'off') glow.spill.color.set(STATUS_COLOURS[lit]);
-    }
+    shadow.setFootprint(c.x, c.z);
+    shadow.setHeight(c.y - CARD.height / 2, 0.9);
   }
 
   /**
@@ -232,11 +237,16 @@ export class BusinessScene implements SceneInstance {
    */
   private kicks(sequence: SequenceName, prevT: number, t: number): void {
     const crossed = (at: number) => prevT < at && t >= at;
-    if (sequence === 'host' && crossed(0.62)) this.swing.kick(0, 1.2);
-    if (sequence !== 'host') {
-      if (crossed(0.16)) this.swing.kick(0, -0.9);
-      if (crossed(SCAN_AT)) this.pitch.kick(0, -0.5);
+    if (sequence === 'host') {
+      // The hook swings home carrying the card forward and down; as it stops under the eye the
+      // card's bottom carries on forward (pitch), with a little sideways sway.
+      if (crossed(HOST_BEATS.hung)) this.pitch.kick(0, -0.7);
+      if (crossed(HOST_BEATS.hung)) this.swing.kick(0, 0.3);
+      return;
     }
+    if (crossed(0.16)) this.swing.kick(0, -0.9);
+    // Leaving the glass to the left: the card lags behind the eye.
+    if (crossed(OUTCOME_BEATS.depart + 0.06)) this.swing.kick(0, 0.7);
   }
 
   private cancelDrag(): void {
@@ -334,13 +344,14 @@ export const businessScene: SceneModule = {
   category: 'business',
   async load({ config, library, signal }: SceneLoadContext): Promise<SceneInstance> {
     if (config.category !== 'business') throw new Error('business scene given another config');
-    const buffer = await fetchGlb(glbUrl, signal);
-    const gltf = await new GLTFLoader().parseAsync(buffer, '');
+    const gltf = await new GLTFLoader().parseAsync(await fetchGlb(glbUrl, signal), '');
     const root = gltf.scene.getObjectByName('business_root');
     if (!root) throw Object.assign(new Error('missing business_root'), { reason: 'asset-failure' as const });
+    // Card templates live in the GLB (KHR_materials_variants); read them before detaching the root.
+    const variants = await loadMaterialVariants(gltf);
     root.removeFromParent();
-    bindLibraryMaterials(root, library);
-    const rig = rigKeycard(root, library, config.template);
-    return new BusinessScene(rig, library, config);
+    bindMaterialsByName(root, library);
+    prepareImported(root, library, variants.materials);
+    return new BusinessScene(rigBusiness(root, library, config.template, variants), library, config);
   },
 };

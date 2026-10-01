@@ -34,6 +34,7 @@ import {
   type ProfilePoint,
 } from './geometry.ts';
 import { buildPremiumClip, buildPremiumScanner, PREMIUM_STRAP_TOP } from './badgePremium.ts';
+import type { BusinessRig } from './business.ts';
 import { LanyardStrand } from './lanyard.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
@@ -539,5 +540,38 @@ export function buildKeycard(ctx: ModelContext, template: CardTemplate = 'light'
       rig.dispose();
       disposeGeometry(root);
     },
+  };
+}
+
+/**
+ * v1.1 keycard rig in the v1.2 Business rig interface (lookdev only: the live scene runs on the
+ * scan-to-CAD masters, models/business.ts). The choreography is v1.2's, so the keycard is posed
+ * with the master badge's numbers; the status window behaves as in v1.1.
+ */
+export function keycardBusinessRig(rig: KeycardRig, lib: ModelContext['lib']): BusinessRig {
+  const off = lib.direction.surfaces.mat_status!;
+  const colours = { accept: '#3BE08A', decline: '#E53E3E' } as const;
+  return {
+    root: rig.root,
+    nodes: rig.nodes,
+    shadows: rig.shadows,
+    bounds: rig.bounds,
+    gate: rig.gate,
+    updateLanyard: rig.updateLanyard,
+    setTemplate: rig.setTemplate,
+    setStatus(lit) {
+      const m = rig.statusMaterial;
+      m.color.set(off.color);
+      m.emissive.set(lit === 'off' ? '#000000' : colours[lit]);
+      m.emissiveIntensity = lit === 'off' ? 0 : lit === 'accept' ? 1 : 0.85;
+      rig.symbols.accept.visible = lit === 'accept';
+      rig.symbols.decline.visible = lit === 'decline';
+      if (rig.glow) {
+        rig.glow.spill.intensity = lit === 'off' ? 0 : 0.35;
+        if (lit !== 'off') rig.glow.spill.color.set(colours[lit]);
+      }
+    },
+    setPress() {},
+    dispose: rig.dispose,
   };
 }

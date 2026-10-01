@@ -99,9 +99,9 @@ export function presetAt(category: Category, set: number): PresetOption {
 export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | 'accepted' | 'declined', string>> = {
   business: {
     'host-ready': 'A keycard waits below an open lanyard clip.',
-    'guest-ready': 'A keycard hangs on a lanyard above a card reader.',
-    accepted: 'The keycard rests beside the reader; its light shows green with a check.',
-    declined: 'The keycard rests beside the reader; its light shows red with a minus.',
+    'guest-ready': 'A keycard hangs on a lanyard beside a card reader.',
+    accepted: 'The keycard hangs beside the reader; the reader shows a green check.',
+    declined: 'The keycard hangs beside the reader; the reader shows a red minus.',
   },
   party: {
     'host-ready': 'A record hovers above an open record player.',

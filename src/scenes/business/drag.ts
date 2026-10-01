@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { CARD, CARD_OFFSET_Y, SCANNER_POS, SCANNER_WIDTH, SCANNER_FOOT } from '../../../models/keycard.ts';
+import { CARD, CARD_OFFSET_Y, READER, SCANNER_POS } from '../../../models/businessContract.ts';
 import { PAD_CENTER } from './poses.ts';
 
 /**
@@ -8,7 +8,7 @@ import { PAD_CENTER } from './poses.ts';
  * actual (tilted) centre and corners. Never affects the chosen response.
  */
 
-export const DRAG_BOUNDS = { minX: -0.95, maxX: 0.72, maxY: 2.42, floor: 0.03 };
+export const DRAG_BOUNDS = { minX: -0.78, maxX: 0.72, maxY: 2.28, floor: 0.03 };
 export const CONTACT_RADIUS = 0.42;
 
 const corner = new Vector3();
@@ -38,17 +38,18 @@ export function clampDragTarget(target: Vector3, rot: Quaternion): Vector3 {
   return target;
 }
 
+/** The reader master's body (business_root space). */
 const housing = {
-  minX: SCANNER_POS.x - SCANNER_WIDTH / 2,
-  maxX: SCANNER_POS.x + SCANNER_WIDTH / 2,
-  maxY: SCANNER_FOOT + 0.84,
-  minZ: SCANNER_POS.z - 0.36,
-  maxZ: SCANNER_POS.z + 0.36,
+  minX: SCANNER_POS.x - READER.width / 2,
+  maxX: SCANNER_POS.x + READER.width / 2,
+  maxY: READER.height,
+  minZ: SCANNER_POS.z + READER.back,
+  maxZ: SCANNER_POS.z + READER.front,
 };
 
 /**
- * Contact with the reader: the card centre near the pad, or any card corner entering the
- * scanner housing. Either triggers the chosen scan early instead of passing through.
+ * Contact with the reader: the card centre near the scan spot, or any card corner entering the
+ * reader's body. Either triggers the chosen scan early instead of passing through.
  */
 export function touchesScanner(pivot: Vector3, rot: Quaternion): boolean {
   if (cardCentre(pivot, rot, centre).distanceTo(PAD_CENTER) < CONTACT_RADIUS) return true;
