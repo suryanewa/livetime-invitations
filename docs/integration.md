@@ -64,8 +64,10 @@ Defaults: the approved look (direction `L2`, premium studio), the user's `prefer
 | Party | `{ category: 'party', songId, label: 'coral' \| 'cobalt' }` | Place record |
 | Birthday | `{ category: 'birthday', cake: 'vanilla' \| 'cocoa' }` | Place candles |
 | Sports | `{ category: 'sports', ball: 'orange' \| 'cream' }` | Pass ball |
-| Dinner | `{ category: 'dinner', dish: 'pasta' \| 'vegetables' }` | Cover dish |
+| Dinner | `{ category: 'dinner', dish: 'pasta' \| 'vegetables' }` (accepted; selects nothing since v1.2, see below) | Cover dish |
 | Business | `{ category: 'business', template: 'light' \| 'dark' }` | Attach card |
+
+**Dinner's `dish` is inert since v1.2.** The scene is the silver cloche and the clean plate, with no food (Surya, 2026-10-01; revision #22). `dish` is still accepted and defaulted (`DEFAULT_CONFIGS.dinner` is `{ category: 'dinner', dish: 'pasta' }`), so existing integrations keep compiling and running. Either value gives the same scene and the same shared posters (`shared-<pose>.webp`): the scene's `setConfig` ignores it. The showcase offers no Dinner preset control. Nothing else in the public API changed in v1.2: `src/core/types.ts` and the `createInvitation` options are unchanged from v1.1 (same categories, configs, callbacks, states and options). The only core change is internal to the scene contract: `src/core/sequence.ts` gained an optional `setLowDetail` hook, which the controller calls on tier changes so imported master materials follow the Low tier. The new models change only what the scenes load (larger GLBs; see `docs/qualification.md`, v1.2).
 
 `setConfig(config)` switches preset or category. A category change loads the new scene and frees the old one's GPU resources; a preset change swaps materials at a canonical pose. Party's `songId` is carried through for your UI; the scene never fetches song data, and the showcase shows "Selected track" when metadata is missing.
 
@@ -103,7 +105,7 @@ State for your UI comes from `getState()` / `onStateChange`: `response.intent`, 
 
 ## Assets
 
-Runtime models are GLB files in `assets/scenes/<category>/` plus the shared disposal bin `assets/shared/disposal-bin.glb` (Birthday, Dinner). Posters are `assets/scenes/<category>/posters/<preset>-<pose>.webp` (or `shared-<pose>.webp` when presets look identical); only the needed poster is fetched. With Vite these are bundled with hashed URLs. `assetBase` in the options is passed to scenes but the bundled scenes resolve their own URLs; hosting assets on another origin needs a small resolver change.
+Runtime models are GLB files in `assets/scenes/<category>/` plus the shared disposal bin `assets/shared/disposal-bin.glb` (Birthday, Dinner). Since v1.2 the scene GLBs are built from the scan-to-CAD masters and are larger: 1.0–5.8 MiB each with gzip −9, 2.0–7.9 MiB raw (the shared bin is unchanged at 155.7 KiB raw). Serve `.glb` with gzip or brotli; the textures inside are already WebP. The GLBs use `KHR_mesh_quantization`, `EXT_texture_webp`, `KHR_texture_transform` (Sports, Dinner) and the PBR material extensions (clearcoat, sheen, anisotropy, transmission, volume, IOR, specular, iridescence, emissive strength), which three r186's `GLTFLoader` reads with no extra decoder. The presets of Business, Party, Birthday and Sports are stored with `KHR_materials_variants`, which `GLTFLoader` does not apply without a separately registered plugin; the bundled scenes read the variants themselves (`loadMaterialVariants` in `models/imported.ts`). Posters are `assets/scenes/<category>/posters/<preset>-<pose>.webp` (or `shared-<pose>.webp` when presets look identical); only the needed poster is fetched. With Vite these are bundled with hashed URLs. `assetBase` in the options is passed to scenes but the bundled scenes resolve their own URLs; hosting assets on another origin needs a small resolver change.
 
 Sources for every model, material and texture are listed in `docs/asset-manifest.md`; the approved look in `docs/style-reference.md`.
 

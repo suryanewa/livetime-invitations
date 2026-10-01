@@ -65,3 +65,26 @@ fix → verify, judged on rendered stills, with measured facts written into the 
 - The objects' look now follows the masters, not the v1.1 "Satin Enamel" object rules; studio, camera and interface
   stay. Record as style-reference v1.2 + a spec revision.
 - Sports keeps the code-authored stand (the master hoop is wall-mounted).
+
+## Completed (2026-10-01, ≈06:20 EDT)
+
+The handoff above was picked up the same morning. Phases 2 and 3 are done: the scene work is on `main`, and this docs pass is in the working tree for the orchestrator to commit. The phase notes above are kept as the record of the interruption.
+
+| What landed | Where |
+| --- | --- |
+| Foundation: import pipeline, runtime support, Sports proof | `c403a32`; `scripts/masters/` (README is the guide), `models/imported.ts` |
+| Five scenes on the masters, merged from their worktree branches | Sports `75d6036` (fidelity pass); Dinner `04f9024` + `12b5cd6`; Birthday `4f6ecb1`; Party `4feb909` + `2ecf5b1`; Business `49bf0c1` + `6a7f2a1` (v1.2.1) |
+| Three independent judges on all five scenes, then a polish pass per scene for their must-fix items | Party v1.2.1 `9329416`, Birthday v1.2.1 `a6a1ce2`, Dinner v1.2.1 `201a201`, Business v1.2.2 `7c951e7`; merged by `b225f95`. Scores and outcomes: `docs/qualification.md` (v1.2, Independent judging) |
+| Sports v1.2.1: rim and board recoil and floor squash sized to read at stage size (rim 2.5°, board 0.6°, squash ≤ 10 %) | `a613138` (HEAD); `docs/scenes/sports-v1.2.md` (Amplitude pass) |
+| Per-scene notes: decisions, measured contracts, export reports, choreography changes, known gaps | `docs/scenes/<scene>-v1.2.md`; recipe Decisions blocks in `scripts/masters/recipes/<scene>.ts` |
+| Posters, review clips and collection thumbnails regenerated through the real renderer | `assets/scenes/<scene>/posters/`, `assets/ui/collection/`, `outputs/<scene>/` |
+| Measurements on `main` **before the polish pass**: sequence lengths (`6a62beb`), export reports, frame cadence (all five) and 71 browser tests (`756a635`). At HEAD `a613138`: 232 unit tests, the production build's JavaScript size and every file size | `docs/qualification.md` (v1.2) |
+| Shared docs: style reference v1.2, provenance rows for the eight masters and the new runtime GLBs, revisions #20–#30, the qualification v1.2 section, the integration note on the inert `dish`, README, the time log, and the showcase's pose text (Birthday's six candles) | `docs/style-reference.md`, `docs/asset-manifest.md`, `docs/spec-revisions.md`, `docs/qualification.md`, `docs/integration.md`, `README.md`, `docs/time-log.md`, `src/demo/fixtures.ts` |
+
+Still open:
+
+- The owner's review of v1.2 and of the recorded revisions (#23–#30, pending Surya's confirmation; #20–#22 are Surya's own decisions).
+- The iPhone 17 Max session, which now has to cover much heavier scenes (budgets waived, #21).
+- Re-running the checkpoint 4 harnesses for live render-cost peaks, counted GPU memory and throttled cold load.
+- The shared-code follow-ups the scene docs route to the foundation owner: a scene path for interruptions in `visualDirector.ts`, a stage-level fix for the shadow-depth texture leak, and recipe options for load-time finishes.
+- `docs/coverage.md` regenerates cleanly (`node --experimental-strip-types scripts/coverage-table.ts`, 650 rows), but the output is unchanged because `docs/coverage.json` still records the checkpoint 5 audit. Its rows were not re-audited for v1.2 (for example the 60k-triangle budget row, the three-candle rows and the Dinner food rows).

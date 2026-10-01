@@ -98,7 +98,7 @@ export function presetAt(category: Category, set: number): PresetOption {
 /** Plain-language pose descriptions for the text fallback when a poster cannot load. */
 export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | 'accepted' | 'declined', string>> = {
   business: {
-    'host-ready': 'A keycard waits below an open lanyard clip.',
+    'host-ready': 'A badge waits below the lanyard\'s snap hook.',
     'guest-ready': 'A keycard hangs on a lanyard beside a card reader.',
     accepted: 'The keycard hangs beside the reader; the reader shows a green check.',
     declined: 'The keycard hangs beside the reader; the reader shows a red minus.',
@@ -110,10 +110,10 @@ export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | '
     declined: 'The record player lid is closed.',
   },
   birthday: {
-    'host-ready': 'A cake waits on its tray.',
-    'guest-ready': 'A cake with three lit candles.',
+    'host-ready': 'A two-tier cake waits on its stand.',
+    'guest-ready': 'A two-tier cake with six lit candles.',
     accepted: 'The candles are blown out.',
-    declined: 'The cake is in the bin; the tray is empty.',
+    declined: 'The cake is in the bin; the stand is empty.',
   },
   sports: {
     'host-ready': 'A basketball rests at the foot of the hoop, ready to pass.',

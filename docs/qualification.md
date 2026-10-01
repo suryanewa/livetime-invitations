@@ -94,9 +94,108 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 - Drawing buffer at the showcase stage (≈400 CSS px, DPR 1.5 → 600², MSAA 4×): ≈13 MiB. **Total ≈ 20 MiB** against the 48 MiB budget.
 - **Risk recorded:** at the master's 2.5 MP drawing-buffer ceiling, MSAA 4× alone would need ≈90 MiB. Embeds larger than ≈700 CSS px at DPR 1.5 should create the renderer without MSAA; this is a decision for Milestone 7 integration guidance.
 
-## v1.2 re-measure: Dinner on the scan-to-CAD masters (2026-10-01)
+## v1.2: the scan-to-CAD masters (2026-10-01)
 
-**Budgets are waived for this pass** (owner's brief, `docs/new-models-brief.md`): these are the numbers that ship, not a pass/fail against the checkpoint 4 budgets below, which they supersede for Dinner. Desktop only; none of this is phone evidence.
+The five scenes now run on the scan-to-CAD masters (revision #20). **Budgets are waived for this pass** (owner's brief, `docs/new-models-brief.md`, revision #21). The figures below are what ships; they are not a pass/fail against the budgets. Where they exceed a cap, the cap is shown next to them. They supersede the checkpoint 4 render-cost, cadence, transfer, cold-load and GPU-memory tables further down, which describe the v1.1 code-authored objects.
+
+**Every run below was taken at HEAD `a613138`** (06:26–06:38 on 2026-10-01), after the Birthday, Party and Dinner v1.2.1 and Business v1.2.2 polish (`a6a1ce2`, `9329416`, `201a201`, `7c951e7`, merged by `b225f95`) and the Sports v1.2.1 amplitude pass (`a613138`): `pnpm models` for all scenes (every GLB byte-identical to the committed file), `pnpm capture timing`, `pnpm capture perf`, the full browser suite and the typecheck and unit tests (232 / 232). Earlier runs during the pass (05:15–05:42, on `6a62beb` and `756a635`, before the polish) gave the same cadence and the same 71 / 71 and differed from these only by a few milliseconds in the sequence lengths; they are superseded. The machine is the authoring Mac (M2 Pro), with the browser tests run in Chrome 153. None of this is phone evidence. Per-scene detail, including every decision and the measured contract numbers, is in `docs/scenes/<scene>-v1.2.md`.
+
+### Checks
+
+| Check | Result |
+| --- | --- |
+| Typecheck | Clean |
+| Unit tests (Vitest) | 232 / 232 pass (18 files, at HEAD `a613138`). Added in v1.2: contract numbers re-measured on each exported GLB, clearances against the shipped geometry (plate profile, reader height field, lid sweep, net envelope), C1 continuity, the change-of-mind paths (Dinner rewind, Business recovery), variants and the importer (`tests/masters.test.ts`) |
+| Browser tests (Playwright, system Chrome) | 71 / 71 pass (`pnpm test:browser`, 4.2 min, at HEAD `a613138`). New in v1.2: Birthday frosting variants and Low tier round trips with no texture leaks; the Business lit status by shape and its washout check; Sports Low tier on the imported masters, including a dispose at Low that frees every texture; and Dinner with no preset control and an inert `dish`. An earlier full run in this pass failed two focus-timing tests in `a11y.spec.ts` (lines 50 and 100) while other agents were rendering on the same machine. The rerun passed 71 / 71 |
+| Deterministic exports | Each scene exported twice to the same hash (scene docs). Re-running `pnpm models party`, `business` and `birthday` for this record left the tree clean |
+| Production build | `vite build` succeeds. Runtime JavaScript for all five scenes together is 261.6 KiB gzip −9 (every chunk except the lookdev, study and gallery pages), so a first route fetches less |
+
+### Real-time sequence lengths (`pnpm capture timing`, live showcase, HEAD `a613138`)
+
+| Scene | Host | Accept | Decline | Authored |
+| --- | --- | --- | --- | --- |
+| Business | 1.212 s | 1.512 | 1.509 | 1.2 / 1.5 / 1.5 |
+| Party | 1.211 | 1.610 | 1.410 | 1.2 / 1.6 / 1.4 |
+| Birthday | 1.313 | 1.411 | 1.510 | 1.3 / 1.4 / 1.5 |
+| Sports | 1.214 | 1.714 | 1.610 | 1.2 / 1.7 / 1.6 |
+| Dinner | 1.210 | 1.514 | 1.514 | 1.2 / 1.5 / 1.5 |
+
+The durations are unchanged from v1.1. Each run is about 10–15 ms over the authored length: one animation frame to detect the end.
+
+### Frame cadence (desktop only, `pnpm capture perf`, HEAD `a613138`)
+
+Ten alternating accept/decline cycles after a warm-up, 390×844 @3×, Normal tier, visible page. Frames are sampled only while a sequence plays. GPU objects are three.js's `renderer.info` counts at the end of the run.
+
+| Scene | Frames | p50 | p95 | p99 | Max | >50 ms | 4× CPU throttle (simulation): p95 / max / >50 ms | GPU geometries / textures / programs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Business | 908 | 16.7 ms | 16.8 | 16.8 | 16.8 | 0 | 16.7 / 16.8 / 0 | 28 / 19 / 12 |
+| Party | 998 | 16.7 | 16.8 | 16.8 | 16.8 | 0 | 16.8 / 16.8 / 0 | 33 / 15 / 10 |
+| Birthday | 923 | 16.7 | 16.7 | 16.8 | 16.8 | 0 | 16.7 / 16.8 / 0 | 30 / 12 / 12 |
+| Sports | 1,093 | 16.7 | 16.8 | 16.8 | 16.8 | 0 | 16.8 / 16.8 / 0 | 15 / 24 / 13 |
+| Dinner | 906 | 16.7 | 16.7 | 16.8 | 16.8 | 0 | 16.7 / 16.8 / 0 | 17 / 9 / 8 |
+
+The Master §9 targets (p95 ≤ 20 ms, p99 ≤ 34 ms, no stall over 50 ms) are met on this desktop with the masters. The M2 Pro is locked to 60 Hz and is far faster than the reference phones, and CPU throttling does not stress the GPU. The heavier geometry and textures make the phone session more important than it was for v1.1.
+
+### Runtime GLBs (`pnpm models <scene>` export reports at HEAD `a613138`; sizes from the committed files, which the re-export reproduced byte for byte)
+
+| Scene | GLB raw | Gzip −9 | Report gzip | Triangles (visible pass) | Draw calls (+ shadow proxies) | Textures (as RGBA8 + mips) | Nodes / primitives | v1.1 GLB raw / gz |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Business | 2062.5 KiB | 1272.0 KiB | 1376.5 | 76,236 (the rig adds a few hundred) | 21 (+ 3 runtime: strap, tab, status tile) | 12 (57.4 MiB) | 43 / 20 | 720.8 / 251.5 KiB |
+| Party | 2355.3 | 1053.6 | 1180.4 | 97,948 | 28 (+ 1, 368 tris) | 7 (27.0 MiB) | 60 / 29 | 608.3 / 234.7 |
+| Birthday | 4343.0 | 2201.9 | 2427.5 | 219,780 | 23 (+ 8, 3,340 tris) | 2 LUTs (0.0 MiB) | 55 / 21 | 561.7 / 270.8 |
+| Sports | 8071.5 | 5915.7 | 6159.4 | 259,206 | 11 (+ 1, 2,436 tris) | 16 (62.6 MiB) | 22 / 12 | 516.3 / 203.0 |
+| Dinner | 3412.5 | 1753.5 | 1963.0 | 146,944 | 6 (+ 2, 5,277 tris) | 1 (5.3 MiB; freed at load) | 19 / 8 | 841.3 / 405.4 |
+| shared/disposal-bin.glb (unchanged) | 155.7 | 63.8 | — | ≈8.4k while on stage | 5 | 0 | 10 / 5 | same |
+
+"Report gzip" is the export report's figure: Node's zlib at level 9. The "Gzip −9" column, which the asset manifest uses, is macOS `gzip -9c`; the two compressors differ by a few percent at the same level (Sports 6159.4 vs 5915.7 KiB).
+
+### Budgets: waived, with the actual figures against the old caps
+
+| Cap (Master §9) | Business | Party | Birthday | Sports | Dinner |
+| --- | --- | --- | --- | --- | --- |
+| ≤ 60k visible triangles | 76k (over) | 98k (over) | 220k (over; + bin 8.4k in the decline) | 259k (over) | 147k (over; + bin) |
+| ≤ 40 draw calls | 24 | 28 | 23 (+ bin 5) | 11 | 6 (+ bin 5) |
+| ≤ 48 MiB texture allocation (estimate) | ≈ 87 MiB (over) | ≈ 57 MiB (over) | ≈ 30 MiB | ≈ 93 MiB (over) | ≈ 30 MiB |
+| ≤ 2.5 MiB cold first scene, gzip-serving host | 1.52 MiB | 1.30 MiB | 2.49 MiB (with the bin) | 6.05 MiB (over) | 2.04 MiB (with the bin) |
+| Same, host serving `.glb` uncompressed | 2.29 MiB | 2.57 MiB (over) | 4.67 MiB (over) | 8.16 MiB (over) | 3.75 MiB (over) |
+
+- **Triangles and draw calls** are the GLB's visible pass. Masters that cast their own shadows add their triangles again in the shadow pass. The checkpoint 4 live-peak harness (main + shadow, every frame) was **not re-run** for v1.2, so the live per-frame peaks are unmeasured.
+- **Texture allocation** is an estimate: the checkpoint 4 phone figure for a scene with few textures of its own (≈ 30 MiB: drawing buffer, environment, shadow map, gobo, plaster, contact shadows) plus the GLB's textures as RGBA8 with mips, both presets resident. It is not a counted allocation; the checkpoint 4 counting harness was not re-run. Dinner frees its one texture at load, and Birthday's are two 256×4 LUTs. Low frees the shadow map and drops normal and sheen maps from the imported materials, which lowers these figures but was not counted either.
+- **Cold first scene** is recomputed from the file sizes. It adds the runtime JavaScript (≤ 261.6 KiB gz, every scene's chunks, so an upper bound), the scene GLB, the bin for Birthday and Dinner, and the largest poster of the scene (14.9–25.9 KiB). `pnpm capture network` was not re-run. At the Master's 4 Mbps test link, the whole cold first scene above (JavaScript, GLB, bin and poster) takes about 3.2 s (Business), 2.7 s (Party), 5.2 s (Birthday), 4.3 s (Dinner) and 12.7 s (Sports) with the GLBs gzipped. With the GLBs uncompressed, as `vite preview` serves them, it takes about 4.8, 5.4, 9.8, 7.9 and 17.1 s. Render-ready within 6 s is therefore unlikely for Sports in either case, and for Birthday and Dinner uncompressed. The controls stay usable before the GLB arrives (checkpoint 4: 0.91–1.01 s), because the DOM does not wait for it.
+
+### Independent judging (three judges, then a polish pass per scene)
+
+Three fresh judges scored each scene against its masters and the v1.1 captures (stills, contact sheets, frame-difference series of every clip). The scores are means of the three, out of 10.
+
+| Scene | Look | Concept | Smooth | Physics | Presets | Polish | Must-fix (all judges) | Polish pass |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Sports | 8 | 9 | 8.8 | 8.5 | 8 | 8 | 0 | v1.2.1 `a613138`: recoil and squash raised to read at stage size (no must-fix) |
+| Party | 8 | 9 | 8 | 8 | 8.5 | 6.7 | 2 (lid flash and pale interior mid-close) | v1.2.1 `9329416`: fixed |
+| Birthday | 7.7 | 8.8 | 8 | 7.5 | 8.7 | 7.2 | 2 (flat vanilla; accept barely registers) | v1.2.1 `a6a1ce2`: fixed |
+| Dinner | 8 | 8.3 | 7.8 | 7.8 | 10 | 6.8 | 3 (stale food posters, twice; change-of-mind pop) | v1.2.1 `201a201`: fixed |
+| Business | 9 | 8.2 | 7.5 | 8.2 | 9 | 8.2 | 3 (change-of-mind cut, twice; host stop–hop–stop) | v1.2.2 `7c951e7`: fixed (the judges scored v1.2.1 `6a7f2a1`) |
+
+Overall, the judges found that all five scenes use the masters and keep v1.1's beats, durations and framing. Sports was ranked strongest, with Business close behind. The polish agents verified each fix on rendered frames, with frame-difference numbers in the scene docs. The judges were not re-run on the polished scenes. As with checkpoints 4 and 5, their verdicts are **pending Surya's confirmation**. Several named physics upgrades were correct but hard to see at stage size: the rim and board recoil, the squash, the cake lean, the cloche rim rock and the tonearm cue. Party's settle and Birthday's flames and breath were enlarged in v1.2.1, and the Sports recoil and squash in Sports v1.2.1 (`a613138`: rim 1.2° → 2.5°, board 0.3° → 0.6°, squash ≤ 8 % → ≤ 10 %).
+
+### Known limitations (from the scene docs' known gaps)
+
+- **Shared director.** Party's interruption blend still slerps linearly, so an accept → decline change mid-spin can turn the record back by up to π and whip the arm to its rest. Sports' change clip blends at a constant rate. Business uses the director's 0 ms cut as a hand-over for its own recovery (#25). A first-class scene path in `src/core/visualDirector.ts` would make this explicit. Dinner's rewind keeps a little state between the cut and the new playback (#24).
+- **Shadow-depth texture leak (shared).** three.js's shadow depth material keeps the last caster's `map`. Birthday avoids leaking a disposed texture per visit by casting through proxies with no map. A scene whose shadow-casting master mesh has a map could leak the same way; the general fix belongs in the stage.
+- **Load-time finishes outside the GLB.** The Sports leather grade, Dinner's dome anisotropy and roughness (its unused 1024² roughness map still travels, 6 KiB), Party's lid extension and split, and the Birthday bin shade are applied at load. The recipe API has no pixel function for a default material, no anisotropy policy and no way to drop a texture slot.
+- **Small at stage size.** The Business hook threading (a 2.7 mm gap), Birthday's thin candles (r 0.0205) and the 1.8° carry lean, the Party tonearm cue and settle, the Sports recoil and squash (raised in `a613138` to 2.5° / 0.6° and ≤ 10 %; the rim's front edge now dips 6–7 px in the 540 px captures), and the Dinner rim rock (≤ 1°) are all correct but small at stage size.
+- **Look.**
+  - The Sports board carries more visual weight than v1.1's, fixed by the 1.6× rim rule. The cream ball has no coral equator.
+  - The Party closed lid reads as a second box. The label wedge is a v1.1 graphic over the master print.
+  - The Birthday flames are the stylised v1.1 shader. The cake is small in the 192 px thumbnail.
+  - Dinner's empty well is a near-flat white disc. The studio environment has no dark horizon for the polished dome.
+  - The Business strap has no twist. The LED bar is under the pressed card, and the tile carries the outcome. The dark card's lower edge relies on the holder's rim.
+- **Small geometric allowances (tested, invisible).** The Sports board recoil (0.6° since `a613138`) can overlap the stand's back plate by up to 1.6 mm, hidden from the camera. Dinner's rim rock can dip up to 1 mm on the coupe slope. The Business clearance tests allow 0.3 mm at the hook wire and 0.7 mm where the clips press the glass.
+- **Lookdev.** The lookdev identity tiles still build the v1.1 cake and the code-authored keycard rig: the master GLBs load asynchronously.
+- **Not re-measured for v1.2:** live render-cost peaks, counted GPU memory, cold load on the throttled network, framing percentages beyond the unit tests (Party 74.6 %; Business card 38 % of the frame height), and the iPhone 17 Max session. The phone session now has to cover much heavier scenes.
+
+### Dinner first re-measure (v1.2, before the v1.2.1 polish; superseded by the tables above)
+
+*Historical: this was Dinner's first v1.2 record, before the v1.2.1 polish (`201a201`). The v1.2 tables above replace it; the 158 / 158 unit count is from that worktree, not today's suite.* **Budgets are waived for this pass** (owner's brief, `docs/new-models-brief.md`). Desktop only; none of this is phone evidence.
 
 | Measure | Dinner v1.2 | v1.1 (checkpoint 4, for reference) |
 | --- | --- | --- |
@@ -176,6 +275,8 @@ Deferred, with reasons:
 
 ### Render cost per scene (lookdev, 358² @3×, including the shadow pass, contact shadows and the studio sweep)
 
+*Superseded for v1.2 by the v1.2 section above: these figures describe the v1.1 code-authored objects.*
+
 | Scene (ready pose) | Triangles | Draw calls | Budget |
 | --- | --- | --- | --- |
 | Business guest-ready / accepted (dark) | 53.4k / 53.5k | 32 / 34 | 60k / 40 |
@@ -198,6 +299,8 @@ Birthday's decline is the tightest: 2k triangles under budget. Smoother bin flap
 
 ### Frame cadence (desktop only, `pnpm capture perf <scene>`)
 
+*Superseded for v1.2 by the v1.2 section above: these figures describe the v1.1 code-authored objects.*
+
 Ten alternating accept/decline cycles after one warm-up pair, 390×844 @3×, Normal tier (DPR 1.5), on a visible page. Frames are sampled only while a sequence plays. Raw samples are in `outputs/perf/frame-times-<scene>.json`.
 
 | Scene | Frames | p50 | p95 | p99 | Max | >50 ms | 4× CPU throttle (simulation): p95 / max / >50 ms |
@@ -213,6 +316,8 @@ Ten alternating accept/decline cycles after one warm-up pair, 390×844 @3×, Nor
 - **Not phone evidence:** the M2 Pro is locked to 60 Hz and much faster than the reference phones. CPU throttling does not stress the GPU. The iPhone 17 Max session is still pending, and low-end iOS and Android remain unverified.
 
 ### Transfer and cold load
+
+*Superseded for v1.2 by the v1.2 section above: these figures describe the v1.1 code-authored objects.*
 
 | Asset | Raw | Gzip −9 |
 | --- | --- | --- |
@@ -237,6 +342,8 @@ Targets (Master §9): controls usable ≤2 s, render-ready ≤6 s, cold first sc
 
 ### Framing (Master §5: 60–75 % of stage width in the ready pose)
 
+*v1.2: the camera and layouts are unchanged; Party measures 74.6 % on the master (unit test band 60–75 %), Sports is locked to 60–75 % by its unit test, and Business was re-fitted (card 38 % of the frame height). The other rows below were not re-measured.*
+
 | Scene | Measured | Status |
 | --- | --- | --- |
 | Business | 61.6 % | Pass (checkpoint 3) |
@@ -252,6 +359,8 @@ The Low tier kept the objects' look only after a fix. Dropping the palm gobo at 
 
 ### GPU memory (Master §9: texture allocation ≤ 48 MiB; counted allocations, not driver readings)
 
+*Superseded for v1.2 by the v1.2 section above: these figures describe the v1.1 code-authored objects.*
+
 Measured at HEAD after the engine fixes by wrapping the WebGL calls that allocate (textures, renderbuffers, buffers) and adding the default framebuffer with 4× MSAA. Two layouts: phone (430×932 @3×, 534² drawing buffer) and desktop (1440×900 @2×, 657²). "Both presets" is after switching to the second preset, with both resident. Raw figures: `outputs/perf/gpu-memory.json`.
 
 | Scene | Phone: Normal / both presets / Low | Desktop: Normal / both presets / Low |
@@ -265,6 +374,8 @@ Measured at HEAD after the engine fixes by wrapping the WebGL calls that allocat
 Every scene is within 48 MiB in both layouts; the peak is Business on desktop with both card prints resident (41.8 MiB). No renderbuffer remains after load (the environment map's 3 MiB depth buffer is freed), and each page holds one live WebGL context. The drawing buffer is the part that grows with the embed: the risk recorded at checkpoint 3 (MSAA 4× near the 2.5 MP ceiling) still applies to embeds much larger than the showcase stage. Phone driver figures belong to the iPhone session.
 
 ### Still open after checkpoint 4
+
+*v1.2 (2026-10-01): the plate colour and the food question are settled by the masters and the no-food decision (#22); the Business scan pose (#18) is superseded by #26; the Business draw-call headroom note applies to the v1.1 objects. The rest stands, and the phone session now has to cover the heavier v1.2 scenes.*
 
 - **iPhone 17 Max session (Surya).** Every scene at Normal and Low: frame times, cold shader compile, shimmer (net, grooves, card edge), legibility at arm's length, and the compositor cost of the CSS vignette and grain. Also VoiceOver on iOS, and touch. See the steps in the checkpoint review page. Low-end iOS, Android, Firefox, Edge, in-app browsers and previous-major browser versions remain unverified (not available on this host).
 - **Decisions for Surya.**

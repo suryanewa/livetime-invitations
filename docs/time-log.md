@@ -48,6 +48,12 @@ Commit times come from `git log`. Where streams overlapped, the gap between two 
 | Checkpoint 4 — close-out | 15:17 | 16:57 | ~1 h 40 m | Verifier fixes; Sports, Business and engine batches merged; final posters and thumbnails for all five scenes; live render-cost peaks, frame cadence, cold load; WebGL leak and Static round-trip checks; procedural textures kept in a CPU copy so a restored context is never black; final test runs (134 unit, 69 browser); release script refreshes the Creative masters and exports; coverage close-out with a skeptic on every upgrade; revision #19. Commits `eac6dc3` → `a660a1a` |
 | Checkpoint 5 — qualification review and release | 16:57 | <!--END--> | <!--ELAPSED--> | Master coverage close-out; independent qualification, handoff and collection reviewers with a skeptic each, and their fixes; time log; release build and package; checkpoint review page |
 
+## 2026-10-01
+
+| Milestone | Start | End | Elapsed | Notes |
+| --- | --- | --- | --- | --- |
+| v1.2 — scan-to-CAD masters (owner request) | ≈01:50 | ≈06:45 | ~4 h 55 m (start inferred from the masters' copy time, 01:53) | Brief with measured master facts (`docs/new-models-brief.md`). Foundation: import pipeline, runtime support and the Sports proof, adversarially reviewed (`c403a32`, 02:54). Five scene agents in parallel worktrees, interrupted at 03:20 by the laptop closing (handoff `docs/RESUME.md`) and resumed at 03:37. Scene commits 03:47–04:24 (Party fix `2ecf5b1` at 04:24), Business v1.2.1 at 05:16; merges to `main` as each landed. Three independent judges (05:20–05:37), polish per scene (05:38–06:04, merged by `b225f95`), Sports amplitude pass `a613138` (06:11). Docs consolidation and two adversarial verifications (05:40–06:38). Every measurement re-run at HEAD `a613138` at 06:26–06:38 (`docs/qualification.md` v1.2). |
+
 ## Actual time so far
 
 - Estimation checkpoint (visual study + Business, 16:20 → 20:50): **4 h 30 m** elapsed, including independent reviews. The milestone rows add up to about 5 h 20 m because they overlap; the earlier checkpoint entry gave about 5 h 30 m.
