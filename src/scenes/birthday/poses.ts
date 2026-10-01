@@ -37,16 +37,24 @@ export const CANDLE_SEATED = CANDLE_START.map((s) => s + CANDLE_DESCENT + CANDLE
 export const FLAME_START = each((i) => 0.84 + 0.02 * i);
 export const FLAME_RISE = 0.12;
 
-/** Breath: flames lean away from the camera and a touch right; wicks follow a little. */
-export const LEAN = { x: -0.42, z: -0.12 };
+/**
+ * Breath: flames lean away from the camera and to the right; wicks follow a little. The sideways
+ * part (z, in the picture plane) is what reads from the 20°/15° camera: the away part is
+ * foreshortened. ≈ 31° at full breath, up to ≈ 46° as each flame dies.
+ */
+export const LEAN = { x: -0.45, z: -0.3 };
 export const WICK_LEAN = 0.3;
+/** The gust is not steady: each flame's lean flutters ±12 % at 7 Hz, out of phase with its neighbours. */
+export const FLAME_FLUTTER = { amount: 0.12, hz: 7 } as const;
+/** At full breath a flame is drawn out this much taller and this much thinner (scale per axis). */
+export const FLAME_STRETCH = { tall: 0.22, thin: 0.15 } as const;
 
 /** Extinguish windows, left to right (0.25–0.595 s), and one wisp each (0.60–0.99 s). */
 export const OUT_START = each((i) => 0.25 + 0.044 * i);
 export const OUT_LEN = 0.125;
 export const WISP_START = each((i) => 0.6 + 0.018 * i);
 export const WISP_LEN = 0.3;
-export const WISP_OPACITY = 0.42;
+export const WISP_OPACITY = 0.62;
 /**
  * A wisp leaves the wick: its foot stays on the wick tip while the curl unfurls upward (its
  * height grows from WISP_GROW_FROM to full), and it only lifts off (WISP_RISE, cubic ease-in) as
@@ -65,6 +73,8 @@ export const DROPPED = IN_BIN;
 
 /** Decline beats: lift + carry across (0.25–0.72), drop into the bin (0.72–0.95). */
 export const CARRY_FROM = 0.25;
+/** End of the lift off the stand (to CARRY height); the carry's gentle lowering to the rim follows. */
+export const LIFT_TO = 0.46;
 export const CARRY_TO = 0.72;
 export const DROP_TO = 0.95;
 

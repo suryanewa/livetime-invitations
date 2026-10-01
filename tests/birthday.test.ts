@@ -7,13 +7,15 @@ import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
 import { PALETTE, recipe } from '../scripts/masters/recipes/birthday.ts';
 import {
-  BIN_POS, BIN_YAW, birthdayBounds, CAKE_RADIUS, CAKE_SCALE, CAKE_TOTAL_HEIGHT, CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME_TOP, LEAN_MAX, MASTER,
+  BIN_POS, BIN_YAW, birthdayBounds, CAKE_RADIUS, CAKE_SCALE, CAKE_TOTAL_HEIGHT, CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME, FLAME_DRAW, FLAME_TOP, LEAN_MAX, MASTER,
   RIM_CLEARANCE, screenX, STAND, STAND_TOP,
 } from '../models/birthdayContract.ts';
 import { BIRTHDAY_GLB_NODES, buildBirthdayGeometry, FLAME_SIZE } from '../models/birthdayParts.ts';
 import { BIN, buildDisposalBin } from '../models/disposalBin.ts';
+import { BIN_SHADE } from '../models/birthday.ts';
 import {
-  CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LAND_SPEED, CANDLE_SEATED, CANDLE_START, DURATIONS, FLAME_RISE, FLAME_START, LEAN_FADE, OUT_LEN, OUT_START, WISP_OPACITY,
+  CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LAND_SPEED, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAME_FLUTTER, FLAME_RISE, FLAME_START, LEAN, LEAN_FADE, LIFT_TO, OUT_LEN, OUT_START,
+  WISP_OPACITY,
 } from '../src/scenes/birthday/poses.ts';
 import { candleDrop, carryLean, frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from '../src/scenes/birthday/sequences.ts';
 import { birthdayFramePoints } from '../src/scenes/birthday/framing.ts';
@@ -21,7 +23,7 @@ import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
 const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
 const pose = (p: CanonicalPose) => frameFor(p, newFrame());
-const ARRAYS = ['drop', 'flameScale', 'flameOpacity', 'flameLean', 'wispOpacity', 'wispRise', 'wispGrow'] as const;
+const ARRAYS = ['drop', 'flameScale', 'flameOpacity', 'flameLean', 'flameStretch', 'wispOpacity', 'wispRise', 'wispGrow'] as const;
 const SCALARS = ['cakeYaw', 'cakeLean', 'wickLean', 'flaps'] as const;
 const DEG = Math.PI / 180;
 
@@ -34,6 +36,7 @@ function close(a: BirthdayFrame, b: BirthdayFrame, eps = 1e-6) {
     for (let i = 0; i < CANDLE_COUNT; i++) expect(Math.abs(a[k][i]! - b[k][i]!), `${k}[${i}]`).toBeLessThan(eps);
   }
   expect(a.cakeVisible).toBe(b.cakeVisible);
+  expect(a.cakeInBin).toBe(b.cakeInBin);
   expect(a.binVisible).toBe(b.binVisible);
 }
 
@@ -94,7 +97,7 @@ describe('Birthday choreography', () => {
         const names = ['cake.x', 'cake.y', 'cake.z', 'bin.x', 'bin.y', 'bin.z', ...SCALARS, ...ARRAYS.flatMap((k) => Array.from({ length: CANDLE_COUNT }, (_, j) => `${k}[${j}]`))];
         for (let k = 0; k < cb.length; k++) {
           const name = names[k]!;
-          const m = /^(flameScale|flameLean|flameOpacity)\[(\d)\]$/.exec(name);
+          const m = /^(flameScale|flameLean|flameStretch|flameOpacity)\[(\d)\]$/.exec(name);
           if (m && Math.min(a.flameOpacity[+m[2]!]!, c.flameOpacity[+m[2]!]!) < 1e-9) continue;
           const w = /^(?:wispRise|wispGrow)\[(\d)\]$/.exec(name);
           if (w && Math.min(a.wispOpacity[+w[1]!]!, c.wispOpacity[+w[1]!]!) < 1e-9) continue;
@@ -167,6 +170,23 @@ describe('Birthday choreography', () => {
     expect(at('accept', 1.4).wickLean).toBe(0);
   });
 
+  it('accept: the breath visibly bends and draws out every lit flame before it goes out', () => {
+    // Full breath at 0.25 s: every flame leans (flutter within ±FLAME_FLUTTER) and is stretched.
+    for (let ms = 250; ms <= 600; ms++) {
+      const f = at('accept', ms / 1000);
+      for (let k = 0; k < CANDLE_COUNT; k++) {
+        if (f.flameOpacity[k]! <= 0) continue;
+        expect(f.flameLean[k]!).toBeGreaterThan(1 - FLAME_FLUTTER.amount - 1e-9);
+        expect(f.flameLean[k]!).toBeLessThan(1.5 * (1 + FLAME_FLUTTER.amount) + 1e-9);
+        expect(f.flameStretch[k]!).toBeCloseTo(1, 9);
+      }
+    }
+    // The lean reads in the picture plane: its sideways part is at least half its away part.
+    expect(Math.abs(LEAN.z)).toBeGreaterThan(0.5 * Math.abs(LEAN.x));
+    expect(Math.hypot(LEAN.x, LEAN.z)).toBeLessThan(0.6);
+    expect(pose('accepted').flameStretch.every((v) => v === 0)).toBe(true);
+  });
+
   it('candles are numbered left to right as the shared camera sees them', () => {
     const xs = CANDLE_SOCKETS.map(([x, z]) => screenX(x, z));
     for (let i = 1; i < CANDLE_COUNT; i++) expect(xs[i]!).toBeGreaterThan(xs[i - 1]! + 0.05);
@@ -210,9 +230,41 @@ describe('Birthday choreography', () => {
         expect(CAKE_RADIUS + CAKE_TOTAL_HEIGHT * tip).toBeLessThan(BIN.opening - 0.04);
         if (p.y + CAKE_TOTAL_HEIGHT < BIN.rimTop) expect(Math.abs(f.cakeLean)).toBeLessThan(0.05 * DEG);
       }
+      // Lift-off: the shell border beds 10 mm into the plate, so it rises clear of the bed before
+      // it has moved 2 mm across (no sliding through the plate).
+      const across = Math.hypot(p.x, p.z);
+      if (across > 0.002 && across < STAND.radius) expect(p.y - STAND_TOP).toBeGreaterThan(0.01);
       // While over the stand, the tipped underside never sinks below its seat on the plate.
       if (Math.hypot(p.x, p.z) < STAND.radius + CAKE_RADIUS) expect(p.y - baseR * tip).toBeGreaterThanOrEqual(STAND_TOP - 1e-9);
     }
+  });
+
+  it('decline: lifts off heavily, gathering speed over several frames (no two-frame launch)', () => {
+    const y = (frame: number) => at('decline', CARRY_FROM + frame * 0.016).cakePos.y;
+    const steps = Array.from({ length: 12 }, (_, f) => y(f + 1) - y(f));
+    const peak = Math.max(...steps);
+    // The first three frames of the lift stay under half the peak per-frame step, and the peak
+    // is at most 0.135 units a frame (v1.2 review: 0.153 reached in the third frame).
+    for (let f = 0; f < 3; f++) expect(steps[f]!).toBeLessThan(0.5 * peak);
+    expect(peak).toBeLessThan(0.135);
+    expect(at('decline', LIFT_TO).cakePos.y).toBeGreaterThan(1.4);
+  });
+
+  it('decline: the cake is in the bin\'s shade only once it is over the opening, entirely above the rim', () => {
+    let first = -1;
+    for (let i = 0; i <= 1500; i++) {
+      const f = at('decline', i / 1000);
+      if (f.cakeInBin && first < 0) {
+        first = i;
+        // Switching on changes no pixel: the whole cake (underside up) is above the shade ramp.
+        expect(f.cakePos.y).toBeGreaterThan(BIN.rimTop + BIN_SHADE.above);
+        expect(binLocal(f.cakePos).d).toBeLessThan(1e-6);
+      }
+      if (first >= 0) expect(f.cakeInBin).toBe(true);
+    }
+    expect(first).toBeGreaterThan(0);
+    expect(pose('declined').cakeInBin).toBe(true);
+    expect(pose('guest-ready').cakeInBin).toBe(false);
   });
 
   it('decline: flaps close only once the cake and candles are below them; the hidden cake stops rendering', () => {
@@ -273,8 +325,11 @@ describe('Birthday builder (code-authored candles)', () => {
       expect(flame.position.y).toBeCloseTo(CANDLE.flameBase, 9);
       const fb = box(flame);
       const cb = box(candle);
-      expect(fb.max.y - fb.min.y).toBeCloseTo(CANDLE.flameHeight, 3);
-      expect(fb.max.x - fb.min.x).toBeLessThan(CANDLE.flameRadius * 2 * 1.4);
+      // The drawn flame: FLAME_DRAW × the master's (1.5 tall, 1.45 wide), lathe a quarter wider.
+      expect(fb.max.y - fb.min.y).toBeCloseTo(FLAME.height, 3);
+      expect(FLAME.height).toBeCloseTo(CANDLE.flameHeight * FLAME_DRAW.height, 9);
+      expect(fb.max.x - fb.min.x).toBeLessThan(FLAME.radius * 2 * 1.4);
+      expect(fb.max.x - fb.min.x).toBeGreaterThan(CANDLE.flameRadius * 2 * 1.4);
       const wick = box(candle.getObjectByName(`wick_${id}`)!);
       const base = STAND_TOP + CANDLE.seat;
       expect(wick.max.y - base).toBeGreaterThan(CANDLE.wickBase + CANDLE.wickHeight - 0.002);

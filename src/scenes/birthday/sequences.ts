@@ -3,7 +3,7 @@ import { cubicBezier, EASE, easeInQuad, easeOutCubic, lerp, seg, smoothstep } fr
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 import {
   BIN_AT, BIN_FROM, CANDLE_COUNT, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LAND_SPEED, CANDLE_SETTLE, CANDLE_START, CARRY, CARRY_FROM, CARRY_LEAN, CARRY_TO,
-  DROP_TO, DROPPED, DURATIONS, FLAME_RISE, FLAME_START, HOVER_OVER_BIN, LEAN, LEAN_FADE, LEAN_MAX, ON_STAND, OUT_LEN, OUT_START, PRESENT_YAW, WICK_LEAN,
+  DROP_TO, DROPPED, DURATIONS, FLAME_FLUTTER, FLAME_RISE, FLAME_START, HOVER_OVER_BIN, LEAN, LEAN_FADE, LEAN_MAX, LIFT_TO, ON_STAND, OUT_LEN, OUT_START, PRESENT_YAW, WICK_LEAN,
   WISP_GROW_FROM, WISP_LEN, WISP_OPACITY, WISP_RISE, WISP_START,
 } from './poses.ts';
 
@@ -21,12 +21,19 @@ export interface BirthdayFrame {
   /** cake_secondary carry lean (radians) about LEAN_AXIS: + tips the top towards the bin. */
   cakeLean: number;
   cakeVisible: boolean;
+  /**
+   * The cake is over the bin's opening (from the end of the carry): what sinks below the rim from
+   * here on is in the bin's shade. Only switches while the whole cake is above the rim.
+   */
+  cakeInBin: boolean;
   /** Each candle's height above its seated socket position (negative: pressed in while settling). */
   drop: number[];
   flameScale: number[];
   flameOpacity: number[];
   /** Breath lean amount (0–1+) applied as LEAN rotation to each flame. */
   flameLean: number[];
+  /** Breath stretch (0–1): the flame drawn out tall and thin by the gust (FLAME_STRETCH). */
+  flameStretch: number[];
   wickLean: number;
   wispOpacity: number[];
   wispRise: number[];
@@ -42,8 +49,8 @@ const filled = (v: number) => Array.from({ length: CANDLE_COUNT }, () => v);
 
 export function newFrame(): BirthdayFrame {
   return frameFor('guest-ready', {
-    cakePos: new Vector3(), cakeYaw: 0, cakeLean: 0, cakeVisible: true, drop: filled(0), flameScale: filled(1), flameOpacity: filled(1),
-    flameLean: filled(0), wickLean: 0, wispOpacity: filled(0), wispRise: filled(0), wispGrow: filled(1), binPos: new Vector3(), binVisible: false, flaps: 0,
+    cakePos: new Vector3(), cakeYaw: 0, cakeLean: 0, cakeVisible: true, cakeInBin: false, drop: filled(0), flameScale: filled(1), flameOpacity: filled(1),
+    flameLean: filled(0), flameStretch: filled(0), wickLean: 0, wispOpacity: filled(0), wispRise: filled(0), wispGrow: filled(1), binPos: new Vector3(), binVisible: false, flaps: 0,
   });
 }
 
@@ -55,10 +62,12 @@ export function frameFor(pose: CanonicalPose, out: BirthdayFrame): BirthdayFrame
   out.cakeYaw = pose === 'host-ready' ? PRESENT_YAW : 0;
   out.cakeLean = 0;
   out.cakeVisible = pose !== 'declined';
+  out.cakeInBin = pose === 'declined';
   setAll(out.drop, pose === 'host-ready' ? CANDLE_HOVER : 0);
   setAll(out.flameScale, lit);
   setAll(out.flameOpacity, lit);
   setAll(out.flameLean, 0);
+  setAll(out.flameStretch, 0);
   out.wickLean = 0;
   setAll(out.wispOpacity, 0);
   setAll(out.wispRise, 0);
@@ -118,8 +127,12 @@ function accept(t: number, out: BirthdayFrame): void {
   for (let i = 0; i < CANDLE_COUNT; i++) {
     // 0.25–0.595: each flame shrinks and goes out, left to right.
     const k = seg(t, OUT_START[i]!, OUT_START[i]! + OUT_LEN);
-    // The dying flame bends further over as it shrinks (starting with zero bend speed: C1).
-    out.flameLean[i] = k >= 1 ? 0 : breath * (1 + 0.5 * k * k);
+    // The gust is not steady: each flame flutters (FLAME_FLUTTER) about its lean, out of phase
+    // with its neighbours. The dying flame bends further over as it shrinks (starting with zero
+    // bend speed: C1), drawn out tall and thin by the breath.
+    const flutter = 1 + FLAME_FLUTTER.amount * Math.sin(2 * Math.PI * FLAME_FLUTTER.hz * t + 1.9 * i);
+    out.flameLean[i] = k >= 1 ? 0 : breath * flutter * (1 + 0.5 * k * k);
+    out.flameStretch[i] = k >= 1 ? 0 : breath;
     out.flameScale[i] = 1 - easeInQuad(k);
     out.flameOpacity[i] = 1 - k * k * (1.5 - 0.5 * k);
     // 0.60–0.99: at most one faint wisp per candle, dissolving upward.
@@ -135,6 +148,13 @@ function accept(t: number, out: BirthdayFrame): void {
 // ── Decline: 1.5 s ────────────────────────────────────────────────────────────
 const FLAP_OPEN = cubicBezier(0.3, 0, 0.2, 1);
 const DESCEND = cubicBezier(0.55, 0, 0.5, 1);
+/**
+ * Lift off the stand (CARRY_FROM–LIFT_TO, 0.21 s): a heavy take-off. It gathers speed over five
+ * frames instead of two (v1.2 review: `EASE.lift` over 0.17 s reached its largest step at once;
+ * peak step 128 mm a frame, was 153) and still clears the rim with the old margin as the carry
+ * brings the cake over the bin. The bedded shell border rises before it moves across.
+ */
+const LIFT = cubicBezier(0.45, 0, 0.25, 1);
 /** Soft close: the flaps swing shut to the damper's last sliver, which it then takes up slowly. */
 const FLAP_GAP = 0.03;
 /** Flap speed (fraction/s) as the damper catches them: the handover between the two closing pieces. */
@@ -218,16 +238,17 @@ function decline(t: number, out: BirthdayFrame): void {
   setAll(out.flameScale, 1 - smoothstep(seg(t, 0.02, 0.18)));
   setAll(out.flameOpacity, out.flameScale[0]!);
   out.flaps = flaps(t);
-  // 0.25–0.72: cake and candles are lifted off the stand, carried across and held over the
+  // 0.25–0.72: cake and candles are lifted off the stand (by 0.46), carried across and held over the
   // opening; the cake sways on its plate. 0.72–0.95: straight down through the opening (steadied);
   // the bin's front wall hides it.
   if (t < CARRY_FROM) out.cakePos.copy(ON_STAND);
   else if (t < CARRY_TO) {
     const u = carryAcross(t);
     out.cakePos.set(lerp(ON_STAND.x, HOVER_OVER_BIN.x, u), 0, lerp(ON_STAND.z, HOVER_OVER_BIN.z, u));
-    out.cakePos.y = t < 0.42 ? lerp(ON_STAND.y, CARRY, EASE.lift(seg(t, CARRY_FROM, 0.42))) : lerp(CARRY, HOVER_OVER_BIN.y, smoothstep(seg(t, 0.42, CARRY_TO)));
+    out.cakePos.y = t < LIFT_TO ? lerp(ON_STAND.y, CARRY, LIFT(seg(t, CARRY_FROM, LIFT_TO))) : lerp(CARRY, HOVER_OVER_BIN.y, smoothstep(seg(t, LIFT_TO, CARRY_TO)));
   } else out.cakePos.lerpVectors(HOVER_OVER_BIN, DROPPED, DESCEND(seg(t, CARRY_TO, DROP_TO)));
   out.cakeLean = carryLean(t);
+  out.cakeInBin = t >= CARRY_TO;
   // Once the flaps have closed over it, the hidden cake stops rendering.
   out.cakeVisible = t < 1.2;
 }

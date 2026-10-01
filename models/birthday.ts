@@ -42,12 +42,51 @@ export interface BirthdayRig {
   candles: CandleRig[];
   flapL: Object3D;
   flapR: Object3D;
+  /** Shade uniforms shared by every cake material (frosting of both presets, candles). */
+  binShade: BinShade;
   bounds: ReturnType<typeof birthdayBounds>;
   setPreset(preset: CakePreset): void;
   dispose(): void;
 }
 
 export type BirthdayModel = BirthdayRig & BuiltModel;
+
+/**
+ * Bin shade: inside the shared bin, below its rim, the ink liner blocks the key and most of the
+ * fill, so whatever of the dropped cake still shows through the opening (the candle tips, the
+ * crown rosettes) darkens with depth instead of staying key-lit on the black interior. A
+ * world-height ramp on the cake's own materials: full light BIN_SHADE.above the rim (in the
+ * mouth of the bin), BIN_SHADE.floor of it BIN_SHADE.depth below, so the seated candle tips (4 cm
+ * under the rim) sink into the dark with the cake instead of reading as confetti. `uBinShadeOn` gates it to the cake over the bin (set only while the
+ * whole cake is above the rim, so switching it never changes a pixel).
+ */
+export const BIN_SHADE = { above: 0.02, depth: 0.05, floor: 0.06 } as const;
+
+export interface BinShade {
+  /** World height of the bin's rim top. */
+  readonly rimY: { value: number };
+  readonly on: { value: number };
+}
+
+function patchBinShade(material: Material, shade: BinShade): void {
+  if (material.userData.binShade) return;
+  material.userData.binShade = true;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uBinRimY = shade.rimY;
+    shader.uniforms.uBinShadeOn = shade.on;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vBinY;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n  vBinY = (modelMatrix * vec4(transformed, 1.0)).y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vBinY;\nuniform float uBinRimY;\nuniform float uBinShadeOn;')
+      .replace(
+        '#include <opaque_fragment>',
+        `outgoingLight *= mix(1.0, ${BIN_SHADE.floor.toFixed(3)}, uBinShadeOn * (1.0 - smoothstep(uBinRimY - ${BIN_SHADE.depth.toFixed(3)}, uBinRimY + ${BIN_SHADE.above.toFixed(3)}, vBinY)));\n#include <opaque_fragment>`,
+      );
+  };
+  material.customProgramCacheKey = () => 'birthday-bin-shade-v1';
+  material.needsUpdate = true;
+}
 
 /** A soft curl of smoke: one quad, low opacity, dissolves upward. */
 function wispTexture(): CanvasTexture {
@@ -113,8 +152,21 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
   }));
   nodes.cake_shadow = cakeShadow;
 
+  // The cake's own materials (both frosting presets, the candles): imported `cake_*` materials
+  // under cake_secondary, plus the variants not currently assigned. The stand stays out of the bin.
+  const binShade: BinShade = { rimY: { value: BIN.rimTop }, on: { value: 0 } };
+  const cakeMaterials = new Set<Material>();
+  const isCake = (m: Material) => m.name.startsWith('cake_') && !m.name.startsWith('cake_stand');
+  nodes.cake_secondary!.traverse((o) => {
+    const m = (o as Mesh).material;
+    if ((o as Mesh).isMesh && !o.userData.shadowProxy) for (const x of Array.isArray(m) ? m : [m]) if (isCake(x)) cakeMaterials.add(x);
+  });
+  for (const m of variants?.materials ?? []) if (isCake(m)) cakeMaterials.add(m);
+  for (const m of cakeMaterials) patchBinShade(m, binShade);
+
   const texture = wispTexture();
-  const wispMaterial = new MeshBasicMaterial({ name: 'fx_wisp', map: texture, color: '#A39B91', transparent: true, opacity: 0, depthWrite: false });
+  // Warm grey, a step darker than v1.1's #A39B91: a pale wisp vanished against the peach studio.
+  const wispMaterial = new MeshBasicMaterial({ name: 'fx_wisp', map: texture, color: '#857C72', transparent: true, opacity: 0, depthWrite: false });
   const ids = candleIds(root);
   // The master's six candles: a taller curl so a single faint wisp still reads on the peach studio.
   const wispScale = ids.length > 3 ? 1.3 : 1;
@@ -162,6 +214,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     candles,
     flapL,
     flapR,
+    binShade,
     bounds: birthdayBounds(),
     setPreset,
     dispose() {

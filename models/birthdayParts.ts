@@ -1,5 +1,5 @@
 import type { Object3D } from 'three';
-import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, STAND_TOP } from './birthdayContract.ts';
+import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME, STAND_TOP } from './birthdayContract.ts';
 import { wickGeometry } from './cakeParts.ts';
 import { group, lathe, mesh, type ProfilePoint } from './geometry.ts';
 import { markNoShadowCast } from './shadowProxy.ts';
@@ -28,11 +28,11 @@ import type { ModelContext } from './types.ts';
 const FLAME_PROFILE: ProfilePoint[] = [[0, 0], [0.026, 0.016, 0.02], [0.036, 0.048, 0.03], [0.02, 0.105, 0.025], [0, 0.16]];
 
 /**
- * Flame node scale at full size: the master flame's height (0.152) and a width a little over the
- * master's (0.040 across): the shader fades the silhouette, so the geometry is drawn wider than
- * the visible flame.
+ * Flame node scale at full size: the drawn flame (FLAME: 1.5× the master's 0.152 height, 1.45×
+ * its width) with the geometry a quarter wider than that, because the shader fades the silhouette
+ * and the visible flame is narrower than the lathe.
  */
-export const FLAME_SIZE = { width: (CANDLE.flameRadius * 1.25) / 0.036, height: CANDLE.flameHeight / 0.16 } as const;
+export const FLAME_SIZE = { width: (FLAME.radius * 1.25) / 0.036, height: FLAME.height / 0.16 } as const;
 
 export const BIRTHDAY_CANDLE_IDS = Array.from({ length: CANDLE_COUNT }, (_, i) => String(i + 1).padStart(2, '0'));
 

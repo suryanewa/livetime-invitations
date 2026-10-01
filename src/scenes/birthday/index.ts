@@ -5,13 +5,13 @@ import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import { rigBirthday, type BirthdayRig } from '../../../models/birthday.ts';
 import { BIN_POS, BIN_YAW, WALL_Z } from '../../../models/birthdayContract.ts';
 import type { CakePreset } from '../../../models/cake.ts';
-import { flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
+import { BIN, flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { birthdayFramePoints } from './framing.ts';
-import { DURATIONS, LEAN, ON_STAND } from './poses.ts';
+import { DURATIONS, FLAME_STRETCH, LEAN, ON_STAND } from './poses.ts';
 import { frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from './sequences.ts';
 
 const UP = new Vector3(0, 1, 0);
@@ -28,6 +28,7 @@ export class BirthdayScene implements SceneInstance {
   private readonly frame = newFrame();
   private preset: CakePreset;
   private readonly qYaw = new Quaternion();
+  private readonly rimWorld = new Vector3();
 
   constructor(readonly rig: BirthdayRig, config: Extract<SceneConfig, { category: 'birthday' }>) {
     this.root = rig.root;
@@ -92,13 +93,18 @@ export class BirthdayScene implements SceneInstance {
     const n = this.rig.nodes;
     n.cake_authored!.position.copy(f.cakePos);
     n.cake_authored!.visible = f.cakeVisible;
+    // Bin shade on the cake's materials once it is over the opening (rim height in world space).
+    this.root.updateWorldMatrix(true, false);
+    this.rig.binShade.rimY.value = this.rimWorld.set(0, BIN.rimTop, 0).applyMatrix4(this.root.matrixWorld).y;
+    this.rig.binShade.on.value = f.cakeInBin ? 1 : 0;
     // Carry lean about the horizontal axis across the carry, then the presentation yaw about the cake's own axis.
     n.cake_secondary!.quaternion.setFromAxisAngle(LEAN_AXIS, f.cakeLean).multiply(this.qYaw.setFromAxisAngle(UP, f.cakeYaw));
     this.rig.candles.forEach((c, i) => {
       c.candle.position.y = c.seatedY + (f.drop[i] ?? 0);
       const s = Math.max(f.flameScale[i] ?? 0, 0.0001), o = f.flameOpacity[i] ?? 0;
+      const tall = 1 + FLAME_STRETCH.tall * (f.flameStretch[i] ?? 0), thin = 1 - FLAME_STRETCH.thin * (f.flameStretch[i] ?? 0);
       c.flame.visible = o > 0.001;
-      c.flame.scale.set(c.flameSize.x * s, c.flameSize.y * s, c.flameSize.z * s);
+      c.flame.scale.set(c.flameSize.x * s * thin, c.flameSize.y * s * tall, c.flameSize.z * s * thin);
       c.flame.rotation.set(LEAN.x * (f.flameLean[i] ?? 0), 0, LEAN.z * (f.flameLean[i] ?? 0));
       c.flameMaterial.uniforms.uOpacity!.value = o;
       c.wick.rotation.set(LEAN.x * f.wickLean, 0, LEAN.z * f.wickLean);

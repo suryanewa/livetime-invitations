@@ -147,8 +147,23 @@ export const CANDLE_HOVER = 0.5;
 /** Largest pendulum lean of the carried cake (radians): 1.8°, under the brief's 2°. */
 export const LEAN_MAX = (1.8 * Math.PI) / 180;
 
+/**
+ * Drawn flame (the v1.1 view-dependent shader flame at each wick): this many times the master
+ * flame's height and width. At the master's own size (0.15 tall) the six flames were a few pixels
+ * at the bin-inclusive framing and the accept blow-out barely changed the frame (v1.2 review); at
+ * 1.5× the teardrop is about the candle's own visible height above the crown, as a birthday
+ * candle's flame is, and the breath has something to bend.
+ */
+export const FLAME_DRAW = { height: 1.5, width: 1.45 } as const;
+
+/** Drawn flame height and widest radius (candle_NN space). */
+export const FLAME = {
+  height: CANDLE.flameHeight * FLAME_DRAW.height,
+  radius: CANDLE.flameRadius * FLAME_DRAW.width,
+} as const;
+
 /** Flame top above the candle base at full size. */
-export const FLAME_TOP = CANDLE.flameBase + CANDLE.flameHeight;
+export const FLAME_TOP = CANDLE.flameBase + FLAME.height;
 
 /**
  * Complete motion bounds: stand, hovering candles, lit flames, the cake's arc over the rim and

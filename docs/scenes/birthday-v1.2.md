@@ -1,4 +1,4 @@
-# Birthday v1.2: the scan-to-CAD cake master
+# Birthday v1.2: the scan-to-CAD cake master (v1.2.1 polish)
 
 The Birthday scene now shows `models/masters/birthday-cake.glb`: the two-tier piped cake on its turned ceramic stand, with
 six twisted candles. The beats are the same as v1.1: the host places the candles and they light, a breath blows them out
@@ -36,9 +36,10 @@ Files: `scripts/masters/recipes/birthday.ts` (the recipe, with a Decisions block
   socket. Seated candles bed 18.7 mm into the top tier, as authored. They are numbered left to right on screen.
 - **Wicks and flames are re-authored.** The master's `candle_wicks` and `candle_flames` are one mesh each for all six
   candles (README pitfall 4), so they are dropped. The builder authors a per-candle wick (master wick height, slight
-  curl) and the v1.1 view-dependent shader flame (`mat_flame_outer`, unique per candle) at each tip. Both are sized
-  from the master's measurements: flame height 0.152, drawn about 1.25× the master's width because the shader fades
-  the silhouette.
+  curl) and the v1.1 view-dependent shader flame (`mat_flame_outer`, unique per candle) at each tip. The wick is the
+  master's size. The flame is drawn at `FLAME_DRAW` = 1.5× the master's height (0.228 instead of 0.152) and 1.45× its
+  width, and the lathe is a quarter wider again because the shader fades the silhouette. At the master's own size the
+  six flames were a few pixels tall at the shared framing and the accept beat barely registered (v1.2.1 review).
 - **Joins.** The 21 tier and piping meshes become 4 (`frosting_cake_{buttercream,piping,rosette,pearl}`). The candles
   are contract nodes and stay separate.
 - **Shadows.** The joined frosting (≈185k triangles) and the stand (21k) skip the shadow pass. Generated proxies cast
@@ -58,6 +59,11 @@ Files: `scripts/masters/recipes/birthday.ts` (the recipe, with a Decisions block
     warm-white piping `#FFFDF8`, ivory-cream rosettes `#F3E3C7` and white pearls. This is close to the original ivory
     rebuild's `#EEDFC5` / `#F3E8D4`. The first rosette tone, `#EEDBB8`, read as caramel under the warm key, so it was
     lightened.
+    **v1.2.1:** the body is now `#E0D3BF` with roughness 0.58 (the master's is 0.42), the piping `#FFFCF6`, the
+    rosettes `#F7EFE1` and the pearls white. At `#F3E9D8` the lit body sat in the tone mapper's shoulder, so the
+    tiers rendered as a flat ivory cut-out on the peach stage and the swags lost their relief. The deeper, more
+    neutral body keeps the shading, and the lighter piping now stands out from it, as on cocoa. A first try at
+    `#E8D5B7` read as peach under the warm key. The cocoa copy inherits the body roughness.
   - **Cocoa** is a `KHR_materials_variants` copy of the same four materials: chocolate body `#5E3727`, milk-chocolate
     piping `#94603F`, dark rosettes `#4A281A` and ivory pearls `#F4EADB`.
 
@@ -74,6 +80,10 @@ Files: `scripts/masters/recipes/birthday.ts` (the recipe, with a Decisions block
 | Accept: wisps | Base rises 0.16 on easeOutCubic, opacity `sin(πw)` | The foot stays on the wick while the curl unfurls (height 0.4 → 1, easeOutCubic). It lifts off (0.07, ease-in w³) only as it fades. Opacity is `0.42·sin²(πw)` | v1.1's rising base left the smoke floating detached above the candle while it was most visible. Seen in the v1.2 contact sheets and fixed |
 | Accept: wick return | `EASE.land` | `smoothstep` | C1 at both ends |
 | Decline: carry | `cubicBezier(0.6,0,0.4,1)` plan travel, no sway | Smootherstep plan travel, which sets off and arrives with zero acceleration. Added a **pendulum lean** of `cake_secondary`: θ'' + 2ζωθ' + ω²θ = −a(t), where a(t) is the carry's closed-form plan acceleration (2.1 Hz, ζ 0.4). It is integrated once at module load (RK4, 0.25 ms) into a Hermite-sampled table, faded to upright over 0.80 to 0.93 s and scaled so the peak is 1.8° | The cake on its plate trails as it sets off (−1.42°) and swings forward as it slows over the bin (+1.80°, within the brief's 2°). It is steadied before it enters the opening, so it drops straight and centred. The shadow proxy is under `cake_secondary`, so the shadow leans with the cake |
+| Accept: breath (v1.2.1) | Lean `{x −0.42, z −0.12}`, mostly away from the camera | Lean `{x −0.45, z −0.30}`: the sideways part is in the picture plane, about 31° at full breath and up to 46° as each flame dies. A 7 Hz ±12 % flutter, out of phase from candle to candle. The flame is drawn out 22 % taller and 15 % thinner (`flameStretch`) | The 20°/15° camera foreshortens a lean away from it, so the breath did not read. Accept now changes the frame by up to 0.07 mean per frame (was under 0.02) |
+| Accept: wisps (v1.2.1) | `#A39B91` at 0.42·sin² | `#857C72` at 0.62·sin² | The pale wisp disappeared against the peach wall |
+| Decline: lift-off (v1.2.1) | `EASE.lift` over 0.25 to 0.42 s, with its largest step (0.153 a frame) in the third frame | `cubicBezier(0.45, 0, 0.25, 1)` over 0.25 to 0.46 s, building over five frames to a peak of 0.128 a frame | Reads heavier. It still clears the bin's rim by the old margin as the carry comes over it, and the bedded shell border rises 10 mm before the cake has moved 2 mm across (new test) |
+| Decline: in the bin (v1.2.1) | Candle tips and crown rosettes stayed key-lit on the black interior and read as confetti (frames 57 to 72) | **Bin shade.** Once the cake is over the opening (`cakeInBin`, from 0.72 s, while all of it is above the rim), the cake's own materials darken with world height: both frosting presets and the candles. Full light 2 cm above the rim, 6 % of it 5 cm below (`BIN_SHADE`). This is an `onBeforeCompile` ramp on the imported `cake_*` materials with shared uniforms | The liner blocks the key and most of the fill. The dropped cake now sinks into shade, and the seated candles are dim nubs in the dark until the flaps close |
 | Decline: flap close | Two `cubicBezier`/`EASE.land` pieces | Two Hermite pieces that hand over at the damper's catch speed | The two pieces hand over at a shared velocity (C1 at 0.95 s and 1.2 s) |
 
 Every channel is a pure function of time, so replay and reversal restore everything exactly. The unit tests check:
@@ -87,7 +97,12 @@ Every channel is a pure function of time, so replay and reversal restore everyth
 - that a wisp's foot stays on its wick while it reads;
 - that the lean stays within 2°, its back and forward phases, and that it is upright when off the stand and before the drop;
 - that the tipped cake clears the stand, the rim and the flaps;
-- that the flaps close only after the cake is below them.
+- that the flaps close only after the cake is below them;
+- (v1.2.1) that every lit flame leans and stretches through the breath, and that the lean's picture-plane part is at
+  least half its away part;
+- (v1.2.1) the heavy lift-off: the first three frames stay under half the peak step, the peak stays under 0.135 a
+  frame, and the shell border clears its 10 mm bed before it moves across;
+- (v1.2.1) that the bin shade switches on only over the opening, with the whole cake above the shade ramp.
 
 ## Measured contract (scene units, `birthday_root` space unless noted)
 
@@ -110,7 +125,8 @@ At `CAKE_SCALE` 1.1:
 | `CAKE_RADIUS` | 0.6919 |
 | `CAKE_TOTAL_HEIGHT` (underside to wick tips) | 1.1815 |
 | `CANDLE.seat` (in `cake_secondary` space) / `height` / `radius` / `insert` | 0.9217 / 0.2385 / 0.0205 / 0.0187 |
-| `CANDLE.flameBase` / `flameHeight` / wick tip (`candle_NN` space) | 0.2453 / 0.1518 / 0.2597 |
+| `CANDLE.flameBase` / `flameHeight` (master) / wick tip (`candle_NN` space) | 0.2453 / 0.1518 / 0.2597 |
+| `FLAME.height` / `FLAME.radius` (drawn: `FLAME_DRAW` 1.5 / 1.45 × the master) | 0.2277 / 0.0289 |
 | `CANDLE_SOCKETS` (x, z in `cake_secondary` space, left to right on screen) | (−0.3123, 0.0273), (−0.1325, 0.2841), (−0.1798, −0.2568), (0.1798, 0.2568), (0.1325, −0.2841), (0.3123, −0.0273) |
 | Bin (shared, unchanged) | rim 1.30, floor 0.10, opening 0.89, r 0.94, at (−1.04, 0, −1.72), facing the stand |
 | `CANDLE_HOVER` | 0.5 |
@@ -142,8 +158,8 @@ unchanged, so `capture timing` was not re-run.
 
 ## Verification
 
-- `pnpm typecheck` and `pnpm test` pass. `tests/birthday.test.ts` has 20 tests: choreography, builder, and the runtime
-  GLB against the contract.
+- `pnpm typecheck` and `pnpm test` pass. `tests/birthday.test.ts` has 23 tests (v1.2.1 added three): choreography,
+  builder, and the runtime GLB against the contract.
 - `tests/browser/birthday.spec.ts` passes, 6 tests. The new one checks that the cocoa variant changes the frame visibly
   and that vanilla comes back exactly. It also covers a Low tier round trip, and leaving and re-entering the scene
   twice (once at Low) with no texture or geometry growth and no console errors.
@@ -152,6 +168,10 @@ unchanged, so `capture timing` was not re-run.
   floating wisps and the caramel rosettes. Iteration 3 confirmed the fixes after the shadow-proxy change. Compared
   with the v1.1 stills, the framing and beats are the same: the cake right of centre, the bin entering from the left,
   and the candle tips visible inside the bin before the flaps close, as in v1.1.
+- v1.2.1 polish (review fixes): re-exported the GLB (deterministic: two exports give the same SHA-1), re-ran
+  `pnpm capture birthday`, and checked by eye the stills, the host, accept and decline frame sequences and the cocoa
+  clips. Frame differences: accept reaches up to 0.07 mean per frame during the breath (was under 0.02). The decline
+  lift-off now ramps 0.4, 1.2, 2.2, 3.4, 4.3 over five frames (was 0.7, 2.4, 4.4). The six browser tests pass.
 
 ## Known gaps
 
@@ -159,8 +179,16 @@ unchanged, so `capture timing` was not re-run.
   to Birthday. Any scene whose shadow-casting master mesh has a `map` and is disposed could leak that texture the same
   way. I worked around it here with proxies. A general fix belongs in shared code: for example, the stage could clear
   stale casters, or `disposeImported` could render a frame without them. I did not edit shared files.
-- **Flame style.** The flames are the v1.1 shader flame, which is orange-tipped and stylised, not the master's tall
-  cream teardrop. The brief keeps the shader. They are sized to the master's flame height.
+- **Flame style.** The flames are the v1.1 shader flame, which is orange-tipped and stylised, not the master's
+  cream teardrop. The brief keeps the shader, and the orange tip is what separates the flames from the cream stage.
+  Since v1.2.1 they are drawn at 1.5× the master's size, so they read at stage size.
+- **Thumbnail size.** The cake is small in the 192 px collection thumbnail because the shared camera fits the whole
+  decline path, bin and flaps included. The deeper vanilla body helps it read there. Re-framing is a shared-camera
+  decision, so it was not changed here.
+- **Bin entrance.** The bin slides in fast (frames 1 to 9), and its cast shadow enters the frame one frame before the
+  bin does. This is the shared bin choreography, unchanged from v1.1.
+- **Thin candles.** The candles keep the master's proportions (r 0.0205), so each is only a few pixels wide on a
+  phone. The larger flames now carry the cascade.
 - **Lean is subtle.** The carry lean peaks at 1.8°, which reads only as a soft sway at stage size. That is the brief's
   intent (≤ 2°).
 - **Lookdev tile.** The lookdev identity tile (`buildBirthday`) still builds the v1.1 code-authored cake, because the
