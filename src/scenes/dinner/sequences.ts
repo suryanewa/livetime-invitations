@@ -1,16 +1,24 @@
-import { MathUtils, Vector3 } from 'three';
+import { Euler, MathUtils, Vector3 } from 'three';
 import { CAMERA_ANGLES } from '../../render/camera.ts';
 import { cubicBezier, EASE, lerp, seg, smoothstep } from '../../motion/curves.ts';
 import {
   COVER, COVER_BESIDE, COVER_POISED, COVER_POISED_TILT, COVER_SEATED, DINNER_BIN_POS, DINNER_BIN_START, DINNER_CARRY,
-  DISH_IN_BIN, FOOD, PLATE,
+  DISH_IN_BIN, PLATE,
 } from '../../../models/dinnerContract.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 
 /**
- * Pure authored choreography for Dinner (Dinner sub-spec): cover the dish, reveal it, or put
- * the whole covered dish in the shared bin. Every value is a function of time, so replay and
- * reversal restore plate, food, cover and bin exactly.
+ * Pure authored choreography for Dinner (Dinner sub-spec): cover the dish, reveal the plate, or
+ * put the whole covered dish in the shared bin. Every value is a function of time, so replay and
+ * reversal restore plate, cover and bin exactly.
+ *
+ * v1.2 (the plate and cloche masters, no food): the cover is handled as a hand would handle it.
+ * Every tilt is a lean θ about up × (its direction of travel), applied about a pivot in cover
+ * space (`poseAbout`): the rim point that is on the plate or floor while it is in contact, the
+ * handle's grip while it is carried, blended smoothly between them. So the reveal is handle-led
+ * (the guest-side rim rises first while the far rim stays on the plate, then the cover comes up
+ * and levels), every set-down lands the leading rim first and lowers the trailing side onto it,
+ * and the rim rock follows on with the same angular speed (C1 in tilt at every beat boundary).
  */
 
 export const DURATIONS = { host: 1.2, accept: 1.5, decline: 1.5 } as const;
@@ -29,8 +37,12 @@ export interface DinnerFrame {
 }
 
 const ORIGIN = new Vector3(0, 0, 0);
-/** Height the skirt clears the food by whenever the cover moves over it. */
-export const SAFE_SKIRT = PLATE.well + FOOD.centreHeight + 0.08;
+/**
+ * Height of the cover's rim whenever it moves over the plate. With no food (v1.2) the only thing
+ * under it is the plate itself, so this is the plate's gilt rim plus a margin; the margin keeps
+ * the v1.1 lift above the seat (0.34) so the host and reveal beats keep their heights and pace.
+ */
+export const SAFE_SKIRT = PLATE.rimHeight + 0.31;
 const ABOVE_SEAT = new Vector3(0, SAFE_SKIRT, 0);
 
 const set = (out: DinnerFrame, plate: Vector3, cover: Vector3, tilt: number) => {
@@ -40,34 +52,60 @@ const set = (out: DinnerFrame, plate: Vector3, cover: Vector3, tilt: number) => 
   out.coverTiltX = 0;
 };
 /** Horizontal direction from the seated cover to its resting place (the reveal's path). */
-const REVEAL_DIR = new Vector3(COVER_BESIDE.x - COVER_SEATED.x, 0, COVER_BESIDE.z - COVER_SEATED.z).normalize();
+export const REVEAL_DIR = new Vector3(COVER_BESIDE.x - COVER_SEATED.x, 0, COVER_BESIDE.z - COVER_SEATED.z).normalize();
 /** Direction the host's cover travels as it comes in to seat. */
-const COVER_DIR = new Vector3(COVER_SEATED.x - COVER_POISED.x, 0, COVER_SEATED.z - COVER_POISED.z).normalize();
-/** The poised cover tips its plate-side edge down (small-angle lean about up × the plate direction). */
-const poisedLean = (out: DinnerFrame, k: number) => {
-  out.coverTilt = -COVER_POISED_TILT * k * COVER_DIR.x;
-  out.coverTiltX = COVER_POISED_TILT * k * COVER_DIR.z;
-};
+export const COVER_DIR = new Vector3(COVER_SEATED.x - COVER_POISED.x, 0, COVER_SEATED.z - COVER_POISED.z).normalize();
+
+const euler = new Euler();
+const rk = new Vector3();
+const pivot = new Vector3();
+/**
+ * Cover pose from its untilted path point `base` (where cover_authored would be, level), a lean θ
+ * about up × dir (θ > 0 dips the rim on the +dir side) and a pivot `k` in cover space: the pivot
+ * point stays where the level cover would have it. Small-angle lean as XYZ Euler, exactly as the
+ * scene applies it.
+ */
+export function poseAbout(out: DinnerFrame, base: Vector3, theta: number, dir: Vector3, k: Vector3): void {
+  out.coverTilt = -theta * dir.x;
+  out.coverTiltX = theta * dir.z;
+  rk.copy(k).applyEuler(euler.set(out.coverTiltX, 0, out.coverTilt));
+  out.coverPos.copy(base).add(k).sub(rk);
+}
+/** Cover-space rim point on the +dir side (where the lip bead meets the plate or floor). */
+const rimPoint = (dir: Vector3, out: Vector3) => out.set(dir.x * COVER.lipRadius, 0, dir.z * COVER.lipRadius);
+/** The handle's grip, where a hand carries the cover. */
+const GRIP = new Vector3(0, COVER.grip, 0);
+
+/** Cubic Hermite on [0, 1] with end values and end slopes (slopes in value per unit u). */
+function hermite(u: number, p0: number, m0: number, p1: number, m1: number): number {
+  const u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
+}
 
 /**
- * The optional secondary settle (sub-spec: at most 1°): a heavy cover rocks once on its rim and
- * comes to rest. It rocks on the edge, so the lifted side rises and the other side stays on the
- * surface; the peak is about 0.95° (under the sub-spec's 1°), one cycle, well damped. It is
- * driven by contact: the cover arrives with a little speed left instead of floating to rest.
+ * The secondary settle (sub-spec: at most 1°): a heavy cover rocks once on its rim and comes to
+ * rest. It rocks on the edge, so the lifted side rises and the other side stays on the surface;
+ * the peak is about 0.95°, one cycle, well damped. It continues the set-down: the cover lands on
+ * its leading rim, its trailing side comes down onto the surface (θ falls to 0 at `ROCK_RATE`),
+ * and the same rotation carries on into the rock (θ < 0 first: the trailing rim takes the weight
+ * and the leading side lifts), so the tilt is C1 through the contact.
  */
 export const SETTLE_TILT = 0.0275;
+/** θ'(0) of the rock for a settle of duration T: the set-down arrives at −ROCK_RATE(T). */
+const rockRate = (T: number) => (SETTLE_TILT * 2 * Math.PI) / T;
 function settle(out: DinnerFrame, u: number, dir: Vector3, rest: Vector3): void {
-  const a = SETTLE_TILT * Math.sin(2 * Math.PI * u) * (1 - u) ** 2;
+  const a = -SETTLE_TILT * Math.sin(2 * Math.PI * u) * (1 - u) ** 2;
   out.coverTilt = -a * dir.x;
   out.coverTiltX = a * dir.z;
   out.coverPos.copy(rest);
-  out.coverPos.y += COVER.radius * Math.abs(Math.sin(a));
+  out.coverPos.y += COVER.lipRadius * Math.abs(Math.sin(a));
 }
 
 export function frameFor(pose: CanonicalPose, out: DinnerFrame): DinnerFrame {
   if (pose === 'host-ready') {
     set(out, ORIGIN, COVER_POISED, 0);
-    poisedLean(out, 1);
+    out.coverTilt = -COVER_POISED_TILT * COVER_DIR.x;
+    out.coverTiltX = COVER_POISED_TILT * COVER_DIR.z;
   }
   else if (pose === 'accepted') set(out, ORIGIN, COVER_BESIDE, 0);
   else if (pose === 'declined') set(out, DISH_IN_BIN, DISH_IN_BIN.clone().add(COVER_SEATED), 0);
@@ -83,73 +121,92 @@ export function newFrame(): DinnerFrame {
   return frameFor('guest-ready', { platePos: new Vector3(), coverPos: new Vector3(), coverTilt: 0, coverTiltX: 0, dishVisible: true, binPos: new Vector3(), binVisible: false, flaps: 0 });
 }
 
+const base = new Vector3();
+const k = new Vector3();
+const rim = new Vector3();
+
 // ── Host: 1.2 s ───────────────────────────────────────────────────────────────
 const ALIGN = cubicBezier(0.4, 0, 0.3, 1);
+/** Host beats: the leading rim touches the plate, the cover is flat on it, it has settled. */
+export const HOST_TOUCH = 0.84;
+export const HOST_FLAT = 0.9;
 function host(t: number, out: DinnerFrame): void {
   frameFor('guest-ready', out);
-  if (t < 0.2) {
-    // Food visible, cover poised: a small preparatory rise.
-    out.coverPos.copy(COVER_POISED);
-    out.coverPos.y += 0.03 * EASE.lift(seg(t, 0, 0.2));
-    poisedLean(out, 1);
-  } else if (t < 0.9) {
-    // Align over the food, levelling as it comes, and lower in one continuous weighted move:
-    // the height passes the safe skirt height exactly as the cover centres (0.60 s) without
-    // stopping, then decelerates to seat precisely at 0.90 s.
-    const s = ALIGN(seg(t, 0.2, 0.6));
-    const from = COVER_POISED.clone().setY(COVER_POISED.y + 0.03);
-    out.coverPos.set(lerp(from.x, ABOVE_SEAT.x, s), coverLowering(t, from.y), lerp(from.z, ABOVE_SEAT.z, s));
-    poisedLean(out, 1 - s);
-  } else {
-    // A gentle settle on the rim into guest-ready.
-    settle(out, seg(t, 0.9, 1.2), COVER_DIR, COVER_SEATED);
+  if (t >= HOST_FLAT) {
+    // The rock on the rim into guest-ready.
+    settle(out, seg(t, HOST_FLAT, DURATIONS.host), COVER_DIR, COVER_SEATED);
+    return;
   }
+  // 0–0.2: a small preparatory rise of the poised cover. 0.2–0.6: it aligns over the plate as it
+  // comes down, passing SAFE_SKIRT exactly as it centres (0.60 s) without stopping, and keeps
+  // lowering to land its leading (front) rim on the plate at HOST_TOUCH; then the back of the rim
+  // comes down onto the plate by HOST_FLAT. The poised lean eases out over the whole approach, so
+  // the cover is still tipped a little towards its landing side when it touches.
+  const fromY = COVER_POISED.y + 0.03;
+  if (t < 0.2) {
+    base.copy(COVER_POISED);
+    base.y += 0.03 * EASE.lift(seg(t, 0, 0.2));
+  } else {
+    const s = ALIGN(seg(t, 0.2, 0.6));
+    base.set(lerp(COVER_POISED.x, ABOVE_SEAT.x, s), coverLowering(t, fromY), lerp(COVER_POISED.z, ABOVE_SEAT.z, s));
+  }
+  // Lean: the poised tilt held to 0.2 s, then down to 0 at HOST_FLAT arriving at the rock's rate.
+  const m1 = (-rockRate(DURATIONS.host - HOST_FLAT) * (HOST_FLAT - 0.2)) / COVER_POISED_TILT;
+  const theta = t < 0.2 ? COVER_POISED_TILT : COVER_POISED_TILT * hermite(seg(t, 0.2, HOST_FLAT), 1, 0, 0, m1);
+  // Pivot: the cover's own origin while it is held poised (as v1.1), moving to the landing rim.
+  rimPoint(COVER_DIR, rim);
+  k.copy(rim).multiplyScalar(smoothstep(seg(t, 0.4, HOST_TOUCH)));
+  poseAbout(out, base, theta, COVER_DIR, k);
 }
 
-/** Cubic Hermite on [0, 1] with end values and end slopes (slopes in value per unit u). */
-function hermite(u: number, p0: number, m0: number, p1: number, m1: number): number {
-  const u2 = u * u, u3 = u2 * u;
-  return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
-}
-/** Host cover height 0.20–0.90 s: through SAFE_SKIRT at 0.60 s at LOWER_SPEED, seated at rest. */
+/** Host lowering speed as the cover passes SAFE_SKIRT, centred, at 0.60 s (u/s). */
 const LOWER_SPEED = -1.1;
-/** Vertical speed left at touch-down (u/s): the contact that starts the rim rock. */
-const TOUCH_DOWN = -0.3;
+/** Host base height 0.20–HOST_TOUCH: through SAFE_SKIRT at 0.60 s, landing softly on the seat. */
 function coverLowering(t: number, fromY: number): number {
   if (t < 0.6) return hermite(seg(t, 0.2, 0.6), fromY, 0, SAFE_SKIRT, LOWER_SPEED * 0.4);
-  return hermite(seg(t, 0.6, 0.9), SAFE_SKIRT, LOWER_SPEED * 0.3, COVER_SEATED.y, TOUCH_DOWN * 0.3);
+  return hermite(seg(t, 0.6, HOST_TOUCH), SAFE_SKIRT, LOWER_SPEED * (HOST_TOUCH - 0.6), COVER_SEATED.y, 0);
 }
 
 // ── Accept: 1.5 s ─────────────────────────────────────────────────────────────
+/** Across the table, seat → beside: starts while the cover is still rising, eases into the landing. */
 const REVEAL = cubicBezier(0.35, 0, 0.3, 1);
-/** Separation then lift in one curve: slow off the plate (≈8 cm at 0.20 s), no zero-velocity joint. */
-const RISE = cubicBezier(0.85, 0, 0.3, 1);
-/** Reveal lean: peaks early (about a third of the way across) so the satin sweeps the dome. */
-const LEAN = 0.18;
+/** Rise off the plate once the guest-side rim has tipped up: slow to start, decelerating to the top. */
+const RISE = cubicBezier(0.6, 0, 0.3, 1);
+/** Accept beats: the rim tip, lift-off, the top, the leading rim lands, flat on the table, settled. */
+export const ACCEPT = { tipPeak: 0.18, liftFrom: 0.1, top: 0.5, touch: 0.8, flat: 0.86, settled: 1.31 } as const;
+/** Handle-led tip: the guest-side rim rises about 4.5° while the far rim stays on the plate. */
+export const TIP = 0.078;
+/** Landing lean: the far (leading) rim comes down first, the cover tipped about 3.5° to it. */
+const LAND = 0.04;
+/** Peak height of the cover's rim above the floor on the reveal (the v1.1 reveal height). */
+export const REVEAL_TOP = SAFE_SKIRT + 0.16;
 function accept(t: number, out: DinnerFrame): void {
   frameFor('guest-ready', out);
-  const c = out.coverPos;
-  if (t < 0.85) {
-    // One continuous action: it separates from the plate, and the sideways move starts while it is
-    // still rising (no hitch at the top), then it is set down beside the plate by 0.85 s with a
-    // little speed left, which starts the rim rock.
-    const across = REVEAL(seg(t, 0.26, 0.85));
-    c.set(lerp(COVER_SEATED.x, COVER_BESIDE.x, across), 0, lerp(COVER_SEATED.z, COVER_BESIDE.z, across));
-    const top = SAFE_SKIRT + 0.16;
-    const up = COVER_SEATED.y + (top - COVER_SEATED.y) * RISE(seg(t, 0, 0.48));
-    c.y = t < 0.55 ? up : hermite(seg(t, 0.55, 0.85), top, 0, COVER_BESIDE.y, TOUCH_DOWN * 0.3);
-    // Leading edge dips along the path (small-angle lean about up × path).
-    const lean = LEAN * Math.sin(Math.PI * Math.pow(across, 0.66));
-    out.coverTilt = -lean * REVEAL_DIR.x;
-    out.coverTiltX = lean * REVEAL_DIR.z;
-  } else if (t < 1.3) {
-    // Settles on its rim beside the plate; the food stays centred and visible.
-    settle(out, seg(t, 0.85, 1.3), REVEAL_DIR, COVER_BESIDE);
-  } else {
-    // Final presentation.
-    c.copy(COVER_BESIDE);
-    out.coverTilt = 0;
+  const A = ACCEPT;
+  if (t >= A.flat) {
+    // Rocks on its rim beside the plate and comes to rest; then the final presentation.
+    if (t < A.settled) settle(out, seg(t, A.flat, A.settled), REVEAL_DIR, COVER_BESIDE);
+    else out.coverPos.copy(COVER_BESIDE);
+    return;
   }
+  // Base path (the cover's origin if it were level): rises off the plate from 0.10 s, travels
+  // across from 0.24 s while still rising, and comes down to rest beside the plate by A.touch.
+  const across = REVEAL(seg(t, 0.24, A.touch));
+  base.set(lerp(COVER_SEATED.x, COVER_BESIDE.x, across), 0, lerp(COVER_SEATED.z, COVER_BESIDE.z, across));
+  base.y = t < A.top
+    ? COVER_SEATED.y + (REVEAL_TOP - COVER_SEATED.y) * RISE(seg(t, A.liftFrom, A.top))
+    : hermite(seg(t, A.top, A.touch), REVEAL_TOP, 0, COVER_BESIDE.y, 0);
+  // Lean about up × the path: the handle-led tip (up by A.tipPeak, levelled by A.top) and the
+  // landing lean (far rim first), which reaches 0 at A.flat at the rock's rate.
+  const tip = TIP * (smoothstep(seg(t, 0, A.tipPeak)) - smoothstep(seg(t, A.tipPeak, A.top)));
+  const u = seg(t, 0.42, A.flat);
+  const land = LAND * Math.sin(Math.PI * u) ** 2 + (u * u - u * u * u) * rockRate(A.settled - A.flat) * (A.flat - 0.42);
+  // Pivot: the far rim on the plate while it tips, the grip while it is carried, the far rim
+  // again as it lands on the table.
+  rimPoint(REVEAL_DIR, rim);
+  const carried = smoothstep(seg(t, 0.12, 0.45)) - smoothstep(seg(t, 0.5, A.touch));
+  k.lerpVectors(rim, GRIP, carried);
+  poseAbout(out, base, tip + land, REVEAL_DIR, k);
 }
 
 // ── Decline: 1.5 s ────────────────────────────────────────────────────────────

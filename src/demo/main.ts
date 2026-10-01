@@ -224,12 +224,18 @@ function renderStatic() {
   $('[data-bind="where"]').textContent = ev.where;
   $('[data-action="prepare"]').textContent = HOST_ACTION[category];
   const words = PRESET_LEGEND[category];
+  // Dinner (v1.2) is the cloche and the clean plate, no food: no preset control. Its config keeps
+  // `dish` for integration compatibility; it selects nothing.
+  const presetControl = category !== 'dinner';
   $('[data-bind="preset-legend"]').textContent = words.legend;
-  $('[data-bind="host-note"]').textContent = `Changing the ${words.noun} resets the preview. Nothing is sent to guests from this page.`;
+  $('[data-bind="host-note"]').textContent = presetControl
+    ? `Changing the ${words.noun} resets the preview. Nothing is sent to guests from this page.`
+    : 'Nothing is sent to guests from this page.';
 
   const presets = $('[data-bind="presets"]');
+  (presets.closest('fieldset') as HTMLFieldSetElement).hidden = !presetControl;
   presets.replaceChildren(
-    ...PRESETS[category].map((p) => {
+    ...(presetControl ? PRESETS[category] : []).map((p) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.textContent = p.label;

@@ -1,4 +1,4 @@
-import { type Object3D } from 'three';
+import { type Mesh, type MeshStandardMaterial, type Object3D } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { COVER, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
 import { buildDinnerGeometry } from './dinnerPremium.ts';
@@ -9,8 +9,10 @@ import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } fro
 export * from './dinnerContract.ts';
 
 /**
- * Dinner runtime rig over the dish hierarchy (built or GLB-loaded) plus the shared bin
- * approved at checkpoint 3: contact shadows, bin placement and the food preset.
+ * Dinner runtime rig over the dish hierarchy (the GLB with the plate and cloche masters, or the
+ * tooling stand-in) plus the shared bin approved at checkpoint 3: contact shadows and the bin's
+ * placement. v1.2 has no food and no dish preset (Surya, 2026-10-01): `setPreset` is kept for
+ * the SceneConfig's `dish` and selects nothing.
  */
 
 export interface DinnerRig {
@@ -29,7 +31,7 @@ export interface DinnerRig {
 
 export type DinnerModel = DinnerRig & BuiltModel;
 
-export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['lib'], preset: DishPreset = 'pasta'): DinnerRig {
+export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['lib']): DinnerRig {
   const dir = lib.direction;
   root.add(binRoot);
   binRoot.position.copy(DINNER_BIN_POS);
@@ -56,12 +58,6 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
   coverShadow.visible = false;
   dishShadow.parent!.add(coverShadow);
 
-  const setPreset = (next: DishPreset) => {
-    nodes.food_pasta!.visible = next === 'pasta';
-    nodes.food_vegetables!.visible = next === 'vegetables';
-  };
-  setPreset(preset);
-
   return {
     root,
     nodes,
@@ -71,7 +67,7 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
     flapL: root.getObjectByName('bin_flap_l')!,
     flapR: root.getObjectByName('bin_flap_r')!,
     bounds: dinnerBounds(),
-    setPreset,
+    setPreset() {},
     dispose() {
       dishShadow.dispose();
       coverShadow.dispose();
@@ -81,9 +77,32 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
   };
 }
 
-/** Tooling (lookdev, tests in a browser): dish + bin geometry and the rig in one call. */
+/**
+ * Polished-silver finish of the dome, at load (the recipe API cannot raise a roughness above its
+ * map, only scale it down). The master's dome roughness map is near-uniform (G 23–34: roughness
+ * 0.09–0.13, no visible lathe detail) and that near-mirror finish showed the studio softbox as hard
+ * white windows and the floor as a flat grey. A uniform DOME_ROUGHNESS keeps a bright mirror polish
+ * whose highlights read as soft bands; the bead, bands, finial and handle keep the master's own
+ * (burnished, turned, buffed) values. The unused map is freed.
+ */
+export const DOME_ROUGHNESS = 0.2;
+export function finishDish(root: Object3D): void {
+  root.traverse((o) => {
+    const m = (o as Mesh).material as MeshStandardMaterial | undefined;
+    if (!(o as Mesh).isMesh || !m || m.name !== 'cloche_dome' || !m.roughnessMap) return;
+    const map = m.roughnessMap;
+    m.roughnessMap = null;
+    if (m.metalnessMap === map) m.metalnessMap = null;
+    m.roughness = DOME_ROUGHNESS;
+    m.metalness = 1;
+    m.needsUpdate = true;
+    map.dispose();
+  });
+}
+
+/** Tooling (lookdev, tests in a browser): the stand-in dish + bin geometry and the rig in one call. */
 export function buildDinner(ctx: ModelContext, preset: DishPreset = 'pasta'): DinnerModel {
   const root = buildDinnerGeometry(ctx, preset);
-  const rig = rigDinner(root, buildDisposalBin(ctx), ctx.lib, preset);
+  const rig = rigDinner(root, buildDisposalBin(ctx), ctx.lib);
   return { ...rig, dispose() { rig.dispose(); disposeGeometry(root); } };
 }

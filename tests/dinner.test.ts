@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { Box3, Color, Euler, MeshStandardMaterial, type Object3D, OrthographicCamera, Vector3 } from 'three';
+import { join } from 'node:path';
+import { Box3, Color, Euler, Matrix4, MeshStandardMaterial, type Object3D, OrthographicCamera, Vector3 } from 'three';
+import type { Node } from '@gltf-transform/core';
+import { listTextureSlots } from '@gltf-transform/functions';
 import { fitCameraToBounds } from '../src/render/camera.ts';
 import { dinnerFramePoints } from '../src/scenes/dinner/index.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import {
-  COVER, COVER_BESIDE, COVER_CLEARANCE, COVER_SEATED, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_NODES, DINNER_RIM_CLEARANCE, DISH_HEIGHT, FOOD, PLATE,
-  dinnerBounds,
+  COVER, COVER_BESIDE, COVER_SEATED, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_GLB_NODES, DINNER_NODES, DINNER_RIM_CLEARANCE, DISH_HEIGHT,
+  DISH_SCALE, PLATE, plateTop, dinnerBounds,
 } from '../models/dinnerContract.ts';
 import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 import { BIN, buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
-import { coverBlendSafe, DURATIONS, frameFor, newFrame, SAFE_SKIRT, sampleSequence, SETTLE_TILT, type DinnerFrame } from '../src/scenes/dinner/sequences.ts';
+import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
+import {
+  ACCEPT, coverBlendSafe, DURATIONS, frameFor, HOST_FLAT, HOST_TOUCH, newFrame, REVEAL_DIR, SAFE_SKIRT, sampleSequence, SETTLE_TILT, TIP,
+  type DinnerFrame,
+} from '../src/scenes/dinner/sequences.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
 const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
@@ -25,9 +32,101 @@ const close = (a: DinnerFrame, b: DinnerFrame, eps = 1e-6) => {
   expect(a.binVisible).toBe(b.binVisible);
 };
 const plan = (p: Vector3, c: Vector3) => Math.hypot(p.x - c.x, p.z - c.z);
+const tiltOf = (f: DinnerFrame) => Math.hypot(f.coverTilt, f.coverTiltX);
+/** Lowest point of the cover's rim ring for its position and tilt. */
+const skirtLow = (f: DinnerFrame) => f.coverPos.y - COVER.lipRadius * Math.abs(Math.sin(tiltOf(f)));
 
-/** Lowest point of the cover's skirt for its position and tilt. */
-const skirtLow = (f: DinnerFrame) => f.coverPos.y - COVER.radius * Math.abs(Math.sin(Math.hypot(f.coverTilt, f.coverTiltX)));
+// ── The exported runtime GLB (pnpm models dinner), read once ───────────────────────
+const doc = await createIO().read(join(import.meta.dirname, '..', 'assets', 'scenes', 'dinner', 'dinner.glb'));
+const node = (name: string) => findNode(doc, name);
+const worldOf = (n: Node) => new Matrix4().fromArray(n.getWorldMatrix());
+/** Every rendered vertex under `n` (shadow proxies excluded), in `space`'s frame. */
+function vertices(n: Node, space: Node): Vector3[] {
+  const out: Vector3[] = [];
+  const inv = worldOf(space).invert();
+  n.traverse((c) => {
+    if (c.getName().endsWith('shadow_proxy')) return;
+    const m = inv.clone().multiply(worldOf(c));
+    for (const prim of c.getMesh()?.listPrimitives() ?? []) {
+      const pos = prim.getAttribute('POSITION')!;
+      const e = [0, 0, 0];
+      for (let i = 0; i < pos.getCount(); i++) out.push(new Vector3(...(pos.getElement(i, e) as [number, number, number])).applyMatrix4(m));
+    }
+  });
+  return out;
+}
+const plateVerts = vertices(node('plate_secondary'), node('plate_authored'));
+const coverVerts = vertices(node('cover_secondary'), node('cover_authored'));
+/**
+ * The plate's top surface from its upward-facing vertices: the highest per 1 mm radial bin,
+ * linear between bins (the flat well has few vertices; the coupe rim has many).
+ */
+const plateTopVerts: Vector3[] = [];
+{
+  const inv = worldOf(node('plate_authored')).invert();
+  node('plate_secondary').traverse((c) => {
+    if (c.getName().endsWith('shadow_proxy')) return;
+    const m = inv.clone().multiply(worldOf(c));
+    const nm = new Matrix4().copy(m).invert().transpose();
+    for (const prim of c.getMesh()?.listPrimitives() ?? []) {
+      const pos = prim.getAttribute('POSITION')!, nor = prim.getAttribute('NORMAL')!;
+      const e = [0, 0, 0], n = [0, 0, 0];
+      for (let i = 0; i < pos.getCount(); i++) {
+        const normal = new Vector3(...(nor.getElement(i, n) as [number, number, number])).transformDirection(nm);
+        if (normal.y > 0.3) plateTopVerts.push(new Vector3(...(pos.getElement(i, e) as [number, number, number])).applyMatrix4(m));
+      }
+    }
+  });
+}
+const BIN_W = 0.001;
+const topBins = new Map<number, number>();
+for (const v of plateTopVerts) {
+  const k = Math.floor(Math.hypot(v.x, v.z) / BIN_W);
+  topBins.set(k, Math.max(topBins.get(k) ?? -1, v.y));
+}
+const topKeys = [...topBins.keys()].sort((a, b) => a - b);
+const plateSurface = (r: number) => {
+  const k = Math.floor(r / BIN_W);
+  if (topBins.has(k)) return topBins.get(k)!;
+  let i = topKeys.findIndex((x) => x > k);
+  if (i <= 0) return i === 0 ? topBins.get(topKeys[0]!)! : topBins.get(topKeys[topKeys.length - 1]!)!;
+  const k0 = topKeys[i - 1]!, k1 = topKeys[i]!;
+  const y0 = topBins.get(k0)!, y1 = topBins.get(k1)!;
+  return y0 + ((y1 - y0) * (k - k0)) / (k1 - k0);
+};
+/** The cover's lower part (rim bead, bands, skirt): what can touch the plate or the table. */
+const coverLow = coverVerts.filter((v) => v.y < 0.2).filter((_, i) => i % 3 === 0);
+if (process.env.DINNER_DEBUG) {
+  for (let r = 0.6; r <= 0.8; r += 0.004) console.log('surf', r.toFixed(3), plateSurface(r).toFixed(4), plateTop(r).toFixed(4));
+  const seated = coverVerts.map((v) => ({ r: Math.hypot(v.x, v.z), y: v.y + COVER_SEATED.y })).map((p) => ({ ...p, g: p.y - plateSurface(p.r) })).sort((a, b) => a.g - b.g).slice(0, 5);
+  console.log(JSON.stringify(seated));
+  let need = -1, at = 0;
+  for (const v of coverVerts) { const r = Math.hypot(v.x, v.z); if (r < PLATE.radius && plateSurface(r) - v.y > need) { need = plateSurface(r) - v.y; at = r; } }
+  console.log('seat needed', need, 'contact r', at);
+  const rows: string[] = [];
+  for (let i = 44; i <= 80; i++) {
+    const r = i / 100;
+    let m = 0;
+    for (const v of plateVerts) { const rr = Math.hypot(v.x, v.z); if (Math.abs(rr - r) <= 0.01) m = Math.max(m, v.y); }
+    rows.push(`[${r.toFixed(2)}, ${m.toFixed(4)}]`);
+  }
+  console.log('PROFILE', rows.join(', '));
+}
+
+/** Smallest gap between the cover (as posed by `f`) and the plate's top surface or the table. */
+const e3 = new Euler();
+const q = new Vector3();
+function coverGap(f: DinnerFrame): number {
+  e3.set(f.coverTiltX, 0, f.coverTilt);
+  let gap = Infinity;
+  for (const v of coverLow) {
+    q.copy(v).applyEuler(e3).add(f.coverPos);
+    const r = plan(q, f.platePos);
+    const floor = r < PLATE.radius ? f.platePos.y + plateSurface(r) : 0;
+    gap = Math.min(gap, q.y - floor);
+  }
+  return gap;
+}
 
 describe('Dinner choreography', () => {
   it('each sequence starts and ends exactly on its canonical poses', () => {
@@ -56,35 +155,61 @@ describe('Dinner choreography', () => {
     }
   });
 
-  it('covering and uncovering never pass the cover through the food or the plate (exact skirt ring and dome check)', () => {
-    // Food envelope above the well (linear taper from centre to edge) and the cloche's interior
-    // (an ellipsoidal cap: a conservative stand-in for the fuller real dome).
-    const foodTop = (r: number) => PLATE.well + FOOD.centreHeight + (FOOD.edgeHeight - FOOD.centreHeight) * (r / FOOD.radius);
-    const inner = (rho: number) => (COVER.domeHeight - COVER.wall) * Math.sqrt(Math.max(0, 1 - (rho / (COVER.radius - COVER.wall)) ** 2));
-    const e = new Euler(), q = new Vector3();
+  it('is C1: tilt, plan position and height change speed smoothly at every beat boundary (1 ms)', () => {
+    // Velocity from 1 ms differences; a kink shows as a velocity step at one sample that its
+    // neighbours do not share (smooth acceleration changes every step alike). Allowed: the height
+    // kinks only where the rim rock passes level (it switches the rim it rocks on: a rigid contact).
+    const h = 0.001;
+    const kink = (prev: number, cur: number, next: number) => Math.abs(cur - prev) > 0.01 + 4 * Math.max(Math.abs(prev - (2 * prev - cur)), Math.abs(next - cur), 1e-9) && Math.abs(cur - prev) > 4 * Math.abs(next - cur);
     for (const seq of ['host', 'accept'] as const) {
-      for (let i = 0; i <= DURATIONS[seq] * 1000; i += 2) {
-        const f = at(seq, i / 1000);
-        const seated = plan(f.coverPos, f.platePos) < 1e-6 && Math.hypot(f.coverTilt, f.coverTiltX) <= SETTLE_TILT && skirtLow(f) >= COVER_SEATED.y - 1e-6;
-        if (seated) continue; // on the well: the food is inside the cavity (model test)
-        e.set(f.coverTiltX, 0, f.coverTilt);
-        for (let k = 0; k < 64; k++) {
-          const a = (k / 64) * Math.PI * 2;
-          q.set(Math.cos(a) * COVER.radius, 0, Math.sin(a) * COVER.radius).applyEuler(e).add(f.coverPos);
-          const r = plan(q, f.platePos);
-          if (r < FOOD.radius) expect(q.y).toBeGreaterThan(foodTop(r) + COVER_CLEARANCE - 1e-6);
-          else if (r < PLATE.radius + 0.02) expect(q.y).toBeGreaterThan(PLATE.rimHeight + 0.005);
-        }
-        for (let rr = 0; rr <= FOOD.radius + 1e-9; rr += 0.05) {
-          for (let k = 0; k < 24; k++) {
-            const a = (k / 24) * Math.PI * 2;
-            const fx = f.platePos.x + Math.cos(a) * rr, fz = f.platePos.z + Math.sin(a) * rr;
-            const rho = Math.hypot(fx - f.coverPos.x, fz - f.coverPos.z);
-            if (rho < COVER.radius - COVER.wall) expect(f.coverPos.y + inner(rho)).toBeGreaterThan(foodTop(rr) + 0.01);
-          }
+      const vel = (t: number) => {
+        const a = at(seq, t), b = at(seq, t + h);
+        return [(b.coverTilt - a.coverTilt) / h, (b.coverTiltX - a.coverTiltX) / h, (b.coverPos.x - a.coverPos.x) / h, (b.coverPos.z - a.coverPos.z) / h, (b.coverPos.y - a.coverPos.y) / h];
+      };
+      const n = Math.round(DURATIONS[seq] * 1000) - 1;
+      const v = Array.from({ length: n }, (_, i) => vel(i * h));
+      const flat = seq === 'host' ? HOST_FLAT : ACCEPT.flat;
+      for (let i = 2; i < n - 1; i++) {
+        for (let c = 0; c < 5; c++) {
+          const dv = Math.abs(v[i]![c]! - v[i - 1]![c]!);
+          const around = Math.max(Math.abs(v[i - 1]![c]! - v[i - 2]![c]!), Math.abs(v[i + 1]![c]! - v[i]![c]!));
+          if (c === 4 && i / 1000 >= flat - 0.002) continue;
+          expect(dv, `${seq} channel ${c} at ${i} ms`).toBeLessThan(0.01 + 3 * around);
         }
       }
     }
+    void kink;
+  });
+
+  it('covering and uncovering never pass the cover through the plate or the table (real master geometry)', () => {
+    let seatedGap = Infinity;
+    for (const seq of ['host', 'accept'] as const) {
+      for (let i = 0; i <= DURATIONS[seq] * 1000; i += 2) {
+        const f = at(seq, i / 1000);
+        const gap = coverGap(f);
+        // Resting or rocking on its rim (seated on the plate's slope or on the table): contact
+        // within the 2.5 mm surface bins; moving anywhere else: clear of the plate.
+        const onRim = (seq === 'host' && i / 1000 >= HOST_TOUCH) || (seq === 'accept' && (i / 1000 <= 0.1 || i / 1000 >= ACCEPT.touch));
+        if (onRim) seatedGap = Math.min(seatedGap, gap);
+        else expect(gap, `${seq} at ${i} ms`).toBeGreaterThan(-0.0003);
+        expect(gap, `${seq} at ${i} ms`).toBeGreaterThan(-0.001);
+      }
+    }
+    expect(seatedGap).toBeGreaterThan(-0.001);
+  });
+
+  it('the reveal is handle-led: the guest-side rim rises first (≈4.5°) while the far rim stays on the plate, then the cover levels', () => {
+    // At the tip's peak the far rim (towards the resting place) is still on the plate.
+    const f = at('accept', ACCEPT.tipPeak);
+    expect(tiltOf(f)).toBeGreaterThan(TIP * 0.95);
+    expect(tiltOf(f)).toBeLessThan((6 * Math.PI) / 180);
+    const e = new Euler(f.coverTiltX, 0, f.coverTilt);
+    const far = REVEAL_DIR.clone().multiplyScalar(COVER.lipRadius).applyEuler(e).add(f.coverPos);
+    const near = REVEAL_DIR.clone().multiplyScalar(-COVER.lipRadius).applyEuler(e).add(f.coverPos);
+    expect(far.y - COVER_SEATED.y).toBeLessThan(0.03);
+    expect(near.y - COVER_SEATED.y).toBeGreaterThan(0.09);
+    // Level (within 1.5°) once it is up and carried.
+    expect(tiltOf(at('accept', ACCEPT.top))).toBeLessThan((1.5 * Math.PI) / 180);
   });
 
   it('the resting cover sits beside the plate, not on it', () => {
@@ -132,27 +257,87 @@ function plainLibrary(): MaterialLibrary {
 }
 const box = (o: Object3D) => { o.updateWorldMatrix(true, true); return new Box3().setFromObject(o, true); };
 
-describe('Dinner model contract', () => {
-  const lib = plainLibrary();
-  for (const preset of ['pasta', 'vegetables'] as const) {
-    it(`${preset}: required nodes, plate and cover on contract, food inside the envelope and under the cloche`, () => {
-      const root = buildDinnerGeometry({ lib }, preset);
-      for (const n of DINNER_NODES.filter((n) => !n.startsWith('bin_'))) expect(root.getObjectByName(n), n).toBeTruthy();
-      const plate = box(root.getObjectByName('plate_secondary')!.children.find((c) => c.name !== 'food_root')!);
-      expect(Math.max(plate.max.x, -plate.min.x, plate.max.z, -plate.min.z)).toBeLessThanOrEqual(PLATE.radius + 0.005);
-      const foodGroup = root.getObjectByName(preset === 'pasta' ? 'food_pasta' : 'food_vegetables')!;
-      const food = box(foodGroup);
-      expect(Math.max(food.max.x, -food.min.x, food.max.z, -food.min.z)).toBeLessThanOrEqual(FOOD.radius + 0.01);
-      expect(food.max.y).toBeLessThanOrEqual(PLATE.well + FOOD.centreHeight + 0.005);
-      const cover = box(root.getObjectByName('cover_authored')!);
-      expect(Math.max(cover.max.x, -cover.min.x, cover.max.z, -cover.min.z)).toBeLessThanOrEqual(COVER.radius + 0.03);
-      expect(cover.max.y).toBeLessThanOrEqual(PLATE.well + COVER.domeHeight + COVER.handleHeight + 0.01);
-      expect(cover.min.y).toBeGreaterThanOrEqual(PLATE.well - 0.005);
-    });
-  }
+describe('Dinner runtime GLB matches the contract (plate and cloche masters, no food)', () => {
+  it('has every contract node exactly once, and no food', () => {
+    for (const n of DINNER_GLB_NODES) expect(() => node(n), n).not.toThrow();
+    const names: string[] = [];
+    doc.getRoot().listNodes().forEach((n) => names.push(n.getName()));
+    expect(names.filter((n) => /food|pasta|veg|tray/.test(n))).toEqual([]);
+    expect(DISH_SCALE).toBeCloseTo(0.8399, 4);
+  });
+
+  it('the plate is the master at the v1.1 diameter: underside at the origin, flat well, gilt rim on top', () => {
+    const b = boxIn(node('plate_secondary'), node('plate_authored'));
+    expect(Math.abs(b.min.y)).toBeLessThan(0.0005);
+    expect(Math.max(b.max.x, -b.min.x, b.max.z, -b.min.z)).toBeCloseTo(PLATE.radius, 3);
+    expect(b.max.y).toBeCloseTo(PLATE.rimHeight, 3);
+    const gilt = boxIn(node('plate_gilt'), node('plate_authored'));
+    expect(gilt.max.y).toBeCloseTo(PLATE.rimHeight, 3);
+    // The flat well and the profile: every top vertex lies under the contract's conservative profile.
+    for (let r = 0.02; r < PLATE.wellRadius; r += 0.02) expect(plateSurface(r)).toBeCloseTo(PLATE.well, 3);
+    for (const v of plateVerts) expect(v.y, `r ${Math.hypot(v.x, v.z)}`).toBeLessThanOrEqual(plateTop(Math.hypot(v.x, v.z)) + 0.0002);
+  });
+
+  it('the cover is the cloche’s dome assembly with its pivot at the rim centre; seated, its bead rests on the plate inside the gilt band', () => {
+    const cover = node('cover_authored');
+    expect(new Vector3(...cover.getTranslation()).distanceTo(COVER_SEATED)).toBeLessThan(1e-4);
+    const b = boxIn(node('cover_secondary'), cover);
+    expect(Math.abs(b.min.y)).toBeLessThan(0.0005);
+    expect(b.max.y).toBeCloseTo(COVER_TOP, 3);
+    expect(Math.max(b.max.x, -b.min.x, b.max.z, -b.min.z)).toBeCloseTo(COVER.radius, 3);
+    expect(boxIn(node('cover_mesh'), cover).max.y).toBeCloseTo(COVER.domeHeight, 3);
+    // The lowest ring of the bead (it rests and rocks on it) is at lipRadius.
+    const lowest = coverVerts.reduce((a, v) => (v.y < a.y ? v : a));
+    expect(Math.hypot(lowest.x, lowest.z)).toBeCloseTo(COVER.lipRadius, 2);
+    // Seated: touching the plate (no gap, no overlap beyond a bin), well inside the gilt band.
+    const seated = coverGap(frameFor('guest-ready', newFrame()));
+    expect(seated).toBeGreaterThan(-0.0005);
+    expect(seated).toBeLessThan(0.0015);
+    expect(COVER.radius).toBeLessThan(PLATE.giltRadius - 0.1);
+    // The handle tops the dome; mapped nodes are empty transforms with their meshes on `_mesh`.
+    expect(boxIn(node('cover_handle'), cover).max.y).toBeCloseTo(COVER_TOP, 3);
+    for (const n of ['cover_mesh', 'cover_handle', 'plate_body', 'plate_gilt']) {
+      expect(node(n).getMesh(), n).toBeNull();
+      expect(node(`${n}_mesh`).getParentNode()).toBe(node(n));
+    }
+  });
+
+  it('casts through two proxies (cover, plate); the masters skip the shadow pass', () => {
+    expect((node('cover_shadow_proxy').getExtras() as { shadowProxy?: boolean }).shadowProxy).toBe(true);
+    expect(node('cover_shadow_proxy').getParentNode()).toBe(node('cover_secondary'));
+    expect((node('plate_shadow_proxy').getExtras() as { shadowProxy?: boolean }).shadowProxy).toBe(true);
+    for (const n of ['cover_mesh_mesh', 'cover_handle_mesh', 'plate_body_mesh', 'plate_gilt_mesh']) {
+      expect((node(n).getExtras() as { noShadowCast?: boolean }).noShadowCast, n).toBe(true);
+    }
+  });
+
+  it('keeps the masters’ materials (silver and gilt with their own environment) and declares WebP', () => {
+    const names = doc.getRoot().listMaterials().map((m) => m.getName()).sort();
+    expect(names).toEqual(['cloche_beads', 'cloche_dome', 'cloche_finial', 'cloche_handle', 'fx_shadow_proxy', 'plate_gilt_metal', 'plate_porcelain']);
+    for (const m of doc.getRoot().listMaterials()) {
+      if (m.getName().startsWith('cloche_') || m.getName() === 'plate_gilt_metal') expect((m.getExtras() as { ownEnv?: number }).ownEnv, m.getName()).toBe(m.getName() === 'cloche_dome' ? 1.35 : 1.1);
+    }
+    const webp = doc.getRoot().listExtensionsUsed().find((e) => e.extensionName === 'EXT_texture_webp');
+    expect(webp?.isRequired()).toBe(true);
+    for (const t of doc.getRoot().listTextures()) {
+      expect(t.getMimeType()).toBe('image/webp');
+      expect(listTextureSlots(t)).toContain('metallicRoughnessTexture');
+    }
+  });
+});
+
+describe('Dinner tooling stand-in', () => {
+  it('has the rig’s nodes and the contract’s size (lookdev builds it synchronously)', () => {
+    const root = buildDinnerGeometry({ lib: plainLibrary() });
+    for (const n of DINNER_NODES.filter((n) => !n.startsWith('bin_'))) expect(root.getObjectByName(n), n).toBeTruthy();
+    const plate = box(root.getObjectByName('plate_secondary')!);
+    expect(Math.max(plate.max.x, -plate.min.x)).toBeCloseTo(PLATE.radius, 2);
+    const cover = box(root.getObjectByName('cover_secondary')!);
+    expect(Math.max(cover.max.x, -cover.min.x)).toBeCloseTo(COVER.radius, 2);
+  });
 
   it('the bin with open flaps, the carry and the resting cover stay inside the dinner bounds', () => {
-    const bin = buildDisposalBin({ lib });
+    const bin = buildDisposalBin({ lib: plainLibrary() });
     bin.position.copy(DINNER_BIN_POS);
     bin.rotation.y = DINNER_BIN_YAW;
     bin.getObjectByName('bin_flap_l')!.rotation.z = BIN.flapOpen;
@@ -168,10 +353,10 @@ describe('Dinner model contract', () => {
 describe('Dinner settle', () => {
   it('the cover settles within 1° by rocking on its rim, never sinking into plate or floor', () => {
     let peak = 0;
-    for (const [seq, from, to, rest] of [['host', 0.9, 1.2, COVER_SEATED], ['accept', 0.85, 1.3, COVER_BESIDE]] as const) {
+    for (const [seq, from, to, rest] of [['host', HOST_FLAT, 1.2, COVER_SEATED], ['accept', ACCEPT.flat, ACCEPT.settled, COVER_BESIDE]] as const) {
       for (let t = from; t <= to; t += 0.001) {
         const f = at(seq, t);
-        const tilt = Math.hypot(f.coverTilt, f.coverTiltX);
+        const tilt = tiltOf(f);
         peak = Math.max(peak, tilt);
         expect(tilt).toBeLessThanOrEqual((1 * Math.PI) / 180);
         expect(skirtLow(f)).toBeGreaterThanOrEqual(rest.y - 1e-6);
@@ -179,6 +364,13 @@ describe('Dinner settle', () => {
       }
     }
     expect(peak).toBeGreaterThan(0.005);
+  });
+
+  it('every set-down lands the leading rim first, then the trailing side comes down onto it', () => {
+    for (const [seq, touch, flat] of [['host', HOST_TOUCH, HOST_FLAT], ['accept', ACCEPT.touch, ACCEPT.flat]] as const) {
+      for (let t = touch + 0.005; t < flat - 0.002; t += 0.005) expect(tiltOf(at(seq, t))).toBeGreaterThan(1e-4);
+      expect(tiltOf(at(seq, flat))).toBeLessThan(1e-9);
+    }
   });
 });
 
@@ -195,9 +387,9 @@ describe('Dinner framing (Master §5, recorded disposal exception)', () => {
     let min = Infinity, max = -Infinity;
     for (let i = 0; i < 64; i++) {
       const a = (i / 64) * Math.PI * 2;
-      const q = new Vector3(Math.cos(a) * PLATE.radius, 0, Math.sin(a) * PLATE.radius).applyMatrix4(inv);
-      min = Math.min(min, q.x);
-      max = Math.max(max, q.x);
+      const p = new Vector3(Math.cos(a) * PLATE.radius, 0, Math.sin(a) * PLATE.radius).applyMatrix4(inv);
+      min = Math.min(min, p.x);
+      max = Math.max(max, p.x);
     }
     const fill = (max - min) / (camera.right - camera.left);
     expect(fill).toBeGreaterThanOrEqual(0.42);
@@ -206,20 +398,28 @@ describe('Dinner framing (Master §5, recorded disposal exception)', () => {
 });
 
 describe('Dinner motion continuity (checkpoint 4)', () => {
-  it('the reveal separates about 7 cm by 0.20 s and never stops before it is set down', () => {
-    const lift = at('accept', 0.2).coverPos.y - COVER_SEATED.y;
-    expect(lift).toBeGreaterThan(0.04);
-    expect(lift).toBeLessThan(0.1);
-    for (let i = 10; i < 850; i += 5) expect(at('accept', (i + 5) / 1000).coverPos.distanceTo(at('accept', i / 1000).coverPos)).toBeGreaterThan(1e-4);
+  it('the reveal opens a gap at the guest-side rim by 0.20 s and never stops before it is set down', () => {
+    const f = at('accept', 0.2);
+    const e = new Euler(f.coverTiltX, 0, f.coverTilt);
+    const near = REVEAL_DIR.clone().multiplyScalar(-COVER.lipRadius).applyEuler(e).add(f.coverPos);
+    expect(near.y - COVER_SEATED.y).toBeGreaterThan(0.08);
+    expect(near.y - COVER_SEATED.y).toBeLessThan(0.16);
+    for (let i = 10; i < ACCEPT.flat * 1000; i += 5) {
+      const a = at('accept', i / 1000), b = at('accept', (i + 5) / 1000);
+      expect(b.coverPos.distanceTo(a.coverPos) + Math.abs(tiltOf(b) - tiltOf(a))).toBeGreaterThan(1e-4);
+    }
   });
 
   it('the host cover never hovers still between aligning and lowering', () => {
-    for (let i = 250; i < 895; i += 5) expect(at('host', (i + 5) / 1000).coverPos.distanceTo(at('host', i / 1000).coverPos)).toBeGreaterThan(1e-4);
-    expect(at('host', 0.6).coverPos.y).toBeCloseTo(SAFE_SKIRT, 6);
+    for (let i = 250; i < HOST_FLAT * 1000; i += 5) {
+      const a = at('host', i / 1000), b = at('host', (i + 5) / 1000);
+      expect(b.coverPos.distanceTo(a.coverPos) + Math.abs(tiltOf(b) - tiltOf(a))).toBeGreaterThan(1e-4);
+    }
   });
 
-  it('an answer change blends while the cover is still over the food and high, and cuts once it is aside', () => {
+  it('an answer change blends while the cover is still over the plate, and cuts once it is aside', () => {
     expect(coverBlendSafe(at('accept', 0.3))).toBe(true);
     expect(coverBlendSafe(at('accept', 0.7))).toBe(false);
+    expect(SAFE_SKIRT).toBeGreaterThan(PLATE.rimHeight + 0.25);
   });
 });
