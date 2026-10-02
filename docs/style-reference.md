@@ -319,7 +319,7 @@ SDF modelling (surface nets, gradient normals, Newton projection) for continuous
 - **Per-scene backdrop wall:** a scene can push the cove wall back (`studio.wallZ`). Birthday uses z −4.3 so the bin's slide and the carried cake never meet the cove.
 - **Point-based framing:** a scene can supply silhouette sample points along every authored path (`framePoints`). The orthographic fit uses them instead of bounding-box corners, which overstate round objects (a disc's box corners project about 28% wider than the disc).
 - **Shared charcoal bin:** a charcoal powder-coated pedal bin (`mat_bin #34373A`, r 0.48, clearcoat 0.25) with an ink liner bucket and foot ring and a butterfly lid of two turned brushed-metal half-dome flaps hinged at the sides (about 100° open), so the open bin stays low in frame. It is sized so the cake with its candles drops fully below the rim before the flaps close: the disappearance is real occlusion, never a fade. Dinner's decline will reuse it (`assets/shared/disposal-bin.glb`).
-- **Coral pedal:** the bin's one enamel insert (`mat_accent`), turned off the front so it shows at the camera angle.
+- **Coral pedal:** the bin's one enamel insert (`mat_accent`), turned off the front so it shows at the camera angle. *(Retired in v1.5: the real bin's tread is black polystyrene; a coloured insert read as a toy accent next to the masters, `docs/scenes/bin-v1.5.md`.)*
 
 ### Sports: premium hoop and ball (M5, signed off by a critical reviewer at checkpoint 4)
 

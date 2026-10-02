@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { Box3, Color, Group, type Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { Box3, Color, Group, type Material, type Mesh, MeshStandardMaterial, ShaderLib, ShaderMaterial, Vector3, type WebGLProgramParametersWithUniforms } from 'three';
 import { listTextureSlots } from '@gltf-transform/functions';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import {
-  attachBin, BIN, BIN_BOUNDS, BIN_CLOSE, BIN_CM, BIN_LATHES, BIN_MATERIALS, binIn, buildDisposalBin, dropHeight, flapAngles, flapsClosing, GRAVITY, PEDAL_HINGE,
-  pedalAngle, roundLoop,
+  attachBin, BIN, BIN_BOUNDS, BIN_CLOSE, BIN_CM, BIN_FLOOR, BIN_LATHES, BIN_MATERIALS, binIn, binLight, buildDisposalBin, detachBin, dropHeight, flapAngles,
+  flapsClosing, GRAVITY, PEDAL_HINGE, patchBinVisibility, pedalAngle, roundLoop,
 } from '../models/disposalBin.ts';
 import { BIN_POS, CAKE_RADIUS, CAKE_TOTAL_HEIGHT, STAND } from '../models/birthdayContract.ts';
 import { COVER, DINNER_BIN, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_WORLD_SCALE, DISH_HEIGHT, PLATE } from '../models/dinnerContract.ts';
@@ -82,6 +82,72 @@ describe('Shared bin: model', () => {
     bin.traverse((o) => { const m = o as Mesh; if (m.isMesh) names.add((m.material as MeshStandardMaterial).name); });
     expect([...names].sort()).toEqual(Object.keys(BIN_MATERIALS).sort());
     for (const n of names) expect(DIRECTIONS.L2.surfaces[n], n).toBeUndefined();
+  });
+});
+
+/** Runs a material's onBeforeCompile on three's own physical shader source (as the renderer would). */
+function compiled(m: Material): WebGLProgramParametersWithUniforms {
+  const shader = { uniforms: {}, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader } as unknown as WebGLProgramParametersWithUniforms;
+  m.onBeforeCompile(shader, undefined as never);
+  return shader;
+}
+
+describe('Shared bin: v1.5 polish (judge round)', () => {
+  it('no coloured accent: the pedal tread is black polystyrene and every surface is near neutral', () => {
+    const hsl = { h: 0, s: 0, l: 0 };
+    expect(new Color(BIN_MATERIALS.bin_tread.color).getHSL(hsl).l).toBeLessThan(0.12);
+    for (const [name, spec] of Object.entries(BIN_MATERIALS)) expect(new Color(spec.color).getHSL(hsl).s, name).toBeLessThan(0.1);
+  });
+
+  it('the flaps open upright, as a butterfly lid\'s halves stand (80–90°)', () => {
+    expect(BIN.flapOpen).toBeLessThanOrEqual(Math.PI / 2 + 1e-12);
+    expect(BIN.flapOpen).toBeGreaterThanOrEqual((80 * Math.PI) / 180);
+  });
+
+  it('attachBin: the outer shells see the floor, the open flaps cast no shadow above the crown, detachBin frees it', () => {
+    const root = new Group();
+    const bin = buildDisposalBin({ lib: plainLibrary() });
+    attachBin(root, bin, plainLibrary(), new Vector3(-1, 0, -2), 0.4);
+    const floorPatched = new Set<string>();
+    bin.traverse((o) => {
+      const m = (o as Mesh).material as Material | undefined;
+      if ((o as Mesh).isMesh && m?.userData.binFloor) floorPatched.add(m.name);
+    });
+    expect([...floorPatched].sort()).toEqual([...BIN_FLOOR.materials].sort());
+    const body = compiled((bin.getObjectByName('bin_body') as Mesh).material as Material);
+    expect(body.fragmentShader).toMatch(/radiance = mix\(radiance, uBinFloorL \* binLit, binBelow\)/);
+    expect(body.uniforms.uBinWallZ).toBe(binLight(bin).wallZ);
+    // Every mesh under the flaps shares one shadow material that discards above the crown.
+    const depths = new Set<Material>();
+    for (const name of ['bin_flap_l', 'bin_flap_r']) bin.getObjectByName(name)!.traverse((o) => { if ((o as Mesh).isMesh) depths.add(o.customDepthMaterial!); });
+    expect(depths.size).toBe(1);
+    const depth = [...depths][0]!;
+    const shader = { uniforms: {}, vertexShader: ShaderLib.depth.vertexShader, fragmentShader: ShaderLib.depth.fragmentShader } as unknown as WebGLProgramParametersWithUniforms;
+    depth.onBeforeCompile(shader, undefined as never);
+    expect(shader.fragmentShader).toMatch(/if \(vBinFlapY > uBinCrownY \+ 0\.004\) discard;/);
+    expect((shader.uniforms.uBinCrownY as { value: number }).value).toBeCloseTo(BIN.height, 9);
+    let freed = false;
+    depth.addEventListener('dispose', () => (freed = true));
+    detachBin(bin);
+    expect(freed).toBe(true);
+  });
+
+  it('inside the bin: the mouth\'s form factor for diffuse, the aperture test for specular; only on standard materials, chained', () => {
+    const bin = buildDisposalBin({ lib: plainLibrary() });
+    const light = binLight(bin);
+    const on = { value: 1 };
+    let earlier = false;
+    const m = new MeshStandardMaterial();
+    m.onBeforeCompile = () => { earlier = true; };
+    patchBinVisibility(m, light, on);
+    const shader = compiled(m);
+    expect(earlier).toBe(true);
+    expect(shader.fragmentShader).toMatch(/binF \+= LTC_EdgeVectorFormFactor\(binPrev, binV\);/);
+    expect(shader.fragmentShader).toMatch(/reflectedLight\.indirectDiffuse \*= mix\(1\.0, binDiff, binIn\);/);
+    expect(m.customProgramCacheKey()).toMatch(/bin-visibility-v2$/);
+    const custom = new ShaderMaterial();
+    patchBinVisibility(custom, light, on);
+    expect(custom.userData.binVisibility).toBeUndefined();
   });
 });
 

@@ -2,7 +2,7 @@ import type { Object3D } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { COVER, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
 import { buildDinnerGeometry } from './dinnerPremium.ts';
-import { attachBin, BIN_CONTACT, buildDisposalBin } from './disposalBin.ts';
+import { attachBin, BIN_CONTACT, buildDisposalBin, detachBin } from './disposalBin.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
@@ -71,6 +71,7 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
       dishShadow.dispose();
       coverShadow.dispose();
       binShadow.dispose();
+      detachBin(binRoot);
       disposeShadowProxies(root);
     },
   };
