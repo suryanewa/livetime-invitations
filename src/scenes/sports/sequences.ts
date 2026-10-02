@@ -235,7 +235,9 @@ export const netEngagement = (p: Vector3): number => {
   const ox = p.x - RIM_CENTER.x, oz = p.z - RIM_CENTER.z, o = Math.hypot(ox, oz);
   const yb = p.y - RIM_CENTER.y;
   let e = 0;
-  for (let i = 0; i <= 32; i++) {
+  // Only the depth samples the ball spans (|dy| < R).
+  const i0 = Math.max(0, Math.ceil(((-yb - BALL_R) / NET.depth) * 32)), i1 = Math.min(32, Math.floor(((-yb + BALL_R) / NET.depth) * 32));
+  for (let i = i0; i <= i1; i++) {
     const d = (i / 32) * NET.depth;
     const dy = -d - yb;
     if (Math.abs(dy) >= BALL_R) continue;

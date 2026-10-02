@@ -1,11 +1,11 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, POLE, RIM, RIM_CENTER, STAND } from '../../../models/sportsContract.ts';
 import {
-  BallTrack, BOUNCE, bounceTime, bounceToRest, cloneState, contactShift, fly, floorContact, GRAVITY, ROLL_DECEL, rollingSpin, throughNet, type BallState,
+  BallTrack, BOUNCE, bounceTime, bounceToRest, cloneState, contactShift, fly, floorContact, GRAVITY, type NetDrag, ROLL_DECEL, rollingSpin, throughNet, type BallState,
 } from './ballPhysics.ts';
 import {
   blankFrame, CONTACTS, gatherAngle, gatherAt, gatherAxis, gatherRate, gatherVelocity, type Launch, LAUNCH_LIFT, makeGather, MADE_DRIFT, RELEASE_AT, REST, RISE_FROM,
-  NET_RATE, rollAxis, sampleTrack, SHOT_APEX_ABOVE_RIM, SHOT_BACKSPIN, solveNet, TRACKS,
+  NET_RATE, netEngagement, netExited, rollAxis, sampleTrack, SHOT_APEX_ABOVE_RIM, SHOT_BACKSPIN, TRACKS,
 } from './sequences.ts';
 import type { SequenceName } from '../../core/types.ts';
 
@@ -283,13 +283,23 @@ function shootAt(track: BallTrack, st: BallState, atContact: boolean, target: Ve
     toRim = t;
   }
   fly(track, st, st.t + toRim);
-  // The net, solved for this entry (the canonical braking; the hand-back aimed so the ball comes to
-  // rest on the target): Newton on the exit drift over the cheap post-net motion, twice through the net.
+  // The net at the canonical braking rate; its hand-back aimed so the ball comes to rest on the
+  // target. Each pass: through the net, then Newton on the exit drift over the cheap bounce-out;
+  // the net hands the ball back as v_exit = drift + (v_entry − drift)·r (a linear relaxation), so
+  // the hand-back moves by the exit's miss over its gain 1 − r. Three passes reach 1e-7 su.
   const entry = cloneState(st);
-  const drift = MADE_DRIFT.clone();
-  for (let outer = 0; outer < 3; outer++) {
+  const net: NetDrag = { engagement: netEngagement, rate: NET_RATE, exitDrift: MADE_DRIFT.clone(), spinRate: 30, exited: netExited };
+  let jac: [number, number, number, number] | null = null;
+  let gain = 1;
+  for (let pass = 0; pass < 6; pass++) {
     const exit = cloneState(entry);
-    throughNet(new BallTrack(false), exit, solveNet(cloneState(entry), drift, NET_RATE));
+    throughNet(new BallTrack(false), exit, net);
+    if (pass === 0) {
+      const ix = entry.v.x - net.exitDrift.x, iz = entry.v.z - net.exitDrift.z;
+      const n2 = ix * ix + iz * iz;
+      const r = n2 > 1e-12 ? ((exit.v.x - net.exitDrift.x) * ix + (exit.v.z - net.exitDrift.z) * iz) / n2 : 0;
+      gain = Math.min(1, Math.max(0.3, 1 - r));
+    }
     const restOf = (u: Vector3) => {
       const s2 = cloneState(exit);
       s2.v.x = u.x;
@@ -298,23 +308,27 @@ function shootAt(track: BallTrack, st: BallState, atContact: boolean, target: Ve
       return s2.p;
     };
     const u = exit.v.clone().setY(0);
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 12; i++) {
       const r = restOf(u);
       const ex = target.x - r.x, ez = target.z - r.z;
-      if (Math.hypot(ex, ez) < 1e-9) break;
-      const h = 1e-4;
-      const rx = restOf(u.clone().setX(u.x + h)), rz = restOf(u.clone().setZ(u.z + h));
-      const a = (rx.x - r.x) / h, b = (rz.x - r.x) / h, c = (rx.z - r.z) / h, d = (rz.z - r.z) / h;
+      if (Math.hypot(ex, ez) < 1e-7) break;
+      if (!jac || i >= 4) {
+        const h = 1e-4;
+        const rx = restOf(u.clone().setX(u.x + h)), rz = restOf(u.clone().setZ(u.z + h));
+        jac = [(rx.x - r.x) / h, (rz.x - r.x) / h, (rx.z - r.z) / h, (rz.z - r.z) / h];
+      }
+      const [a, b, c, d] = jac;
       const det = a * d - b * c;
       if (Math.abs(det) < 1e-12) break;
       u.x += (d * ex - b * ez) / det;
       u.z += (-c * ex + a * ez) / det;
     }
-    // Aim the net's hand-back by the correction the exit needs.
-    drift.x += u.x - exit.v.x;
-    drift.z += u.z - exit.v.z;
+    const dx = u.x - exit.v.x, dz = u.z - exit.v.z;
+    if (Math.hypot(dx, dz) < 1e-7) break;
+    net.exitDrift.x += dx / gain;
+    net.exitDrift.z += dz / gain;
   }
-  throughNet(track, st, solveNet(cloneState(entry), drift, NET_RATE));
+  throughNet(track, st, net);
   bounceToRest(track, st);
 }
 

@@ -24,6 +24,7 @@ import { COVE_RADIUS } from '../src/render/studio.ts';
 import { BLEND_MARGIN, blendClearance, hoopDistance, sportsFramePoints, sportsInterruptCut } from '../src/scenes/sports/index.ts';
 import { type Change, planChange, type Showing } from '../src/scenes/sports/change.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
+import { netCost } from './netCost.ts';
 
 const SEQS = ['host', 'accept', 'decline'] as const;
 /** Sample a sequence's physics at t, tails included. */
@@ -116,14 +117,14 @@ describe('Sports ball physics (ballPhysics.ts)', () => {
     expect(SPORTS_CM_PER_UNIT).toBeCloseTo(36, 9);
   });
 
-  it('a 1.8 m drop rebounds to 1.2–1.4 m (FIBA) and compresses the ball 10 %', () => {
+  it('a 1.8 m drop rebounds to 1,035–1,085 mm (FIBA 2026, underside to underside) and compresses the ball 10 %', () => {
     const drop = 180 / SPORTS_CM_PER_UNIT;
     const vIn = Math.sqrt(2 * GRAVITY * drop);
     const v = new Vector3(0, -vIn, 0), w = new Vector3();
     const up = floorImpulse(v, w);
     const rebound = (up * up) / (2 * GRAVITY) * SPORTS_CM_PER_UNIT;
-    expect(rebound).toBeGreaterThan(120);
-    expect(rebound).toBeLessThan(140);
+    expect(rebound).toBeGreaterThan(103.5);
+    expect(rebound).toBeLessThan(108.5);
     expect(BOUNCE.restitution).toBeGreaterThanOrEqual(0.76);
     expect(BOUNCE.restitution).toBeLessThanOrEqual(0.84);
     expect(squashFor(vIn)).toBeCloseTo(0.1, 2);
@@ -147,10 +148,10 @@ describe('Sports ball physics (ballPhysics.ts)', () => {
     expect(L(back.v, back.roll)).toBeCloseTo(L(2, -3), 9);
   });
 
-  it('every floor contact rebounds at e × the impact speed, until a rebound would rise under 1 mm', () => {
+  it('every floor contact rebounds at e × the impact speed, until a rebound would rise under 1 cm', () => {
     for (const seq of SEQS) {
       const cs = CONTACTS[seq];
-      expect(cs.length, seq).toBeGreaterThan(5);
+      expect(cs.length, seq).toBeGreaterThanOrEqual(5);
       expect(cs.length, seq).toBeLessThan(40);
       for (const [i, c] of cs.entries()) {
         if (i < cs.length - 1) expect(c.rebound, `${seq} ${i}`).toBeCloseTo(BOUNCE.restitution * c.speed, 9);
@@ -668,7 +669,8 @@ describe('Sports runtime GLB and the simulated net', async () => {
     let maxOpen = 0, minGap = Infinity, wake = Infinity, lift = 0, settledAt = Infinity, lateSwing = 0;
     const bottom = lattice.rows[5]!;
     const p = new Vector3();
-    const { sim } = runNet(lattice, 'accept', REST_AT.accept, (t, s, _springs, ball) => {
+    // Run past the ball's rest: the net keeps swinging after the ball has stopped.
+    const { sim } = runNet(lattice, 'accept', REST_AT.accept + 2, (t, s, _springs, ball) => {
       if (!s.settled && wake === Infinity) wake = t;
       if (s.settled && t > CONTACT_AT + 0.2 && settledAt === Infinity) settledAt = t;
       for (let i = 0; i < s.n; i++) {
@@ -698,7 +700,7 @@ describe('Sports runtime GLB and the simulated net', async () => {
 
   it('the rim and board answer the net\'s real pull: bounded, the rim stopped by the board, both back at rest', () => {
     let rimMax = 0, rimMin = 0, boardMax = 0, forceMax = 0;
-    const { springs } = runNet(lattice, 'accept', REST_AT.accept, (_t, s, sp) => {
+    const { springs } = runNet(lattice, 'accept', REST_AT.accept + 2, (_t, s, sp) => {
       rimMax = Math.max(rimMax, sp.rim);
       rimMin = Math.min(rimMin, sp.rim);
       boardMax = Math.max(boardMax, Math.abs(sp.board));
@@ -716,17 +718,18 @@ describe('Sports runtime GLB and the simulated net', async () => {
     expect(springs.settled).toBe(true);
   });
 
-  it('the net simulation is cheap: well under a millisecond per frame (two fixed steps)', () => {
-    const sim = new NetSim(lattice);
-    const contact = { center: new Vector3(0, -0.3, 0), previous: new Vector3(0, -0.25, 0) };
-    sim.step(1 / 120, contact);
-    const t0 = performance.now();
-    for (let i = 0; i < 240; i++) {
-      contact.previous.copy(contact.center);
-      contact.center.y = -0.3 - 0.4 * Math.sin(i / 20);
-      sim.step(1 / 120, contact);
+  it('the net simulation is cheap: well under a millisecond per frame (two fixed steps), measured so machine load cannot fail it', () => {
+    // Cost per 60 fps frame with the ball in the net, in units of a fixed reference kernel timed in
+    // the same process (fastest of interleaved rounds: contention only adds time). On the M2 Pro the
+    // kernel takes 0.26 ms and the net 0.12 ms per frame (ratio 0.45; 0.44–0.71 at load average
+    // 24–33). The bound, 2, is 0.52 ms at that speed. A genuinely slow net fails every attempt; a
+    // contended measurement is retried.
+    let best = Infinity, last = { perFrameMs: 0, referenceMs: 0, ratio: Infinity };
+    for (let attempt = 0; attempt < 4 && best >= 2; attempt++) {
+      last = netCost(lattice);
+      best = Math.min(best, last.ratio);
     }
-    expect((performance.now() - t0) / 120).toBeLessThan(1);
+    expect(best, `net ${last.perFrameMs.toFixed(3)} ms/frame vs reference ${last.referenceMs.toFixed(3)} ms`).toBeLessThan(2);
   });
 });
 

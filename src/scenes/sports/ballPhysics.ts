@@ -11,8 +11,10 @@ import { BALL_R, SPORTS_CM_PER_UNIT } from '../../../models/sportsContract.ts';
  * - Flight: one gravity, standard g (9.81 m/s² = 27.25 su/s²). Air drag (≈ 7 % of g at the
  *   shot's top speed) and Magnus lift from the backspin (≈ 2 %) are left out, so every flight is an
  *   exact parabola.
- * - Floor contact: an impulse with a normal coefficient of restitution of 0.82 (FIBA: a ball
- *   dropped from 1.8 m rebounds to 1.2–1.4 m, e = 0.816–0.882; the brief's 0.76–0.84) and a
+ * - Floor contact: an impulse with a normal coefficient of restitution of 0.77 (FIBA Official
+ *   Basketball Rules 2026, Equipment §3: dropped from ≈ 1,800 mm it rebounds to 1,035–1,085 mm,
+ *   both measured to the underside of the ball: e = 0.758–0.776; the brief's 0.76–0.84. The older
+ *   rule's 1.2–1.4 m is measured to the top of the ball, the same e) and a
  *   tangential impulse after Cross ("Bounce of a spinning ball near normal incidence", Am. J.
  *   Phys. 2005): the contact point's tangential velocity is reversed by e_t = 0.15 when the ball
  *   grips, else Coulomb sliding friction μ = 0.6 limits the impulse; the ball is a hollow shell,
@@ -43,7 +45,7 @@ export const GRAVITY = 981 / SPORTS_CM_PER_UNIT;
 export const MS = 100 / SPORTS_CM_PER_UNIT;
 
 export const BOUNCE = {
-  restitution: 0.82,
+  restitution: 0.77,
   friction: 0.6,
   tangentialRestitution: 0.15,
   /** I / (m R²) for a hollow rubber shell. */
