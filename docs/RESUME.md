@@ -105,6 +105,16 @@ records `docs/scenes/<scene>-v1.5*.md` and spec revisions #37–#40.
 
 Still open:
 
+- **The bin's second polish round is unmerged** (Surya, 2026-10-02: push now, leave it as a documented gap). It lives
+  on branch `v1.5/bin` (worktree `.claude/worktrees/v15-bin`), ahead of what `main` carries: deferring the bin's
+  6.6 MB download until after `ready` (with its own hidden warm draw, since the controller's warm frame only covers
+  what is loaded), an eased entrance (~0.35–0.45 s, decelerating, inside the pull-back's window: `BIN_DELAY` in
+  `src/scenes/{birthday,dinner}/`) with the cove shadow entering with the bin rather than before it, and a texture-set
+  size check. To resume: `git merge v1.5/integration` into `v1.5/bin`, finish, verify (typecheck, unit, browser on
+  5506, the Birthday and Dinner decline strips), merge into `main`, regenerate the declined posters and backdrops
+  (`pnpm capture birthday|dinner`, `pnpm capture backdrops`). What `main` has: the judges' first bin round (black
+  pedal, 90° flaps with no cove shadow, the traced floor bounce, the in-bin form factor) and the warm frame that
+  removes the first-decline hitch.
 - **Owner decisions, pending:** revisions #37 (the record plays on; the deck order), #38 (the mini hoop system and
   the physics tails), #39 (the decline pull-back), #40 (Normal at 2 device pixels) and the host beat's new length
   (#23: 2.47 s, from the candle placement); Master §9's 2.5 MP buffer ceiling (the laptop renders at 1.65×, a full
