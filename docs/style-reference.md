@@ -26,6 +26,15 @@ Surya's edit #11 made the shared bin a real 47 cm pedal bin (`docs/scenes/bin-v1
 
 Dinner at rest is held by its own cover's paths (poised above the plate at host-ready, set down beside it at accept), short of the 0.75 cap, not by the bin. Tests: `tests/pull.test.ts`, `tests/framing.test.ts`, `tests/browser/framing.spec.ts` (the rule at rest, the clearance at pull 1, the pull through a decline and a change of mind, zero fits solved during sequences and the phone dock's changes), `tests/browser/fullscreen.spec.ts` (the declined poster's backdrop). Frames: `evidence/v1.5/framing/` (`scripts/framing-evidence.ts`).
 
+## v1.5 stage (2026-10-02): sharper on phones, a frame that moves with the sheet, posters that cannot go stale
+
+From the judges' measurement of the integrated build:
+
+- **Normal renders at up to 2 device pixels** (it was 1.5; spec revision #40), inside Master §9's unchanged 2.5-million-pixel buffer ceiling: the 390 × 844 phone draws a 780 × 1688 buffer (it upscaled a 585 × 1266 one 2×: stair-stepped silhouettes, a dotted groove on the stand's rim, soft flames and prints next to crisp UI), the 1280 × 720 laptop 2108 × 1185 (1.65, the ceiling). Every sequence of every scene still paces at p95 ≤ 16.8 ms at both sizes (`docs/qualification.md`, v1.5). If a device misses frames (p95 over 20 ms in two consecutive 1 s windows) Normal steps once to 1.5, between sequences, before any tier drop, and never back up on its own.
+- **The frame square follows the overlays smoothly**: a change of insets while the scene is live eases over 250 ms on the pull-back's ease (`INSET_EASE_MS`), so "Preview as guest" on a phone grows the object with the sheet instead of jumping it 1.56× in a frame. Posters and reduced motion take the new square at once.
+- **No first-appearance hitch**: the warm frame at load (behind the poster) also draws everything that is hidden for now (the bin, flames, smoke, steam), so the bin's first decline uploads nothing mid-sequence.
+- **Posters are checked against the live scene** (`tests/browser/posters.spec.ts`): every canonical pose of every preset and the collection thumbnail, rendered as the capture renders them and compared after a quarter-size box filter. A fresh capture differs by at most 15/255 anywhere; a poster with more than 0.05 % of its pixels changed by over 24/255 fails, with the command to regenerate it.
+
 ## v1.4 scale (2026-10-02): one world scale, one framing rule
 
 Owner: *"the sense of scale with the models is pretty poor. Make it feel more consistent."* (`docs/scale-fullscreen-brief.md`, Scale part; the fullscreen part is separate.) Where v1.3's camera section below disagrees, this section wins.

@@ -16,6 +16,16 @@ async function ready(page: Page, url = '/') {
 }
 const frame = (page: Page) => page.evaluate(() => (window as any).__showcase.controller.getFrame() as Frame);
 const rect = (page: Page, sel: string) => page.locator(sel).evaluate((el) => el.getBoundingClientRect().toJSON() as Rect);
+/** Until the frame square stops moving (an inset ease lasts 250 ms). */
+async function settled(page: Page) {
+  let prev = '';
+  await expect.poll(async () => {
+    const now = JSON.stringify(await frame(page));
+    const still = now === prev;
+    prev = now;
+    return still;
+  }, { intervals: [120, 120, 120, 120, 200, 300] }).toBe(true);
+}
 const overlaps = (a: Rect, f: Frame) => a.x < f.x + f.size && a.x + a.width > f.x && a.y < f.y + f.size && a.y + a.height > f.y;
 
 /** Layout invariants for one viewport: full-bleed canvas, overlays clear of the frame square. */
@@ -23,6 +33,8 @@ async function expectLayout(page: Page) {
   const vw = await page.evaluate(() => [innerWidth, innerHeight]);
   const canvas = await rect(page, '.lt-stage canvas');
   expect([canvas.x, canvas.y, canvas.width, canvas.height]).toEqual([0, 0, vw[0], vw[1]]);
+  // The frame square eases to new insets (v1.5, INSET_EASE_MS): judge it once it has settled.
+  await settled(page);
   const f = await frame(page);
   expect(f.size).toBeGreaterThan(Math.min(vw[0]!, vw[1]!) * 0.25);
   expect(overlaps(await rect(page, '.sc-top'), f), 'header clear of the frame').toBe(false);
@@ -105,6 +117,37 @@ test('the poster sits on the frame square, with the backdrop still around it', a
     expect(b.y + b.height).toBeGreaterThanOrEqual(height);
     expect(await page.locator('.lt-stage__backdrop').evaluate((el) => getComputedStyle(el).backgroundImage)).toMatch(/backdrop.*\.webp/);
   }
+});
+
+test('phone: the frame square eases with the sheet (no one-frame jump of the object), and lands exactly on the new insets', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await ready(page, '/?scene=party');
+  await settled(page);
+  const before = await frame(page);
+  // Sample the frame square every animation frame while "Preview as guest" swaps the sheet's panel.
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__frames = [];
+    const loop = () => {
+      w.__frames.push(w.__showcase.controller.getFrame());
+      if (w.__frames.length < 40) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+  await page.getByRole('button', { name: 'Preview as guest' }).click();
+  await page.waitForFunction(() => (window as any).__frames.length >= 40);
+  const sizes = (await page.evaluate(() => (window as any).__frames as Frame[])).map((f) => f.size);
+  await settled(page);
+  const after = await frame(page);
+  const change = Math.abs(after.size - before.size);
+  expect(change, 'the preview changes the free area').toBeGreaterThan(20);
+  // Several frames in between, no single frame taking more than a third of the change.
+  const steps = sizes.slice(1).map((s, i) => Math.abs(s - sizes[i]!));
+  expect(sizes.filter((s) => Math.abs(s - before.size) > 1 && Math.abs(s - after.size) > 1).length).toBeGreaterThanOrEqual(5);
+  expect(Math.max(...steps)).toBeLessThan(change / 3);
+  // And it lands on exactly the square the insets give (the canvas and the poster agree).
+  const p = await page.evaluate(() => [...['--lt-frame-x', '--lt-frame-y', '--lt-frame-size']].map((v) => parseFloat(getComputedStyle(document.querySelector('.lt-stage')!).getPropertyValue(v))));
+  expect(p).toEqual([after.x, after.y, after.size]);
 });
 
 test('a pulled-back declined poster sits over its own backdrop; the other poses and scenes over the rest backdrop', async ({ page }) => {
