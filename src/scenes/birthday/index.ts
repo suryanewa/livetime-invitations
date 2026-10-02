@@ -1,20 +1,21 @@
 import { Box3, type Camera, Euler, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/birthday/birthday.glb?url';
-import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import { rigBirthday, type BirthdayRig } from '../../../models/birthday.ts';
 import { poseFlame } from '../../../models/birthdayFire.ts';
 import { BIN_POS, BIN_YAW, WALL_Z } from '../../../models/birthdayContract.ts';
 import type { CakePreset } from '../../../models/cake.ts';
-import { BIN, flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
+import { BIN, binEntranceStart, binPlaceholder, flapAngles, openBinSilhouette } from '../../../models/disposalBin.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { declinePull, silhouettePoints } from '../../render/framing.ts';
-import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
+import type { DeferredContext, SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
+import type { MaterialLibrary } from '../../render/materials.ts';
+import { DeferredBin } from '../deferredBin.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { birthdayFramePoints, birthdayRestFramePoints } from './framing.ts';
 import { MELT_CAP, meltState, newMeltState } from './melt.ts';
-import { CANDLE_LEAN, DURATIONS, ON_STAND } from './poses.ts';
+import { BIN_AT, BIN_FROM, CANDLE_LEAN, DURATIONS, ON_STAND } from './poses.ts';
 import { frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from './sequences.ts';
 import { EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, newFlicker, SMOKE } from './fire.ts';
 
@@ -66,7 +67,10 @@ export class BirthdayScene implements SceneInstance {
   private readonly wicks: [number, number, number][];
   private readonly wickTmp = new Vector3();
 
-  constructor(readonly rig: BirthdayRig, config: Extract<SceneConfig, { category: 'birthday' }>) {
+  /** v1.5: the shared bin, loaded after ready (only the decline shows it). */
+  private readonly bin: DeferredBin;
+
+  constructor(readonly rig: BirthdayRig, config: Extract<SceneConfig, { category: 'birthday' }>, library?: MaterialLibrary) {
     this.root = rig.root;
     this.bounds = rig.bounds.clone();
     this.preset = config.cake;
@@ -76,7 +80,9 @@ export class BirthdayScene implements SceneInstance {
       ...rig.candles.map((c) => c.candle),
     ];
     this.wicks = rig.candles.map(() => [0, 0, 0]);
-    this.framePoints = [...birthdayFramePoints(), ...openBinFramePoints(n.bin_root!, BIN_POS, BIN_YAW)];
+    // The open bin's silhouette from its design (its GLB arrives after ready: openBinSilhouette).
+    this.framePoints = [...birthdayFramePoints(), ...openBinSilhouette(BIN_POS, BIN_YAW)];
+    this.bin = new DeferredBin(n.bin_root!, this.root, library, () => this.apply(this.frame));
     // Each candle's low side (its lean's direction), in its master candle's own frame: where its run goes.
     rig.candles.forEach((c, i) => {
       if (!c.melt || !c.wax) return;
@@ -215,7 +221,8 @@ export class BirthdayScene implements SceneInstance {
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
-    // Warm both frostings, the bin, the flames and the smoke (made visible for the compile only).
+    // Warm both frostings, the flames and the smoke (made visible for the compile only); the bin
+    // warms itself once it has arrived (DeferredBin).
     const scene = this.root.parent ?? this.root;
     const n = this.rig.nodes;
     n.bin_root!.visible = true;
@@ -230,7 +237,40 @@ export class BirthdayScene implements SceneInstance {
     this.beforeRender();
   }
 
+  /** v1.5: the decline (and the declined pose) needs the bin, which loads after ready. */
+  needs(target: SequenceName | CanonicalPose): boolean {
+    return (target === 'decline' || target === 'declined') && !this.bin.ready;
+  }
+
+  ensure(_target: SequenceName | CanonicalPose, context: DeferredContext): Promise<void> {
+    this.view = context.camera;
+    return this.bin.ensure(context);
+  }
+
+  prefetch(context: DeferredContext): Promise<void> {
+    this.view = context.camera;
+    return this.bin.prefetch(context);
+  }
+
+  /** The stage's camera, once the bin is loading (its entrance starts just out of the drawn view). */
+  private view: Camera | null = null;
+
+  /**
+   * The bin at its sampled place, with its entrance (the sampled path runs along x from BIN_FROM to
+   * BIN_AT) starting just out of the drawn view (binEntranceStart): the whole slide is seen,
+   * at every canvas size and layout. Without a camera (tooling) the sampled path itself.
+   */
+  private placeBin(p: Vector3): void {
+    const bin = this.rig.nodes.bin_root!;
+    bin.position.copy(p);
+    if (!this.view || p.x === BIN_AT.x) return;
+    const start = binEntranceStart(this.view, this.root, BIN_AT.z, BIN_AT.x, 1);
+    const e = (p.x - BIN_FROM.x) / (BIN_AT.x - BIN_FROM.x);
+    bin.position.x = start + e * (BIN_AT.x - start);
+  }
+
   dispose(): void {
+    this.bin.dispose();
     this.rig.dispose();
     disposeImported(this.root);
     this.root.traverse((o) => (o as { geometry?: { dispose(): void } }).geometry?.dispose());
@@ -267,7 +307,7 @@ export class BirthdayScene implements SceneInstance {
     });
     this.applyMelt(f);
     // The flames, embers and smoke are drawn in beforeRender (with the live flicker on top).
-    n.bin_root!.position.copy(f.binPos);
+    this.placeBin(f.binPos);
     n.bin_root!.visible = f.binVisible;
     const [l, r] = flapAngles(f.flaps);
     this.rig.flapL.rotation.set(0, 0, l);
@@ -305,21 +345,20 @@ export const birthdayScene: SceneModule = {
   category: 'birthday',
   async load({ config, library, signal }: SceneLoadContext): Promise<SceneInstance> {
     if (config.category !== 'birthday') throw new Error('birthday scene given another config');
-    const [cakeBuffer, binBuffer] = await Promise.all([fetchGlb(glbUrl, signal), fetchGlb(binUrl, signal)]);
-    const loader = new GLTFLoader();
-    const [cake, bin] = await Promise.all([loader.parseAsync(cakeBuffer, ''), loader.parseAsync(binBuffer, '')]);
+    // v1.5: the cake only; the bin (6.6 MB, only the decline shows it) loads after ready. Its
+    // framing silhouette is computed from its design while the cake downloads.
+    const cakeFetch = fetchGlb(glbUrl, signal);
+    openBinSilhouette(BIN_POS, BIN_YAW);
+    const cake = await new GLTFLoader().parseAsync(await cakeFetch, '');
     const root = cake.scene.getObjectByName('birthday_root');
-    const binRoot = bin.scene.getObjectByName('bin_root');
-    if (!root || !binRoot) throw Object.assign(new Error('missing birthday nodes'), { reason: 'asset-failure' as const });
+    if (!root) throw Object.assign(new Error('missing birthday nodes'), { reason: 'asset-failure' as const });
     // Frosting presets live in the GLB (KHR_materials_variants); read them before detaching the root.
     const variants = await loadMaterialVariants(cake);
     root.removeFromParent();
-    binRoot.removeFromParent();
     bindMaterialsByName(root, library);
     prepareImported(root, library, variants.materials);
-    bindMaterialsByName(binRoot, library);
-    const rig = rigBirthday(root, binRoot, library, config.cake, variants);
-    return new BirthdayScene(rig, config);
+    const rig = rigBirthday(root, binPlaceholder(), library, config.cake, variants);
+    return new BirthdayScene(rig, config, library);
   },
 };
 

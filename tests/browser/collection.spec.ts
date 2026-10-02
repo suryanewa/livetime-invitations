@@ -29,6 +29,8 @@ test('30 scene switches keep one canvas, free each scene\'s GPU resources and le
     const literal = CATEGORIES[i % CATEGORIES.length]!;
     await page.evaluate((l) => (window as any).__showcase.setConfig(new Function(`return (${l})`)()), literal);
     await expect.poll(async () => (await state(page)).resource, { timeout: 30_000 }).toBe('ready');
+    // v1.5: Birthday and Dinner load the bin after ready; count once they have.
+    await expect.poll(() => page.evaluate(() => (window as any).__showcase.controller.deferredReady()), { timeout: 30_000 }).toBe(true);
     const info = (await page.evaluate(() => (window as any).__showcase.controller.renderInfo())) as Info;
     if (i < 5) firstVisit.push(info);
     if (i >= 25) lastVisit.push(info);

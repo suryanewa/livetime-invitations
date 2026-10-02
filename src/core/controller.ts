@@ -1,7 +1,7 @@
 import { presetOf, resolveConfig, sameConfig } from './config.ts';
 import { PlaybackClock } from './clock.ts';
 import { ResponseState, type ResponseSnapshot } from './responseState.ts';
-import type { SceneInstance, SceneModule } from './sequence.ts';
+import type { DeferredContext, SceneInstance, SceneModule } from './sequence.ts';
 import type {
   CanonicalPose,
   Category,
@@ -91,6 +91,11 @@ export interface InvitationHandle extends InvitationController {
    * so far, the reduced `points`).
    */
   framing(aspect?: number): FramingReport | null;
+  /**
+   * Tooling only (captures, resource and frame-time checks): whether the live scene has loaded and
+   * warmed what it loads after ready (v1.5: the shared bin); true for a scene that defers nothing.
+   */
+  deferredReady(): boolean;
 }
 
 export const LOAD_TIMEOUT_MS = 6000;
@@ -213,6 +218,21 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
         updatePoster();
         emit();
       },
+      // v1.5 deferred assets (the shared bin): load and warm them now, then draw; failed, the poster.
+      ensure: (target) => {
+        const s = stage, live = scene;
+        if (!s || !live?.ensure) return Promise.resolve();
+        return live.ensure(target, deferredContext(s)).then(
+          () => requestFrame(),
+          (err: unknown) => {
+            if (scene === live && !disposed && (err as { reason?: string }).reason !== 'aborted') {
+              releaseScene();
+              setResource('fallback', 'asset-failure');
+            }
+            throw err;
+          },
+        );
+      },
     },
     mode,
     options.initialResponse ?? null,
@@ -230,6 +250,15 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   let onScreen = true;
   let lastFrameAt = 0;
   let warm = false;
+
+  /** The next idle moment between frames (or 60 ms where the browser has no idle callback). */
+  function idleMoment(): Promise<void> {
+    return new Promise((resolve) => {
+      const idle = (window as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      if (idle) idle(() => resolve(), { timeout: 600 });
+      else setTimeout(resolve, 60);
+    });
+  }
 
   function emit() {
     options.onStateChange?.(getState());
@@ -405,6 +434,12 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
         throw Object.assign(new Error('context'), { reason: 'context-lost' as const });
       }
       director.setReducedMotion(reduced());
+      // v1.5: the pose the scene opens on may need what it otherwise loads after ready (a saved
+      // decline shows the bin): load it now, under the poster.
+      for (const target of new Set([director.currentPose, director.targetPose])) {
+        if (instance.needs?.(target)) await instance.ensure!(target, deferredContext(s));
+      }
+      if (abort.signal.aborted || disposed) return;
       director.attach(instance);
       // One warm frame while the poster still covers the canvas: compileAsync neither builds the
       // shadow pass's depth program nor uploads textures, so without it the first frame after
@@ -419,6 +454,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       canRetryGraphics = false;
       setResource('ready', 'loaded');
       requestFrame();
+      startPrefetch(instance, s);
     } catch (err) {
       if (abort.signal.aborted || disposed) return;
       if (loadTimer) clearTimeout(loadTimer);
@@ -426,6 +462,32 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       const reason = (err as { reason?: ResourceReason }).reason ?? 'asset-failure';
       setResource('fallback', reason);
     }
+  }
+
+  /** v1.5: what a scene's deferred loading needs from the stage (src/core/sequence.ts). */
+  function deferredContext(s: Stage): DeferredContext {
+    return {
+      renderer: s.renderer,
+      scene: s.scene,
+      camera: s.camera,
+      adopt: (object) => s.adoptContent(object),
+      idle: idleMoment,
+      busy: () => director.isPlaying || director.waiting !== null,
+    };
+  }
+
+  /**
+   * v1.5: after ready, in idle moments, the scene loads and warms what it deferred (the shared
+   * bin): a failure here is left to the decline's own `ensure` (which retries the same load and,
+   * failing, shows the poster).
+   */
+  function startPrefetch(instance: SceneInstance, s: Stage) {
+    if (!instance.prefetch) return;
+    const context = deferredContext(s);
+    void context.idle()
+      .then(() => (scene === instance && stage === s && !disposed ? instance.prefetch!(context) : undefined))
+      .then(() => requestFrame())
+      .catch(() => {});
   }
 
   function attachCanvas(s: Stage) {
@@ -919,6 +981,11 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       if (!stage) return null;
       const info = stage.renderer.info;
       return { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 };
+    },
+
+    deferredReady() {
+      const live = scene;
+      return !!live && resource === 'ready' && !live.needs?.('decline') && !live.needs?.('declined');
     },
 
     framing(aspect = 1) {

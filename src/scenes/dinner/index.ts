@@ -1,17 +1,18 @@
 import { Box3, type Camera, Euler, type Object3D, Vector3, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/dinner/dinner.glb?url';
-import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import {
-  COVER, COVER_PROFILE, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_WORLD_SCALE, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
+  COVER, COVER_PROFILE, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_START, DINNER_BIN_YAW, DINNER_WORLD_SCALE, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
   type DinnerRig,
 } from '../../../models/dinner.ts';
-import { flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
+import { binEntranceStart, binPlaceholder, flapAngles, openBinSilhouette } from '../../../models/disposalBin.ts';
 import { DinnerSteam } from '../../../models/dinnerSteam.ts';
 import { disposeImported, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { silhouettePoints } from '../../render/framing.ts';
-import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
+import type { DeferredContext, SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
+import type { MaterialLibrary } from '../../render/materials.ts';
+import { DeferredBin } from '../deferredBin.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { smoothstep } from '../../motion/curves.ts';
 import {
@@ -24,7 +25,7 @@ import { dinnerPull } from './pull.ts';
 /**
  * Silhouette samples of every Dinner path: the plate, the cover along the host and accept paths
  * (its measured profile, tilted and placed exactly as rendered), the resting cover and the carry.
- * The scene adds the open bin from its geometry (openBinFramePoints). `'rest'` (v1.5 decline
+ * The scene adds the open bin from its design (openBinSilhouette). `'rest'` (v1.5 decline
  * pull-back): the host and accept paths only, without the carry.
  */
 export function dinnerFramePoints(paths: 'all' | 'rest' = 'all'): Vector3[] {
@@ -61,7 +62,7 @@ export function dinnerFramePoints(paths: 'all' | 'rest' = 'all'): Vector3[] {
     ring(p.x, p.z, PLATE.radius, p.y, 12);
     ring(p.x, p.z, COVER.radius * 0.35, p.y + DISH_HEIGHT, 6);
   }
-  // The bin itself (body and open flaps) is sampled from its geometry: openBinFramePoints.
+  // The bin itself (body and open flaps) is sampled from its design: openBinSilhouette.
   return pts;
 }
 
@@ -93,13 +94,18 @@ export class DinnerScene implements SceneInstance {
   private steamFade = 1;
   private steamFading = false;
 
-  constructor(readonly rig: DinnerRig, _config: Extract<SceneConfig, { category: 'dinner' }>) {
+  /** v1.5: the shared bin, loaded after ready (only the decline shows it). */
+  private readonly bin: DeferredBin;
+
+  constructor(readonly rig: DinnerRig, _config: Extract<SceneConfig, { category: 'dinner' }>, library?: MaterialLibrary) {
     this.root = rig.root;
     this.bounds = rig.bounds.clone();
     rig.root.add(this.steam.object);
     const n = rig.nodes;
     this.animatedNodes = [n.plate_authored!, n.cover_authored!, n.bin_root!, rig.flapL, rig.flapR];
-    this.framePoints = [...dinnerFramePoints(), ...openBinFramePoints(n.bin_root!, DINNER_BIN_POS, DINNER_BIN_YAW)];
+    // The open bin's silhouette from its design (its GLB arrives after ready: openBinSilhouette).
+    this.framePoints = [...dinnerFramePoints(), ...openBinSilhouette(DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE)];
+    this.bin = new DeferredBin(n.bin_root!, this.root, library, () => this.apply(this.frame));
     this.pose('guest-ready');
     this.heroPoints = silhouettePoints(this.root);
   }
@@ -224,15 +230,47 @@ export class DinnerScene implements SceneInstance {
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
-    // Warm the bin too (shown for the compile only).
+    // The steam is shown for the compile only; the bin warms itself once it has arrived (DeferredBin).
     const scene = this.root.parent ?? this.root;
-    this.rig.nodes.bin_root!.visible = true;
     this.steam.showForCompile();
     await renderer.compileAsync(scene, camera);
     this.apply(this.frame);
   }
 
+  /** v1.5: the decline (and the declined pose) needs the bin, which loads after ready. */
+  needs(target: SequenceName | CanonicalPose): boolean {
+    return (target === 'decline' || target === 'declined') && !this.bin.ready;
+  }
+
+  ensure(_target: SequenceName | CanonicalPose, context: DeferredContext): Promise<void> {
+    this.view = context.camera;
+    return this.bin.ensure(context);
+  }
+
+  prefetch(context: DeferredContext): Promise<void> {
+    this.view = context.camera;
+    return this.bin.prefetch(context);
+  }
+
+  /** The stage's camera, once the bin is loading (its entrance starts just out of the drawn view). */
+  private view: Camera | null = null;
+
+  /**
+   * The bin at its sampled place, with its entrance (the sampled path runs along x from
+   * DINNER_BIN_START to DINNER_BIN_POS) starting just out of the drawn view (binEntranceStart): the whole slide is seen,
+   * at every canvas size and layout. Without a camera (tooling) the sampled path itself.
+   */
+  private placeBin(p: Vector3): void {
+    const bin = this.rig.nodes.bin_root!;
+    bin.position.copy(p);
+    if (!this.view || p.x === DINNER_BIN_POS.x) return;
+    const start = binEntranceStart(this.view, this.root, DINNER_BIN_POS.z, DINNER_BIN_POS.x, DINNER_BIN_SCALE);
+    const e = (p.x - DINNER_BIN_START.x) / (DINNER_BIN_POS.x - DINNER_BIN_START.x);
+    bin.position.x = start + e * (DINNER_BIN_POS.x - start);
+  }
+
   dispose(): void {
+    this.bin.dispose();
     this.steam.dispose();
     this.rig.dispose();
     disposeImported(this.root);
@@ -260,7 +298,7 @@ export class DinnerScene implements SceneInstance {
     const coverShadow = this.rig.coverShadow;
     coverShadow.setFootprint(f.coverPos.x, f.coverPos.z);
     coverShadow.setHeight(f.dishVisible ? f.coverPos.y + (1 - beside) * 2 : 99, 1.2);
-    n.bin_root!.position.copy(f.binPos);
+    this.placeBin(f.binPos);
     n.bin_root!.visible = f.binVisible;
     const [l, r] = flapAngles(f.flaps);
     this.rig.flapL.rotation.set(0, 0, l);
@@ -299,21 +337,20 @@ export const dinnerScene: SceneModule = {
   category: 'dinner',
   async load({ config, library, signal }: SceneLoadContext): Promise<SceneInstance> {
     if (config.category !== 'dinner') throw new Error('dinner scene given another config');
-    const [dishBuffer, binBuffer] = await Promise.all([fetchGlb(glbUrl, signal), fetchGlb(binUrl, signal)]);
-    const loader = new GLTFLoader();
-    const [dish, bin] = await Promise.all([loader.parseAsync(dishBuffer, ''), loader.parseAsync(binBuffer, '')]);
+    // v1.5: the dish only; the bin (6.6 MB, only the decline shows it) loads after ready. Its
+    // framing silhouette is computed from its design while the dish downloads.
+    const dishFetch = fetchGlb(glbUrl, signal);
+    openBinSilhouette(DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE);
+    const dish = await new GLTFLoader().parseAsync(await dishFetch, '');
     const root = dish.scene.getObjectByName('dinner_root');
-    const binRoot = bin.scene.getObjectByName('bin_root');
-    if (!root || !binRoot) throw Object.assign(new Error('missing dinner nodes'), { reason: 'asset-failure' as const });
+    if (!root) throw Object.assign(new Error('missing dinner nodes'), { reason: 'asset-failure' as const });
     root.removeFromParent();
-    binRoot.removeFromParent();
     bindMaterialsByName(root, library);
-    bindMaterialsByName(binRoot, library);
     // The plate and cloche masters keep their own PBR materials as authored: own environment for
     // the silver and the gilt, the Low tier's registry (models/imported.ts).
     prepareImported(root, library);
     // v1.4: the scene stands in the world at its real size (models/worldScale.ts).
     root.scale.setScalar(DINNER_WORLD_SCALE);
-    return new DinnerScene(rigDinner(root, binRoot, library), config);
+    return new DinnerScene(rigDinner(root, binPlaceholder(), library), config, library);
   },
 };

@@ -106,6 +106,9 @@ async function exportScene(name: string) {
     // v1.5: the bin carries its own PBR textures (scripts/bin/), through the masters' chain.
     await finishBin(doc, (line) => console.log(line));
     await optimizeComposed(doc, BIN_RECIPE, (line) => console.log(line));
+    // v1.5 review: the steel's tangents and the turned parts' second UV set (all within 0–1) as
+    // normalised 16-bit integers (KHR_mesh_quantization, as the masters' positions and normals).
+    await doc.transform(quantize({ pattern: /^(TANGENT|TEXCOORD_1)$/, quantizeNormal: 12, quantizeTexcoord: 16 }));
   } else {
     await doc.transform(
       dedup(),

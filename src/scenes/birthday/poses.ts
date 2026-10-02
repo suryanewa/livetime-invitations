@@ -81,6 +81,12 @@ export { IGNITE, IGNITE_START } from './fire.ts';
  * is settled, flaps open, at 0.37 s, before the carry across sets off (ACROSS_FROM).
  */
 export const BIN_DELAY = 0.12;
+/**
+ * v1.5 review: the bin's slide (models/disposalBin.ts BIN_ENTRANCE: from just out of the drawn
+ * view, decelerating), 0.12–0.50 s, at rest before the cake reaches its footprint (0.521 s); its
+ * flaps open as it settles (0.28–0.48 s), before the cake comes over the rim.
+ */
+export const BIN_SLIDE = 0.38;
 
 /** Decline path keys. */
 export const BIN_AT = BIN_POS;

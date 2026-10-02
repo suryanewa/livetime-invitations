@@ -1,5 +1,5 @@
 import {
-  Box3, BufferAttribute, BufferGeometry, Color, type DirectionalLight, type Euler, type Material, Matrix4, type Mesh, MeshDepthMaterial, MeshPhysicalMaterial,
+  Box3, BufferAttribute, BufferGeometry, type Camera, Color, type DirectionalLight, type Euler, type Material, Matrix4, type Mesh, MeshDepthMaterial, MeshPhysicalMaterial,
   MeshStandardMaterial, type Object3D, Quaternion, type SpotLight, Vector2, Vector3,
 } from 'three';
 import { beveledPlate, group, mesh } from './geometry.ts';
@@ -202,11 +202,98 @@ export function openBinFramePoints(binRoot: Object3D, position: Vector3, yaw: nu
 }
 
 /**
+ * The open bin's framing samples without its geometry (v1.5: the bin's GLB loads after the scene
+ * is ready, but the decline's camera fit is made at load). The same points that matter as
+ * `openBinFramePoints` takes from every vertex, at once: a turned part's vertices are its profile
+ * revolved at its own segment angles, and only the profile's convex-hull points can be extremes
+ * of any projection, so those are revolved; the flaps (open), the hinges and the pedal (pressed,
+ * as the lid's link leaves it) come from their own builders. The convex hull of these is the hull
+ * of every vertex of the built bin (tests/bin.test.ts), so every framing fit is the same.
+ */
+export function openBinSilhouette(position: Vector3, yaw: number, scale = 1): Vector3[] {
+  const local = (silhouetteLocal ??= buildSilhouette());
+  const place = new Matrix4().compose(position, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw), new Vector3(scale, scale, scale));
+  const pts: Vector3[] = new Array(local.length / 3);
+  for (let i = 0; i < pts.length; i++) pts[i] = new Vector3(local[i * 3], local[i * 3 + 1], local[i * 3 + 2]).applyMatrix4(place);
+  return pts;
+}
+
+/** The open bin's silhouette samples in bin_root space, built once per page (≈ 40 ms). */
+let silhouetteLocal: Float32Array | null = null;
+
+function buildSilhouette(): Float32Array {
+  const out: number[] = [];
+  const v = new Vector3();
+  const add = (g: BufferGeometry, m: Matrix4 | null) => {
+    const attr = g.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i < attr.count; i++) {
+      v.fromBufferAttribute(attr, i);
+      if (m) v.applyMatrix4(m);
+      out.push(v.x, v.y, v.z);
+    }
+    g.dispose();
+  };
+  // Turned parts: the profile's hull (with its mirror across the axis), revolved.
+  for (const part of BIN_LATHES) {
+    for (const [r, y] of profileHull(roundLoop(part.loop).map((p) => [p.r, p.y] as [number, number]))) {
+      for (let i = 0; i < part.segments; i++) {
+        const phi = (i / part.segments) * Math.PI * 2;
+        out.push(r * Math.sin(phi) * U, y * U, r * Math.cos(phi) * U);
+      }
+    }
+  }
+  for (const g of [...hingeHousing(-1), ...hingeHousing(1), hingePin(-1), hingePin(1)]) add(g, null);
+  // The flaps, open on their hinge pins.
+  const half = lidHalf();
+  const open = flapAngles(1);
+  for (const side of [-1, 1] as const) {
+    const flap = new Matrix4().compose(
+      new Vector3(side * BIN.hingeX, BIN.rimTop + BIN.hingeY, 0), new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), open[side < 0 ? 0 : 1]!), new Vector3(1, 1, 1),
+    );
+    for (const geometry of [half.shell, half.under, half.knuckle]) {
+      const g = geometry.clone();
+      if (side > 0) mirrorX(g);
+      g.translate(-side * BIN.hingeX, -BIN.hingeY, 0);
+      add(g, flap);
+    }
+  }
+  half.shell.dispose(); half.under.dispose(); half.knuckle.dispose();
+  // The pedal, pressed (the lid's link: attachBin).
+  const p = pedalParts();
+  const mount = new Matrix4().makeRotationY(BIN.pedalAngle);
+  for (const g of [p.housing, ...p.lugs, p.slot, p.pin]) add(g, mount);
+  const lever = mount.clone().multiply(new Matrix4().compose(
+    new Vector3(0, PEDAL_HINGE.y * U, PEDAL_HINGE.z * U), new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), pedalAngle(1)), new Vector3(1, 1, 1),
+  ));
+  add(p.lever, lever);
+  add(p.tread, lever);
+  return new Float32Array(out);
+}
+
+/** The points of a turned profile (r, y) on the convex hull of it and its mirror across the axis (r ≥ 0). */
+function profileHull(points: [number, number][]): [number, number][] {
+  const all = [...points, ...points.map(([r, y]) => [-r, y] as [number, number])].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const chain = (list: [number, number][]) => {
+    const h: [number, number][] = [];
+    for (const q of list) {
+      while (h.length >= 2 && cross(h[h.length - 2]!, h[h.length - 1]!, q) <= 0) h.pop();
+      h.push(q);
+    }
+    return h;
+  };
+  return [...chain(all), ...chain([...all].reverse())].filter(([r]) => r >= 0);
+}
+
+/**
  * Runtime placement (the Birthday and Dinner rigs): adds the bin under the scene root at
  * `position`, turned by `yaw`, scaled by `scale` (1 / the scene's world scale, so the bin keeps
  * its real size), registers its PBR materials with the scene's imported materials (own
  * environment for the steel, the Low tier, disposal: models/imported.ts), and links the pedal
  * to the lid: setting a flap's rotation (the scenes' `flapAngles`) also sets the pedal.
+ *
+ * v1.5: `binRoot` may be `binPlaceholder()`, the empty bin a scene is rigged with before the
+ * bin's GLB has arrived (it loads after the scene is ready: `fillBin` moves its parts in later).
  */
 export function attachBin(
   root: Object3D, binRoot: Object3D, lib: ModelContext['lib'], position: Vector3, yaw: number, scale = 1,
@@ -216,21 +303,8 @@ export function attachBin(
   binRoot.position.copy(position);
   binRoot.rotation.set(0, yaw, 0);
   binRoot.scale.setScalar(scale);
-  prepareImported(root, lib);
-  linkPedal(binRoot);
   const light = binLight(binRoot);
-  // Its own outer shells reflect the floor it stands on (patchBinFloor).
-  binRoot.traverse((o) => {
-    const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
-    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if (BIN_FLOOR.materials.includes(m.name as never)) patchBinFloor(m, light);
-  });
-  // The open flaps cast no shadow above the closed lid's crown (flapShadowMaterial).
-  const depth = flapShadowMaterial(light);
-  binRoot.userData.flapDepth = depth;
-  for (const name of ['bin_flap_l', 'bin_flap_r']) binRoot.getObjectByName(name)?.traverse((o) => {
-    if ((o as Mesh).isMesh) o.customDepthMaterial = depth;
-  });
+  if (!binRoot.userData.binPlaceholder) finishBin(root, binRoot, lib);
   // The scene's own surfaces that can go into the bin see its walls instead of the room.
   if (options.shade) {
     const on = { value: 1 };
@@ -242,10 +316,75 @@ export function attachBin(
   }
 }
 
-/** Frees what `attachBin` made for this bin (the flaps' shadow material); the scene frees the rest. */
+/**
+ * The empty bin a scene is rigged with until the bin's GLB arrives (v1.5: the 6.6 MB bin is needed
+ * only on decline, so it loads after the scene is ready): `bin_root` with the nodes the rigs and
+ * the scenes drive (`bin_lid` and the two flap pivots, where the GLB has them, and `bin_shadow`,
+ * the contact shadow's place). `fillBin` moves the real parts in.
+ */
+export function binPlaceholder(): Object3D {
+  const root = group('bin_root');
+  root.userData.binPlaceholder = true;
+  const lid = group('bin_lid', root);
+  lid.position.set(0, BIN.rimTop, 0);
+  for (const side of [-1, 1] as const) group(side < 0 ? 'bin_flap_l' : 'bin_flap_r', lid).position.set(side * BIN.hingeX, BIN.hingeY, 0);
+  group('bin_shadow', root).position.set(0, 0.002, 0);
+  return root;
+}
+
+/**
+ * Moves a loaded bin's parts into the placeholder the scene was rigged with (the flap pivots and
+ * `bin_root` keep their identity, so the scene's references and the interruption blend's nodes
+ * stay valid; its contact shadow stays the rig's), then does what `attachBin` could not do
+ * without them. `root` is the scene root the bin was attached to.
+ */
+export function fillBin(binRoot: Object3D, loaded: Object3D, root: Object3D, lib: ModelContext['lib']): void {
+  if (!binRoot.userData.binPlaceholder) throw new Error('fillBin: the bin is already filled');
+  const loadedLid = loaded.getObjectByName('bin_lid');
+  for (const name of ['bin_flap_l', 'bin_flap_r']) {
+    const from = loaded.getObjectByName(name), to = binRoot.getObjectByName(name);
+    if (!from || !to) throw Object.assign(new Error(`bin node ${name} missing`), { reason: 'asset-failure' as const });
+    for (const c of [...from.children]) to.add(c);
+  }
+  const lid = binRoot.getObjectByName('bin_lid')!;
+  for (const c of [...(loadedLid?.children ?? [])]) if (!/^bin_flap_[lr]$/.test(c.name)) lid.add(c);
+  for (const c of [...loaded.children]) if (c !== loadedLid && c.name !== 'bin_shadow') binRoot.add(c);
+  delete binRoot.userData.binPlaceholder;
+  finishBin(root, binRoot, lib);
+}
+
+/** The bin's own set-up once its parts are there: materials, the pedal's link, its light, its shadow. */
+function finishBin(root: Object3D, binRoot: Object3D, lib: ModelContext['lib']): void {
+  prepareImported(root, lib);
+  linkPedal(binRoot);
+  const light = binLight(binRoot);
+  hookBinLight(binRoot);
+  // Its own outer shells reflect the floor it stands on (patchBinFloor).
+  binRoot.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if (BIN_FLOOR.materials.includes(m.name as never)) patchBinFloor(m, light);
+  });
+  // Its shadow: the open flaps cast nothing above the closed lid's crown, and the whole bin's
+  // shadow enters the frame with it (binShadowMaterials).
+  const depth = binShadowMaterials(light, binRoot);
+  binRoot.userData.binDepth = depth;
+  const flaps = new Set<Object3D>();
+  for (const name of ['bin_flap_l', 'bin_flap_r']) binRoot.getObjectByName(name)?.traverse((o) => flaps.add(o));
+  binRoot.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    mesh.customDepthMaterial = flaps.has(mesh) ? depth.flap : depth.body;
+    mesh.onBeforeShadow = depth.track;
+  });
+}
+
+/** Frees what `attachBin` and `fillBin` made for this bin (its shadow materials); the scene frees the rest. */
 export function detachBin(binRoot: Object3D): void {
-  (binRoot.userData.flapDepth as Material | undefined)?.dispose();
-  delete binRoot.userData.flapDepth;
+  const depth = binRoot.userData.binDepth as { flap: Material; body: Material } | undefined;
+  depth?.flap.dispose();
+  depth?.body.dispose();
+  delete binRoot.userData.binDepth;
 }
 
 function isInside(o: Object3D, ancestor: Object3D): boolean {
@@ -266,6 +405,8 @@ export interface BinLight {
   readonly keyDir: { value: Vector3 };
   /** World z of the cove's back wall (the rig's `studio_sweep`; far behind when there is none). */
   readonly wallZ: { value: number };
+  /** Share of the bin's shadow drawn (0–1): it enters the frame with the bin (binShadowMaterials). */
+  readonly cast: { value: number };
 }
 
 /** The scene's key: its first spot or directional light (the rigs' shadow-casting key). */
@@ -278,17 +419,16 @@ function findKey(scene: Object3D): SpotLight | DirectionalLight | null {
   return key;
 }
 
-/** The bin's uniforms, created once per bin and updated before its body draws. */
+/** The bin's uniforms, created once per bin and updated before its body draws (`hookBinLight`). */
 export function binLight(binRoot: Object3D): BinLight {
   const existing = binRoot.userData.binLight as BinLight | undefined;
   if (existing) return existing;
   const light: BinLight = {
     rimY: { value: BIN.rimTop }, axis: { value: new Vector2() }, radius: { value: BIN.opening },
     floorY: { value: 0 }, footR: { value: BIN.radius }, crownY: { value: BIN.height }, keyDir: { value: new Vector3(0, 1, 0) },
-    wallZ: { value: -1e4 },
+    wallZ: { value: -1e4 }, cast: { value: 1 },
   };
   binRoot.userData.binLight = light;
-  const body = binRoot.getObjectByName('bin_body');
   const p = new Vector3(), q = new Quaternion(), k = new Vector3(), kp = new Vector3(), kt = new Vector3();
   let key: SpotLight | DirectionalLight | null = null;
   let searched: Object3D | null = null;
@@ -316,8 +456,17 @@ export function binLight(binRoot: Object3D): BinLight {
     }
   };
   update();
-  if (body) body.onBeforeRender = update as NonNullable<Object3D['onBeforeRender']>;
+  binRoot.userData.binLightUpdate = update;
   return light;
+}
+
+/** Keeps the bin's uniforms current: its body updates them before it draws. */
+function hookBinLight(binRoot: Object3D): void {
+  const update = binRoot.userData.binLightUpdate as ((r?: unknown, scene?: Object3D) => void) | undefined;
+  const body = binRoot.getObjectByName('bin_body');
+  if (!update || !body) return;
+  update();
+  body.onBeforeRender = update as NonNullable<Object3D['onBeforeRender']>;
 }
 
 /**
@@ -395,26 +544,110 @@ export function patchBinFloor(material: Material, light: BinLight): void {
 }
 
 /**
- * The flaps' shadow material (v1.5 polish): the flaps cast as usual up to the closed lid's crown,
- * and not above it. Open, each flap stands 16 cm over the rim; under the low window key the two
- * threw "rabbit ears" larger than the bin onto the cove behind it (the spot's throw magnifies
- * them) through the whole carry. The lid, the hinges and the rest of the bin keep their shadows,
- * so the closed bin's is unchanged and the open bin's is the closed one's. One per bin (a shared
- * material would collect every renderer's dispose listener): `detachBin` frees it.
+ * The bin's shadow materials (v1.5 polish), one pair per bin (a shared material would collect
+ * every renderer's dispose listener; `detachBin` frees them):
+ *
+ * - the flaps cast as usual up to the closed lid's crown, and not above it. Open, each flap
+ *   stands 16 cm over the rim, and under the low window key the two threw "rabbit ears" larger
+ *   than the bin onto the cove behind it through the whole carry (the spot's throw magnifies
+ *   them); the closed bin's shadow is unchanged, and the open bin's is the closed one's.
+ * - the whole bin's shadow enters the frame with it: the key comes from the front left, so the
+ *   shadow of the bin sliding in from the left lies to its right and reached the cove in frame
+ *   before the bin did (v1.5 review). `cast` (light.cast) is the share of the bin's width inside
+ *   the frame, eased (`track`, on every one of its meshes' shadow passes, from the camera being
+ *   drawn): the shadow's texels drop out on a fixed dither below it, which the shadow's 16-tap
+ *   filter turns into a fade. At rest in frame it is 1: the shadow is exactly as before.
  */
-function flapShadowMaterial(light: BinLight): MeshDepthMaterial {
-  const m = new MeshDepthMaterial({ name: 'fx_bin_flap_shadow' });
-  m.onBeforeCompile = (shader) => {
-    shader.uniforms.uBinCrownY = light.crownY;
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vBinFlapY;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\n  vBinFlapY = (modelMatrix * vec4(transformed, 1.0)).y;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vBinFlapY;\nuniform float uBinCrownY;')
-      .replace('#include <clipping_planes_fragment>', 'if (vBinFlapY > uBinCrownY + 0.004) discard;\n#include <clipping_planes_fragment>');
+export const BIN_SHADOW_ENTER = { full: 0.35 } as const;
+
+function binShadowMaterials(light: BinLight, binRoot: Object3D): { flap: MeshDepthMaterial; body: MeshDepthMaterial; track: NonNullable<Object3D['onBeforeShadow']> } {
+  const make = (name: string, clip: boolean) => {
+    const m = new MeshDepthMaterial({ name });
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uBinCrownY = light.crownY;
+      shader.uniforms.uBinCast = light.cast;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying float vBinShadowY;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\n  vBinShadowY = (modelMatrix * vec4(transformed, 1.0)).y;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vBinShadowY;\nuniform float uBinCrownY;\nuniform float uBinCast;')
+        .replace('#include <clipping_planes_fragment>', `${clip ? 'if (vBinShadowY > uBinCrownY + 0.004) discard;\n' : ''}if (uBinCast < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= uBinCast) discard;\n#include <clipping_planes_fragment>`);
+    };
+    m.customProgramCacheKey = () => `bin-shadow-v2-${clip ? 'flap' : 'body'}`;
+    return m;
   };
-  m.customProgramCacheKey = () => 'bin-flap-shadow-v1';
-  return m;
+  // The bin's footprint and height in its own space, projected by the camera being drawn.
+  const corners = [-1, 1].flatMap((x) => [-1, 1].flatMap((z) => [0, 1].map((y) => new Vector3(x * BIN.radius, y * BIN.height, z * BIN.radius))));
+  const v = new Vector3();
+  let frame = -1;
+  const track: NonNullable<Object3D['onBeforeShadow']> = (renderer, _object, camera) => {
+    const id = renderer.info.render.frame;
+    if (id === frame) return;
+    frame = id;
+    // A warm-up draw may hold it (src/scenes/deferredBin.ts: the bin out of sight casts nothing).
+    const hold = binRoot.userData.castHold as number | undefined;
+    light.cast.value = hold ?? binShadowShare(binRoot, camera, corners, v);
+  };
+  return { flap: make('fx_bin_flap_shadow', true), body: make('fx_bin_shadow', false), track };
+}
+
+/**
+ * The bin's shadow share for `camera`: the share of its width (its footprint and height, projected)
+ * inside the frame, eased to 1 by BIN_SHADOW_ENTER.full. Nothing of its shadow shows before the bin
+ * does; fully in frame, all of it.
+ */
+export function binShadowShare(binRoot: Object3D, camera: Camera, corners: readonly Vector3[], v = new Vector3()): number {
+  binRoot.updateWorldMatrix(true, false);
+  let lo = Infinity, hi = -Infinity, behind = false;
+  for (const c of corners) {
+    v.copy(c).applyMatrix4(binRoot.matrixWorld).project(camera);
+    if (v.z > 1) behind = true;
+    lo = Math.min(lo, v.x);
+    hi = Math.max(hi, v.x);
+  }
+  if (behind || hi <= lo) return 1;
+  const inside = Math.max(0, Math.min(hi, 1) - Math.max(lo, -1)) / (hi - lo);
+  const u = Math.min(1, inside / BIN_SHADOW_ENTER.full);
+  return u * u * (3 - 2 * u);
+}
+
+/**
+ * The bin's entrance (v1.5 review: it swept in from far off-frame and crossed the visible part
+ * in 0.1–0.2 s on a phone, a pop-in). Each scene slides it along x from just out of the drawn
+ * view (`binEntranceStart`: wherever that is for this canvas, this layout and the camera's
+ * pull-back at that moment) to its place over its own BIN_SLIDE (0.38–0.4 s, settled before the
+ * object reaches it), so all of the slide is seen: it comes in already moving, as if pushed from
+ * out of frame (at 1.5 × its mean speed), and decelerates to rest (`ease`, zero speed at the end).
+ */
+export const BIN_ENTRANCE = { ease: [0.3, 0.45, 0.25, 1] } as const;
+
+/**
+ * The x (in `root`'s space; the slide runs along x at depth `z`) where the bin, with the dense part
+ * of its contact shadow (1.2 × its radius), is just out of `camera`'s drawn view on the left. `scale`: the bin's scale in
+ * `root` (1 / the scene's world scale). At least 1 unit (20 cm) from `rest`, so a canvas whose
+ * left edge is near the bin still sees it slide in.
+ */
+export function binEntranceStart(camera: Camera, root: Object3D, z: number, rest: number, scale = 1): number {
+  root.updateWorldMatrix(true, false);
+  camera.updateMatrixWorld();
+  const r = BIN.radius * 1.2 * scale, h = BIN.height * scale;
+  const v = new Vector3();
+  const rightmost = (x: number) => {
+    let m = -Infinity;
+    for (const y of [0, h]) for (const dz of [-r, 0, r]) {
+      v.set(x + r, y, z + dz).applyMatrix4(root.matrixWorld).project(camera);
+      m = Math.max(m, v.x);
+    }
+    return m;
+  };
+  let lo = rest - 60, hi = rest - 1;
+  if (rightmost(hi) <= -1.02) return hi;
+  for (let i = 0; i < 32; i++) {
+    const mid = (lo + hi) / 2;
+    if (rightmost(mid) <= -1.02) lo = mid;
+    else hi = mid;
+  }
+  return lo;
 }
 
 /**

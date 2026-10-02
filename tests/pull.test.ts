@@ -8,8 +8,8 @@ import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { defineRig, type Rig } from '../src/render/rig.ts';
 import { Stage } from '../src/render/stage.ts';
 import { mulberry32 } from '../src/motion/random.ts';
-import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
-import { BIN_POS, BIN_YAW } from '../models/birthdayContract.ts';
+import { BIN, buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
+import { BIN_POS, BIN_YAW, CAKE_RADIUS } from '../models/birthdayContract.ts';
 import { DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW } from '../models/dinnerContract.ts';
 import { birthdayDeclineFramePoints, birthdayRestFramePoints } from '../src/scenes/birthday/framing.ts';
 import { ACROSS_FROM, BIN_DELAY as BIRTHDAY_BIN_DELAY, BIN_FROM } from '../src/scenes/birthday/poses.ts';
@@ -263,14 +263,22 @@ describe('the stage solves a fit once per content and aspect, never in the loop'
 });
 
 describe('the bin waits for the camera (the decline pull-back\'s choreography)', () => {
-  it('Birthday: still until BIN_DELAY, then settled with its flaps open before the carry across', () => {
+  it('Birthday: still until BIN_DELAY, then settled with its flaps open before the cake reaches it', () => {
     const f = birthdayFrame();
     for (let t = 0; t <= BIRTHDAY_BIN_DELAY; t += 0.005) {
       birthdaySample('decline', t, f);
       expect(f.binPos.distanceTo(BIN_FROM), `t=${t}`).toBeLessThan(1e-9);
       expect(f.flaps).toBe(0);
     }
-    birthdaySample('decline', ACROSS_FROM, f);
+    // v1.5 review: the bin's slide is longer (0.38 s, decelerating, all of it seen), so it settles
+    // as the cake drifts across, before the cake reaches its footprint (0.521 s); open by then.
+    let reach = 0;
+    for (let t = ACROSS_FROM; t < 1; t += 0.001) {
+      birthdaySample('decline', t, f);
+      if (Math.hypot(f.cakePos.x - BIN_POS.x, f.cakePos.z - BIN_POS.z) < CAKE_RADIUS + BIN.radius + 0.02) { reach = t; break; }
+    }
+    expect(reach).toBeGreaterThan(ACROSS_FROM);
+    birthdaySample('decline', reach - 0.01, f);
     expect(f.binPos.distanceTo(BIN_POS)).toBeLessThan(1e-6);
     expect(f.flaps).toBeGreaterThan(0.999);
     // The camera is well under way when it sets off.
@@ -291,9 +299,8 @@ describe('the bin waits for the camera (the decline pull-back\'s choreography)',
       if (Math.hypot(f.platePos.x, f.platePos.z) > 1e-4) { across = t; break; }
     }
     expect(across).toBeGreaterThan(0.5);
-    dinnerSample('decline', across, f);
-    expect(f.binPos.distanceTo(DINNER_BIN_POS)).toBeLessThan(1e-6);
-    // Its flaps are open before the dish comes over its footprint.
+    // v1.5 review: the bin's slide is longer (0.4 s, decelerating, all of it seen): it settles, open,
+    // before the dish comes over its footprint (as the dish turns across it has a few mm to go).
     let over = 0;
     for (let t = across; t < 1; t += 0.001) {
       dinnerSample('decline', t, f);
@@ -301,7 +308,10 @@ describe('the bin waits for the camera (the decline pull-back\'s choreography)',
     }
     expect(over).toBeGreaterThan(across);
     dinnerSample('decline', over - 0.01, f);
+    expect(f.binPos.distanceTo(DINNER_BIN_POS)).toBeLessThan(1e-6);
     expect(f.flaps).toBeGreaterThan(0.999);
+    dinnerSample('decline', across, f);
+    expect(f.binPos.distanceTo(DINNER_BIN_POS)).toBeLessThan(0.02);
     expect(declinePull(DINNER_BIN_DELAY)).toBeGreaterThan(0.1);
   });
 });

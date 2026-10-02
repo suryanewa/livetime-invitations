@@ -89,11 +89,11 @@ exports give byte-identical GLBs), and go through the masters' texture policy (W
 
 | Material | Finish | Maps |
 | --- | --- | --- |
-| `bin_powder` (body) | warm-neutral graphite `#4A4846`, satin 0.29 ± 0.04 over 20–40 cm | orange-peel micro-normal (2.2 mm cells and a finer octave, 0.55° RMS slope, sparse dust inclusions), 512² per 5.76 cm tile (89 px/cm); occlusion + roughness 2048 × 1024 on UV1 |
+| `bin_powder` (body) | warm-neutral graphite `#4A4846`, satin 0.29 ± 0.04 over 20–40 cm | orange-peel micro-normal (2.2 mm cells and a finer octave, 0.55° RMS slope, sparse dust inclusions), 512² per 5.76 cm tile (89 px/cm); occlusion + roughness 1024 × 512 on UV1 (2048 × 1024 until the guest-experience round) |
 | `bin_base`, `bin_ring` | satin black PP `#1D1D1D` 0.56 / 0.52 | EDM mould grain (VDI 3400 ≈ Ref 27), v1.5 polish: 0.3 mm cells, even, 3° RMS (was 0.45 mm with a broad undulation, 5°: the lid ring read as pebbled leather in close-up), 512² per 3 cm (171 px/cm); occlusion + roughness 1024 × 256 on UV1 |
-| `bin_liner` | mid-grey PP `#7C7C7B`, 0.45 | a softer grain (3°); occlusion + roughness 1024 × 1024 on UV1 (0.14 deep in the bucket) |
+| `bin_liner` | mid-grey PP `#7C7C7B`, 0.45 | a softer grain (3°); occlusion + roughness 512 × 512 on UV1 (0.14 deep in the bucket; was 1024²) |
 | `bin_plastic` | satin black PP (hinge knuckles, pedal housing) | the same EDM grain |
-| `bin_steel` (lid top and underside, lever) | brushed stainless, metal 1, KHR_materials_anisotropy 0.6 across the grain | brushed grooves (0.12 mm cells, belt scratches; 2.5° RMS across the grain), 1024² per 6 cm (171 px/cm); roughness 0.17 along the grain with streaks at 0.4 / 1 / 2.5 mm; tangents in the mesh (the grain follows UV0's u: across the lid, along its rolled edge) |
+| `bin_steel` (lid top and underside, lever) | brushed stainless, metal 1, KHR_materials_anisotropy 0.6 across the grain | brushed grooves (0.12 mm cells, belt scratches; 2.5° RMS across the grain), 1024² per 6 cm (171 px/cm); roughness 0.17 along the grain with streaks at 0.4 / 1 / 2.5 mm, 512² (was 1024²); tangents in the mesh (the grain follows UV0's u: across the lid, along its rolled edge) |
 | `bin_pin` | black-oxide steel 0.42 | |
 | `bin_rubber` | matte rubber 0.86 | grain 256² per 3 cm |
 | `bin_tread` | black polystyrene `#1B1B1C` 0.5 (v1.5 polish; was coral elastomer `#FF714A`) | ribs (4 mm pitch, 0.5 mm crowns), 256² per 1.2 cm |
@@ -105,7 +105,7 @@ revolved analytically (cones, cylinders, annuli: exact intersections), with the 
 the inner wall under the lip 0.5, the seam under the lid ring 0.6, the outer wall 1.
 
 Texel density, against the masters (15–100 px/cm; the hoop's tiled maps 50 px/cm): the micro-normals 89–200 px/cm,
-the unique occlusion/roughness 10–26 px/cm. GLB 6564.6 KiB raw, 3412.2 KiB gzip (the export's own report).
+the unique occlusion/roughness 5–26 px/cm. GLB 5916.4 KiB raw, 3041.9 KiB gzip, 18.0 MiB of textures as RGBA8 + mips (the export's own report; 6564.6 KiB and 34.0 MiB before the guest-experience round, below).
 
 **Contact shadow** (`BIN_CONTACT`): footprint the base's diameter, a tight line at 0.85 reaching 7 % past the base and
 a short spread: about half the floor's light at contact, as under the stand and the plate.
@@ -244,3 +244,55 @@ finding, what it turned out to be, and the change (frames: `evidence/v1.5/bin/po
    bucket floor) it darkens.
 5. **The lid ring's grain read as pebbled leather** in macro: the visible PP parts' EDM grain is finer and even
    (0.3 mm cells, 3° RMS, no broad undulation).
+
+## Guest-experience round (real-time measurements on the integrated build)
+
+The judge measured the guest's side on a laptop and an emulated phone: the first decline uploaded the bin's 11
+textures at once (7 → 18 in Dinner, 11 → 22 in Birthday) with JS frames of 18–52 ms in its first 60–330 ms (a 52 ms
+long task and a dropped frame on the phone); the 6.6 MB bin was downloaded before the live scene though only the
+decline shows it; and the bin swept in from far off-frame, crossing the visible part in 0.1–0.2 s on a phone, its
+cove shadow in frame before it. What changed:
+
+- **The bin loads after ready** (`src/scenes/deferredBin.ts`). Birthday and Dinner rig a placeholder bin
+  (`binPlaceholder`: `bin_root`, the lid and flap pivots and the contact shadow's place) and are ready without
+  it; the decline's camera fit takes the open bin from its design (`openBinSilhouette`: the turned parts' profile
+  hulls revolved and the flaps, hinges and pedal from their builders, computed once while the scene's own GLB
+  downloads; its hull is the hull of every vertex of the built bin, tests/bin.test.ts). In the first idle moment
+  after ready the GLB is fetched at low priority, its parts move into the placeholder (`fillBin`: the pivots keep
+  their identity, so the scenes' references and the interruption blend stay valid) and the stage gives them
+  shadows and their own environment (`Stage.adoptContent`).
+- **It warms before anyone can need it**: its programs compile off the main thread one material per idle moment,
+  its textures upload one per idle moment, and one draw with the bin behind the camera (its shadow held at 0)
+  links its shadow programs and uploads its geometry; never during a sequence. The first decline then creates no
+  texture and no program (browser test), and its frames stay at the display's cadence:
+
+  | First 400 ms of the first decline | laptop | phone (390 × 844, 4× CPU throttle) |
+  | --- | --- | --- |
+  | Birthday | longest frame callback 1.3 ms, no gap over 16.7 ms | 3.4 ms, none over 16.8 ms |
+  | Dinner | 0.7 ms, none over 16.8 ms | 3.7 ms, none over 16.7 ms |
+
+  The warm-up itself takes 0.6–0.8 s after ready, at rest; on the throttled phone its one out-of-sight draw costs
+  a ~33 ms task (one or two flicker frames at guest-ready), no long task (`evidence/v1.5/bin/guest/frametimes.json`).
+- **A decline tapped before it has arrived** (`SceneInstance.needs` / `ensure`, `VisualDirector` hold): the answer
+  saves at once and the picture holds on guest-ready until the bin is loaded and warm, then the whole decline
+  plays; a change of mind meanwhile drops the wait; a bin that cannot be loaded shows the declined poster
+  (`asset-failure`), and the answer is saved. A saved decline loads the bin before ready, as before (browser tests).
+- **Smaller**: the body's and the bucket's occlusion/roughness and the steel's roughness at half size, the
+  steel's tangents and the turned parts' second UV set as 16-bit integers: 6.6 → 5.9 MB, 34 → 18 MiB of texture
+  memory; close-ups at the same lens differ by under 0.2 of a level on average (`scratchpad` diffs, max 12 levels
+  on 0.5 % of the bucket's interior).
+- **The entrance**: each scene slides the bin along x from just out of the drawn view (`binEntranceStart`, from the
+  stage camera at that moment: any canvas, layout and pull-back) to its place over its BIN_SLIDE (Birthday 0.38 s
+  from 0.12 s, Dinner 0.4 s from 0.16 s), coming in already moving and decelerating to rest
+  (`BIN_ENTRANCE.ease`); all of it is seen: 0.33–0.38 s from its first visible frame to rest at aspects 9:16 to
+  16:9 (was 0.1–0.2 s on a phone). It settles before the object reaches it (cake 0.521 s, dish 0.577 s), its flaps
+  open as it settles. Its real-time shadow enters with it: the bin's shadow materials drop texels on a fixed
+  dither below the share of the bin inside the frame (eased to full at 35 %, `BIN_SHADOW_ENTER`), so nothing of
+  its shadow shows before the bin does (`evidence/v1.5/bin/guest/entrance-*.webp`).
+
+Changes outside the bin's files: the scene contract (`src/core/sequence.ts`: `DeferredContext`, `needs`,
+`ensure`, `prefetch`), the director's hold (`src/core/visualDirector.ts`), the controller (ensure at load for a
+saved decline, prefetch after ready, the failure fallback, `deferredReady()` for tooling), `Stage.adoptContent`,
+and the framing owner's test of the bin's arrival (tests/pull.test.ts: settled and open before the object reaches
+it, rather than before the cake sets off across, which the 0.38 s slide no longer allows).
+

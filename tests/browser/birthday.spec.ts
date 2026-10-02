@@ -118,7 +118,11 @@ test('Frosting variants and the Low tier on the cake master: visible, exact roun
   const info = () => page.evaluate(`${c}.renderInfo()`) as Promise<{ textures: number; geometries: number }>;
   const config = async (literal: string, reload = false) => {
     await page.evaluate((l) => (window as any).__showcase.setConfig(new Function(`return (${l})`)()), literal);
-    if (reload) await expect.poll(async () => (await state(page)).resource, { timeout: 30_000 }).toBe('ready');
+    if (reload) {
+      await expect.poll(async () => (await state(page)).resource, { timeout: 30_000 }).toBe('ready');
+      // v1.5: the bin loads after ready; count resources once it has (it is the scene's too).
+      await expect.poll(() => page.evaluate(`${c}.deferredReady()`), { timeout: 30_000 }).toBe(true);
+    }
     await settle();
   };
   const tier = async (t: string) => {

@@ -28,11 +28,20 @@ export interface SceneDriver {
    * The interruption then cuts to guest-ready (Master §6 allows ≤150 ms, so zero is valid).
    */
   interruptCut?(): boolean;
+  /** v1.5: true while `target` needs assets the scene loads after ready (the shared bin). */
+  needs?(target: SequenceName | CanonicalPose): boolean;
 }
 
 export interface VisualHooks {
   complete(sequence: SequenceName): void;
   change?(state: VisualState): void;
+  /**
+   * v1.5: load what `target` needs (`SceneDriver.needs`). Until it resolves the director holds the
+   * picture where it is (the response ledger has already moved on), then shows `target`; a newer
+   * intent, mode or reset drops the wait. On rejection the hook decides (the controller shows the
+   * poster), and the director stays where it is.
+   */
+  ensure?(target: SequenceName | CanonicalPose): Promise<void>;
 }
 
 type Snapshot = { p: Vector3; q: Quaternion; s: Vector3 }[];
@@ -54,6 +63,9 @@ export class VisualDirector {
   private visual: VisualState;
   /** Completion is emitted only when an uninterrupted playback reaches its end. */
   private pendingSnapComplete: SequenceName | null = null;
+  /** v1.5: the current wait for deferred assets (any newer request drops the older one). */
+  private waitToken = 0;
+  private waitingFor: SequenceName | CanonicalPose | null = null;
 
   constructor(private readonly hooks: VisualHooks, mode: Mode, intent: Response | null) {
     this.mode = mode;
@@ -67,6 +79,33 @@ export class VisualDirector {
 
   get isPlaying(): boolean {
     return this.playback !== null;
+  }
+
+  /** v1.5: the target the picture is held for while the scene loads what it needs (null: none). */
+  get waiting(): SequenceName | CanonicalPose | null {
+    return this.waitingFor;
+  }
+
+  /**
+   * v1.5 deferred assets: when `target` needs what the scene has not loaded yet, ask for it and run
+   * `then` once it is there (unless something newer came first); true if it waits.
+   */
+  private hold(target: SequenceName | CanonicalPose, then: () => void): boolean {
+    const token = ++this.waitToken;
+    this.waitingFor = null;
+    if (!this.driver?.needs?.(target) || !this.hooks.ensure) return false;
+    this.waitingFor = target;
+    this.hooks.ensure(target).then(
+      () => {
+        if (token !== this.waitToken) return;
+        this.waitingFor = null;
+        then();
+      },
+      () => {
+        if (token === this.waitToken) this.waitingFor = null;
+      },
+    );
+    return true;
   }
 
   /** Pose the poster/fallback should represent right now (current intent, never an error). */
@@ -99,12 +138,16 @@ export class VisualDirector {
     if (!driver && this.playback) this.finishNow();
     this.playback = null;
     this.driver = driver;
+    this.waitToken++;
+    this.waitingFor = null;
     if (driver) {
       // A late load shows the settled target: a host preparation that already completed
       // stays prepared rather than resetting to host-ready.
       const prepared = this.mode === 'host' && this.visual === 'guest-ready';
+      const pose = prepared ? 'guest-ready' : this.restingPose();
+      if (this.hold(pose, () => this.attach(driver))) return;
       this.set(prepared ? 'guest-ready' : this.restingState());
-      driver.pose(prepared ? 'guest-ready' : this.restingPose());
+      driver.pose(pose);
       driver.settle?.();
     }
   }
@@ -126,6 +169,8 @@ export class VisualDirector {
     if (this.mode !== 'guest') return;
     if (!intent) return this.cancel();
     const sequence: SequenceName = intent;
+    // v1.5: a decline tapped before the bin has arrived waits for it on the picture it is on.
+    if (this.hold(this.reduced ? finalPose(sequence) : sequence, () => this.setIntent(intent))) return;
     if (!this.driver || this.reduced) {
       this.playback = null;
       this.set(intent === 'accept' ? 'accepted-pose' : 'declined-pose');
@@ -216,6 +261,7 @@ export class VisualDirector {
   }
 
   private play(sequence: SequenceName): void {
+    if (this.hold(this.reduced ? finalPose(sequence) : sequence, () => this.play(sequence))) return;
     if (!this.driver || this.reduced) {
       this.playback = null;
       const pose = finalPose(sequence);
@@ -246,6 +292,7 @@ export class VisualDirector {
   }
 
   private cancel(): void {
+    if (this.hold(this.restingPose(), () => this.cancel())) return;
     this.playback = null;
     this.pendingSnapComplete = null;
     this.set(this.restingState());

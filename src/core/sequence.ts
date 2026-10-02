@@ -1,4 +1,4 @@
-import type { Box3, Object3D, WebGLRenderer, Camera, Vector3 } from 'three';
+import type { Box3, Object3D, Scene, WebGLRenderer, Camera, Vector3 } from 'three';
 import type { MaterialLibrary } from '../render/materials.ts';
 import type { CanonicalPose, Category, SceneConfig, SequenceName } from './types.ts';
 
@@ -13,6 +13,23 @@ export interface SceneLoadContext {
   library: MaterialLibrary;
   assetBase: string;
   signal: AbortSignal;
+}
+
+/**
+ * v1.5: what a scene loads after it is ready (the shared bin, 6.6 MB, which only the decline
+ * needs): the stage's pieces it compiles and uploads with, and how it hands new parts to the stage.
+ */
+export interface DeferredContext {
+  renderer: WebGLRenderer;
+  /** The stage's scene (the content is in it) and camera. */
+  scene: Scene;
+  camera: Camera;
+  /** Parts added under the content after it was set get what content gets: shadows, own environment. */
+  adopt(object: Object3D): void;
+  /** Resolves at the next idle moment between frames (the browser's idle callback, or a timeout). */
+  idle(): Promise<void>;
+  /** True while a sequence plays: background work waits it out (it never costs a sequence a frame). */
+  busy(): boolean;
 }
 
 export interface PointerHit {
@@ -112,6 +129,15 @@ export interface SceneInstance {
   setLowDetail?(enabled: boolean): void;
   /** Warm shader programs for every material/preset variant before declaring ready. */
   precompile?(renderer: WebGLRenderer, camera: Camera): Promise<void>;
+  /**
+   * v1.5 deferred assets (the shared bin). `needs(target)`: true while the sequence or pose cannot
+   * be shown yet; `ensure` resolves once it can (loaded, attached and warmed: its programs
+   * compiled and its textures uploaded), rejecting if the asset failed. `prefetch` does the same in
+   * the background after ready, in idle moments. Omitted: everything was loaded up front.
+   */
+  needs?(target: SequenceName | CanonicalPose): boolean;
+  ensure?(target: SequenceName | CanonicalPose, context: DeferredContext): Promise<void>;
+  prefetch?(context: DeferredContext): Promise<void>;
   dispose(): void;
 }
 
