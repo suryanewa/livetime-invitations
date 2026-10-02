@@ -10,7 +10,7 @@ import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
 import { DURATIONS } from '../src/scenes/birthday/poses.ts';
 import {
-  BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, flameAxis, flameState, flicker, FLICKER, litTime, MM, newFlicker, newSmokePuffs, newSmokeStrand, plumeRise,
+  BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, flameAxis, flameScale, flameState, flicker, FLICKER, litTime, MM, newFlicker, newSmokePuffs, newSmokeStrand, plumeRise,
   POOL_Y, PUFF_COUNT, SMOKE, SMOKE_POINT_COUNT, smokePuffs, smokeRate, smokeStrand, WICK_TIP_Y,
 } from '../src/scenes/birthday/fire.ts';
 
@@ -19,7 +19,11 @@ const wick = (i: number): [number, number, number] => [CANDLE_SOCKETS[i]![0], CA
 const MPS = 5;
 
 describe('Birthday fire: the flame', () => {
-  it('is a birthday candle flame: 13–15 mm from the pool, 4.5–5.5 mm wide, widest at the wick top', () => {
+  it('is a birthday candle flame: 13–15 mm from the pool, 4.5–5.5 mm wide, widest at the wick top; each a little different', () => {
+    const sizes = Array.from({ length: CANDLE_COUNT }, (_, i) => flameScale(i));
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(0.93);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(1.07);
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeGreaterThan(0.04);
     const top = FLAME_REST.base + FLAME_REST.length - POOL_Y;
     expect(top / MM).toBeGreaterThanOrEqual(13);
     expect(top / MM).toBeLessThanOrEqual(15);
@@ -153,7 +157,7 @@ describe('Birthday fire: the smoke', () => {
       // While the flame burns, the top blob sits on the flame's own axis.
       const t = b.lift + 0.3 * b.out;
       smokePuffs(i, t, wick(i), p);
-      flameAxis(flameState(i, t, 'accept'), 0.98, axis);
+      flameAxis(flameState(i, t, 'accept'), 0.98, axis, flameScale(i));
       const k = PUFF_COUNT - 1;
       const w = wick(i);
       expect(Math.abs(p.position[k * 3 + 1]! - (w[1] + FLAME_REST.base - WICK_TIP_Y + axis[1]))).toBeLessThan(1e-6);
@@ -220,7 +224,8 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     }
     // Hero top: the steady flame's tip (the GLB's 1.5× lathe and the fire's quads are not counted).
     const top = Math.max(...scene.heroPoints!.map((p) => p.y));
-    expect(top).toBeCloseTo(STAND_TOP + CANDLE.seat + FLAME_REST.base + FLAME_REST.length, 3);
+    const tallest = Math.max(...rig.candles.map((_, i) => flameScale(i)));
+    expect(top).toBeCloseTo(STAND_TOP + CANDLE.seat + FLAME_REST.base + tallest * FLAME_REST.length, 3);
   });
 
   it('lit: settling while the flames burn (they flicker), still after settle(); the light follows the flame', () => {
@@ -230,7 +235,7 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     scene.settle();
     scene.beforeRender();
     const u = rig.candles[0]!.fire.material.uniforms;
-    expect(u.uShape.value[0]).toBeCloseTo(FLAME_REST.length, 9);
+    expect(u.uShape.value[0]).toBeCloseTo(FLAME_REST.length * flameScale(0), 9);
     expect(rig.flameLights.intensity.value[0]).toBeCloseTo(CANDLE_LIGHT, 9);
     // The light sits in the flame (world space), a few millimetres above the wick.
     const wickWorld = rig.candles[0]!.fire.wickTip.clone().applyMatrix4(rig.candles[0]!.candle.matrixWorld);
@@ -244,7 +249,7 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     expect(lengths.size).toBeGreaterThan(5);
     scene.settle();
     scene.beforeRender();
-    expect(u.uShape.value[0]).toBeCloseTo(FLAME_REST.length, 9);
+    expect(u.uShape.value[0]).toBeCloseTo(FLAME_REST.length * flameScale(0), 9);
     scene.pose('accepted');
     expect(scene.settling()).toBe(false);
     scene.beforeRender();

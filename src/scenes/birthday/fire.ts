@@ -75,6 +75,14 @@ export const FLAME_REST = {
 export const FLAME_REST_TOP = FLAME_REST.base + FLAME_REST.length;
 
 /**
+ * No two wicks stand the same height: candle `i`'s flame is this many times FLAME_REST (±7 %
+ * seeded; Lf ∝ L^0.63, so ±0.5 mm of wick).
+ */
+export function flameScale(i: number): number {
+  return 1 + 0.07 * signed(i, 50);
+}
+
+/**
  * Radius profile of the steady flame along its length (s: 0 base → 1 tip), 1 at its widest:
  * an elliptical cup below the wick top and a slightly convex ogive to a sharp tip above it.
  * The shader (src/render/flame.ts) evaluates the same function.
@@ -526,8 +534,8 @@ export function newSmokeStrand(): SmokeStrand {
  * the cake's plan axes (scene units). The same curve the shader draws: a straight lean from the
  * base, the tip curling back up by `bend` (a quadratic offset), the base carried off by `lift`.
  */
-export function flameAxis(f: FlameState, s: number, out: [number, number, number]): [number, number, number] {
-  const L = FLAME_REST.length * f.height;
+export function flameAxis(f: FlameState, s: number, out: [number, number, number], scale = 1): [number, number, number] {
+  const L = FLAME_REST.length * f.height * scale;
   const ct = Math.cos(f.tilt), st = Math.sin(f.tilt);
   const b = 0.5 * L * f.tilt * f.bend * s * s;
   const h = f.lift + st * s * L - ct * b;
@@ -654,7 +662,7 @@ export function smokePuffs(i: number, t: number, wick: readonly [number, number,
     const birth = Math.min(t, pass);
     const a = Math.max(0, t - pass);
     const f = flameState(i, Math.min(birth, extinguishedAt(i) - 1e-6), 'accept', tmpFlame);
-    flameAxis(f, s, tmpAxis);
+    flameAxis(f, s, tmpAxis, flameScale(i));
     const drift = t > pass ? SMOKE.puffCarry * breathDrift(i, pass, t) : 0;
     const dm = drift / MPS;
     const zr = plumeRise(a, 1.3);
@@ -663,7 +671,7 @@ export function smokePuffs(i: number, t: number, wick: readonly [number, number,
     out.position[k * 3] = wick[0] + tmpAxis[0] + b.dirX * drift + jx;
     out.position[k * 3 + 1] = wick[1] + (FLAME_REST.base - WICK_TIP_Y) + tmpAxis[1] + zr * MPS;
     out.position[k * 3 + 2] = wick[2] + tmpAxis[2] + b.dirZ * drift + jz;
-    const r0 = Math.max(1.6 * MM, 1.7 * FLAME_REST.radius * f.width * flameProfile(Math.min(0.97, s)));
+    const r0 = Math.max(1.6 * MM, 1.7 * FLAME_REST.radius * flameScale(i) * f.width * flameProfile(Math.min(0.97, s)));
     const r = r0 + (SMOKE.jetSpread * dm * MPS) / 2 + 2.5 * MM * Math.sqrt(a / 0.5);
     out.radius[k] = r;
     // Greying with the flame's dying (continuous through `pass`), most soot in the upper flame,

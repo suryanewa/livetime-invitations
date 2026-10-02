@@ -5,7 +5,7 @@ import {
 import type { MaterialLibrary } from '../src/render/materials.ts';
 import { blackbodyAt, createPuffMaterial, createSmokeMaterial, type FlameUniforms, sootRadiance } from '../src/render/flame.ts';
 import {
-  FLAME_REST, type FlameState, type Flicker, newSmokePuffs, sootFormed, newSmokeStrand, PUFF_COUNT, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokePuffs, type SmokePuffs, smokeStrand,
+  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokePuffs, sootFormed, newSmokeStrand, PUFF_COUNT, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokePuffs, type SmokePuffs, smokeStrand,
   type SmokeStrand,
 } from '../src/scenes/birthday/fire.ts';
 
@@ -247,8 +247,9 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   u.uAxisY.value.copy(up).multiplyScalar(ct).addScaledVector(dirH, st);
   u.uAxisX.value.copy(up).multiplyScalar(-st).addScaledVector(dirH, ct);
   u.uAxisZ.value.crossVectors(u.uAxisX.value, u.uAxisY.value).normalize();
-  const L = FLAME_REST.length * Math.max(f.height, 1e-3) * fl.height;
-  const R = FLAME_REST.radius * Math.max(f.width, 1e-3) * fl.width;
+  const size = flameScale(r.index);
+  const L = FLAME_REST.length * size * Math.max(f.height, 1e-3) * fl.height;
+  const R = FLAME_REST.radius * size * Math.max(f.width, 1e-3) * fl.width;
   const bend = 0.5 * L * tilt * f.bend;
   // Base: on the wick's axis at the cup's height, carried downstream once it has lifted off.
   anchor.set(r.wickTip.x, FLAME_REST.base, r.wickTip.z).sub(r.node.position);

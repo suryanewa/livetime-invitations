@@ -15,7 +15,7 @@ import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.
 import { birthdayFramePoints } from './framing.ts';
 import { DURATIONS, ON_STAND } from './poses.ts';
 import { frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from './sequences.ts';
-import { EMBER, emberAt, FLAME_REST, FLICKER, flicker, newFlicker, SMOKE } from './fire.ts';
+import { EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, newFlicker, SMOKE } from './fire.ts';
 
 const UP = new Vector3(0, 1, 0);
 
@@ -70,16 +70,17 @@ export class BirthdayScene implements SceneInstance {
     const pts: Vector3[] = [];
     this.root.updateMatrixWorld(true);
     const toRoot = this.root.matrixWorld.clone().invert();
-    for (const c of this.rig.candles) {
+    this.rig.candles.forEach((c, i) => {
       const w = c.fire.wickTip;
+      const k = flameScale(i);
       const at = (x: number, y: number, z: number) => pts.push(new Vector3(x, y, z).applyMatrix4(c.candle.matrixWorld).applyMatrix4(toRoot));
-      at(w.x, FLAME_REST.base + FLAME_REST.length, w.z);
-      const y = FLAME_REST.base + FLAME_REST.widest * FLAME_REST.length;
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * Math.PI * 2;
-        at(w.x + Math.cos(a) * FLAME_REST.radius, y, w.z + Math.sin(a) * FLAME_REST.radius);
+      at(w.x, FLAME_REST.base + k * FLAME_REST.length, w.z);
+      const y = FLAME_REST.base + FLAME_REST.widest * k * FLAME_REST.length;
+      for (let n = 0; n < 8; n++) {
+        const a = (n / 8) * Math.PI * 2;
+        at(w.x + Math.cos(a) * k * FLAME_REST.radius, y, w.z + Math.sin(a) * k * FLAME_REST.radius);
       }
-    }
+    });
     return pts;
   }
 

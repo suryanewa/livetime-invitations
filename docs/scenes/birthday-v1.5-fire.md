@@ -21,8 +21,9 @@ the camera foreshortens correctly.
   Inst. 33, 2011): for paraffin on a ≈1.1 mm wick, flame length from the pool Lf = 3.85·L^0.634 mm and
   width at the wick top Wf = 3.38·L^0.201 mm. The master's wick stands L = 4.2 mm above the candle top:
   Lf ≈ 10 mm, Wf ≈ 4.5 mm. Twisted birthday wicks burn a little larger, so the flame is **13 mm from
-  base to tip (tip 14 mm above the pool), 5 mm wide, widest at the wick top** (`FLAME_REST`). The
-  v1.2 flame was drawn at 4.5 cm (1.5× the master's already-large 3 cm flame).
+  base to tip (tip 14 mm above the pool), 5 mm wide, widest at the wick top** (`FLAME_REST`), each
+  candle ±7 % (seeded `flameScale`: no two wicks stand the same height). The v1.2 flame was drawn at
+  4.5 cm (1.5× the master's already-large 3 cm flame).
 - **Zones** (judged against the paper's Fig. 2 photograph of a 1.13 mm wick): a faint blue cup
   (CH*, C2* chemiluminescence) round the wick's base; a dark fuel-rich core round the wick; the soot
   (yellow) zone starting at about the wick's top as an inverted U over the core and filling in above
@@ -163,8 +164,7 @@ Lit (perpetual) ≈0.35 ms; worst case (during the smoke) ≈0.85 ms, under the 
 
 ## Verification
 
-- `pnpm typecheck`; `pnpm test`: 297 unit tests (24 files) at the first commit, `tests/birthdayFire.test.ts`
-  new (15): flame size against the paper, 10–12 Hz flicker and exact rest, Planck dimming, `litTime`,
+- `pnpm typecheck`; `pnpm test`: 297 unit tests (24 files), `tests/birthdayFire.test.ts` new (15): flame size against the paper, 10–12 Hz flicker and exact rest, Planck dimming, `litTime`,
   plume speed 0.25–0.55 m/s at 3–10 cm, smoke from the wick at lift-off and gone by `SMOKE.end`, a
   straight laminar stem (< 1 mm off its chord below 3 cm) under waves above, determinism, the puff
   riding the flame and moving < 3 mm per ms, the ember, the breath strong enough everywhere, and the
