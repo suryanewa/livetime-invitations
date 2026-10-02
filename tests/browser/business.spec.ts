@@ -132,13 +132,15 @@ test('Graphics loss falls back to a poster and responses still work', async ({ p
   await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /light-accepted/);
 });
 
-test('The lit status (LED and tile) keeps its colour, reads by shape at phone size, and leaves no hotspot on the glass', async ({ page }) => {
+test('The status pictogram is dead-front while idle, lights in its colour with a hotspot, reads by shape at phone size, and leaves no glint on the glass', async ({ page }) => {
   await ready(page);
   await guest(page);
   await page.getByRole('button', { name: /Motion/ }).click();
   expect((await state(page)).reducedMotion).toBe(true);
-  // Window and glass boxes as fractions of the square stage (fixed camera). v1.4: re-measured
-  // under the hero framing rule, which shows the badge and reader at 0.73× their v1.3 size.
+  // v1.5: boxes as fractions of the square stage (fixed camera): the pictogram and its halo on the
+  // lower glass (PICTO, inside the window: the steel lip starts at 0.735), and the lower glass round
+  // it, below the NFC mark and clear of the window's edge highlights (GLASS: v1.4's point spill left a
+  // 255 glint at 0.606, 0.694). The check is about 18 × 14 px on this 540 px still, the minus 16 × 5.
   const measure = () => page.evaluate(async () => {
     const url = (window as any).__showcase.controller.captureStill(540, 1, 'image/png') as string;
     const img = new Image();
@@ -151,37 +153,33 @@ test('The lit status (LED and tile) keeps its colour, reads by shape at phone si
     g.drawImage(img, 0, 0);
     const { data, width, height } = g.getImageData(0, 0, c.width, c.height);
     const inBox = (x: number, y: number, b: number[]) => x >= b[0]! * width && x <= b[2]! * width && y >= b[1]! * height && y <= b[3]! * height;
-    // v1.2.1: the LED bar at the top of the glass and the status tile on the lower glass (WIN),
-    // the tile alone (TILE), and the reader's glass round them.
-    const WIN = [0.55, 0.49, 0.645, 0.74], TILE = [0.55, 0.65, 0.645, 0.74], GLASS = [0.49, 0.43, 0.73, 0.77];
+    const PICTO = [0.55, 0.66, 0.645, 0.728], GLASS = [0.54, 0.672, 0.665, 0.722];
     const lit: number[][] = [];
-    let hot = 0;
-    let tx0 = Infinity, tx1 = -Infinity, ty0 = Infinity, ty1 = -Infinity;
+    const px: { x: number; y: number; l: number }[] = [];
+    let glint = 0, darkest = 255, brightest = [0, 0, 0];
+    let lx0 = Infinity, lx1 = -Infinity;
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const i = (y * width + x) * 4;
-        const px = [data[i]!, data[i + 1]!, data[i + 2]!];
-        const hi = Math.max(...px), sat = hi - Math.min(...px);
-        if (inBox(x, y, WIN)) {
-          if (sat > 60) lit.push(px);
-          if (sat > 80 && hi > 150 && inBox(x, y, TILE)) { tx0 = Math.min(tx0, x); tx1 = Math.max(tx1, x); ty0 = Math.min(ty0, y); ty1 = Math.max(ty1, y); }
-        } else if (inBox(x, y, GLASS) && hi >= 230 && sat > 60) hot++;
+        const p = [data[i]!, data[i + 1]!, data[i + 2]!];
+        const hi = Math.max(...p), sat = hi - Math.min(...p);
+        const l = 0.2126 * p[0]! + 0.7152 * p[1]! + 0.0722 * p[2]!;
+        if (inBox(x, y, PICTO)) {
+          px.push({ x, y, l });
+          if (sat > 60) { lit.push(p); lx0 = Math.min(lx0, x); lx1 = Math.max(lx1, x); }
+          if (l > 0.2126 * brightest[0]! + 0.7152 * brightest[1]! + 0.0722 * brightest[2]!) brightest = p;
+          darkest = Math.min(darkest, hi);
+        }
+        // A glint: a bright, colourless spot on the black glass (the lit glyph is coloured).
+        if (inBox(x, y, GLASS) && hi >= 200 && sat <= 25) glint++;
       }
     }
-    // The glyph: dark pixels inside the lit tile (shape only, no colour): its rows' extent.
-    let gy0 = Infinity, gy1 = -Infinity, glyph = 0;
-    // Inset past the tile's rounded corners (the glass shows there) to the glyph's columns, and
-    // past its top and bottom edges: through the perspective lens (v1.3) the tile's edges are
-    // not quite level, so the glass showed at the bounding box's corner rows.
-    const inset = Math.round((tx1 - tx0) * 0.25), vInset = Math.max(2, Math.round((ty1 - ty0) * 0.12));
-    for (let y = ty0 + vInset; y <= ty1 - vInset; y++) {
-      for (let x = tx0 + inset; x <= tx1 - inset; x++) {
-        const i = (y * width + x) * 4;
-        if (Math.max(data[i]!, data[i + 1]!, data[i + 2]!) < 90) { glyph++; gy0 = Math.min(gy0, y); gy1 = Math.max(gy1, y); }
-      }
-    }
-    const median = [0, 1, 2].map((k) => lit.map((p) => p[k]!).sort((a, b) => a - b)[lit.length >> 1]!);
-    return { median, max: Math.max(...lit.map((p) => Math.max(...p))), count: lit.length, hot, tile: { w: tx1 - tx0, h: ty1 - ty0 }, glyph, glyphTall: gy1 - gy0 };
+    // The glyph's shape without colour: the extent of the pixels above 60 % of the box's peak luminance.
+    const peak = Math.max(...px.map((p) => p.l));
+    const core = px.filter((p) => p.l > 0.6 * peak);
+    const ext = (k: 'x' | 'y') => Math.max(...core.map((p) => p[k])) - Math.min(...core.map((p) => p[k])) + 1;
+    const median = lit.length ? [0, 1, 2].map((k) => lit.map((p) => p[k]!).sort((a, b) => a - b)[lit.length >> 1]!) : [0, 0, 0];
+    return { count: lit.length, median, litWidth: lx1 - lx0 + 1, glint, peak, brightest, coreW: ext('x'), coreH: ext('y') };
   });
   // Relative luminance, and the same under deuteranopia (Machado 2009, severity 1).
   const lin = (v: number) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
@@ -191,6 +189,12 @@ test('The lit status (LED and tile) keeps its colour, reads by shape at phone si
     return lum([0.367322 * r + 0.860646 * g - 0.227968 * b, 0.280085 * r + 0.672501 * g + 0.047413 * b, -0.01182 * r + 0.04294 * g + 0.968881 * b]);
   };
 
+  // Idle (guest-ready): dead front. Nothing lit on the glass, no glint.
+  const idle = await measure();
+  expect(idle.count, 'idle').toBe(0);
+  expect(idle.peak, 'idle').toBeLessThan(110);
+  expect(idle.glint, 'idle').toBe(0);
+
   await page.getByRole('button', { name: 'Accept' }).click();
   await expect.poll(async () => (await state(page)).visual).toBe('accepted-pose');
   const accept = await measure();
@@ -199,19 +203,23 @@ test('The lit status (LED and tile) keeps its colour, reads by shape at phone si
   const decline = await measure();
 
   for (const [label, m] of [['accept', accept], ['decline', decline]] as const) {
-    // The tile is about 37 × 26 px on this 540 px still (v1.3: 50 × 32 before the v1.4 framing;
-    // v1.2's LED bar alone was 26 × 6).
-    expect(m.count, label).toBeGreaterThan(600);
-    expect(m.tile.w, label).toBeGreaterThan(30);
-    expect(m.tile.h, label).toBeGreaterThan(20);
-    expect(m.glyph, label).toBeGreaterThan(25);
-    // No channel clips: the window reads as its token, not as mint or pink.
-    expect(m.max, label).toBeLessThanOrEqual(245);
-    // No specular hotspot from the spill light on the glass beside the window.
-    expect(m.hot, label).toBeLessThanOrEqual(5);
+    // The light reads at 540 px (v1.4's tile was 37 × 26 px of flat colour; the glyph and its halo
+    // are about 20 px across: 178 coloured pixels for the check, 129 for the minus).
+    expect(m.count, label).toBeGreaterThan(100);
+    expect(m.litWidth, label).toBeGreaterThan(16);
+    // HDR: the stroke's core rolls a little towards white (its darkest channel at 143 / 153, the
+    // tokens' at 59 / 34: a hotspot, not a flat token sticker) without clipping flat (v1.5's first
+    // cut pinned the whole stroke at (180, 255, 213) and (255, 195, 199))…
+    expect(Math.min(...m.brightest), label).toBeGreaterThan(110);
+    expect(Math.min(...m.brightest), label).toBeLessThan(180);
+    // …and no glint of a light on the glass beside it.
+    expect(m.glint, label).toBe(0);
   }
-  // Without colour: the check spans several times the minus's height.
-  expect(accept.glyphTall).toBeGreaterThan(decline.glyphTall * 1.8);
+  // One envelope: the check and the minus are as wide as each other (within 20 %).
+  expect(Math.abs(accept.coreW - decline.coreW) / Math.max(accept.coreW, decline.coreW)).toBeLessThan(0.2);
+  // Without colour: the check stands about twice the minus's height.
+  expect(accept.coreH).toBeGreaterThan(decline.coreH * 1.8);
+  // The halo keeps the token's hue: green and red, far apart.
   expect(accept.median[1]! - accept.median[0]!).toBeGreaterThan(90);
   expect(decline.median[0]! - decline.median[1]!).toBeGreaterThan(90);
   const ratio = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);

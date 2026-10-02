@@ -187,21 +187,30 @@ export function facePoint(u: number, v: number, w: number, out = new Vector3()):
  * Where the card meets the reader (face space, stage units): centred, high on the glass. Its side
  * clips (the thickest part, which bear on the glass) sit 0.03 inside the glass's top and side
  * edges; the card's top half overhangs the reader's top edge (the body falls away behind it), so
- * the card covers the NFC mark and leaves the lower glass, where the status tile lights, in view.
+ * the card covers the NFC mark and leaves the lower glass, where the status pictogram lights, in view.
  */
 export const SCAN_SPOT = { u: 0, v: 0.265 } as const;
 /**
- * Status tile (runtime, models/business.ts): a lit rounded tile on the lower glass, below the
- * pressed card and the NFC mark, with a dark check (accept) or minus (decline) cut into it, so the
- * outcome reads by shape as well as colour, without zooming. Face space, stage units.
+ * Status pictogram (v1.5, runtime: models/business.ts): a dead-front glyph behind the lower glass,
+ * below the pressed card and the NFC mark, invisible while off, lit in the status colour as a check
+ * (accept) or a minus (decline), so the outcome reads by shape as well as colour. Face space, stage
+ * units. `grid` is the size of the shell's 20-unit icon grid on the glass: strokes of 0.0231 (1.8 mm
+ * at the card's real scale), a hair under the printed NFC mark's 0.0236, so the face carries one
+ * stroke weight (a lit stroke reads a little bolder than a printed one); the check is 0.116 wide
+ * (8.8 mm). `extent` is the light's carrying quad in grid units (the halo has faded to nothing
+ * before its edge). Centred across the glass at `v`: in the clear lower glass, 0.04 below the
+ * pressed card's lowest point counting the glow, its halo inside the window; at rest it sits just
+ * below the middle of the glass between the NFC mark and the window's lower edge.
  */
-export const STATUS_TILE = { v: -0.445, width: 0.3, height: 0.19, radius: 0.05, stroke: 0.04 } as const;
+export const STATUS_PICTOGRAM = { v: -0.43, grid: 0.21, extent: 30 } as const;
+/** The pictogram's carrying quad (face space, stage units): extent × grid / 20 on a side. */
+export const STATUS_PICTOGRAM_SIZE = (STATUS_PICTOGRAM.extent * STATUS_PICTOGRAM.grid) / 20;
 /** Face space z of the card centre when its clips touch the glass. */
 export const SCAN_CONTACT_W = FACE.glass + HOLDER_CLIPS.halfDepth;
 
 /**
  * Gasket compression at the scan press: the glass (with the LED, the target mark and the status
- * tile on it) gives by 0.6 mm and the gasket under it (0.77 mm at READER_SCALE 0.72) takes it. The
+ * pictogram on it) gives by 0.6 mm and the gasket under it (0.77 mm at READER_SCALE 0.72) takes it. The
  * card itself never deforms.
  */
 export const PRESS_DEPTH = 0.6 / MM_PER_UNIT;
