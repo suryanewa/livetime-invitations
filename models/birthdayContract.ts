@@ -23,11 +23,18 @@ export const MASTER = {
   footRadius: 0.379156,
   /** Lowest vertex of the tiers and piping (the bottom shell border; it beds 0.009 into the plate). */
   cakeBottom: -0.251947,
-  /** Widest point of the tiers and piping (the bottom tier's tassels and rosettes). */
-  cakeRadius: 0.628963,
-  /** Top-tier surface where the candles stand, and the crown rosettes' tips. */
+  /**
+   * Widest point of the tiers and piping (the bottom tier's rosettes). v1.5: re-measured after the
+   * hand finish (scripts/masters/recipes/birthdayFinish.ts: ±1.4 % drift, ±4 % rosette sizes); the
+   * master's own was 0.628963.
+   */
+  cakeRadius: 0.63424,
+  /**
+   * Top-tier surface where the candles stand (the master's; v1.5 the finished top is uneven by
+   * ±0.7 mm about it), and the crown rosettes' tips (v1.5 re-measured; the master's 0.639565).
+   */
   tierTop: 0.603,
-  cakeTop: 0.639565,
+  cakeTop: 0.64334,
   /** Candles (all six identical): base, top, radius; they bed 0.017 into the top tier. */
   candleBase: 0.586,
   candleTop: 0.8028,
