@@ -1,7 +1,7 @@
-import { CanvasTexture, type Material, type Mesh, MeshBasicMaterial, type Object3D, PlaneGeometry, type ShaderMaterial, SRGBColorSpace, Mesh as ThreeMesh } from 'three';
-import { keepPixels } from '../src/render/textures.ts';
+import { type Material, type Mesh, type Object3D, PlaneGeometry } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { BIN_POS, BIN_YAW, birthdayBounds, STAND } from './birthdayContract.ts';
+import { type FlameRig, rigCandleFire, SmokeRig } from './birthdayFire.ts';
 import { BIRTHDAY_GLB_NODES } from './birthdayParts.ts';
 import { buildCakeGeometry, type CakePreset } from './cake.ts';
 import { BIN, buildDisposalBin } from './disposalBin.ts';
@@ -11,26 +11,21 @@ import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } fro
 
 /**
  * Birthday runtime rig over the cake hierarchy (the v1.2 master GLB, or the v1.1 code-authored
- * cake for tooling) plus the shared bin: contact shadow, unique flame materials, smoke wisps, bin
- * placement and frosting presets.
+ * cake for tooling) plus the shared bin: contact shadow, the candle fire (v1.5: volumetric flames,
+ * their light and the smoke, models/birthdayFire.ts), bin placement and frosting presets.
  */
 
 /** Nodes the rig and the scene look up: the GLB's contract plus the shared bin's. */
 export const BIRTHDAY_NODES = ['birthday_root', 'cake_authored', 'cake_secondary', 'cake_shadow', 'bin_root', 'bin_lid'] as const;
 export { BIRTHDAY_GLB_NODES };
 
-/** Shared camera azimuth: wisps face the fixed orthographic camera. */
-const CAMERA_AZIMUTH = (20 * Math.PI) / 180;
-
 export interface CandleRig {
   candle: Object3D;
   seatedY: number;
+  /** flame_NN: the flame's anchor on the candle (the fire rig draws relative to it). */
   flame: Object3D;
-  /** Flame node scale at full size (per axis), as authored. */
-  flameSize: { x: number; y: number; z: number };
-  flameMaterial: ShaderMaterial;
+  fire: FlameRig;
   wick: Object3D;
-  wisp: Mesh;
 }
 
 export interface BirthdayRig {
@@ -40,6 +35,8 @@ export interface BirthdayRig {
   cakeShadow: ContactShadow;
   binShadow: ContactShadow;
   candles: CandleRig[];
+  /** Every candle's smoke streaklines (v1.5). */
+  smoke: SmokeRig;
   flapL: Object3D;
   flapR: Object3D;
   /** Shade uniforms shared by every cake material (frosting of both presets, candles). */
@@ -86,35 +83,6 @@ function patchBinShade(material: Material, shade: BinShade): void {
   };
   material.customProgramCacheKey = () => 'birthday-bin-shade-v1';
   material.needsUpdate = true;
-}
-
-/** A soft curl of smoke: one quad, low opacity, dissolves upward. */
-function wispTexture(): CanvasTexture {
-  const w = 64, h = 160;
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const c = canvas.getContext('2d')!;
-  c.filter = 'blur(3px)';
-  c.strokeStyle = 'rgba(255,255,255,0.9)';
-  c.lineCap = 'round';
-  c.lineWidth = 9;
-  c.beginPath();
-  c.moveTo(w / 2, h - 8);
-  c.bezierCurveTo(w * 0.15, h * 0.7, w * 0.85, h * 0.45, w * 0.4, h * 0.12);
-  c.stroke();
-  // Fade towards the top so it dissolves rather than ends.
-  c.globalCompositeOperation = 'destination-in';
-  c.filter = 'none';
-  const g = c.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, 'rgba(0,0,0,0)');
-  g.addColorStop(0.55, 'rgba(0,0,0,0.8)');
-  g.addColorStop(1, 'rgba(0,0,0,1)');
-  c.fillStyle = g;
-  c.fillRect(0, 0, w, h);
-  const t = new CanvasTexture(keepPixels(canvas));
-  t.colorSpace = SRGBColorSpace;
-  return t;
 }
 
 /** Candle nodes present under the cake (six on the master, three on the v1.1 tooling cake), in order. */
@@ -164,31 +132,20 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
   for (const m of variants?.materials ?? []) if (isCake(m)) cakeMaterials.add(m);
   for (const m of cakeMaterials) patchBinShade(m, binShade);
 
-  const texture = wispTexture();
-  // Warm grey, a step darker than v1.1's #A39B91: a pale wisp vanished against the peach studio.
-  const wispMaterial = new MeshBasicMaterial({ name: 'fx_wisp', map: texture, color: '#857C72', transparent: true, opacity: 0, depthWrite: false });
+  // v1.5 fire (#4): each GLB lathe flame becomes a volumetric flame with its light; one ribbon
+  // mesh carries every candle's smoke (models/birthdayFire.ts).
   const ids = candleIds(root);
-  // The master's six candles: a taller curl so a single faint wisp still reads on the peach studio.
-  const wispScale = ids.length > 3 ? 1.3 : 1;
+  const flameQuad = new PlaneGeometry(1, 1);
   const candles: CandleRig[] = ids.map((id) => {
     const candle = root.getObjectByName(`candle_${id}`)!;
     const flame = root.getObjectByName(`flame_${id}`)!;
     nodes[`candle_${id}`] = candle;
     nodes[`flame_${id}`] = flame;
-    const flameMesh = flame.getObjectByName(`flame_${id}_mesh`) as Mesh;
-    const flameMaterial = lib.unique('mat_flame_outer') as ShaderMaterial;
-    flameMesh.material = flameMaterial;
-    flameMesh.renderOrder = 2;
     const wick = candle.getObjectByName(`wick_${id}`) ?? candle.getObjectByName('wick')!;
-    const wisp = new ThreeMesh(new PlaneGeometry(0.1 * wispScale, 0.26 * wispScale).translate(0, 0.13 * wispScale, 0), wispMaterial.clone());
-    wisp.name = `wisp_${id}`;
-    wisp.position.set(0, flame.position.y + 0.01, 0);
-    wisp.rotation.y = CAMERA_AZIMUTH;
-    wisp.visible = false;
-    wisp.renderOrder = 3;
-    candle.add(wisp);
-    return { candle, seatedY: candle.position.y, flame, flameSize: { x: flame.scale.x, y: flame.scale.y, z: flame.scale.z }, flameMaterial, wick, wisp };
+    const fire = rigCandleFire(candle, flame, wick, lib, flameQuad);
+    return { candle, seatedY: candle.position.y, flame, fire, wick };
   });
+  const smoke = new SmokeRig(nodes.cake_secondary!, candles.length);
 
   const flapL = root.getObjectByName('bin_flap_l')!;
   const flapR = root.getObjectByName('bin_flap_r')!;
@@ -212,6 +169,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     cakeShadow,
     binShadow,
     candles,
+    smoke,
     flapL,
     flapR,
     binShade,
@@ -220,15 +178,16 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     dispose() {
       cakeShadow.dispose();
       binShadow.dispose();
-      texture.dispose();
-      wispMaterial.dispose();
       disposeShadowProxies(root);
       for (const c of candles) {
-        c.flameMaterial.dispose();
-        (c.wisp.material as Material).dispose();
-        c.wisp.geometry.dispose();
-        c.wisp.removeFromParent();
+        c.fire.material.dispose();
+        c.fire.wickMaterial.dispose();
+        c.fire.quad.removeFromParent();
+        c.fire.light.removeFromParent();
+        c.fire.light.dispose();
       }
+      flameQuad.dispose();
+      smoke.dispose();
     },
   };
 }

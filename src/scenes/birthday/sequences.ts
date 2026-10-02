@@ -1,16 +1,16 @@
 import { Vector3 } from 'three';
-import { cubicBezier, EASE, easeInQuad, easeOutCubic, lerp, seg, smoothstep } from '../../motion/curves.ts';
+import { cubicBezier, EASE, lerp, seg, smoothstep } from '../../motion/curves.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 import {
   BIN_AT, BIN_FROM, CANDLE_COUNT, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LAND_SPEED, CANDLE_SETTLE, CANDLE_START, CARRY, CARRY_FROM, CARRY_LEAN, CARRY_TO,
-  DROP_TO, DROPPED, DURATIONS, FLAME_FLUTTER, FLAME_RISE, FLAME_START, HOVER_OVER_BIN, LEAN, LEAN_FADE, LEAN_MAX, LIFT_TO, ON_STAND, OUT_LEN, OUT_START, PRESENT_YAW, WICK_LEAN,
-  WISP_GROW_FROM, WISP_LEN, WISP_OPACITY, WISP_RISE, WISP_START,
+  DROP_TO, DROPPED, DURATIONS, HOVER_OVER_BIN, LEAN_FADE, LEAN_MAX, LIFT_TO, ON_STAND, PRESENT_YAW,
 } from './poses.ts';
+import { flameState, type FlameState, litFlame, newFlameState, noFlame } from './fire.ts';
 
 /**
  * Pure authored choreography for Birthday: every value is a function of time (the carry lean is
  * a damped pendulum integrated once, at module load, into a table sampled with cubic Hermite
- * interpolation), so replay and reversal restore cake, candles, flames, wisps and bin exactly, and
+ * interpolation), so replay and reversal restore cake, candles, flames, smoke and bin exactly, and
  * every channel is C1 at every beat boundary (Birthday sub-spec; tests/birthday.test.ts).
  */
 
@@ -28,17 +28,13 @@ export interface BirthdayFrame {
   cakeInBin: boolean;
   /** Each candle's height above its seated socket position (negative: pressed in while settling). */
   drop: number[];
-  flameScale: number[];
-  flameOpacity: number[];
-  /** Breath lean amount (0–1+) applied as LEAN rotation to each flame. */
-  flameLean: number[];
-  /** Breath stretch (0–1): the flame drawn out tall and thin by the gust (FLAME_STRETCH). */
-  flameStretch: number[];
-  wickLean: number;
-  wispOpacity: number[];
-  wispRise: number[];
-  /** Wisp height as a fraction of its full curl (1 at rest). */
-  wispGrow: number[];
+  /** Each candle's authored flame (fire.ts): ignition, the breath, extinction. Flicker rides on top. */
+  flames: FlameState[];
+  /**
+   * Accept time at which the ember and smoke are sampled (−1: none). A secondary channel: the
+   * canonical poses carry none, and after the accept sequence the scene's live clock continues it.
+   */
+  smokeTime: number;
   binPos: Vector3;
   binVisible: boolean;
   /** Flap opening fraction (0 closed, 1 open). */
@@ -49,29 +45,22 @@ const filled = (v: number) => Array.from({ length: CANDLE_COUNT }, () => v);
 
 export function newFrame(): BirthdayFrame {
   return frameFor('guest-ready', {
-    cakePos: new Vector3(), cakeYaw: 0, cakeLean: 0, cakeVisible: true, cakeInBin: false, drop: filled(0), flameScale: filled(1), flameOpacity: filled(1),
-    flameLean: filled(0), flameStretch: filled(0), wickLean: 0, wispOpacity: filled(0), wispRise: filled(0), wispGrow: filled(1), binPos: new Vector3(), binVisible: false, flaps: 0,
+    cakePos: new Vector3(), cakeYaw: 0, cakeLean: 0, cakeVisible: true, cakeInBin: false, drop: filled(0),
+    flames: Array.from({ length: CANDLE_COUNT }, () => newFlameState()), smokeTime: -1, binPos: new Vector3(), binVisible: false, flaps: 0,
   });
 }
 
 const setAll = (a: number[], v: number) => a.fill(v);
 
 export function frameFor(pose: CanonicalPose, out: BirthdayFrame): BirthdayFrame {
-  const lit = pose === 'guest-ready' ? 1 : 0;
   out.cakePos.copy(pose === 'declined' ? DROPPED : ON_STAND);
   out.cakeYaw = pose === 'host-ready' ? PRESENT_YAW : 0;
   out.cakeLean = 0;
   out.cakeVisible = pose !== 'declined';
   out.cakeInBin = pose === 'declined';
   setAll(out.drop, pose === 'host-ready' ? CANDLE_HOVER : 0);
-  setAll(out.flameScale, lit);
-  setAll(out.flameOpacity, lit);
-  setAll(out.flameLean, 0);
-  setAll(out.flameStretch, 0);
-  out.wickLean = 0;
-  setAll(out.wispOpacity, 0);
-  setAll(out.wispRise, 0);
-  setAll(out.wispGrow, 1);
+  for (const f of out.flames) (pose === 'guest-ready' ? litFlame : noFlame)(f);
+  out.smokeTime = -1;
   out.binPos.copy(pose === 'declined' ? BIN_AT : BIN_FROM);
   out.binVisible = pose === 'declined';
   out.flaps = 0;
@@ -109,40 +98,19 @@ function host(t: number, out: BirthdayFrame): void {
   for (let i = 0; i < CANDLE_COUNT; i++) {
     // 0.18–0.94: six candles lower into their sockets, 55 ms apart, and settle.
     out.drop[i] = candleDrop(t - CANDLE_START[i]!);
-    // 0.84–1.06: flames appear as a restrained scale/opacity rise, 20 ms apart, no overshoot.
-    const k = smoothstep(seg(t, FLAME_START[i]!, FLAME_START[i]! + FLAME_RISE));
-    out.flameScale[i] = k;
-    out.flameOpacity[i] = k;
+    // 0.84–1.28: each wick catches once its candle has seated and its flame grows (fire.ts).
+    flameState(i, t, 'host', out.flames[i]);
   }
-  // 1.06–1.30: the guest-ready composition holds.
+  // 1.28–1.30: the guest-ready composition holds.
 }
 
 // ── Accept: 1.4 s ─────────────────────────────────────────────────────────────
 function accept(t: number, out: BirthdayFrame): void {
   frameFor('guest-ready', out);
-  // 0–0.25: a breath — every flame and wick leans the same way.
-  const breath = EASE.lift(seg(t, 0, 0.25));
-  // 1.00–1.40: wicks return to rest (C1 at both ends).
-  out.wickLean = WICK_LEAN * breath * (1 - smoothstep(seg(t, 1, 1.4)));
-  for (let i = 0; i < CANDLE_COUNT; i++) {
-    // 0.25–0.595: each flame shrinks and goes out, left to right.
-    const k = seg(t, OUT_START[i]!, OUT_START[i]! + OUT_LEN);
-    // The gust is not steady: each flame flutters (FLAME_FLUTTER) about its lean, out of phase
-    // with its neighbours. The dying flame bends further over as it shrinks (starting with zero
-    // bend speed: C1), drawn out tall and thin by the breath.
-    const flutter = 1 + FLAME_FLUTTER.amount * Math.sin(2 * Math.PI * FLAME_FLUTTER.hz * t + 1.9 * i);
-    out.flameLean[i] = k >= 1 ? 0 : breath * flutter * (1 + 0.5 * k * k);
-    out.flameStretch[i] = k >= 1 ? 0 : breath;
-    out.flameScale[i] = 1 - easeInQuad(k);
-    out.flameOpacity[i] = 1 - k * k * (1.5 - 0.5 * k);
-    // 0.60–0.99: at most one faint wisp per candle, dissolving upward.
-    const w = seg(t, WISP_START[i]!, WISP_START[i]! + WISP_LEN);
-    out.wispOpacity[i] = w > 0 && w < 1 ? WISP_OPACITY * Math.sin(Math.PI * w) ** 2 : 0;
-    // Rooted on the wick while it unfurls; lifts off only as it fades. Back to rest once the
-    // wisp has dissolved (invisible), so the accepted pose is exact.
-    out.wispRise[i] = w < 1 ? WISP_RISE * w * w * w : 0;
-    out.wispGrow[i] = w > 0 && w < 1 ? WISP_GROW_FROM + (1 - WISP_GROW_FROM) * easeOutCubic(w) : 1;
-  }
+  // 0.06–0.55: the guest's breath sweeps the cake; each flame leans, necks, lifts off and goes out
+  // from the base up, nearest the mouth first (fire.ts). Its last gas becomes the first smoke.
+  for (let i = 0; i < CANDLE_COUNT; i++) flameState(i, t, 'accept', out.flames[i]);
+  out.smokeTime = t;
 }
 
 // ── Decline: 1.5 s ────────────────────────────────────────────────────────────
@@ -232,11 +200,10 @@ export function carryLean(t: number): number {
 
 function decline(t: number, out: BirthdayFrame): void {
   frameFor('guest-ready', out);
-  // 0–0.25: the bin slides into the margin and opens; the flames go out.
+  // 0–0.25: the bin slides into the margin and opens; the flames are snuffed (fire.ts).
   out.binVisible = t > 0;
   out.binPos.lerpVectors(BIN_FROM, BIN_AT, EASE.travel(seg(t, 0, 0.24)));
-  setAll(out.flameScale, 1 - smoothstep(seg(t, 0.02, 0.18)));
-  setAll(out.flameOpacity, out.flameScale[0]!);
+  for (let i = 0; i < CANDLE_COUNT; i++) flameState(i, t, 'decline', out.flames[i]);
   out.flaps = flaps(t);
   // 0.25–0.72: cake and candles are lifted off the stand (by 0.46), carried across and held over the
   // opening; the cake sways on its plate. 0.72–0.95: straight down through the opening (steadied);
@@ -261,4 +228,3 @@ export function sampleSequence(sequence: SequenceName, t: number, out: BirthdayF
   return out;
 }
 
-export { LEAN };
