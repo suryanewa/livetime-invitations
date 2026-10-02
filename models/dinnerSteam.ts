@@ -27,13 +27,14 @@ import { REVEAL_DIR } from '../src/scenes/dinner/sequences.ts';
 /**
  * Dinner v1.5 steam (plan: src/scenes/dinner/steam.ts), two instanced draws evaluated in closed
  * form at the steam clock `uTime`, so the GPU does all of it and the CPU sets a few uniforms:
- *  - Puffs (spill, release, pocket, trail): camera-facing soft billboards. The vertex shader
+ *  - Puffs (spill, release, pocket, trail, landing): camera-facing soft billboards. The vertex shader
  *    places each at its age (CPU mirror `puffAt`); the fragment shader slices a domain-warped 3D
  *    noise field through it (attached to the puff, so it billows, churns and frays into wisps as
  *    it ages; its outline is the field's, never the quad's circle).
  *  - Plumes (the column): ribbons up from the plate, as wide as the camera's horizontal, along a
  *    meandering centreline (CPU mirror `plumeCenter`); the fragment shader draws the thin
- *    strands a rising sheet of vapour folds into, carried up with it (`plumeDensity`).
+ *    strands a rising sheet of vapour folds into, carried up with it and churning
+ *    (`plumeDensity`). Every term is continuous: a step anywhere prints a line across steam.
  * Both fade analytically against the plate, the table and the cloche (no depth texture: the
  * surfaces are known in closed form, so no edge shows where a billboard crosses them, and
  * nothing draws inside the dome, which hides its inside from this camera anyway).
@@ -392,19 +393,21 @@ void main() {
   float free = smoothstep(0.0, 0.12, h);
   // Eddies a couple of centimetres across reshape in a fraction of a second (the z of the noise
   // runs with τ), so the strands are not a pattern sliding up.
-  float c1 = (0.85 * snoise(vec3(s * 2.6, vSeed, 1.25 * uTime)) + (uLow ? 0.0 : 0.35 * snoise(vec3(s * 8.0, vSeed + 3.0, 2.0 * uTime)))) * free * (1.0 + 0.6 * h);
+  float c1 = (0.85 * snoise(vec3(s * 2.6, vSeed, 1.9 * uTime)) + (uLow ? 0.0 : 0.35 * snoise(vec3(s * 8.0, vSeed + 3.0, 3.0 * uTime)))) * free * (1.0 + 0.6 * h);
   // A second strand peels off the first and merges back: its offset, width and density all vary
   // along the sheet (never a matched pair of rails). Continuous in the offset (a sign() here
   // jumped the strand across a horizontal line).
-  float off = snoise(vec3(s * 2.0, vSeed + 5.0, 1.1 * uTime));
+  float off = snoise(vec3(s * 2.0, vSeed + 5.0, 1.6 * uTime));
   float c2 = c1 + 1.7 * off * free;
-  float w2 = 0.5 + 0.5 * snoise(vec3(s * 1.7, vSeed + 13.0, 0.9 * uTime));
+  float w2 = 0.5 + 0.5 * snoise(vec3(s * 1.7, vSeed + 13.0, 1.4 * uTime));
   // Laminar and soft at the base (a broad sheet, never bars over the plate), thin bright strands
   // once it turns turbulent, widening slowly by diffusion.
   float sig = mix(0.9, 0.24, smoothstep(0.05, 0.45, h)) + 0.22 * h;
+  // Small eddies fray the strands' edges (no clean, regular arc).
+  sig *= uLow ? 1.0 : 0.8 + 0.4 * (0.5 + 0.5 * snoise(vec3(u * 2.5, s * 6.0, vSeed + 21.0 + 2.4 * uTime)));
   float a1 = (u - c1) / sig, a2 = (u - c2) / ((1.2 + 0.9 * w2) * sig);
   float strands = max(exp(-a1 * a1), (0.25 + 0.55 * w2) * exp(-a2 * a2));
-  float breakup = 0.5 + 0.5 * snoise(vec3(u * 1.2, s * 4.0, vSeed + 9.0 + 1.1 * uTime));
+  float breakup = 0.5 + 0.5 * snoise(vec3(u * 1.2, s * 4.0, vSeed + 9.0 + 1.6 * uTime));
   // Gaps open along the strands as they rise (wisps), but the cores stay dense: steam reads by
   // its bright filament edges.
   float d = strands * mix(1.0, 0.35 + 0.65 * smoothstep(0.1, 0.8, breakup), smoothstep(0.15, 0.9, h));

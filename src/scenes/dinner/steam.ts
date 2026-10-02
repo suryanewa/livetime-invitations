@@ -18,16 +18,16 @@ import { newFrame, REVEAL_DIR, sampleSequence } from './sequences.ts';
  * 10–20 cm. The air under a cloche on a hot dish is ≈ 40–50 K warmer than the room, and the dome
  * itself is hot, so it rises briskly (15–25 cm/s at first) and slows as it mixes in.
  *  1. Spill. A tipped dome is a doorway at its raised rim: the warm layer leaves under the rim
- *     edge and is caught at once by the warm boundary layer rising up the hot dome's outer wall,
- *     so the first steam is a thin sheet climbing the raised side's skirt, in front of the silver,
+ *     edge and is caught at once by the warm boundary layer rising up the hot dome's outer wall:
+ *     an uneven sheet of lobes that rolls over, shears and climbs past the raised side's skirt,
  *     gone within half a second. It starts on the raised (guest, camera) side, strongest where the
  *     gap is widest.
  *  2. Release. As the rim leaves the plate (0.20–0.36 s) room air rushes in under it and the
  *     bottom of the pocket lifts off with the dome as a mist (never a layer lying on the plate).
  *  3. Pocket. The warm air the dome held sits at its crown and goes up with it, but the dome is
  *     then carried off sideways (≈ 1 m/s) and the pocket, buoyant, is left behind: a cloud the
- *     shape of the dome's inside, revealed from the trailing side as the shell slides off it,
- *     drawn a little after the dome by its wake, rising fast and fraying.
+ *     shape of the dome's inside that comes into view as the shell slides clear of it, drawn a
+ *     little after the dome by its wake, rising fast and fraying.
  *  4. Trail. What warm air the dome still holds is shed from its trailing rim (the guest side) as
  *     it is carried off: thin wisps streaming back off the edge and rising, across the dome's dark
  *     lower reflections.
@@ -35,7 +35,8 @@ import { newFrame, REVEAL_DIR, sampleSequence } from './sequences.ts';
  *     still under it out across the table: a small, low puff at the rim that spreads and fades.
  *  6. Column. The uncovered plate's hot, moist boundary layer rises from the well from the moment
  *     the rim clears it, strongest then and thinning from the bottom up (`plumeSource`), as a few
- *     uneven plumes that curl as they rise and are gone by STEAM_END.
+ *     uneven plumes (one carrying dense filaments) that curl as they rise and are gone by
+ *     STEAM_END.
  *
  * Units: Dinner scene units (1 su = 16.9 cm, DINNER_WORLD_SCALE); the plate is at the origin
  * (the reveal never moves it). Physical speeds are noted in cm/s where they were chosen.

@@ -57,12 +57,14 @@ the CPU sets a handful of uniforms per frame.
 | --- | --- | --- | --- | --- | --- |
 | Spill | 22 puffs | 0.10–0.30 s, weighted to the widening gap | round the raised rim (all within 70° of it, mean within 30°), 6–8 mm off the bead | up the raised side's outer wall at 15–24 cm/s (the exchange outflow caught by the hot wall's boundary layer, drawn up by the lifting dome): a thin filament sheet, drawn out 1.7–2.1× along the rise | 0.35–0.5 s |
 | Release | 10 | 0.21–0.35 s | under the lifting dome, at least 1.3 cm above the plate and below the rim | lifts off with the dome (30–50 % of its rise) and on, buoyant | 0.4–0.6 s |
-| Pocket | 14 | 0.30–0.49 s | inside the dome as it is carried off (weighted to its crown, where the warm air sat) | 20–35 % of the dome's velocity (its wake), then a fast buoyant rise, fraying | 0.45–0.7 s |
-| Trail | 8 | 0.38–0.59 s | the trailing (guest-side) rim of the travelling dome | streams back off the edge (25–45 % of the dome's velocity), rises; thinning | 0.3–0.45 s |
+| Pocket | 14 | released 0.30–0.50 s, shown 0.40–0.67 s (once the dome is clear of it) | inside the dome as it is carried off (weighted to its crown, where the warm air sat), lobes 1.4–4 cm | drawn after the dome by its wake while it clears, then 12–25 % of its velocity and a fast buoyant rise, fraying | 0.45–0.7 s |
+| Trail | 8 | 0.39–0.58 s | shed off the trailing (guest-side) rim of the travelling dome, beyond the rim by more than its own size | left behind (8–20 % of the dome's velocity), rising; thinning | 0.3–0.45 s |
 | Landing | 7 | 0.79–0.86 s, as the trailing side comes down | the landed dome's trailing rim, either side of the plate's edge (1.4 cm away), 2–4 cm up | squeezed out across the table at 4–7 cm/s, rising a little | 0.35–0.5 s |
-| Column | 4 plumes, uneven (one dominant, three narrower and weaker) | 0.26–0.34 s, as the rim clears the well: at full strength at once, then thinning from the bottom (decay 0.45–0.6 s) | the front half of the well, r < 0.24 su (clear of the cloche set down behind-left) | rises at 17–21 cm/s; forms 2.5 cm off the porcelain; a meander frozen into the rising vapour, a slow ±0.5–1 cm sway at 0.6 Hz, strands that churn and curl; evaporates gently (e^(−h/24 cm)) so its first, strongest vapour rises out of view | gone by STEAM_END, 2.73 s |
+| Column | 4 plumes, uneven: one dominant plume of dense, near-white filaments and three faint veils | 0.22–0.30 s, as the rim clears the well: up to full strength over 0.22 s (a soft rounded front), then thinning from the bottom (decay 0.45–0.6 s) | the dominant plume 2.5–3 cm right of the well's middle on screen (away from the cloche set down to the left); the others scattered over the front half of the well | rises at 17–21 cm/s; forms only 5 cm off the porcelain; a meander frozen into the rising vapour and a slow ±0.5–1 cm sway at 0.6 Hz; one or two strands that peel apart and merge, curl, fray at the edges and reshape in a fraction of a second; evaporates gently (e^(−h/34 cm)), so its first, strongest vapour keeps rising out of view | gone by STEAM_END, 3.09 s |
 
-- **Puffs** are camera-facing soft billboards. The vertex shader places each puff at its age: emission momentum
+- **Puffs** are camera-facing soft billboards. A pocket puff shows only once the dome, carried off at ≈ 1 m/s,
+  is clear of it by 40 % of its size (checked against the dome's live pose, at least 0.06 s after release), so no
+  steam ever traces the dome's outline. The vertex shader places each puff at its age: emission momentum
   decaying over 0.18 s, buoyant acceleration (0.2 s) and deceleration by entrainment (1.6 s), radius growth, meander
   growing with height, and the spill's curl. The fragment shader slices a domain-warped 3D value-noise field through
   the puff. The field is attached to the puff and churns as it rises. Density is soft throughout: no thresholded
@@ -73,8 +75,8 @@ the CPU sets a handful of uniforms per frame.
 - **Plumes** are ribbons up from the plate, as wide as the camera's horizontal, so they shear with their path and
   never twist or fold. Their density at height h is the source as it was h/rise ago. So the column grows up off the
   plate at its strongest, then thins from the bottom as the source weakens, while its first vapour keeps rising out
-  of view. It fades in over its first 2.5 cm and out over the top 6 cm of its 24 cm, so no ribbon end shows and
-  nothing lies on the plate. The fragment shader draws the strand or two a rising sheet folds into: wandering and
+  of view. It fades in over its first 5 cm and out over the top 7 cm of its 27 cm, so no ribbon end shows and
+  nothing lies on the plate. Dense cores saturate softly (no clamp edge). The fragment shader draws the strand or two a rising sheet folds into: wandering and
   curling side to side (laminar for the first few centimetres), the pattern itself churning in time rather than
   sliding up, breaking into wisps higher.
 - **Shading** (`STEAM_LOOK`): a near-white in-scatter (linear 0.94–0.97) through the rig's exposure and tone mapping.
@@ -93,7 +95,7 @@ the CPU sets a handful of uniforms per frame.
 - **Plays on the reveal only.** The accept's samples drive the steam clock (`steamState.tau` is the accept's time),
   so a replay starts it from zero and nothing accumulates. Decline and host never show steam: the cloche stays on.
 - **After the reveal**, the director poses `accepted` at 1.5 s and the steam carries on in `simulate`. `settling()`
-  stays true while it rises, until `STEAM_END` (2.73 s), when every puff has gone and every plume is below 1 %
+  stays true while it rises, until `STEAM_END` (3.09 s), when every puff has gone and every plume is below 1 %
   density (white at 1 % moves the greige cove by 0.3 of an 8-bit step). The scene then ends clear and the loop idles
   (browser test: no frames after it, and the frame equals the reduced-motion still).
 - **`settle()`** snaps the steam to rest. The exception is the settle that comes with a change of mind's cut: the
@@ -114,14 +116,52 @@ alternating rounds, medians; `scripts/_scratch/steam-bench.ts`, not committed):
 
 | τ | 1400² | 2000² |
 | --- | --- | --- |
-| 0.3 s | 0.27 ms | 0.27 ms |
-| 0.5 s | 0.36 ms | 0.44 ms |
-| 0.7 s (pocket, peak) | 0.57 ms | 0.61 ms |
-| 1.0 s | 0.35 ms | 0.51 ms |
-| 1.5 s | 0.17 ms | 0.14 ms |
-| 2.2 s | 0.23 ms | 0.33 ms |
+| 0.3 s | 0.23 ms | 0.15 ms |
+| 0.5 s | 0.30 ms | 0.46 ms |
+| 0.7 s (pocket, peak) | 0.42 ms | 0.49 ms |
+| 1.0 s | 0.30 ms | 0.46 ms |
+| 1.5 s | 0.26 ms | 0.26 ms |
+| 2.2 s | 0.18 ms | 0.28 ms |
+
+Frame cadence through four reveals with their steam, on a phone viewport (390×844 at 3×, Normal tier, real time):
+p50 16.7 ms, p95 16.7 ms, p99 16.8 ms. With 4× CPU throttling it is the same. The tier stays Normal
+(`evidence/v1.5/dinner/perf-cadence.jsonl`). One intermittent 100 ms frame about 0.12 s into the first accept after
+load also appears with the steam hidden: it predates this work.
 
 The budget was < 1 ms. CPU work per frame is a handful of uniform writes.
+
+## Adversarial review (five rounds, by an independent reviewer reading the frames)
+
+A reviewer with a VFX and food-steam brief read every evidence set and measured the steam on its own. Its metric is
+the brightening against a no-steam render of the same frames, `nosteam-720/`. What each round found, and the fix:
+
+1. **Not steam yet.** The spill was a lumpy sideways billow at rim height. Over the plate's shadow the steam looked
+   like a grey stain. The column appeared only after a dead gap and read as a texture sliding up. **Fix:** the spill
+   became a rising, short-lived sheet; the column was started at lift-off at full strength, made to flap and churn,
+   kept off the plate (no layer lying on it), and given ring-free puff envelopes.
+2. **A second wave.** The steam swelled again after the landing. The strands looked like a comb, and the column
+   seemed to sink back. **Fix:** a few uneven plumes; a single visible-steam curve that peaks at the reveal and only
+   fades; gentler evaporation so the first vapour keeps rising; the trail shed from the trailing rim and the
+   squeeze-out puff at set-down (both physically real, and both the reviewer's suggestions); solid puff centres. The
+   reviewer conceded the interior-fog point: the band under the raised rim is the outer skirt reflecting the plate.
+3. **Comb in the opening, and the column did not read.** **Fix:** the spill became an uneven sheet whose lobes vary
+   4–14 cm, shear and roll over; the column's base became soft and laminar; one dominant plume carries dense filaments
+   (p99.9 ≈ 43 levels against the cove) with eddies that reshape fast.
+4. **"Yes, it reads as steam, with conditions."** The conditions were twin rails and a flat edge at the column's base,
+   a glow along the dome's shoulder, and blotches over the plate's shadow. **Root cause of the rails and the edge: a
+   shader seam.** The second strand's offset used `sign()`, which jumped it across a horizontal line. Two more seams
+   were found and fixed: the plate profile stepped to the table at the plate's edge, and the dome-shadow test was a
+   branch. Pocket puffs now appear only once the dome is clear of them, and the release mist is lighter.
+5. **Signed off.** *"It reads as real steam, and I'd sign it off. … Even frame by frame there is no giveaway left
+   that I would block on."* The remaining minor note was more churn in the young column at 1.0–1.3 s. It was applied
+   (strand churn 1.5× faster, frayed strand edges).
+
+The visible-steam curve (`steam-visibility-curve.txt`, summed brightening over the frame, 720 px):
+
+- **Rise:** 40 at 0.19 s, 302 at 0.38 s.
+- **Peak:** 372 at 0.58 s, as the dome slides clear of the plate. The reviewer judged this rise physically justified,
+  because steam that was hidden behind the dome comes into view.
+- **Fade:** 176 at 0.96 s, 159 at 1.34 s, 51 at 1.92 s, 4 at 2.69 s and 0 by 3.1 s, with no swell after the landing.
 
 ## Decisions
 
@@ -133,8 +173,11 @@ The budget was < 1 ms. CPU work per frame is a handful of uniform writes.
   climb its skirt (a ≈ 1.2 m/s² buoyant start). It shows from ≈ 0.24 s as a soft curl beside the dome's right flank,
   and from ≈ 0.3 s past the plate's right rim against the cove. The haze under the lifting dome (over its shadow on
   the plate) is what "under the cloche" looks like here.
-- **The column leans towards the dome at first.** The cloche's wake is a real slow drift towards the back-left. It
-  also puts the young column over the dome's darker right flank, where it is easiest to see.
+- **No lean of the column towards the cloche.** A first version leaned it after the dome's wake. That made it read
+  as steam leaking from under the landed cloche, so the drift is now zero and the column stands over the plate.
+- **The pocket comes into view rather than being born in view.** The warm air the dome held is released inside it
+  and appears only as the shell slides clear. This is the physically right reading, and the only way to keep steam
+  from tracing the dome's outline.
 
 ## Known gaps
 
@@ -145,5 +188,38 @@ The budget was < 1 ms. CPU work per frame is a handful of uniform writes.
 - **One steam clock.** After accept → decline → accept in quick succession, the first reveal's fading steam is
   replaced by the new reveal's when it starts. At most 0.25 s of clearing steam is lost, at the moment the new
   reveal begins.
+- **Reviewer's cosmetic notes left as they are.** A faint lift (+26 levels) on the landed dome's lower band at
+  0.90–1.02 s: invisible at normal size. The young column's curl can read as a fairly regular arc for a moment.
 - **Thin over light.** By design the steam is subtle against the cove and the porcelain (see Research). It is most
   legible in motion and over the silver.
+
+## Evidence and tests
+
+Evidence is under `evidence/v1.5/dinner/` and is not committed:
+
+- **The reveal at 62.5 fps:** `reveal-62fps/` (239 frames at 720 px), `reveal-62fps.mp4` and
+  `reveal-62fps-crop2x.mp4`.
+- **Strips:** `reveal-strip-0-1s.png`, `reveal-strip-1-3.8s.png`, and `reveal-consecutive-0.40s.png` /
+  `reveal-consecutive-0.80s.png` (12 consecutive frames each).
+- **Close-ups at 1080 px:** `closeup-rim-spill.png`, `closeup-pocket.png`, `closeup-column.png`, frames in
+  `closeups-src/`.
+- **Change of mind, decline and host:** `change-strip.png`, `decline-strip.png`, `host-strip.png` (no steam).
+- **Stills per beat and clips:** `capture/` from `pnpm capture dinner`. Its accept clip now runs 3.8 s, through the
+  steam.
+- **Accepted still:** `rest-compare.png`, the comparison behind the no-residue decision.
+- **Steam metric and Low tier:** `steam-visibility-curve.txt` against `nosteam-720/`; `low-tier-strip.png`.
+- **Frame cost:** `perf-bench.json`, `perf-cadence.jsonl`.
+
+The four posters re-captured with the steam match the shipped ones (0 pixels differ at 2 % fuzz), so `assets/` is
+untouched.
+
+Tests:
+
+- `tests/dinner-steam.test.ts` has 12 tests. The plan: deterministic; spills first from the raised side while the far
+  rim is down; the pocket is released inside the dome and shown once clear; a trail from the trailing rim and a
+  set-down puff; nothing in or through the plate or the table; speeds; the column grows, shows, thins and is gone,
+  with no fold. On stage: the reveal clock; the steam carries on and ends clear; decline and host show none; reduced
+  motion and settle; replay; the change of mind.
+- `tests/browser/dinner.spec.ts` checks that the steam shows after the reveal, that the loop keeps drawing while it
+  rises and then idles, and that the final frame equals the reduced-motion still.
+- Totals: unit 294, browser 88.
