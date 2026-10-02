@@ -163,6 +163,25 @@ Evidence: `evidence/v1.5/business/polish/`.
 - `closeup-*`, `macro-*`, `screen-{desktop,laptop,phone}-*`, `still-*-540.png`, `thumb-*-192.png` and
   `strip-ramp-{accept,decline}.png` are the final renders.
 
+## Polish round 2 (the guest-experience judge on a 390 × 844 phone: 6.5/10, "undersized")
+
+| Ask | Done |
+| --- | --- |
+| Glyphs ~1.5× larger, clearance re-checked | Grid 0.21 → 0.315 (stroke 0.0347 = 2.6 mm, 1.5× the printed NFC mark's; check 13.2 mm wide). Centre v −0.44 → −0.422: the whole glyph stays at least 0.02 below the pressed card's lowest point during the hold (its upper glow tucks under the card's edge), 0.08 above the window's lower edge at rest, 0.14 below the NFC mark's arcs. Measured core sizes (CSS px): phone check 12.7 × 9.3 → **18.7 × 13.7**, minus 10.7 × 3.7 → **17.7 × 5.0**; laptop 26 × 19 / 25 × 7; desktop 34.5 × 25 / 32.5 × 9; 540 still 26 × 19 / 25 × 7 px |
+| Weight the dash to match the check | The minus spans the check's 11 units (the shell's is 10, beside a word). On the first enlarged build the reviewer measured, at phone 1.5×, core strokes of 11.7 / 12.0 device px and 992 / 1016 px² of lit area on one centre line. The red's halo gain is trimmed 3.0 → 2.6 and its core 1.85 → 1.7, so its bloom is no wider than the green's and the core stays saturated, `(249, 93, 89)` |
+| A light guide (ring or bar) | Rendered both (`polish2/light-guide-variants.png`) and rejected. Round a 1.5× glyph the ring overruns the lower glass and turns both glyphs into app badges (✅ / ⛔); a bar under the minus reads as "=". The glyph alone, at its new size, gives the status its presence |
+| Crispness at 1.5× and 2× DPR | Both reviewed (`polish2/tier-phone-{1.5x,2x}-*`): 1.5× is a little softer, with no stair-stepping; the softness reads as diffusion behind the glass |
+
+A hostile review of the first enlarged build scored it 7.5 with two should-fixes, both applied above: the rest pose
+read bottom-heavy (now raised half a grid unit) and the red bloom read wider than the green (now trimmed).
+
+Evidence: `evidence/v1.5/business/polish2/`.
+- `sizes-sheet.png` compares before / phone 1.5× / phone 2× / laptop 1× / 192 thumbnail / 540.
+- `tier-{phone-1.5x,phone-2x,laptop,desktop}-{accept,decline}-reader.png` are the reader at each layout.
+- `closeups-sheet.png`, `closeup-*`, `macro-*`, `still-*-540.png` and `thumb-*-192.png` are the final renders.
+- `strip-reader-{accept,decline}.png` follows the whole reader through the contact and hold.
+- `strip-ramp-{accept,decline}.png` shows the light ramp.
+
 ## Evidence (`evidence/v1.5/business/`)
 
 - `before/`: v1.4 for comparison (close-ups, phone crops, desktop page, 540 px and 192 px stills).

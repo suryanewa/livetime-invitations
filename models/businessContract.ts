@@ -194,16 +194,17 @@ export const SCAN_SPOT = { u: 0, v: 0.265 } as const;
  * Status pictogram (v1.5, runtime: models/business.ts): a dead-front glyph behind the lower glass,
  * below the pressed card and the NFC mark, invisible while off, lit in the status colour as a check
  * (accept) or a minus (decline), so the outcome reads by shape as well as colour. Face space, stage
- * units. `grid` is the size of the shell's 20-unit icon grid on the glass: strokes of 0.0231 (1.8 mm
- * at the card's real scale), a hair under the printed NFC mark's 0.0236, so the face carries one
- * stroke weight (a lit stroke reads a little bolder than a printed one); the check is 0.116 wide
- * (8.8 mm). `extent` is the side of the light's texture in grid units, mapped onto the glass in
- * face space (the halo has faded to nothing before its edge). Centred across the glass at `v`: in
- * the clear lower glass, 0.03 below the pressed card's lowest point counting the glow, its halo
- * inside the window; at rest it sits just below the middle of the glass between the NFC mark and
- * the window's lower edge.
+ * units. `grid` is the size of the shell's 20-unit icon grid on the glass: strokes of 0.0347 (2.6 mm
+ * at the card's real scale, 1.5× the printed NFC mark's 0.0236: a lit status mark, bolder than the
+ * print); the check is 0.173 wide (13.2 mm). Polish 2 grew it 1.5× (from 0.21) so it reads on a
+ * phone: the check 19 CSS px wide and the minus 18 × 5 on a 390 px phone (12.7 and 10.7 × 3.7
+ * before). `extent` is the side of the light's texture in grid units, mapped onto the glass in face
+ * space (the halo has faded to nothing before its edge). Centred across the glass at `v`: the whole
+ * glyph stays 0.03 below the pressed card's lowest point (its upper glow tucks under the card's
+ * edge), its halo inside the window; at rest it sits in the lower glass, 0.08 above the window's
+ * lower edge (raised half a grid unit from −0.43, where the rest pose read bottom-heavy).
  */
-export const STATUS_PICTOGRAM = { v: -0.43, grid: 0.21, extent: 36 } as const;
+export const STATUS_PICTOGRAM = { v: -0.422, grid: 0.315, extent: 36 } as const;
 /** The pictogram's texture on the glass (face space, stage units): extent × grid / 20 on a side. */
 export const STATUS_PICTOGRAM_SIZE = (STATUS_PICTOGRAM.extent * STATUS_PICTOGRAM.grid) / 20;
 /** Face space z of the card centre when its clips touch the glass. */

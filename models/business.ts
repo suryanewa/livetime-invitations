@@ -97,16 +97,16 @@ export const GLOW = {
   /**
    * Radiance at the glyph's brightest point (× the status colour; linear, before exposure: the
    * emission field is normalised to 1 there, where the stroke's core and its halo overlap). Set so
-   * each glyph's strongest channel renders at 1.7–1.9 after the rig's 1.15 exposure: two to two and
-   * a half times the Neutral tone curve's shoulder (0.76), so the core rolls off (a gentle HDR
-   * bloom) while the curve's path to white stays under an eighth and the hue holds. An LED's light
+   * each glyph's strongest channel renders at about 1.7 after the rig's 1.15 exposure: over twice
+   * the Neutral tone curve's shoulder (0.76), so the core rolls off (a gentle HDR bloom) while the
+   * curve's path to white stays under a tenth and the hue holds. An LED's light
    * is narrow-band: its core reads as its colour, not as a white filament. (v1.5's first cuts,
    * 4.2 / 5 and then 2.6 / 2.7 on the stroke core, washed the red core to salmon and, over a bright
-   * reflection, to pink-white.) The red runs a shade hotter (1.63 against 1.45 in its strongest
+   * reflection, to pink-white.) The red runs a shade hotter (1.49 against 1.45 in its strongest
    * channel: it has 0.37 of the green's luminance); the glyph's presence at small sizes is carried
-   * by its halo (businessPrint.ts STATUS_DIFFUSION.haloGain).
+   * by its size and its halo (businessPrint.ts STATUS_DIFFUSION.haloGain).
    */
-  glyph: { accept: 1.95, decline: 1.85 },
+  glyph: { accept: 1.95, decline: 1.7 },
 } as const;
 /*
  * No spill light (v1.5). A 1.8 mm stroke behind smoked glass throws no light a viewer can see on the
