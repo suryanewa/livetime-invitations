@@ -7,6 +7,7 @@ import {
   type DinnerRig,
 } from '../../../models/dinner.ts';
 import { flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
+import { DinnerSteam } from '../../../models/dinnerSteam.ts';
 import { disposeImported, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { silhouettePoints } from '../../render/framing.ts';
@@ -14,9 +15,10 @@ import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/se
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { smoothstep } from '../../motion/curves.ts';
 import {
-  type AnswerChange, changeTime, coverBlendSafe, DURATIONS, frameFor, newFrame, planAnswerChange, sampleAnswerChange, sampleSequence,
+  type AnswerChange, changeTime, CONTENT_END, coverBlendSafe, DURATIONS, frameFor, newFrame, planAnswerChange, sampleAnswerChange, sampleSequence,
   type DinnerFrame,
 } from './sequences.ts';
+import { STEAM_CHANGE_FADE, STEAM_END, STEAM_REST, steamPlumes, steamPuffs } from './steam.ts';
 
 /**
  * Silhouette samples of every Dinner path: the plate, the cover along the host and accept paths
@@ -73,10 +75,24 @@ export class DinnerScene implements SceneInstance {
   readonly framePoints: Vector3[];
 
   private readonly frame = newFrame();
+  /** v1.5: the steam released by the reveal (src/scenes/dinner/steam.ts, models/dinnerSteam.ts). */
+  private readonly steam = new DinnerSteam(steamPuffs(), steamPlumes());
+  /**
+   * The steam clock τ (s since the reveal began), or null when no steam shows. While the reveal
+   * plays the accept's samples set it; after it (`steamFree`) `simulate` carries it on until the
+   * last puff has gone, and settle() snaps it to rest.
+   */
+  private steamT: number | null = null;
+  private steamFree = false;
+  /** A change of mind stops the release (no puff born after this τ) and fades what is out. */
+  private steamEmitEnd = Infinity;
+  private steamFade = 1;
+  private steamFading = false;
 
   constructor(readonly rig: DinnerRig, _config: Extract<SceneConfig, { category: 'dinner' }>) {
     this.root = rig.root;
     this.bounds = rig.bounds.clone();
+    rig.root.add(this.steam.object);
     const n = rig.nodes;
     this.animatedNodes = [n.plate_authored!, n.cover_authored!, n.bin_root!, rig.flapL, rig.flapR];
     this.framePoints = [...dinnerFramePoints(), ...openBinFramePoints(n.bin_root!, DINNER_BIN_POS, DINNER_BIN_YAW)];
@@ -95,10 +111,17 @@ export class DinnerScene implements SceneInstance {
   private changeArmed = false;
 
   pose(pose: CanonicalPose): void {
+    const cutOfChange = this.changeArmed;
     if (this.changeArmed) this.changeArmed = false;
     else this.change = null;
+    // The reveal has just played to its end: its steam carries on (simulate) until it has gone.
+    const revealEnded = pose === 'accepted' && this.shown?.seq === 'accept' && this.shown.rate > 0 && this.steamT !== null && !this.steamFree;
     this.shown = pose === 'accepted' ? { seq: 'accept', t: DURATIONS.accept, rate: 0 }
       : pose === 'declined' ? { seq: 'decline', t: DURATIONS.decline, rate: 0 } : null;
+    if (revealEnded) {
+      // Carry on from the last sample (within a frame of the reveal's end): never a jump.
+      this.steamFree = true;
+    } else if (!cutOfChange) this.steamRest();
     this.apply(frameFor(pose, this.frame));
   }
 
@@ -106,7 +129,58 @@ export class DinnerScene implements SceneInstance {
     this.changeArmed = false;
     if (this.change && sequence !== this.change.next) this.change = null;
     this.shown = { seq: sequence, t, rate: 1 };
-    this.apply(this.change ? sampleAnswerChange(this.change, t, this.frame) : sampleSequence(sequence, t, this.frame));
+    // The reveal playing forwards drives the steam clock; anything else leaves only steam that
+    // a change of mind has already released (it fades on its own clock, simulate).
+    const c = this.change;
+    const [seq, s] = c ? changeTime(c, t) : [sequence, t];
+    const revealing = seq === 'accept' && (!c || (c.next === 'accept' && t >= c.rewind));
+    if (revealing) {
+      // After a change of mind the reveal may play up to k× faster (the rewind took some of its
+      // time); the steam follows the reveal's own clock while the cover moves, then runs on in
+      // real time once the reveal's motion is over (changeTime holds there).
+      this.steamT = c ? revealSteamTime(c, t) : s;
+      this.steamFree = this.steamFading = false;
+      this.steamEmitEnd = Infinity;
+      this.steamFade = 1;
+    } else if (!this.steamFading) this.steamT = null;
+    this.apply(c ? sampleAnswerChange(c, t, this.frame) : sampleSequence(sequence, t, this.frame));
+  }
+
+  /** Steam at rest for the pose on stage: none, or the accepted still's faint residue (STEAM_REST). */
+  private steamRest(): void {
+    const accepted = this.shown?.seq === 'accept' && this.shown.rate === 0;
+    this.steamT = accepted && STEAM_REST ? STEAM_REST.tau : null;
+    this.steamFade = accepted && STEAM_REST ? STEAM_REST.fade : 1;
+    this.steamFree = this.steamFading = false;
+    this.steamEmitEnd = Infinity;
+  }
+
+  simulate(dt: number): void {
+    if (!this.steamFree || this.steamT === null) return;
+    this.steamT += dt;
+    if (this.steamFading) this.steamFade = Math.max(0, this.steamFade - dt / STEAM_CHANGE_FADE);
+    // Gone: the live steam ends clear (the canonical still's residue, if any, is for stills only).
+    if (this.steamT >= STEAM_END || this.steamFade <= 0) {
+      this.steamT = null;
+      this.steamFree = this.steamFading = false;
+    }
+    this.syncSteam();
+  }
+
+  /** True while released steam is still rising (the loop keeps drawing until it has gone). */
+  settling(): boolean {
+    return this.steamFree && this.steamT !== null;
+  }
+
+  /**
+   * Snap the steam to rest (reduced motion, replay, the director's deadlines). The settle that
+   * comes with a change of mind's cut is the exception: steam already out keeps rising and fades
+   * (interruptCut), as air would.
+   */
+  settle(): void {
+    if (this.changeArmed) return;
+    this.steamRest();
+    this.syncSteam();
   }
 
   /**
@@ -125,23 +199,32 @@ export class DinnerScene implements SceneInstance {
     const next = s.seq === 'accept' ? 'decline' : 'accept';
     this.change = planAnswerChange(from, at, rate, next);
     this.changeArmed = true;
+    // Steam already released keeps rising on its own clock and fades; nothing more is released.
+    if (this.steamT !== null) {
+      this.steamFree = this.steamFading = true;
+      this.steamEmitEnd = Math.min(this.steamEmitEnd, this.steamT);
+    }
+    this.syncSteam();
     return true;
   }
 
   /** Low tier for the imported plate and cloche materials (the library handles the bin). */
   setLowDetail(enabled: boolean): void {
     setImportedLowDetail(this.root, enabled);
+    this.steam.setLowDetail(enabled);
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
     // Warm the bin too (shown for the compile only).
     const scene = this.root.parent ?? this.root;
     this.rig.nodes.bin_root!.visible = true;
+    this.steam.showForCompile();
     await renderer.compileAsync(scene, camera);
     this.apply(this.frame);
   }
 
   dispose(): void {
+    this.steam.dispose();
     this.rig.dispose();
     disposeImported(this.root);
     this.root.traverse((o) => (o as { geometry?: { dispose(): void } }).geometry?.dispose());
@@ -173,7 +256,28 @@ export class DinnerScene implements SceneInstance {
     const [l, r] = flapAngles(f.flaps);
     this.rig.flapL.rotation.set(0, 0, l);
     this.rig.flapR.rotation.set(0, 0, r);
+    this.steam.setSurfaces(f.coverPos, f.coverTiltX, f.coverTilt, f.platePos);
+    this.syncSteam();
   }
+
+  private syncSteam(): void {
+    this.steam.update(this.steamT, this.steamEmitEnd, this.steamFade);
+  }
+
+  /** The steam on stage (tests, tooling): its clock (null: none), overall fade and release cut-off. */
+  get steamState(): { tau: number | null; fade: number; emitEnd: number; visible: boolean } {
+    return { tau: this.steamT, fade: this.steamFade, emitEnd: this.steamEmitEnd, visible: this.steam.object.visible };
+  }
+}
+
+/**
+ * Steam time on a change of mind's reveal: the accept's own time while its motion plays (it may be
+ * sped up by k), real time after CONTENT_END (where changeTime holds), continuous at the switch.
+ */
+export function revealSteamTime(c: AnswerChange, t: number): number {
+  const s = c.start + (t - c.rewind) * c.k;
+  const end = CONTENT_END.accept;
+  return s <= end ? s : end + (s - end) / c.k;
 }
 
 async function fetchGlb(url: string, signal: AbortSignal): Promise<ArrayBuffer> {

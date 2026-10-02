@@ -9,6 +9,12 @@ type Snap = { resource: string; visual: string; response: { intent: string | nul
 const state = (page: Page) => page.evaluate(() => (window as any).__showcase.state as Snap);
 const requests = (page: Page) => page.evaluate(() => (window as any).__showcase.requests.length as number);
 
+/**
+ * Mean per-channel difference (0–255) the steam still makes in a 256 px still just after the
+ * reveal, when the column is thinning (measured 0.07; the cleared frame measures 0).
+ */
+const STEAM_VISIBLE = 0.03;
+
 async function ready(page: Page, url = '/?scene=dinner') {
   await page.goto(url);
   await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
@@ -53,6 +59,43 @@ test('Accept reveals the dish; Decline bins the covered dish; one request each',
   await expect.poll(async () => (await state(page)).visual, { timeout: 5000 }).toBe('declined-pose');
   await expect.poll(() => requests(page)).toBe(2);
   await expect.poll(async () => (await state(page)).response.persistence).toBe('saved');
+});
+
+test('Accept releases steam that rises on after the reveal, then fades clear: the loop idles on the canonical still', async ({ page }) => {
+  // v1.5: the steam lives in simulate past the reveal (settling() while it rises); count frames.
+  await page.addInitScript(() => {
+    const raf = window.requestAnimationFrame.bind(window);
+    (window as any).__rafCalls = 0;
+    window.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      (window as any).__rafCalls++;
+      return raf(cb);
+    };
+  });
+  await ready(page);
+  await page.getByRole('button', { name: 'Guest', exact: true }).click();
+  await page.getByRole('button', { name: 'Accept' }).click();
+  await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('accepted-pose');
+  const still = () => page.evaluate(() => (window as any).__showcase.controller.captureStill(256, 1) as string);
+  const steaming = await still();
+  // Still drawing: the column is rising off the plate.
+  const calls = () => page.evaluate(() => (window as any).__rafCalls as number);
+  const a = await calls();
+  await page.waitForTimeout(300);
+  expect(await calls()).toBeGreaterThan(a + 5);
+  // Gone by STEAM_END (3.6 s of the reveal's clock, ≈ 2.1 s after the accepted pose): idle.
+  await page.waitForTimeout(2600);
+  const b = await calls();
+  await page.waitForTimeout(800);
+  expect(await calls()).toBeLessThanOrEqual(b + 1);
+  const cleared = await still();
+  const canonical = await page.evaluate(async () => {
+    const c = (window as any).__showcase.controller;
+    c.setReducedMotion(true);
+    await new Promise((r) => setTimeout(r, 100));
+    return c.captureStill(256, 1) as string;
+  });
+  expect(await stillDiff(page, steaming, canonical)).toBeGreaterThan(STEAM_VISIBLE);
+  expect(await stillDiff(page, cleared, canonical)).toBeLessThan(0.3);
 });
 
 test('Replay after decline restores plate, cover and bin, and ends on the canonical pose', async ({ page }) => {
