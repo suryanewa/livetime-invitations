@@ -3,12 +3,12 @@ import {
   type Camera,
   Color,
   DataTexture,
-  LinearFilter,
   Euler,
   Float32BufferAttribute,
   Group,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
+  LinearFilter,
   Matrix4,
   Mesh,
   NormalBlending,
@@ -25,20 +25,25 @@ import { PLUME, type Plume, PUFF_KINDS, type Puff, STEAM_TIME } from '../src/sce
 import { REVEAL_DIR } from '../src/scenes/dinner/sequences.ts';
 
 /**
- * Dinner v1.5 steam: every puff of the reveal (src/scenes/dinner/steam.ts) as one instanced draw
- * of camera-facing soft billboards. The vertex shader evaluates each puff's closed-form life at
- * the steam clock `uTime` (the CPU mirror is `puffAt`); the fragment shader slices a 3D noise
- * field through the puff (attached to it, so it billows and breaks into wisps as it ages, never
- * a flat sprite) and fades analytically against the plate, the table and the cloche (no depth
- * texture: the surfaces are known in closed form, so no quad edge ever shows where a billboard
- * crosses them, and nothing draws inside the dome).
+ * Dinner v1.5 steam (plan: src/scenes/dinner/steam.ts), two instanced draws evaluated in closed
+ * form at the steam clock `uTime`, so the GPU does all of it and the CPU sets a few uniforms:
+ *  - Puffs (spill, release, pocket, trail): camera-facing soft billboards. The vertex shader
+ *    places each at its age (CPU mirror `puffAt`); the fragment shader slices a domain-warped 3D
+ *    noise field through it (attached to the puff, so it billows, churns and frays into wisps as
+ *    it ages; its outline is the field's, never the quad's circle).
+ *  - Plumes (the column): ribbons up from the plate, as wide as the camera's horizontal, along a
+ *    meandering centreline (CPU mirror `plumeCenter`); the fragment shader draws the thin
+ *    strands a rising sheet of vapour folds into, carried up with it (`plumeDensity`).
+ * Both fade analytically against the plate, the table and the cloche (no depth texture: the
+ * surfaces are known in closed form, so no edge shows where a billboard crosses them, and
+ * nothing draws inside the dome, which hides its inside from this camera anyway).
  *
  * Shading. Steam is droplets in air, an optically thin, nearly white scatterer: it adds the
  * room's in-scattered light and veils what is behind it by the same fraction. Under the
- * neutral-room rig the window key is in front of it (scattering angle ≈ 130°, weak), so it reads
- * brighter than the dark strokes in the silver, about level with the greige cove and a touch
- * below the lit porcelain: bright against dark, nearly invisible against light, as real steam is
- * under front light. `STEAM_LOOK.color` is that in-scattered radiance (linear, before exposure).
+ * neutral-room rig it reads brighter than the dark strokes in the silver, a little lighter than
+ * the greige cove and about level with the lit porcelain: bright against dark, nearly invisible
+ * against light, as real steam is when it is not backlit. The dome's shadow shades it as it
+ * shades the plate. `STEAM_LOOK.color` is that in-scattered radiance (linear, before exposure).
  */
 
 export const STEAM_LOOK = {
@@ -48,7 +53,8 @@ export const STEAM_LOOK = {
   topLight: 0.12,
   /**
    * Share of the light that is the room's (the rest is the shadow-casting key): in the dome's
-   * shadow the steam keeps only this, as the plate does (lit porcelain ≈ 1.45× its shade here).
+   * shadow the steam keeps only this, as the plate does (measured: the porcelain in the lifting
+   * dome's shadow is 0.77 of its lit value, sRGB 210 against 235, linear).
    */
   ambient: 0.77,
   /** Soft contact distances (su): the plate and table, the cloche's shell. */
@@ -68,8 +74,9 @@ function glslProfile(name: string, pts: readonly (readonly [number, number])[]):
   return lines.join('\n');
 }
 
-// The plate's top surface (r → y) thinned to its shape, and the dome's outer radius by height.
-const PLATE_LINE = PLATE_PROFILE.filter(([r]) => r === 0 || r >= 0.44).filter((_, i, a) => i % 2 === 0 || i === a.length - 1);
+// The plate's top surface (r → y; an upper bound of the master's, so the soft contact always
+// fades out above the porcelain) and the dome's outer radius by height.
+const PLATE_LINE = PLATE_PROFILE;
 const DOME_BY_HEIGHT = COVER_PROFILE.map(([r, y]) => [y, r] as const);
 
 /**
@@ -182,6 +189,7 @@ void main() {
 const SURFACES = /* glsl */ `
 uniform float uTime;
 uniform float uFade;
+uniform bool uLow;
 uniform vec3 uColor;
 uniform float uTopLight;
 uniform float uAmbient;
@@ -199,7 +207,7 @@ ${glslProfile('domeRadius', DOME_BY_HEIGHT)}
 float contact(vec3 p) {
   vec3 pp = p - uPlate;
   float rp = length(pp.xz);
-  float surface = rp < 0.8 ? plateTop(rp) : 0.0;
+  float surface = rp < 0.8 && pp.y < 0.2 ? plateTop(rp) : 0.0;
   float k = smoothstep(0.0, ${STEAM_LOOK.softFloor.toFixed(3)}, pp.y - surface) * smoothstep(0.0, ${STEAM_LOOK.softFloor.toFixed(3)}, p.y);
   vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
   float rc = length(cv.xz);
@@ -261,11 +269,12 @@ void main() {
   vec2 w = vec2(snoise(q * 0.9 + 3.1), snoise(q * 0.9 + 7.7));
   vec3 qw = q + 0.6 * vec3(w.x, w.y, 0.5 * w.x);
   float env = (1.0 - smoothstep(0.1, 0.95, length(vCorner + 0.4 * w))) * (1.0 - smoothstep(0.75, 1.0, sqrt(r2)));
-  float n = 0.5 + 0.5 * (0.7 * snoise(ROT * qw) + 0.3 * snoise(ROT * (ROT * qw) * 2.3 + 5.3));
+  // (Low tier: one octave and no filaments, half the lookups.)
+  float n = 0.5 + 0.5 * (uLow ? 0.85 * snoise(ROT * qw) : 0.7 * snoise(ROT * qw) + 0.3 * snoise(ROT * (ROT * qw) * 2.3 + 5.3));
   // Filaments: thin sheets stretched along the rise, in world space so they run on from puff to
   // puff, drifting up and bent by the same warp. They take over as the puff evaporates.
   vec3 wq = vPos * vec3(3.0, 1.2, 3.0) + vec3(0.0, -uTime * 0.45, 0.0) + 0.45 * w.x;
-  float sn = snoise(ROT * wq);
+  float sn = uLow ? 0.0 : snoise(ROT * wq);
   float sheet = 1.0 - sn * sn;
   float dens = env * n * n * 1.7 * mix(1.0, 0.3 + 0.9 * sheet, vErode);
   // Evaporation thins it from its faint parts first: it frays into wisps, then is gone.
@@ -363,7 +372,7 @@ void main() {
   // so the wandering strands never meet its edges.
   float s = h - vRise * uTime;
   float free = smoothstep(0.0, 0.35, h);
-  float c1 = (0.8 * snoise(vec3(s * 2.0, vSeed, 0.35 * uTime)) + 0.3 * snoise(vec3(s * 4.6, vSeed + 3.0, 0.0))) * free * (1.0 + 0.6 * h);
+  float c1 = (0.8 * snoise(vec3(s * 2.0, vSeed, 0.35 * uTime)) + (uLow ? 0.0 : 0.3 * snoise(vec3(s * 4.6, vSeed + 3.0, 0.0)))) * free * (1.0 + 0.6 * h);
   float c2 = c1 + 0.9 * snoise(vec3(s * 1.6, vSeed + 5.0, 0.3 * uTime)) * free;
   float sig = 0.3 + 0.35 * h;
   float a1 = (u - c1) / sig, a2 = (u - c2) / (1.25 * sig);
@@ -438,6 +447,7 @@ export class DinnerSteam {
     this.noise = noiseTexture();
     const shared = {
       uNoise: { value: this.noise },
+      uLow: { value: false },
       uTime: { value: 0 },
       uEmitEnd: { value: Infinity },
       uFade: { value: 1 },
@@ -510,6 +520,7 @@ export class DinnerSteam {
   }
 
   private readonly shared: {
+    uLow: { value: boolean };
     uTime: { value: number }; uEmitEnd: { value: number }; uFade: { value: number };
     uCoverInv: { value: Matrix4 }; uPlate: { value: Vector3 };
     uCamRight: { value: Vector3 }; uCamUp: { value: Vector3 }; uCamBack: { value: Vector3 }; uKeyDir: { value: Vector3 };
@@ -531,6 +542,11 @@ export class DinnerSteam {
     this.coverInv.makeRotationFromEuler(EULER.set(tiltX, 0, tiltZ)).setPosition(coverPos).invert();
     this.shared.uCoverInv.value.copy(this.coverInv);
     this.shared.uPlate.value.copy(platePos);
+  }
+
+  /** Low tier: one noise octave and no filaments (about half the texture lookups). */
+  setLowDetail(enabled: boolean): void {
+    this.shared.uLow.value = enabled;
   }
 
   /** Show both draws for a shader warm-up (the next update restores visibility). */

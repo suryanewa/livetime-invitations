@@ -208,6 +208,7 @@ export class DinnerScene implements SceneInstance {
   /** Low tier for the imported plate and cloche materials (the library handles the bin). */
   setLowDetail(enabled: boolean): void {
     setImportedLowDetail(this.root, enabled);
+    this.steam.setLowDetail(enabled);
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
