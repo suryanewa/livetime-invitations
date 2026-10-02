@@ -3,12 +3,12 @@ import { cubicBezier, EASE, lerp, seg, smoothstep } from '../../motion/curves.ts
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 import { CANDLE, CANDLE_SOCKETS } from '../../../models/birthdayContract.ts';
 import {
-  ACROSS_FROM, BIN_AT, BIN_DELAY, BIN_DROP_G, BIN_FROM, CAKE_LOAD, CANDLE_COUNT, CANDLE_HOVER, CANDLE_SEATED, CANDLE_START, CARRY, CARRY_FROM,
+  ACROSS_FROM, BIN_AT, BIN_DELAY, BIN_DROP_G, BIN_FROM, BIN_SLIDE, CAKE_LOAD, CANDLE_COUNT, CANDLE_HOVER, CANDLE_SEATED, CANDLE_START, CARRY, CARRY_FROM,
   CARRY_LEAN, CARRY_TO, DROPPED, DURATIONS, FLAPS_CLOSE, HOVER_OVER_BIN, LEAN_FADE, LEAN_MAX, LIFT_TO, ON_STAND, PRESENT_YAW,
 } from './poses.ts';
 import { BREATH, burnRate, flameState, type FlameState, litFlame, newFlameState, noFlame, SMOKE, type SmokeKind, SNUFF } from './fire.ts';
 import { candleDrop, pressOf, push } from './placement.ts';
-import { BIN_CLOSE, dropHeight, flapsClosing } from '../../../models/disposalBin.ts';
+import { BIN_CLOSE, BIN_ENTRANCE, dropHeight, flapsClosing } from '../../../models/disposalBin.ts';
 
 /**
  * Pure authored choreography for Birthday: every value is a function of time (the carry lean is
@@ -304,6 +304,7 @@ function accept(t: number, out: BirthdayFrame, change: FireChange | null): void 
 
 // ── Decline: 1.5 s ────────────────────────────────────────────────────────────
 const FLAP_OPEN = cubicBezier(0.3, 0, 0.2, 1);
+const BIN_ENTER = cubicBezier(...BIN_ENTRANCE.ease);
 /**
  * Lift off the stand (CARRY_FROM–LIFT_TO, 0.36 s, 32 cm up to clear the real bin's rim): a heavy
  * take-off on a smootherstep, gathering speed over several frames (v1.2 review: no two-frame
@@ -315,7 +316,7 @@ const LIFT = (u: number) => u * u * u * (u * (6 * u - 15) + 10);
 /** Flaps: open as the bin arrives; from FLAPS_CLOSE (the cake is below the rim) the bin's soft close. */
 const FLAPS_GAP_AT = FLAPS_CLOSE + BIN_CLOSE.toGap;
 function flaps(t: number): number {
-  if (t < FLAPS_CLOSE) return FLAP_OPEN(seg(t, BIN_DELAY + 0.08, BIN_DELAY + 0.25));
+  if (t < FLAPS_CLOSE) return FLAP_OPEN(seg(t, BIN_DELAY + 0.16, BIN_DELAY + 0.36));
   return flapsClosing(t - FLAPS_CLOSE);
 }
 
@@ -401,10 +402,12 @@ export const SMOKE_EMIT_UNTIL = CARRY_TO + 0.08;
 function decline(t: number, out: BirthdayFrame, change: FireChange | null): void {
   frameFor('guest-ready', out);
   // 0–0.25: the flames are snuffed (fire.ts), each leaving a brief wisp, and the camera starts
-  // easing back (framing.ts DECLINE_PULL); 0.12–0.37: the bin slides into the room it has made and
-  // opens (BIN_DELAY). After a change of mind, the breath's fire carries on instead.
-  out.binVisible = t > 0;
-  out.binPos.lerpVectors(BIN_FROM, BIN_AT, EASE.travel(seg(t, BIN_DELAY, BIN_DELAY + 0.24)));
+  // easing back (framing.ts DECLINE_PULL); 0.12–0.50: the bin slides into the room it has made,
+  // decelerating, and opens as it settles (BIN_DELAY, BIN_SLIDE; the scene starts it just out of
+  // the drawn view), at rest before the cake reaches it (0.521 s). After a change of mind, the
+  // breath's fire carries on instead.
+  out.binVisible = t > BIN_DELAY;
+  out.binPos.lerpVectors(BIN_FROM, BIN_AT, BIN_ENTER(seg(t, BIN_DELAY, BIN_DELAY + BIN_SLIDE)));
   if (change) carriedFire(change, t, out);
   else {
     for (let i = 0; i < CANDLE_COUNT; i++) {

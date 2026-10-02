@@ -218,26 +218,40 @@ export class Stage {
       this.studioScale = studio?.scale ?? object.scale.x;
       this.studio.setWall?.(studio?.wallZ, this.studioScale);
       this.scaleShadow();
-      if (this.shadowed) {
-        object.traverse((o) => {
-          const m = o as Mesh;
-          if (!m.isMesh) return;
-          const transparent = Array.isArray(m.material) ? false : (m.material as { transparent?: boolean }).transparent;
-          if (m.userData.shadowProxy) {
-            // Invisible low-poly stand-in: casts for the dense mesh it replaces, receives nothing.
-            m.castShadow = true;
-            m.receiveShadow = false;
-            return;
-          }
-          m.castShadow = !transparent && !m.name.endsWith('_shadow') && !m.userData.noShadowCast && castsVisibleShadow(m);
-          m.receiveShadow = !transparent;
-        });
-      }
+      if (this.shadowed) this.markShadows(object);
       this.bounds.getCenter(this.aim.position);
       this.aim.updateMatrixWorld();
       this.studio.setContent?.(this.bounds, this.studioScale);
       this.fit();
     }
+  }
+
+  /** Shadow casting and receiving for content meshes (thin decals and transparent parts excluded). */
+  private markShadows(object: Object3D): void {
+    object.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh) return;
+      const transparent = Array.isArray(m.material) ? false : (m.material as { transparent?: boolean }).transparent;
+      if (m.userData.shadowProxy) {
+        // Invisible low-poly stand-in: casts for the dense mesh it replaces, receives nothing.
+        m.castShadow = true;
+        m.receiveShadow = false;
+        return;
+      }
+      m.castShadow = !transparent && !m.name.endsWith('_shadow') && !m.userData.noShadowCast && castsVisibleShadow(m);
+      m.receiveShadow = !transparent;
+    });
+  }
+
+  /**
+   * v1.5: parts a scene adds under its content after `setContent` (the shared bin, loaded after
+   * the scene is ready) get what content gets there: their own environment and the shadow flags.
+   */
+  adoptContent(object: Object3D): void {
+    if (!this.content) return;
+    this.assignOwnEnvironment(object);
+    if (this.shadowed) this.markShadows(object);
+    this.renderer.shadowMap.needsUpdate = true;
   }
 
   /**

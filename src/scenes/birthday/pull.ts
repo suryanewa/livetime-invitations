@@ -70,6 +70,10 @@ function planCameraRewind(c: AnswerChange): { span: number; hold: number; p0: nu
   });
   const needAt = (t: number) => (t >= R ? 0 : need[Math.min(need.length - 1, Math.round(t / dt))]!);
   const top = REWIND.pace * PULL_TOP_SPEED;
+  // The scene's state just before its rewind ends (the grid's last sample is already past it).
+  const endAt = R - 1e-4;
+  const [endSeq, endS] = changeTime(c, endAt);
+  const endNeed = endSeq === 'decline' ? declinePull(endS) : 0;
   let found: { span: number; hold: number; p0: number; v0: number } | null = null;
   for (const tail of TAILS) {
     const span = R + tail;
@@ -80,6 +84,10 @@ function planCameraRewind(c: AnswerChange): { span: number; hold: number; p0: nu
         ok = p >= needAt(u * span) - 1e-3 && Math.abs(p - prev) / (span / N) <= top;
         prev = p;
       }
+      // And the instant before the scene's rewind ends, which the samples can step over: its
+      // last part can be quick (the bin's entrance comes in already moving: models/disposalBin.ts
+      // BIN_ENTRANCE), and the decline's pull is still high there.
+      ok = ok && rewindCurve(endAt / span, p0, v0 * span, hold) >= endNeed - 1e-3;
       if (ok) { found = { span, hold, p0, v0 }; break; }
     }
     if (found) break;

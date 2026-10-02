@@ -6,7 +6,10 @@
  *
  * Texel density (cf. the masters: 15–100 px/cm, the hoop's tiled maps 50 px/cm): micro-normals
  * and the steel's roughness are tiled on UV0 at 85–200 px/cm; the turned parts' occlusion and
- * roughness variation are unique on UV1 at 10–26 px/cm (they are low-frequency).
+ * roughness variation are unique on UV1 at 5–26 px/cm (they are low-frequency). v1.5 review (the
+ * first decline uploaded 34 MiB of maps): the body's and the bucket's occlusion/roughness and the
+ * steel's roughness at half size (the profile occlusion and the 20–40 cm mottle, and 0.12 mm per
+ * texel for streaks of 0.4 mm and more, lose nothing at any size the bin is drawn); 17 MiB.
  */
 import type { Document, Material } from '@gltf-transform/core';
 import { KHRMaterialsAnisotropy } from '@gltf-transform/extensions';
@@ -48,7 +51,7 @@ export async function finishBin(doc: Document, log: ComposeLog): Promise<void> {
   const linerN = await texture('bin_liner_normal', T.edmNormal(512, TILE.plastic, 0.6));
   const rubberN = await texture('bin_rubber_normal', T.rubberNormal(256, TILE.rubber));
   const steelN = await texture('bin_steel_normal', T.brushedNormal(1024, TILE.steel));
-  const steelORM = await texture('bin_steel_orm', T.brushedOrm(1024));
+  const steelORM = await texture('bin_steel_orm', T.brushedOrm(512));
   const treadN = await texture('bin_tread_normal', T.treadNormal(256, TILE.tread));
 
   // Unique occlusion + roughness (UV1) for the turned parts: occlusion along the profile, the
@@ -76,7 +79,7 @@ export async function finishBin(doc: Document, log: ComposeLog): Promise<void> {
   // Body: satin graphite powder coat (roughness 0.29 ± 0.04 over 20–40 cm), orange peel.
   const body = material('bin_powder');
   setNormal(body, powderN);
-  setORM(body, await turnedORM('bin_body', 2048, 1024, 0.29, 0.04, 101), 1, true);
+  setORM(body, await turnedORM('bin_body', 1024, 512, 0.29, 0.04, 101), 1, true);
   // Base cup and lid ring: EDM-textured PP (0.56 / 0.52 ± 0.025).
   for (const [name, part, rough, seed] of [['bin_base', 'bin_base', 0.56, 103], ['bin_ring', 'bin_lid_ring', 0.52, 107]] as const) {
     const m = material(name);
@@ -86,7 +89,7 @@ export async function finishBin(doc: Document, log: ComposeLog): Promise<void> {
   // Inner bucket: mid-grey PP (0.45 ± 0.03), deep occlusion inside.
   const liner = material('bin_liner');
   setNormal(liner, linerN);
-  setORM(liner, await turnedORM('bin_liner', 1024, 1024, 0.45, 0.03, 109), 1, true);
+  setORM(liner, await turnedORM('bin_liner', 512, 512, 0.45, 0.03, 109), 1, true);
   // Small PP parts (hinge knuckles, pedal housing).
   setNormal(material('bin_plastic'), edmN);
   setNormal(material('bin_rubber'), rubberN);

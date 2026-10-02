@@ -1,0 +1,93 @@
+{
+  "probe": "scripts/_scratch/frametime.ts and warmcost.ts (headless Chrome, ANGLE Metal); laptop 1440x900, phone 390x844 @3x with 4x CPU throttling; rAF callback time (cb) and frame gaps",
+  "firstDecline400ms": {
+    "birthday-laptop": {
+      "frames": 25,
+      "cbMaxMs": 0.9,
+      "gapMaxMs": 16.8,
+      "framesOver20ms": 0,
+      "longTasks": 0
+    },
+    "birthday-phone": {
+      "frames": 25,
+      "cbMaxMs": 3.1,
+      "gapMaxMs": 16.7,
+      "framesOver20ms": 0,
+      "longTasks": 0
+    },
+    "dinner-laptop": {
+      "frames": 25,
+      "cbMaxMs": 0.7,
+      "gapMaxMs": 16.8,
+      "framesOver20ms": 0,
+      "longTasks": 0
+    },
+    "dinner-phone": {
+      "frames": 25,
+      "cbMaxMs": 2.7,
+      "gapMaxMs": 16.7,
+      "framesOver20ms": 0,
+      "longTasks": 0
+    }
+  },
+  "judgeBefore": {
+    "laptop": "birthday cb 15-24 ms, dinner cb 18-33 ms in the first 60-330 ms of the first decline",
+    "phone": "birthday 52 ms long task and a dropped frame, dinner cb 27-30 ms"
+  },
+  "warmUpAtRest": {
+    "birthday-laptop": {
+      "readyToWarmMs": 596,
+      "cbMaxMs": 0.5,
+      "gapMaxMs": 16.7
+    },
+    "birthday-phone": {
+      "readyToWarmMs": 707,
+      "cbMaxMs": 2.9,
+      "gapMaxMs": 33.2,
+      "note": "one ~30 ms task at rest (the out-of-sight draw: the bin geometry upload and its two shadow programs), no long task"
+    },
+    "dinner-laptop": {
+      "readyToWarmMs": 607,
+      "cbMaxMs": 0.4,
+      "gapMaxMs": 16.8
+    },
+    "dinner-phone": {
+      "readyToWarmMs": 672,
+      "cbMaxMs": 1.3,
+      "gapMaxMs": 16.7
+    }
+  },
+  "entranceVisibleSeconds": {
+    "note": "first frame any of the bin is in the drawn view to settled (scripts/_scratch/entrance-probe.ts, 120 Hz); before: 0.1-0.2 s on a phone",
+    "birthday": {
+      "aspect0.56": 0.342,
+      "aspect0.75": 0.35,
+      "aspect1": 0.342,
+      "aspect1.5": 0.342,
+      "aspect1.78": 0.35
+    },
+    "dinner": {
+      "aspect0.56": 0.35,
+      "aspect0.75": 0.35,
+      "aspect1": 0.35,
+      "aspect1.5": 0.375,
+      "aspect1.78": 0.367
+    }
+  },
+  "binGlb": {
+    "before": "6565 KiB, loaded with the scene, 34.0 MiB of textures uploaded on the first decline",
+    "after": "5916 KiB, requested after ready at low priority, 18.0 MiB of textures uploaded in idle moments"
+  },
+  "network9Mbit": {
+    "bytesBeforeReady": {
+      "birthday": "7.9 MB (was 14.4)",
+      "dinner": "3.4 MB (was 10.0)"
+    },
+    "binWarmAfterReadySeconds": {
+      "birthday": 7.0,
+      "dinner": 7.0
+    },
+    "note": "dev server, emulated 9 Mbit/s, 60 ms, cache off (scripts/_scratch/netready.ts)"
+  },
+  "measuredOn": "v1.5/bin merged with v1.5/integration 8f3b0c5"
+}

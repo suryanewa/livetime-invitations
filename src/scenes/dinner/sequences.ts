@@ -6,7 +6,7 @@ import {
   DISH_HEIGHT, DISH_IN_BIN, PLATE,
 } from '../../../models/dinnerContract.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
-import { BIN_CLOSE, dropHeight, flapsClosing, GRAVITY } from '../../../models/disposalBin.ts';
+import { BIN_CLOSE, BIN_ENTRANCE, dropHeight, flapsClosing, GRAVITY } from '../../../models/disposalBin.ts';
 
 /**
  * Pure authored choreography for Dinner (Dinner sub-spec): cover the dish, reveal the plate, or
@@ -233,16 +233,18 @@ export const FLAP_CLOSE_AT = 0.94;
 const FLAP_GAP_AT = FLAP_CLOSE_AT + BIN_CLOSE.toGap;
 const FLAPS_SHUT = FLAP_GAP_AT + BIN_CLOSE.last;
 /** Bin entrance: eases in from off-frame and decelerates into place (no full-speed first frame). */
-const BIN_ENTER = cubicBezier(0.25, 0.25, 0.2, 1);
+const BIN_ENTER = cubicBezier(...BIN_ENTRANCE.ease);
 /**
  * v1.5 decline pull-back (src/render/framing.ts DECLINE_PULL): the camera starts easing back on the
- * tap, and the bin's entrance (its slide and its flaps, shape and length unchanged) waits this long
- * for it. At the rest framing (the dish at 70 % of the width) the 47 cm bin is three times the
- * dish: entering at once it swept a giant, top-cropped black mass across the first 0.3 s. Waiting
- * 0.16 s, it glides into the room the camera has made, and it is settled at 0.50 s, before the dish
- * sets off across (0.53 s) and reaches it (0.575 s).
+ * tap, and the bin's entrance waits this long for it. At the rest framing (the dish at 70 % of the
+ * width) the 47 cm bin is three times the dish: entering at once it swept a giant, top-cropped
+ * black mass across the first 0.3 s. Waiting 0.16 s, it glides into the room the camera has made
+ * (v1.5 review: from just out of the drawn view, decelerating over BIN_SLIDE; models/disposalBin.ts
+ * BIN_ENTRANCE), and it is settled at 0.56 s, before the dish reaches it (0.577 s).
  */
 export const BIN_DELAY = 0.16;
+/** v1.5 review: the bin's slide, 0.16–0.56 s (BIN_DELAY above). */
+export const BIN_SLIDE = 0.4;
 /**
  * The flaps open over this part of the bin's entrance (its clock: BIN_DELAY after the decline's):
  * as the bin settles, done at 0.56 s, as the dish turns across towards it (it reaches the bin's
@@ -331,7 +333,7 @@ function decline(t: number, out: DinnerFrame, tBin = t): void {
   out.binVisible = tBin > BIN_DELAY;
   // Its speed peaks off-screen and it decelerates across the visible part (no dark mass
   // slamming across the frame in a few frames).
-  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tBin - BIN_DELAY, 0, 0.34)));
+  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tBin - BIN_DELAY, 0, BIN_SLIDE)));
   // Flaps open as it arrives, and start closing as soon as the dish is out of sight (no frozen
   // frames): the bin's soft close, nearly shut by 1.27 s, the last gap taken up by 1.42 s.
   if (t < FLAP_CLOSE_AT) out.flaps = FLAP_OPEN(seg(tBin - BIN_DELAY, FLAPS_OPEN[0], FLAPS_OPEN[1]));
@@ -375,7 +377,7 @@ const DECLINE_LEAD = 0.25;
 /** Plan clearance between the returning cover and the bin coming in (bin rim + bead + margin). */
 export const BIN_CLEARANCE = DINNER_BIN.radius + COVER.radius + 0.05;
 /** Bin position on the decline's clock (its entrance). */
-const binAt = (tb: number, out: Vector3) => out.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tb - BIN_DELAY, 0, 0.34)));
+const binAt = (tb: number, out: Vector3) => out.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tb - BIN_DELAY, 0, BIN_SLIDE)));
 const FRAME = 1 / 60;
 /**
  * Rewind bounds (s) by the outcome that follows, and its largest 60 fps step relative to the

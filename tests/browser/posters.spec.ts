@@ -40,6 +40,8 @@ for (const scene of SCENES) {
       const sc = (window as any).__showcase;
       const ready = async () => {
         for (let i = 0; i < 600 && sc.state?.resource !== 'ready'; i++) await new Promise((r) => setTimeout(r, 50));
+        // v1.5: Birthday and Dinner load the bin after ready (the declined pose waits for it).
+        for (let i = 0; i < 600 && !sc.controller.deferredReady(); i++) await new Promise((r) => setTimeout(r, 50));
       };
       const image = async (src: string) => {
         const img = new Image();

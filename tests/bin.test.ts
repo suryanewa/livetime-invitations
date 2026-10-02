@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { Box3, Color, Group, type Material, type Mesh, MeshStandardMaterial, ShaderLib, ShaderMaterial, Vector3, type WebGLProgramParametersWithUniforms } from 'three';
+import { Box3, Color, Group, type Material, type Mesh, MeshStandardMaterial, PerspectiveCamera, ShaderLib, ShaderMaterial, Vector3, type WebGLProgramParametersWithUniforms } from 'three';
+import { mulberry32 } from '../src/motion/random.ts';
 import { listTextureSlots } from '@gltf-transform/functions';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import {
-  attachBin, BIN, BIN_BOUNDS, BIN_CLOSE, BIN_CM, BIN_FLOOR, BIN_LATHES, BIN_MATERIALS, binIn, binLight, buildDisposalBin, detachBin, dropHeight, flapAngles,
-  flapsClosing, GRAVITY, PEDAL_HINGE, patchBinVisibility, pedalAngle, roundLoop,
+  attachBin, BIN, BIN_BOUNDS, BIN_CLOSE, BIN_CM, BIN_FLOOR, BIN_LATHES, BIN_MATERIALS, binEntranceStart, binIn, binLight, binPlaceholder, binShadowShare, buildDisposalBin,
+  detachBin, dropHeight, fillBin, flapAngles, flapsClosing, GRAVITY, openBinFramePoints, openBinSilhouette, PEDAL_HINGE, patchBinVisibility, pedalAngle, roundLoop,
 } from '../models/disposalBin.ts';
 import { BIN_POS, CAKE_RADIUS, CAKE_TOTAL_HEIGHT, STAND } from '../models/birthdayContract.ts';
 import { COVER, DINNER_BIN, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_WORLD_SCALE, DISH_HEIGHT, PLATE } from '../models/dinnerContract.ts';
@@ -117,19 +118,99 @@ describe('Shared bin: v1.5 polish (judge round)', () => {
     const body = compiled((bin.getObjectByName('bin_body') as Mesh).material as Material);
     expect(body.fragmentShader).toMatch(/radiance = mix\(radiance, uBinFloorL \* binLit, binBelow\)/);
     expect(body.uniforms.uBinWallZ).toBe(binLight(bin).wallZ);
-    // Every mesh under the flaps shares one shadow material that discards above the crown.
-    const depths = new Set<Material>();
-    for (const name of ['bin_flap_l', 'bin_flap_r']) bin.getObjectByName(name)!.traverse((o) => { if ((o as Mesh).isMesh) depths.add(o.customDepthMaterial!); });
-    expect(depths.size).toBe(1);
-    const depth = [...depths][0]!;
-    const shader = { uniforms: {}, vertexShader: ShaderLib.depth.vertexShader, fragmentShader: ShaderLib.depth.fragmentShader } as unknown as WebGLProgramParametersWithUniforms;
-    depth.onBeforeCompile(shader, undefined as never);
-    expect(shader.fragmentShader).toMatch(/if \(vBinFlapY > uBinCrownY \+ 0\.004\) discard;/);
-    expect((shader.uniforms.uBinCrownY as { value: number }).value).toBeCloseTo(BIN.height, 9);
-    let freed = false;
-    depth.addEventListener('dispose', () => (freed = true));
+    // Every mesh casts through the bin's own shadow material: the flaps' discards above the crown,
+    // all of them drop out below the shadow's share (it enters the frame with the bin).
+    const flaps = new Set<Material>(), rest = new Set<Material>();
+    for (const name of ['bin_flap_l', 'bin_flap_r']) bin.getObjectByName(name)!.traverse((o) => { if ((o as Mesh).isMesh) flaps.add(o.customDepthMaterial!); });
+    bin.traverse((o) => { if ((o as Mesh).isMesh && !flaps.has(o.customDepthMaterial!)) rest.add(o.customDepthMaterial!); });
+    expect(flaps.size).toBe(1);
+    expect(rest.size).toBe(1);
+    const depth = (m: Material) => {
+      const shader = { uniforms: {}, vertexShader: ShaderLib.depth.vertexShader, fragmentShader: ShaderLib.depth.fragmentShader } as unknown as WebGLProgramParametersWithUniforms;
+      m.onBeforeCompile(shader, undefined as never);
+      return shader;
+    };
+    const flap = depth([...flaps][0]!), other = depth([...rest][0]!);
+    expect(flap.fragmentShader).toMatch(/if \(vBinShadowY > uBinCrownY \+ 0\.004\) discard;/);
+    expect(other.fragmentShader).not.toMatch(/uBinCrownY \+ 0\.004/);
+    for (const sh of [flap, other]) expect(sh.fragmentShader).toMatch(/>= uBinCast\) discard;/);
+    expect((flap.uniforms.uBinCrownY as { value: number }).value).toBeCloseTo(BIN.height, 9);
+    expect(other.uniforms.uBinCast).toBe(binLight(bin).cast);
+    let freed = 0;
+    for (const m of [...flaps, ...rest]) m.addEventListener('dispose', () => freed++);
     detachBin(bin);
-    expect(freed).toBe(true);
+    expect(freed).toBe(2);
+  });
+
+  it('a scene rigs a placeholder and the loaded bin fills it: the same pivots, one contact shadow, the pedal linked', () => {
+    const root = new Group();
+    const slot = binPlaceholder();
+    const flapL = slot.getObjectByName('bin_flap_l')!, flapR = slot.getObjectByName('bin_flap_r')!;
+    attachBin(root, slot, plainLibrary(), new Vector3(-1, 0, -2), 0.4);
+    expect(slot.getObjectByName('bin_body')).toBeUndefined();
+    const built = buildDisposalBin({ lib: plainLibrary() });
+    fillBin(slot, built, root, plainLibrary());
+    expect(slot.getObjectByName('bin_flap_l')).toBe(flapL);
+    expect(slot.getObjectByName('bin_flap_r')).toBe(flapR);
+    expect(slot.getObjectByName('bin_body')).toBeDefined();
+    expect(flapL.getObjectByName('bin_flap_l_shell')).toBeDefined();
+    let shadows = 0;
+    slot.traverse((o) => { if (o.name === 'bin_shadow') shadows++; });
+    expect(shadows).toBe(1);
+    // Same shapes as the bin built whole.
+    const whole = buildDisposalBin({ lib: plainLibrary() });
+    whole.updateMatrixWorld(true);
+    slot.position.set(0, 0, 0); slot.rotation.set(0, 0, 0);
+    slot.updateMatrixWorld(true);
+    expect(new Box3().setFromObject(slot).distanceToPoint(new Vector3())).toBe(new Box3().setFromObject(whole).distanceToPoint(new Vector3()));
+    // The pedal follows the flap.
+    flapL.rotation.z = BIN.flapOpen;
+    expect(slot.getObjectByName('bin_pedal')!.rotation.x).toBeCloseTo(BIN.pedalPress, 9);
+    expect(() => fillBin(slot, buildDisposalBin({ lib: plainLibrary() }), root, plainLibrary())).toThrow();
+    detachBin(slot);
+  });
+
+  it('the open bin\'s framing silhouette from its design holds every vertex of the built bin (the same hull)', () => {
+    const root = new Group();
+    const bin = buildDisposalBin({ lib: plainLibrary() });
+    attachBin(root, bin, plainLibrary(), new Vector3(-1, 0, -2), 0.5, 1.2);
+    const all = openBinFramePoints(bin, new Vector3(-1, 0, -2), 0.5, 1.2);
+    const design = openBinSilhouette(new Vector3(-1, 0, -2), 0.5, 1.2);
+    expect(design.length).toBeLessThan(all.length);
+    const rand = mulberry32(7);
+    for (let k = 0; k < 300; k++) {
+      const d = new Vector3(rand() * 2 - 1, rand() * 2 - 1, rand() * 2 - 1).normalize();
+      let a = -Infinity, b = -Infinity;
+      for (const p of all) a = Math.max(a, p.dot(d));
+      for (const p of design) b = Math.max(b, p.dot(d));
+      expect(Math.abs(a - b)).toBeLessThan(1e-5);
+    }
+  });
+
+  it('its shadow enters the frame with it, and its slide starts just out of the drawn view', () => {
+    const root = new Group();
+    const bin = buildDisposalBin({ lib: plainLibrary() });
+    attachBin(root, bin, plainLibrary(), new Vector3(0, 0, 0), 0);
+    const camera = new PerspectiveCamera(18, 0.5625, 0.5, 200);
+    camera.position.set(4, 4, 14);
+    camera.lookAt(0, 1, 0);
+    camera.updateMatrixWorld();
+    camera.updateProjectionMatrix();
+    const corners = [-1, 1].flatMap((x) => [-1, 1].flatMap((z) => [0, 1].map((y) => new Vector3(x * BIN.radius, y * BIN.height, z * BIN.radius))));
+    expect(binShadowShare(bin, camera, corners)).toBe(1);
+    const start = binEntranceStart(camera, root, 0, 0);
+    expect(start).toBeLessThanOrEqual(-1);
+    bin.position.x = start;
+    expect(binShadowShare(bin, camera, corners)).toBe(0);
+    bin.position.x = start + BIN.radius;
+    const partly = binShadowShare(bin, camera, corners);
+    expect(partly).toBeGreaterThan(0);
+    expect(partly).toBeLessThan(1);
+    // A wider view starts it further out.
+    camera.aspect = 1.8;
+    camera.updateProjectionMatrix();
+    expect(binEntranceStart(camera, root, 0, 0)).toBeLessThan(start);
+    detachBin(bin);
   });
 
   it('inside the bin: the mouth\'s form factor for diffuse, the aperture test for specular; only on standard materials, chained', () => {

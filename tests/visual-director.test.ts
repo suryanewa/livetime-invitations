@@ -215,3 +215,79 @@ describe('VisualDirector', () => {
     expect(completed).toEqual(['accept']);
   });
 });
+
+describe('VisualDirector: assets the scene loads after ready (v1.5, the shared bin)', () => {
+  /** A driver whose decline needs a deferred asset, and an `ensure` the test resolves by hand. */
+  function deferred(reduced = false) {
+    const completed: SequenceName[] = [];
+    let loaded = false;
+    const asked: (SequenceName | CanonicalPose)[] = [];
+    let release: (() => void) | null = null, fail: (() => void) | null = null;
+    const v = new VisualDirector({
+      complete: (s) => completed.push(s),
+      ensure: (target) => {
+        asked.push(target);
+        return new Promise<void>((resolve, reject) => {
+          release = () => { loaded = true; resolve(); };
+          fail = () => reject(new Error('asset'));
+        });
+      },
+    }, 'guest', null);
+    const d = fakeDriver();
+    d.needs = (target) => !loaded && (target === 'decline' || target === 'declined');
+    v.setReducedMotion(reduced);
+    v.attach(d);
+    v.update(0);
+    return { v, d, completed, asked, release: () => release!(), fail: () => fail!() };
+  }
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it('a decline tapped before the bin has arrived holds guest-ready, then plays the whole decline', async () => {
+    const { v, d, completed, asked, release } = deferred();
+    v.setIntent('decline');
+    expect(asked).toEqual(['decline']);
+    expect(v.state).toBe('guest-ready');
+    expect(v.waiting).toBe('decline');
+    expect(v.update(0.5)).toBe(false);
+    expect(d.node.position.x).toBe(0);
+    release();
+    await flush();
+    expect(v.waiting).toBeNull();
+    expect(v.state).toBe('decline-playing');
+    for (let t = 0.5; t <= 2.1; t += 1 / 60) v.update(t);
+    expect(v.state).toBe('declined-pose');
+    expect(d.node.position.x).toBe(-2);
+    expect(completed).toEqual(['decline']);
+  });
+
+  it('a change of mind while it waits drops the wait: accept plays at once, the late arrival changes nothing', async () => {
+    const { v, d, completed, release } = deferred();
+    v.setIntent('decline');
+    v.setIntent('accept');
+    expect(v.waiting).toBeNull();
+    expect(v.state).toBe('accept-playing');
+    release();
+    await flush();
+    for (let t = 0; t <= 2; t += 1 / 60) v.update(t);
+    expect(v.state).toBe('accepted-pose');
+    expect(d.node.position.x).toBe(1);
+    expect(completed).toEqual(['accept']);
+  });
+
+  it('under reduced motion the declined pose waits for it too; a failed load leaves the picture as it was', async () => {
+    const r = deferred(true);
+    r.v.setIntent('decline');
+    expect(r.asked).toEqual(['declined']);
+    expect(r.d.node.position.x).toBe(0);
+    r.release();
+    await flush();
+    expect(r.d.node.position.x).toBe(-2);
+    const f = deferred();
+    f.v.setIntent('decline');
+    f.fail();
+    await flush();
+    expect(f.v.waiting).toBeNull();
+    expect(f.v.state).toBe('guest-ready');
+    expect(f.d.node.position.x).toBe(0);
+  });
+});

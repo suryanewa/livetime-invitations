@@ -15,7 +15,7 @@ import { BIRTHDAY_GLB_NODES, buildBirthdayGeometry } from '../models/birthdayPar
 import { BIN, BIN_CLOSE, buildDisposalBin } from '../models/disposalBin.ts';
 import { BIN_SHADE } from '../models/birthday.ts';
 import {
-  CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_DESCENTS, CANDLE_HOVER, CANDLE_LEAN, CANDLE_PRESS, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAPS_CLOSE, IGNITE, IGNITE_START,
+  BIN_DELAY, CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_DESCENTS, CANDLE_HOVER, CANDLE_LEAN, CANDLE_PRESS, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAPS_CLOSE, IGNITE, IGNITE_START,
   LEAN_FADE, LIFT_TO,
 } from '../src/scenes/birthday/poses.ts';
 import { BREATH_AT, burnRate, extinguishedAt, type FlameState } from '../src/scenes/birthday/fire.ts';
@@ -115,6 +115,9 @@ describe('Birthday choreography', () => {
     for (const seq of ['host', 'accept', 'decline'] as const) {
       for (let i = 1; i < DURATIONS[seq] / h - 0.5; i++) {
         if (seq === 'decline' && i < 2) continue;
+        // v1.5 review: the bin comes in already moving, from just out of the drawn view (the scene
+        // starts its slide there), at BIN_DELAY: its start is not seen.
+        const binStart = seq === 'decline' && Math.abs(i * h - BIN_DELAY) < 2 * h;
         const a = at(seq, (i - 1) * h), b = at(seq, i * h), c = at(seq, (i + 1) * h);
         const ca = channels(a), cb = channels(b), cc = channels(c);
         for (let k = 0; k < cb.length; k++) {
@@ -126,6 +129,7 @@ describe('Birthday choreography', () => {
           if (p && Math.abs(i * h - (CANDLE_START[+p[1]!]! + CANDLE_DESCENTS[+p[1]!]!)) < 2 * h) continue;
           // The setting clock starts as a flame goes out (a kink by nature, not motion).
           if (/^cool\[/.test(names[k]!)) continue;
+          if (binStart && /^bin\./.test(names[k]!)) continue;
           const d2 = Math.abs(ca[k]! - 2 * cb[k]! + cc[k]!);
           // Positions: the bin's 2.8-unit slide-in peaks near 1100 units/s²; allow 3000 (jumps > 0.3 units/s).
           const limit = k < 6 ? 3e-5 : flame >= 0 ? 1e-4 : 1e-5;

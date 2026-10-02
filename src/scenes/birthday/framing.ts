@@ -38,7 +38,7 @@ export function birthdayRestFramePoints(): Vector3[] {
   return pts;
 }
 
-/** The decline's own paths: the cake carried to the bin and the bin's open flaps (its body: openBinFramePoints). */
+/** The decline's own paths: the cake carried to the bin and the bin's open flaps (its body: openBinSilhouette). */
 export function birthdayDeclineFramePoints(): Vector3[] {
   const pts: Vector3[] = [];
   const ring2 = (cx: number, cz: number, r: number, y: number, n = 20) => ring(pts, cx, cz, r, y, n);
