@@ -181,17 +181,22 @@ test('Live fire: lit flames keep the loop running; after Accept the smoke rises 
   expect(await calls()).toBeGreaterThan(before + 30);
   await page.getByRole('button', { name: 'Accept' }).click();
   await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('accepted-pose');
-  // The smoke outlives the 1.4 s sequence (the wicks smoulder on: SMOKE.end, 6.5 s after the
-  // accept began): still drawing just after, and still 3 s later.
+  // The smoke outlives the 1.4 s sequence (the wicks smoulder on for 3–5 s): still drawing just
+  // after, and still 2 s later.
   before = await calls();
   await page.waitForTimeout(600);
   expect(await calls()).toBeGreaterThan(before + 10);
-  await page.waitForTimeout(2400);
+  await page.waitForTimeout(1400);
   before = await calls();
   await page.waitForTimeout(500);
   expect(await calls()).toBeGreaterThan(before + 10);
-  // Then nothing moves: the loop stops and stays stopped.
-  await page.waitForTimeout(2300);
+  // Then nothing moves once the smoke has thinned to nothing (by SMOKE.end, 6.5 s after the accept
+  // began, whatever the frame rate): the loop stops and stays stopped.
+  await expect.poll(async () => {
+    const a = await calls();
+    await page.waitForTimeout(400);
+    return (await calls()) - a;
+  }, { timeout: 12_000, intervals: [100] }).toBe(0);
   before = await calls();
   await page.waitForTimeout(1500);
   expect(await calls()).toBe(before);

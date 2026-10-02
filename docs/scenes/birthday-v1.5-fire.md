@@ -9,7 +9,8 @@ Files: `src/scenes/birthday/fire.ts` (the physics: pure functions of time, seede
 `models/birthdayFire.ts` (the rig: flame quads, the flames' light on the cake, smoke ribbons),
 `models/birthday.ts` (wires it in), `src/scenes/birthday/{poses,sequences,index}.ts`,
 `src/render/materials.ts` (`mat_flame`), `tests/birthdayFire.test.ts`, `tests/birthday.test.ts`,
-`tests/browser/birthday.spec.ts`. Evidence: `evidence/v1.5/birthday-fire/`.
+`tests/browser/birthday.spec.ts`. Evidence: `evidence/v1.5/birthday-fire/` (the polish rounds: `polish/`, which supersedes the
+earlier smoke frames).
 
 ## What it is now
 
@@ -31,14 +32,17 @@ the camera foreshortens correctly.
   few tenths of a millimetre); a cooler, orange tip. Polish round (judge B): the base read as a pale
   lavender bulb and the wick inside it purple-blue, because the blue emission filled the whole base
   volume and screen-blended over the dark wick. The blue now lives only in a shell at 0.76–1.08 of
-  the radius over the bottom 17 % of the flame, so the wick inside reads dark, as in the photograph.
+  the radius over the bottom 17 % of the flame, and no blue is drawn on rays that cross the wick
+  (foot to curled tip, within 1.4–2.6 wick radii: the sheath in front of it is a hair's breadth,
+  the one behind it is hidden), so the wick inside reads dark, as in the photograph; its very tip,
+  where it pokes into the hot mantle, glows dull red (`EMBER.lit` 0.3, ≈1,030 K).
 - **Colour is temperature.** Soot radiance (Planck × ε ∝ 1/λ) integrated against analytic CIE 1931
   matching functions (Wyman, Sloan and Shirley 2013) into linear sRGB, tabulated 700–2,300 K, scaled
   so 1,900 K soot is 1. The flame core integrates to ≈5× white and goes through a **per-channel
   camera response** (1 − e^−L) instead of the scene's Neutral tone curve: a hue-preserving tone
   curve turns an overexposed blackbody pink-white, a camera saturates red, then green: orange,
-  yellow, warm white, as in photographs. Blended as `screen`. A faint veiling-glare halo (σ 1.7 flame
-  radii, 5 %) stands in for the lens's bloom.
+  yellow, warm white, as in photographs. Blended as `screen`. A faint veiling-glare halo (σ 1.5 flame
+  radii, `FLAME_GLOW` 0.03) stands in for the lens's bloom.
 - **Live flicker** (`simulate` advances the live clock only): the buoyant toroidal-vortex flicker at
   **11 Hz ±4 % per candle** (Kitahata et al. 2009; Okamoto et al., Sci. Rep. 6:36145: 11.0 ± 0.4 Hz),
   **≤3 % of length**, slowly amplitude-modulated, plus a varicose wave travelling up the flame (±3 %
@@ -48,11 +52,15 @@ the camera foreshortens correctly.
 - **The wick's life** (polish round, judge B: the blown-out wicks were straight glossy brown sticks).
   Before it is lit, fresh white cotton; lit, it chars black within 0.1 s of burning (`wickChar`, from
   the lit time), goes fully matt and its braid curls the top over by about 1 mm (the wick shader bends
-  the top quarter, cubic in height, in real units on the quantized mesh). After the flame leaves it,
-  the **ember** (Planck emissive on its top ≈2 mm plus a 0.5 mm glow in the flame shader) flares to
-  full 50 ms later and cools (e-folding 0.8 s × each wick's own cooling, 1,320 K → 900 K) to dark by
-  3 s, while a **grey ash tip** (top 1.5 mm) forms from 0.3 s and is complete 1.6 s later (`ashAt`).
-  The canonical blown-out cake (posters, reduced motion) is charred, ash-tipped and cold. A snuffed
+  the top, cubic in height, in real units on the quantized mesh), each candle its own way (seeded,
+  ±69° round the master's lean); the ember, the flame's wick mask and the smoke all leave from the
+  curled tip (`FlameRig.curlTip` × char). After the flame leaves it, the **ember** flares to full
+  50 ms later and cools (e-folding 0.8 s × each wick's own cooling, 1,320 K → 900 K) to dark by 3 s:
+  Planck emissive on the very tip (≈0.3 mm fully, fading unevenly round the braid by 0.6–0.9 mm) and
+  a 0.5 mm glow in the flame shader. Its emissive goes through the same per-channel response as the
+  flame, so it stays orange under the Neutral curve (it washed to salmon at EMBER_GAIN 900). A
+  **grey ash tip** (top 1.5 mm) forms from 0.3 s and is complete 1.6 s later (`ashAt`). The
+  canonical blown-out cake (posters, reduced motion) is charred, ash-tipped and cold. A snuffed
   wick's ember is dimmer (62 %).
 - **Light on the cake.** Each flame is ≈1 cd. Its light is added through three's own `RE_Direct` to
   the cake's own materials only (frosting, both presets; candles), with an extended-source clamp
@@ -63,8 +71,9 @@ the camera foreshortens correctly.
   every lit fragment, the full-frame cove included, evaluated them (the cove 80 cm away would get
   ≈0.5 %).
 
-**Ignition (host, 0.84–1.28 s).** Each wick catches once its candle has seated, 20 ms apart; the
-flame shows at once as a small blue bead (30 % of the length, 55 % of the width) and grows over
+**Ignition (host).** Each wick catches 20 ms after the last once every candle is in (the cake
+owner's placement: `IGNITE_START[i] = LIGHT_FROM + 0.02·i`, from 1.885 s; `DURATIONS.host` ≈ 2.465 s);
+the flame shows at once as a small blue bead (30 % of the length, 55 % of the width) and grows over
 0.34 s, its soot (yellow) forming once it is a third grown. Monotone, never a flash.
 
 **The breath (accept).** A round jet from the guest's mouth on the camera side, 28 cm towards the
@@ -97,14 +106,16 @@ The wave: lift-offs 0.10–0.23 s, out 0.24–0.38 s, nearest the mouth first (f
   instant the flame lets go of the wick (lift-off). The separate soot puff is gone: the flame's own
   body dies out yellow-orange downstream (above) and the ribbon fills the path it took, so flame and
   smoke are one thread with nothing detached and no red stage between them.
-- **Dense and white from the first frame.** Emission is a burst as the flame leaves (e-folding 0.3 s,
-  the wick and pool at their hottest), then a **smoulder** that thins to a fading thread: e-folding
-  4.5 s × each wick's cooling, faded out from 3 s to 5.5 s. Opacity is Beer–Lambert: the column's
-  optical depth (2.4 at full emission where it leaves the wick, thinning as it widens and with age)
-  gives 1 − e^−depth, ≈0.9 for the fresh ribbon and ≈0.2 for the last thread; the three strands
-  share the depth, so where they still overlap low down they composite to exactly the column's
-  opacity. A frame after each flame is out the stem within 3 mm of the wick is > 0.65 opaque
-  (tested; it read ≈0.4 before).
+- **Dense and white from the first frame.** Emission is a burst as the flame leaves (up to rate
+  within 25 ms, e-folding 0.3 s: the wick and pool at their hottest), then a **smoulder** that thins
+  to a fading thread: e-folding 4.5 s × each wick's cooling, faded out from 3 s to 5.5 s. Opacity is
+  Beer–Lambert: the column's optical depth (2.4 at full emission where it leaves the wick, thinning
+  as width^−0.6 as it widens, fading with age from 1.2 s to 2.5 s) gives 1 − e^−depth, ≈0.9 for the
+  fresh ribbon and ≈0.2 for the last thread; the three strands share the depth, so where they still
+  overlap low down they composite to exactly the column's opacity. A frame after each flame is out
+  the stem within 3 mm of the wick is > 0.65 opaque (tested; it read ≈0.4 before). The first
+  vapour rises as a starting plume, its head a thermal up to 2.2× the stem's width, so a thread
+  never ends in a square cut.
 - **Colour**: wax aerosol is white (sub-micron droplets scatter nearly all the light they catch,
   faintly bluish): linear radiance 1.4 before the tone curve (`SMOKE_RADIANCE`), ≈245 of 255 on
   screen where dense against the cove's ≈210. Judged against the greige stage: the old `#7b7c80` read
@@ -119,28 +130,47 @@ The wave: lift-offs 0.10–0.23 s, out 0.24–0.38 s, nearest the mouth first (f
   - **the stirred air** the breath leaves behind: five shared eddies of 6–14 cm drifting at up to
     5 cm/s, divergence-free in plan, decaying (e-folding 2.2 s) into the room's own gentle stirring
     (35 % of it), each parcel remembering ≈0.7 s of it. Shared by all six plumes and evaluated where
-    each parcel is, so neighbours bend together, lean towards each other and merge;
+    each parcel is, so neighbours bend together;
+  - **merging**: neighbouring plumes entrain each other's air, so from 5 cm up each is drawn towards
+    the candles' centre, by 0.44–0.66 of its offset at 25 cm (seeded per plume): the six lean in
+    and tangle into one column instead of rising as six parallel threads (hostile review);
   - the **sinuous instability**, decorrelated per plume: its own transition height (laminar for its
     first 4–9 cm: exactly straight at the wick), wavelength (×0.75–1.35), amplitude (×0.6–1.4), the
     beat of its disturbances (0.7–2.2 Hz), phase speed, the plane its waves swing in, and a seeded
-    intermittency envelope (the column calms, kinks and only sometimes rolls into a curl); above
-    10 cm two wisps split off the main thread.
+    intermittency envelope (the column calms, kinks and only sometimes rolls into a curl); the waves
+    grow in time as well as height (1 − e^−age/0.4 s), so a young plume's head rises before it rolls
+    (no six identical hooks); above 10 cm two wisps split off the main thread.
   - Width: 1.2 mm at the wick, √t diffusion, turbulent spread above the transition and in the jet.
     Opacity thins with that full width, but a thread is **drawn no wider than 4 mm**: a turbulent
     column breaks into wisps rather than widening as one sheet (wide ribbons folding over themselves
     drew hard-edged translucent planes at the plume heads). Ribbons are widened in the vertex
     shader, never under 1.3 px (opacity scaled instead), with a Gaussian section and age-driven wisp
-    noise; where a thread points at the camera it blends towards the screen horizontal, so it draws
-    as a soft blob of its width instead of a fan of strips (the star-shaped artefacts of the
-    earlier ribbons, seen end-on as the breath carried them away from the camera).
+    noise. Across a thread is the perpendicular of its projected tangent; only where that tangent
+    is under a pixel (the thread points at the camera) does it blend towards the screen horizontal,
+    so an end-on stretch draws as a soft blob of its width instead of a fan of strips (the
+    star-shaped artefacts of the earlier ribbons, seen end-on as the breath carried them away from
+    the camera), and a thread seen side-on keeps its full width.
 - **It rises in the room**, not on the cake: the ribbons hang under `birthday_root` and every parcel
-  starts where its wick was when it was born (`WickAt`). On the cake carried to the bin, smoke born
-  on the move is strung out along the path, thinner per length with the wick's speed through the air
-  (half as dense at 0.15 m/s), and none is born once the wicks are in the bin.
+  starts where its wick was when it was born (`WickAt`), on the cake's path at that moment (the
+  scene keeps that path as segments on the smoke's clock: the stand, the decline, a change of mind's
+  rewind or play-on), leaning as the cake leaned. On the cake carried to the bin, smoke born on the
+  move is strung out along the path, thinner per length with the wick's speed through the air (half
+  as dense at 0.05 m/s). The air over a moving cake goes with it at first (pushed up by its top,
+  drawn along in its wake): every parcel is carried by the cake's motion since its birth, weighted
+  e^−(τ − birth)/0.35 s (`WAKE`; the scene samples the cake's path every 1/30 s and pre-integrates
+  it per frame, so each parcel costs one interpolation). The smoke above the wicks rides up with the
+  lifted cake and is then left behind, so none is left dangling under it (measured: no smoke pixel
+  under the lifted cake at decline 0.5 s), and a wisp born long before the cake moved keeps its own
+  path (not squeezed into flecks). None is seen from wicks inside the bin (also when the rewind
+  brings them back out, until they clear it).
 - **Snuffed candles smoke** (decline): a starved flame smokes as it shrinks onto the wick, so each
   leaves a brief, weaker wisp from halfway through its snuff (vapour 0.5–0.7 against a blown wick's
-  0.75–1.1, cooling about twice as fast; `SmokeKind` 'snuff'), left rising where the cake stood as
-  it is lifted away.
+  0.75–1.1, coming up over 60 ms, cooling about twice as fast and over within 3 s; `SmokeKind`
+  'snuff'; tested: under 45 % of a blown wick's vapour, 90 % of it within 3 s). A starved wick
+  hardly smoulders (12 % of its vapour against a blown wick's 45 %), and its thin, cool wisp
+  spreads 2.5× faster by diffusion and dissipates sooner (each parcel fades from 0.4 s of age, gone
+  by 1.1 s, against a blown wick's 1.2–2.5 s), so the wisp left rising where the cake stood as it
+  is lifted away thins into the air instead of floating off as separate specks.
 - It is faded to exactly nothing by **6.5 s on its clock** (`SMOKE.end`).
 
 ## Determinism, the clocks and rest
@@ -149,10 +179,13 @@ The wave: lift-offs 0.10–0.23 s, out 0.24–0.38 s, nearest the mouth first (f
   advances clocks. The sequence frame carries each flame's authored state (`frame.flames`) and the
   smoke clock (`frame.smokeTime`); `beforeRender` composes the live flicker on top and draws.
 - **The smoke outlives the sequences** (durations are unchanged): when the director ends accept or
-  decline on its own canonical pose, the scene hands the smoke's clock, kind and carry to the live
-  clock (`tail`), and `settling()` stays true until `SMOKE.end` (6.5 s on the smoke's clock).
-  `settle()` (reduced motion, replay, settle deadline) clears it. A canonical pose reached any other
-  way has no smoke.
+  decline (or a change of mind) on its own canonical pose, the scene hands the smoke's clock and
+  kind to the live clock (`tail`; a carried fire's own lit time and setting wax with it), and
+  `settling()` stays true until there is nothing left to see: the densest smoke drawn under 0.4 %
+  and, where the cake is in view, every ember cold and every ash tip formed (at the latest
+  `SMOKE.end`, 6.5 s on the smoke's clock; in the bin, as soon as its last wisp has thinned). Smoke
+  past `SMOKE.end` is not even evaluated. `settle()` (reduced motion, replay, settle deadline)
+  clears it. A canonical pose reached any other way has no smoke.
 - **`settling()` is true while any flame burns** (it flickers), so the lit cake keeps the loop
   running. Decision recorded: `tests/browser/idle.spec.ts` stays on the default scene (Business),
   which still idles; `tests/browser/birthday.spec.ts` asserts Birthday's own behaviour (frames while
@@ -165,25 +198,35 @@ The wave: lift-offs 0.10–0.23 s, out 0.24–0.38 s, nearest the mouth first (f
   losing their yellow first, by 0.2 s), each leaving a wisp.
 - **A change of mind** (judge A scored the Birthday interruption 2: accept → decline after the blow
   relit all six flames at full size in one frame and deleted the smoke; the melt popped back). The
-  scene now carries its live state across the director's hand-over, on the Party/Business pattern:
-  `interruptCut()` captures the fire under way (`FireChange`: the breath's or the snuff's kind and
-  its clock, from the sequence or the live tail; from a canonical blown-out cake, a fire long done)
-  and asks for the 0 ms cut; the change survives `settle()` and `pose('guest-ready')` and the new
-  sequence takes it at t = 0 (`sampleSequence(…, change)`). Then the candles the breath or the snuff
-  has reached stay out (a flame mid-extinction carries on going out on its own clock), the smoke
-  keeps rising on its own clock (identical across the cut, frame for frame), and the declined cake
-  carries smoke born on it (`smokeCarry`). **Lit time**: `liveLit` is kept through the cut, and the
-  carried flames keep integrating their own burn rate (0 once out), so the melt never pops back
-  (tested: no candle's shortening decreases at any frame of the new sequence). Before any fire has
-  begun (accept before the breath reaches a flame) the cake blends as before, its lit time kept.
-  From the bin (the cake lifted off its stand), the clean cut back to the lit cake on its stand
-  stays, as before: the accept then has its candles to blow out. With the bin in view but the cake
-  still on its stand, the fire is carried as above.
+  scene carries its live state across the director's hand-over, on the Party/Business pattern, in
+  both directions:
+  - `interruptCut()` captures the fire under way (`FireChange`: the breath's or the snuff's kind and
+    its clock, from the playback or the live tail; from a canonical blown-out cake, a fire long done)
+    and asks for the 0 ms cut. From the decline (playing, declined, or mid-rewind) the cut is the
+    cake owner's rewind (change.ts, merged from `v1.5/birthday-cake` 45a3204): the decline plays
+    backwards along its own path, the bin leaves, the camera comes home (pull.ts), then the accept;
+    or, changed back mid-rewind, the decline plays on. The rewind's fire is the captured fire
+    (`AnswerChange.fire`, `carriedFire`), never rewound. With the cake on its stand (accept, or a
+    change's accept part) the decline takes the fire at t = 0 (`sampleSequence(…, fire)`).
+  - Then the candles the breath or the snuff has reached stay out (a flame mid-extinction goes on
+    going out on its own clock), the smoke keeps rising on its own clock (identical across the cut,
+    frame for frame: tested for the blow → decline, the snuff → accept before the lift, the lifted
+    cake → accept and the blow → decline → accept), and smoke born on the cake follows the cake's
+    path (the decline, the rewind) to where it was born.
+  - **Lit time** (the lit-time owner's side of the melt hand-off): `liveLit` is kept through the cut
+    (one flag, `interrupting`, shared with the cake owner's rewind), the carried flames keep
+    integrating their own burn rate (0 once out) and their wax goes on setting (`coolTime`), so the
+    melt never pops back (tested: no candle's shortening decreases at any frame of the new
+    playback). A playback that carried a fire also ends on it (its pose keeps the carried lit time
+    and wax, not the canonical pose's).
+  - Only before any fire has begun (accept before the breath reaches a flame; decline before the
+    snuff) does the lit cake take the change without a carry: the director's blend with the cake on
+    its stand, or the rewind with the candles burning on until the accept's breath.
 
 ## The flame-state API and the melt (#6), integrated with the cake branch
 
-(The change-of-mind carry above is the lit-time owner's side of the melt hand-off: `liveLit` and
-the carried `litTime` feed the cake owner's `meltState` unchanged.)
+(The change-of-mind carry above is the lit-time owner's side of the melt hand-off: `liveLit`, the
+carried `litTime` and `cool` feed the cake owner's `meltState` and `solidify` unchanged.)
 
 `src/scenes/birthday/fire.ts`:
 
@@ -249,14 +292,32 @@ integration.
 |---|---|
 | Six flame quads (ray-marched) | ≈0.08 |
 | The flames' light on the cake (patched materials) | ≈0.25 (six PointLights: 1.3) |
-| Smoke: CPU (18 streaklines × 64 parcels, closed form, shared eddies) | SMOKE_CPU |
+| Smoke: CPU (18 streaklines × 64 parcels, closed form: plume, eddies, merging, wake), after the blow | 0.63 |
+| Smoke: CPU, born on the moving cake (the decline's carry, the rewind: each parcel looks its cake up) | 0.73 |
 | Smoke: GPU (1 draw call, 2,304 ribbon vertices) | ≈0.1 |
-| Live flicker (simulate + compose, lit) | 0.006 CPU |
+| Live flicker (simulate + compose, lit) | 0.007 CPU |
 
-Lit (perpetual) ≈0.35 ms; worst case (during the smoke) ≈0.85 ms, under the 2 ms budget.
+Lit (perpetual) ≈0.35 ms; worst case (smoke on the moving cake) ≈1.2 ms, under the 2 ms budget, and
+only while there is smoke to see (the tail ends when it has thinned out; nothing is evaluated past
+`SMOKE.end`). After the merge the whole Birthday frame at 1170² measured 4.6–5.6 ms with or without
+the fire's draws (the fire's GPU share is inside the run-to-run noise).
 
 ## Verification
 
+- Polish rounds (judges A and B, hostile review), merged with `v1.5/integration` (aae7b65) and
+  `v1.5/birthday-cake` (45a3204): `pnpm typecheck`; `pnpm test` 398 (29 files);
+  `pnpm test:browser` (`BASE_URL=http://127.0.0.1:5503`) 95. New in `tests/birthdayFire.test.ts`:
+  the hand-over (stem > 0.65 opaque within 3 mm of the wick a frame after the flame is out, > 0.5
+  while it dies; no drawn point jumps > 2 mm between 1 ms frames), the 3–5.5 s smoulder, each
+  plume's own transition height (spread > 1.5 cm), the snuff's wisp (weaker, brief: < 45 % of a
+  blown wick's vapour, 90 % within 3 s), white smoke, smoke from wicks on the carried cake and none
+  from the bin, every candle's newest parcel at its curled wick on the stand and on the lifted,
+  leaning cake, the ember's orange (no salmon), and the change of mind through the scene: after the
+  blow, after the snuff, from the lifted cake, blow → decline → back after the lift, from the
+  canonical blown-out cake, before the breath (blend): flames never relight, the smoke array is
+  identical across the cut, the melt never shrinks back, and the tails end. `tests/birthdayChange.test.ts`
+  (the cake owner's rewind) checks no flame (a quad still drawn is a cooling ember). The browser
+  live-fire test polls for the loop to idle instead of fixed sleeps.
 - After the integration with the cake branch: `pnpm typecheck`; `pnpm test` 307 (24 files);
   `pnpm test:browser` 88. New since: the melt lowers the flame base, ember and light with the wick
   and the flame stands along world up on a leaning candle; the burn rate the melt reads.
@@ -279,8 +340,10 @@ Lit (perpetual) ≈0.35 ms; worst case (during the smoke) ≈0.85 ms, under the 
 
 - The tooling cakes (`models/cake.ts`, study and lookdev) keep the v1.1 view-dependent flame
   (`mat_flame_outer`); the product uses `mat_flame`.
-- A change of mind from the bin (or with the cake on its way) cuts back to the lit cake, as before;
-  the smoke of that first outcome is not carried across that cut.
+- A decline changed back in the 40 ms while the snuff is still reaching the six candles (decline
+  t 0.02–0.06 s) carries the snuff to all six: the candles it had not reached go out on its clock
+  instead of meeting the accept's breath (one smoke clock per frame). Before 0.02 s nothing is
+  carried and the breath blows all six out.
 - The breath does not bend smoke that is already in the air when it is carried across a change of
   mind (the new sequence has no breath of its own to give).
 - The smoke is not lit by the scene (a fixed radiance tuned to the studio's neutral-room rig); under

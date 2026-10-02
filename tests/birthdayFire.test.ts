@@ -1,14 +1,14 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Color, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
-import { blackbodyAt, createFlameMaterial, sootRadiance } from '../src/render/flame.ts';
+import { blackbodyAt, createFlameMaterial, SMOKE_RADIANCE, sootRadiance } from '../src/render/flame.ts';
 import { rigBirthday } from '../models/birthday.ts';
 import { CANDLE_LIGHT } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
-import { CARRY_FROM, DURATIONS, IGNITE_START } from '../src/scenes/birthday/poses.ts';
+import { CARRY_FROM, DURATIONS, IGNITE_START, ON_STAND } from '../src/scenes/birthday/poses.ts';
 import {
   ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
   POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
@@ -173,7 +173,7 @@ describe('Birthday fire: the smoke', () => {
       // While the flame still burns, lifted off, the thread already leaves the bared wick (the
       // flame's last gas becomes the first smoke: one continuous column, no gap to fill).
       expect(stem(i, b.lift + 0.5 * (out - b.lift), w)).toBeGreaterThan(0.5);
-      // Continuous in time: between 1 ms samples no parcel moves more than 2 mm (it is a streakline).
+      // Continuous in time: between 1 ms frames no drawn point of the thread moves more than 2 mm.
       for (let t = b.lift + 0.002; t < b.lift + 0.6; t += 0.001) {
         smokeStrand(i, 0, t, still(i), st);
         smokeStrand(i, 0, t + 0.001, still(i), st2);
@@ -239,11 +239,33 @@ describe('Birthday fire: the smoke', () => {
     }
   });
 
+  it('the snuff\'s wisp is brief: well under half a blown wick\'s vapour, and over within 3 s', () => {
+    const total = (i: number, kind: 'breath' | 'snuff', until: number) => {
+      let v = 0;
+      for (let t = 0; t < until; t += 0.002) v += smokeRate(i, t, kind) * 0.002;
+      return v;
+    };
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      expect(total(i, 'snuff', SMOKE.end)).toBeLessThan(0.45 * total(i, 'breath', SMOKE.end));
+      // 90 % of it is out within 3 s of the snuff.
+      const bare = smokeSource(i, 'snuff').bare;
+      expect(total(i, 'snuff', bare + 3)).toBeGreaterThan(0.9 * total(i, 'snuff', SMOKE.end));
+    }
+  });
+
+  it('the smoke is white: brighter than a white wall under the same light, faintly bluish', () => {
+    const [r, g, b] = SMOKE_RADIANCE;
+    expect(Math.min(r, g, b)).toBeGreaterThan(1.2);
+    expect(b).toBeGreaterThanOrEqual(g);
+    expect(g).toBeGreaterThanOrEqual(r);
+    expect(b / r).toBeLessThan(1.1);
+  });
+
   it('smoke born on the carried cake starts where its wick was then, and none from a wick in the bin', () => {
     const st = newSmokeStrand();
-    // The cake sets off at t = 1 and moves 5 units per second along x.
-    const moving: WickAt = (birth, out) => { const w = wick(0); out[0] = w[0] + 5 * Math.max(0, birth - 1); out[1] = w[1]; out[2] = w[2]; return birth > 1 ? 1 : 0; };
-    smokeStrand(0, 0, 1.2, moving, st, 'snuff', 1.15);
+    // The cake sets off at t = 1 and moves 5 units per second along x; from 1.15 its wicks are in the bin.
+    const moving: WickAt = (birth, out) => { const w = wick(0); out[0] = w[0] + 5 * Math.max(0, birth - 1); out[1] = w[1]; out[2] = w[2]; return birth > 1.15 ? -1 : birth > 1 ? 1 : 0; };
+    smokeStrand(0, 0, 1.2, moving, st, 'snuff');
     // The newest parcels (born after 1.15) carry no smoke; those born on the move are strung out
     // thin along its path (1 m/s), from where the wick was when each left it.
     const still0 = newSmokeStrand();
@@ -427,7 +449,11 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     scene.sample('decline', 0.15);
     scene.beforeRender();
     const at = intensities(rig);
+    const smoke = smokeArray(rig);
     expect(changeMind(scene, 'accept')).toBe(true);
+    // The same frame across the cut: the wisps go on from exactly where they were.
+    scene.beforeRender();
+    expect(smokeArray(rig)).toEqual(smoke);
     for (let t = 0; t <= DURATIONS.accept; t += 1 / 60) {
       scene.sample('accept', t);
       scene.beforeRender();
@@ -530,10 +556,15 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     scene.beforeRender();
     expect(w.char.value).toBe(1);
     expect(w.ash.value).toBe(0);
-    // The breath: the bared wick's ember flares (bright orange), then greys to ash on the live clock.
+    // The breath: the bared wick's ember flares (bright orange: red saturated, green part way, no
+    // salmon wash), then greys to ash on the live clock.
     scene.sample('accept', BREATH_AT[3]!.lift + 0.05);
     scene.beforeRender();
-    expect(w.ember.value.r).toBeGreaterThan(1);
+    const e = w.ember.value;
+    expect(e.r).toBeGreaterThan(0.9);
+    expect(e.g / e.r).toBeGreaterThan(0.2);
+    expect(e.g / e.r).toBeLessThan(0.75);
+    expect(e.b / e.r).toBeLessThan(0.1);
     expect(w.ash.value).toBe(0);
     scene.sample('accept', DURATIONS.accept - 1 / 120);
     scene.pose('accepted');
@@ -561,8 +592,28 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     expect(c.candle.quaternion.angleTo(new Quaternion())).toBeGreaterThan(0);
     expect(rig.smoke.mesh.parent).toBe(rig.root);
     rig.root.updateMatrixWorld(true);
-    const w = c.fire.wickTip.clone().setY(c.fire.wickTip.y - c.fire.shorten).applyMatrix4(c.candle.matrixWorld).applyMatrix4(rig.root.matrixWorld.clone().invert());
-    expect(new Vector3(pos.getX(0), pos.getY(0), pos.getZ(0)).distanceTo(w)).toBeLessThan(0.05 * MM);
+    const tipOf = (k: number) => {
+      const ck = rig.candles[k]!;
+      const tip = ck.fire.wickTip.clone().addScaledVector(ck.fire.curlTip, ck.fire.wick.char.value);
+      return tip.setY(tip.y - ck.fire.shorten).applyMatrix4(ck.candle.matrixWorld).applyMatrix4(rig.root.matrixWorld.clone().invert());
+    };
+    // The charred braid curls its tip over by about a millimetre: the smoke leaves from there.
+    expect(c.fire.curlTip.length() / MM).toBeGreaterThan(0.8);
+    expect(c.fire.curlTip.length() / MM).toBeLessThan(1.2);
+    expect(new Vector3(pos.getX(0), pos.getY(0), pos.getZ(0)).distanceTo(tipOf(0))).toBeLessThan(0.05 * MM);
+    // On the cake carried to the bin (lifted, leaning): every candle's newest parcel is at its wick.
+    scene.sample('decline', 0);
+    scene.sample('decline', 0.5);
+    scene.beforeRender();
+    rig.root.updateMatrixWorld(true);
+    expect(rig.nodes.cake_authored!.position.distanceTo(ON_STAND)).toBeGreaterThan(0.1);
+    for (let k = 0; k < rig.candles.length; k++) {
+      const v = (k * SMOKE_STRAND_COUNT * SMOKE_POINT_COUNT) * 2;
+      expect(new Vector3(pos.getX(v), pos.getY(v), pos.getZ(v)).distanceTo(tipOf(k))).toBeLessThan(0.05 * MM);
+    }
+    // The braids curl each their own way.
+    const dirs = rig.candles.map((ck) => Math.atan2(ck.fire.curlTip.z, ck.fire.curlTip.x));
+    expect(Math.max(...dirs) - Math.min(...dirs)).toBeGreaterThan(0.8);
   });
 
   it('the melt burns the top down and the flame, its ember and its light follow the wick', () => {

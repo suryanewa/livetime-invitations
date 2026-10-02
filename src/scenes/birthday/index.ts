@@ -21,11 +21,17 @@ import {
 } from './sequences.ts';
 import { type AnswerChange, changeTime, planAnswerChange, sampleAnswerChange } from './change.ts';
 import { birthdayPull } from './pull.ts';
-import { ashAt, EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, MPS, newFlicker, SMOKE, type SmokeKind, wickChar } from './fire.ts';
+import { ashAt, EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, MPS, newFlicker, SMOKE, type SmokeKind, WAKE, type WakeAt, wickChar } from './fire.ts';
 
 const UP = new Vector3(0, 1, 0);
 /** Half-step (s) of the carried cake's speed, for the smoke it strings out. */
 const SPEED_H = 1 / 240;
+/** The cake's path sampled for the wake (fire.ts WAKE): every WAKE_H s over the smoke's longest life. */
+const WAKE_H = 1 / 30;
+const WAKE_N = Math.ceil(8.5 / WAKE_H) + 1;
+const WAKE_J = Math.ceil((3 * WAKE) / WAKE_H);
+/** The wake kernel per grid step after a parcel's birth (e^−(j + ½)·H / WAKE). */
+const WAKE_W = Array.from({ length: WAKE_J }, (_, j) => Math.exp(-((j + 0.5) * WAKE_H) / WAKE));
 
 /**
  * Where the cake was on the smoke's clock, from `from` on (BirthdayScene.path): on the decline's
@@ -115,7 +121,42 @@ export class BirthdayScene implements SceneInstance {
   private readonly wickTmp = new Vector3();
   private readonly cakeTmp = new Vector3();
   private readonly cakeTmp2 = new Vector3();
+  private readonly cakeTmp3 = new Vector3();
   private readonly qBirth = new Quaternion();
+  /** The densest smoke drawn last frame (the tail ends once nothing is left to see). */
+  private smokePeak = 0;
+  /**
+   * The wake, per frame: the cake's position every WAKE_H s back from now (τ_k = now − (N−1−k)·H)
+   * and, for each k, the weighted motion since τ_k (Σ_j ΔP_{k+j} · WAKE_W[j]), so smoke born at any
+   * moment reads how far the moving cake has carried it with one interpolation.
+   */
+  private readonly wakeP = new Float32Array(WAKE_N * 3);
+  private readonly wakeS = new Float32Array(WAKE_N * 3);
+  private wakeT0 = 0;
+  private readonly smokeWakeAt: WakeAt = (birth, out) => {
+    const x = Math.min(Math.max((birth - this.wakeT0) / WAKE_H, 0), WAKE_N - 1);
+    const k = Math.min(Math.floor(x), WAKE_N - 2), f = x - k;
+    const S = this.wakeS;
+    for (let c = 0; c < 3; c++) out[c] = S[k * 3 + c]! * (1 - f) + S[(k + 1) * 3 + c]! * f;
+  };
+  /** Smoke born at `birth` (smoke clock): candle i's wick then, in the room (made once: no per-frame closure). */
+  private readonly smokeWick = (i: number, birth: number, out: [number, number, number]): number => {
+    const s = this.cakeTimeAt(birth);
+    const w = this.wicks[i]!;
+    const v = this.wickTmp.set(w[0], w[1], w[2]);
+    const lean = this.cakeFor(birth, this.cakeTmp);
+    if (lean !== 0) v.applyQuaternion(this.qBirth.setFromAxisAngle(LEAN_AXIS, lean));
+    out[0] = this.cakeTmp.x + v.x;
+    out[1] = this.cakeTmp.y + v.y;
+    out[2] = this.cakeTmp.z + v.z;
+    // None is seen from wicks inside the bin.
+    if (s !== null && s > SMOKE_EMIT_UNTIL) return -1;
+    if (s === null && this.cakeTimeAt(birth + SPEED_H) === null) return 0;
+    // How fast it moved through the air (a wick carried strings its vapour out).
+    this.cakeFor(birth + SPEED_H, this.cakeTmp2);
+    this.cakeFor(Math.max(0, birth - SPEED_H), this.cakeTmp3);
+    return this.cakeTmp2.distanceTo(this.cakeTmp3) / (2 * SPEED_H * MPS);
+  };
 
   constructor(readonly rig: BirthdayRig, config: Extract<SceneConfig, { category: 'birthday' }>) {
     this.root = rig.root;
@@ -174,6 +215,7 @@ export class BirthdayScene implements SceneInstance {
     if (this.changeArmed) this.changeArmed = false;
     else this.change = null;
     if (pose !== 'guest-ready') this.pendingFire = null;
+    const fire = this.fire;
     this.fire = null;
     // A playback ending on its own pose (accept → accepted, decline → declined) hands its smoke to
     // the live clock: it keeps rising from where the playback left it (the canonical pose carries none).
@@ -189,6 +231,15 @@ export class BirthdayScene implements SceneInstance {
       this.apply(sampleAnswerChange(c, DURATIONS[c.next], this.frame));
       const sm = this.frame.smokeTime;
       this.tail = ended && sm >= 0 && sm < SMOKE.end ? { clock: sm, kind: this.frame.smokeKind } : null;
+      this.frame.smokeTime = -1;
+      this.restingOut = true;
+      return;
+    }
+    // Likewise a decline that carried the breath's fire: it ends with that fire (lit time, wax).
+    if (ended && fire && last) {
+      this.apply(sampleSequence(last.sequence, DURATIONS[last.sequence], this.frame, fire));
+      const sm = this.frame.smokeTime;
+      this.tail = sm >= 0 && sm < SMOKE.end ? { clock: sm, kind: this.frame.smokeKind } : null;
       this.frame.smokeTime = -1;
       this.restingOut = true;
       return;
@@ -243,7 +294,7 @@ export class BirthdayScene implements SceneInstance {
     this.flickerGain = Math.min(1, this.flickerGain + dt / FLICKER.resume);
     if (this.tail !== null) {
       this.tail.clock += dt;
-      if (this.tail.clock >= SMOKE.end) this.tail = null;
+      if (this.tail.clock >= SMOKE.end || this.tailDone(this.tail)) this.tail = null;
     }
     if (this.restingLit && this.liveLit < MELT_CAP) {
       this.liveLit = Math.min(MELT_CAP, this.liveLit + dt);
@@ -258,6 +309,18 @@ export class BirthdayScene implements SceneInstance {
   /** Frames are needed while any flame burns (it flickers), smoke is rising or the melt still forms. */
   settling(): boolean {
     return this.tail !== null || this.frame.flames.some((f) => f.intensity > 0) || (this.restingLit && this.liveLit < MELT_CAP) || this.cooling();
+  }
+
+  /**
+   * The tail has nothing left to show: its smoke has thinned below what a screen shows (last
+   * frame's densest point under 0.4 %) and, where the cake is in view, every ember is cold and
+   * every ash tip formed. Then the loop may idle before SMOKE.end.
+   */
+  private tailDone(tail: { clock: number; kind: SmokeKind }): boolean {
+    if (this.smokePeak >= 0.004) return false;
+    if (!this.frame.cakeVisible) return true;
+    for (let i = 0; i < this.rig.candles.length; i++) if (emberAt(i, tail.clock, tail.kind) > 0.005 || ashAt(i, tail.clock, tail.kind) < 1) return false;
+    return true;
   }
 
   /** The blown-out wax is still setting on the live clock (until every pool and run has set). */
@@ -287,9 +350,12 @@ export class BirthdayScene implements SceneInstance {
   /** The smoke's clock and kind now: the playback's, or the tail's (null: none). */
   private smoke(): { clock: number; kind: SmokeKind } | null {
     const f = this.frame;
-    if (f.smokeTime >= 0) return { clock: f.smokeTime, kind: f.smokeKind };
-    return this.tail;
+    if (f.smokeTime < 0) return this.tail;
+    this.smokeNow.clock = f.smokeTime;
+    this.smokeNow.kind = f.smokeKind;
+    return this.smokeNow;
   }
+  private readonly smokeNow: { clock: number; kind: SmokeKind } = { clock: 0, kind: 'breath' };
 
   /** The cake's decline time when it was where smoke born at `b` (smoke clock) left it; null: on its stand. */
   private cakeTimeAt(b: number): number | null {
@@ -331,8 +397,8 @@ export class BirthdayScene implements SceneInstance {
       c.fire.wick.char.value = char;
       c.fire.wick.ash.value = sm ? ashAt(i, sm.clock, sm.kind) : flame.out && char > 0 ? 1 : 0;
       poseFlame(c.fire, c.candle, flame, this.flicker, ember);
-      // Wick tip (burnt down by the melt) in cake_secondary space, for the smoke.
-      const w = this.wickTmp.copy(c.fire.wickTip);
+      // Wick tip (burnt down by the melt, curled as it chars) in cake_secondary space, for the smoke.
+      const w = this.wickTmp.copy(c.fire.wickTip).addScaledVector(c.fire.curlTip, char);
       w.y -= c.fire.shorten;
       w.applyQuaternion(c.candle.quaternion).add(c.candle.position);
       this.wicks[i]![0] = w.x;
@@ -342,28 +408,30 @@ export class BirthdayScene implements SceneInstance {
     // The smoke rises in the room (birthday_root): each parcel from where its wick was when it was
     // born, on the cake on its stand or on its way to (or back from) the bin; none is seen from
     // wicks inside the bin.
-    if (!sm) {
-      this.rig.smoke.update(-1, 'breath', () => 0);
-      return;
+    this.smokePeak = sm ? this.rig.smoke.update(sm.clock, sm.kind, this.smokeWick, this.buildWake(sm.clock) ? this.smokeWakeAt : undefined) : this.rig.smoke.update(-1, 'breath', this.smokeWick);
+  }
+
+  /** Sample the cake's path for the wake at smoke clock `t`; false when it has not moved (no wake). */
+  private buildWake(t: number): boolean {
+    if (this.path.length === 0) return false;
+    this.wakeT0 = t - (WAKE_N - 1) * WAKE_H;
+    const P = this.wakeP, S = this.wakeS;
+    let moved = false;
+    for (let k = 0; k < WAKE_N; k++) {
+      this.cakeFor(this.wakeT0 + k * WAKE_H, this.cakeTmp);
+      P[k * 3] = this.cakeTmp.x; P[k * 3 + 1] = this.cakeTmp.y; P[k * 3 + 2] = this.cakeTmp.z;
+      if (k > 0 && !moved) moved = P[k * 3] !== P[k * 3 - 3] || P[k * 3 + 1] !== P[k * 3 - 2] || P[k * 3 + 2] !== P[k * 3 - 1];
     }
-    this.rig.smoke.update(sm.clock, sm.kind, (i, birth, out) => {
-      const s = this.cakeTimeAt(birth);
-      if (s !== null && s > SMOKE_EMIT_UNTIL) return -1;
-      const w = this.wicks[i]!;
-      const v = this.wickTmp.set(w[0], w[1], w[2]);
-      const lean = this.cakeFor(birth, this.cakeTmp);
-      if (lean !== 0) v.applyQuaternion(this.qBirth.setFromAxisAngle(LEAN_AXIS, lean));
-      const p = this.cakeTmp;
-      out[0] = p.x + v.x;
-      out[1] = p.y + v.y;
-      out[2] = p.z + v.z;
-      if (s === null && this.cakeTimeAt(birth + SPEED_H) === null) return 0;
-      // How fast it moved through the air (a wick carried strings its vapour out).
-      this.cakeFor(birth + SPEED_H, this.cakeTmp2);
-      const ahead = this.cakeTmp2.clone();
-      this.cakeFor(Math.max(0, birth - SPEED_H), this.cakeTmp2);
-      return ahead.distanceTo(this.cakeTmp2) / (2 * SPEED_H * MPS);
-    });
+    if (!moved) return false;
+    for (let k = 0; k < WAKE_N; k++) {
+      let x = 0, y = 0, z = 0;
+      for (let j = 0; j < WAKE_J && k + j + 1 < WAKE_N; j++) {
+        const a = (k + j) * 3, b = a + 3, w = WAKE_W[j]!;
+        x += (P[b]! - P[a]!) * w; y += (P[b + 1]! - P[a + 1]!) * w; z += (P[b + 2]! - P[a + 2]!) * w;
+      }
+      S[k * 3] = x; S[k * 3 + 1] = y; S[k * 3 + 2] = z;
+    }
+    return true;
   }
 
   /**
