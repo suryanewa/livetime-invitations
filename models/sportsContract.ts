@@ -187,6 +187,19 @@ export function netRestRadius(t: number): number {
   return p[p.length - 1]![1];
 }
 
+/**
+ * The net as it hangs (v1.5 polish): the master's envelope, opened in its lower half so the
+ * bottom ring's inner opening is 1.14 × the ball (a real net's bottom clears the ball; the ball
+ * spreads the cords as it passes and they slide on it, rather than the net hugging it like a sock).
+ * The simulation hangs the master's knots on this envelope (`sportsNet.ts`) and the made ball's net
+ * drag engages against it.
+ */
+export const NET_HANG = { inner: 0.285, from: 0.42, to: 0.62 } as const;
+export function netHangRadius(t: number): number {
+  const s = Math.min(1, Math.max(0, (t - NET_HANG.from) / (NET_HANG.to - NET_HANG.from)));
+  return Math.max(netRestRadius(t), NET_HANG.inner * s * s * (3 - 2 * s));
+}
+
 // ── Hoop recoil: the rim on its bracket and the board on its arms answer the net's pull ──
 /**
  * Pivots in hoop space, measured from the master at HOOP_SCALE (the `rim` and `backboard` nodes'
@@ -233,7 +246,7 @@ export const BALL_AT = {
  * Motion bounds box: the key light aims at its centre and box-framed tools (lookdev) fit it. The
  * scene frames the camera with silhouette points of every path (tails to rest included).
  */
-export const SPORTS_BOUNDS = new Box3(new Vector3(-1.4, -0.05, -3.7), new Vector3(2.4, 4.8, 1.4));
+export const SPORTS_BOUNDS = new Box3(new Vector3(-1.6, -0.05, -3.7), new Vector3(2.4, 4.8, 1.4));
 
 /**
  * Backdrop wall for this scene (studio sweep wall z), pushed back like Birthday's and Dinner's so
