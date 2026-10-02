@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { Color, Euler, Group, Matrix4, MeshStandardMaterial, Vector3 } from 'three';
-import { COVER, COVER_PROFILE, dinnerBounds, plateTop } from '../models/dinnerContract.ts';
+import { COVER, COVER_PROFILE, dinnerBounds, PLATE, plateTop } from '../models/dinnerContract.ts';
 import type { DinnerRig } from '../models/dinner.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { VisualDirector } from '../src/core/visualDirector.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { DinnerScene } from '../src/scenes/dinner/index.ts';
-import { ACCEPT, DURATIONS, newFrame, REVEAL_DIR, sampleSequence } from '../src/scenes/dinner/sequences.ts';
+import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  buildPlumes, buildPuffs, domeClearance, newPuffState, PLUME, plumeCenter, plumeDensity, POCKET_CLEAR, PUFF_COUNTS, PUFF_KINDS, puffAt, riseAt, STEAM_CHANGE_FADE, STEAM_END, STEAM_REST,
-  steamPlumes, steamPuffs,
+  buildPlumes, buildPuffs, domeClearance, newPuffState, PLUME, plumeCenter, plumeDensity, POCKET_CLEAR, PUFF_COUNTS, PUFF_KINDS, leftSteamEnd, plumeSource, wakeFade, puffAt, riseAt, STEAM_END, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade,
+  steamPlumes, steamPuffs, VIEW_RIGHT,
 } from '../src/scenes/dinner/steam.ts';
 
 /**
@@ -118,7 +118,7 @@ describe('Dinner steam plan (v1.5)', () => {
     for (const p of steamPlumes()) expect(p.base.y).toBeCloseTo(plateTop(Math.hypot(p.base.x, p.base.z)), 6);
   });
 
-  it('rises like the warm air off a hot dish: at most 30 cm/s, decelerating as it mixes in; the column at 15–22 cm/s', () => {
+  it('rises like the warm air off a hot dish: at most 30 cm/s, decelerating as it mixes in; the column at 20–25 cm/s', () => {
     const a = newPuffState(), b = newPuffState();
     let vmax = 0;
     for (const p of steamPuffs()) {
@@ -129,33 +129,55 @@ describe('Dinner steam plan (v1.5)', () => {
     const w = (t: number) => (riseAt(1, t + 0.005) - riseAt(1, t - 0.005)) / 0.01;
     expect(w(1.0)).toBeLessThan(w(0.4));
     for (const p of steamPlumes()) {
-      expect(p.rise * SU_CM).toBeGreaterThanOrEqual(15);
-      expect(p.rise * SU_CM).toBeLessThanOrEqual(22);
+      expect(p.rise * SU_CM).toBeGreaterThanOrEqual(20);
+      expect(p.rise * SU_CM).toBeLessThanOrEqual(25);
     }
   });
 
-  it('the column grows up off the plate, shows for 1–2 s after the reveal, thins and is gone by STEAM_END', () => {
+  it('the column is a broad sheet over the well (60–85 % of its width), not a strand', () => {
+    // Across the camera's view (its horizontal is 20° off the scene's x), each sheet's half-width
+    // either side of its base.
+    const right = VIEW_RIGHT;
+    const lo = Math.min(...steamPlumes().map((p) => p.base.dot(right) - p.width));
+    const hi = Math.max(...steamPlumes().map((p) => p.base.dot(right) + p.width));
+    const share = (hi - lo) / (2 * PLATE.wellRadius);
+    expect(share).toBeGreaterThan(0.6);
+    expect(share).toBeLessThan(0.85);
+    // Side by side, overlapping: no gap between neighbouring sheets.
+    const sorted = [...steamPlumes()].sort((a, b) => a.base.dot(right) - b.base.dot(right));
+    for (let i = 1; i < sorted.length; i++) {
+      expect(sorted[i]!.base.dot(right) - sorted[i]!.width).toBeLessThan(sorted[i - 1]!.base.dot(right) + sorted[i - 1]!.width);
+    }
+  });
+
+  it('the column grows up off the plate, shows strongly for 1–2 s after the reveal, then a thin tail to ≈ 4 s, gone by STEAM_END', () => {
     const maxDensity = (tau: number, h0 = 0, h1: number = PLUME.length) => {
       let m = 0;
       for (const p of steamPlumes()) for (let h = h0; h <= h1; h += 0.02) m = Math.max(m, plumeDensity(p, h, tau));
       return m;
     };
-    // Visible above the plate's far rim (h ≳ 0.3 su from the camera) through the second after the
-    // reveal, thinning, and below 1 % everywhere (invisible over the cove) by STEAM_END.
-    expect(maxDensity(1.2, 0.3, 0.9)).toBeGreaterThan(0.12);
-    expect(maxDensity(1.8, 0.3, 0.9)).toBeGreaterThan(0.03);
+    // Dense above the plate's far rim (h ≳ 0.3 su from the camera) through the second after the
+    // reveal, thinning; a thin tail still there at 4 s (p99.9 ≈ 11 levels of 255 over the cove,
+    // measured: the thin steam breaks into filaments that keep their light), a twentieth of the
+    // peak; below STEAM_GONE everywhere (gone) by STEAM_END.
+    expect(maxDensity(1.2, 0.3, 0.9)).toBeGreaterThan(0.3);
+    expect(maxDensity(1.8, 0.3, 0.9)).toBeGreaterThan(0.15);
     expect(maxDensity(1.8)).toBeLessThan(maxDensity(1.2));
-    expect(maxDensity(STEAM_END)).toBeLessThanOrEqual(0.0101);
+    expect(maxDensity(4.0, 0.3, 0.9)).toBeGreaterThan(0.03);
+    expect(maxDensity(4.0)).toBeLessThan(0.1 * maxDensity(1.0));
+    expect(maxDensity(STEAM_END)).toBeLessThanOrEqual(STEAM_GONE * 1.01);
     for (const p of steamPuffs()) expect(p.t0 + p.life).toBeLessThanOrEqual(STEAM_END);
-    expect(STEAM_END).toBeGreaterThan(DURATIONS.accept + 1);
-    expect(STEAM_END).toBeLessThan(DURATIONS.accept + 2.5);
+    expect(STEAM_END).toBeGreaterThan(DURATIONS.accept + 4);
+    expect(STEAM_END).toBeLessThan(DURATIONS.accept + 5.5);
     // It grows up off the plate at its rise speed (nothing above the front), and once the source
-    // has peaked the base only thins.
+    // has peaked the formed sheet (h ≥ PLUME.base) only thins.
     for (const p of steamPlumes()) {
       const tau = p.t0 + 0.4;
       expect(plumeDensity(p, 0.5 * p.rise * 0.4, tau)).toBeGreaterThan(0);
       expect(plumeDensity(p, p.rise * 0.4 + 0.01, tau)).toBe(0);
-      for (let t = p.t0 + PLUME.ramp; t < STEAM_END; t += 0.05) expect(plumeDensity(p, 0, t + 0.05)).toBeLessThanOrEqual(plumeDensity(p, 0, t));
+      for (let t = p.t0 + PLUME.ramp + PLUME.base / p.rise; t < STEAM_END; t += 0.05) {
+        expect(plumeDensity(p, PLUME.base, t + 0.05)).toBeLessThanOrEqual(plumeDensity(p, PLUME.base, t));
+      }
     }
     // The centreline starts on the plate and, wherever the sheet shows (density ≥ 1 %), meander
     // and wake lean together never slope it past 45° (it shears with the path; steeper would
@@ -301,27 +323,105 @@ describe('Dinner steam on stage (v1.5)', () => {
     expect(s.scene.settling()).toBe(true);
   });
 
-  it('a change of mind mid-reveal lets the steam already out rise on and fade; nothing more is released', () => {
+  it('a change of mind mid-reveal leaves the steam already out to rise on and disperse on its own; nothing more is released', () => {
     const s = stage();
     s.director.setIntent('accept');
     s.run(0.5);
     const before = s.scene.steamState;
+    const cut = before.tau!;
     s.director.setIntent('decline');
-    // The cut is never seen: the same steam, on the same clock.
+    // The cut is never seen: the same steam, on the same clock, left behind (no fade).
     const after = s.scene.steamState;
     expect(after.visible).toBe(true);
-    expect(after.tau).toBe(before.tau);
-    expect(after.emitEnd).toBe(before.tau);
-    let prev = 1;
-    s.run(STEAM_CHANGE_FADE + 0.05, () => {
-      const st = s.scene.steamState;
-      if (st.tau !== null) {
-        expect(st.fade).toBeLessThanOrEqual(prev);
-        // A steady fade over STEAM_CHANGE_FADE: no frame drops it by more than its share.
-        expect(prev - st.fade).toBeLessThanOrEqual((1 / 60 / STEAM_CHANGE_FADE) * 1.001);
-        prev = st.fade;
+    expect(after.tau).toBeNull();
+    expect(after.left).toHaveLength(1);
+    expect(after.left[0]).toMatchObject({ tau: cut, emitEnd: cut });
+    const capture = after.left[0]!.capture;
+    expect(after.left[0]!.until).toBe(leftSteamEnd(cut, -Infinity, capture));
+    expect(after.left[0]!.until).toBeLessThanOrEqual(steamEndAfter(cut));
+    // Stirred by the returning cover, it thins smoothly from the cut (no step), to 1 % within ≈ 2.5 s.
+    expect(stirFade(0)).toBe(1);
+    expect(1 - stirFade(1 / 60)).toBeLessThan(0.01);
+    expect(stirFade(0.5)).toBeGreaterThan(0.3);
+    expect(stirFade(2.5)).toBeLessThan(0.01);
+    expect(after.fade).toBe(1);
+    // The rewind sets the cover back on the plate: what it closes over then stays under it (the
+    // first frame that counts has it seated, or barely lifted with the plate); the dish's wake
+    // then breaks up the rest, smoothly.
+    expect(wakeFade(0)).toBe(1);
+    expect(1 - wakeFade(1 / 60)).toBeLessThan(0.02);
+    expect(wakeFade(1.5)).toBeLessThan(0.01);
+    expect(capture - cut).toBeGreaterThanOrEqual(REWIND.min);
+    expect(capture - cut).toBeLessThanOrEqual(REWIND.max.decline + 1 / 60);
+    const seated = frameFor('guest-ready', newFrame()).coverPos;
+    // It disperses over its own life (over half a second here; stirred, thinning from the cut), then it has gone and the loop idles,
+    // the decline's end (its pose) notwithstanding.
+    const until = after.left[0]!.until;
+    expect(until - cut).toBeGreaterThan(0.6);
+    let prev = cut, frames = 0, closed = false;
+    s.run(until - cut + 0.1, () => {
+      const l = s.scene.steamState.left;
+      if (!l.length) return;
+      expect(l[0]!.tau).toBeCloseTo(prev + 1 / 60, 9);
+      if (!closed && l[0]!.tau >= capture) {
+        closed = true;
+        expect(s.scene.rig.nodes.cover_authored!.position.distanceTo(seated)).toBeLessThan(0.02);
       }
+      prev = l[0]!.tau;
+      frames++;
     });
+    expect(closed).toBe(true);
+    expect(frames / 60).toBeCloseTo(until - cut, 1);
+    expect(s.scene.steamState.visible).toBe(false);
+    s.run(DURATIONS.decline + 1);
+    expect(s.director.state).toBe('declined-pose');
+    expect(s.scene.steamState.visible).toBe(false);
+    expect(s.scene.settling()).toBe(false);
+    // The release stops softly: the source dies away over PLUME.cut (continuous), then nothing; the
+    // column's base detaches and rises off at its rise speed.
+    for (const p of steamPlumes()) {
+      for (let t = cut - 0.05; t < cut + PLUME.cut + 0.05; t += 0.005) {
+        expect(Math.abs(plumeSource(p, t + 0.005, -Infinity, cut) - plumeSource(p, t, -Infinity, cut))).toBeLessThan(0.08);
+      }
+      expect(plumeSource(p, cut + PLUME.cut, -Infinity, cut)).toBe(0);
+      const tau = cut + 0.6;
+      expect(plumeDensity(p, p.rise * (tau - cut - PLUME.cut) - 0.01, tau, -Infinity, cut)).toBe(0);
+    }
+  });
+
+  it('changed back mid-rewind, the reveal resumes and releases its own steam beside what was left behind', () => {
+    const s = stage();
+    s.director.setIntent('accept');
+    s.run(0.6);
+    s.director.setIntent('decline');
+    s.run(0.1);
+    const [left] = s.scene.steamState.left;
+    expect(left).toBeDefined();
+    s.director.setIntent('accept');
+    const st = s.scene.steamState;
+    // What was left behind carries on untouched (no jump back, no pop); the cover never closed
+    // over it.
+    expect(st.left).toEqual([{ ...left, capture: Infinity, until: leftSteamEnd(left!.emitEnd) }]);
+    expect(left!.capture).toBeGreaterThan(left!.tau);
+    // The reveal resumes part-way down its rewind and releases only from there (ramped up).
+    expect(st.tau).not.toBeNull();
+    expect(st.tau!).toBeGreaterThan(0);
+    expect(st.tau!).toBeLessThan(0.6);
+    expect(st.emitStart).toBe(st.tau);
+    for (const p of steamPlumes()) expect(plumeSource(p, st.tau! + 0.01, st.emitStart)).toBeLessThan(0.02);
+    s.run(DURATIONS.accept + 0.1);
+    expect(s.director.state).toBe('accepted-pose');
+    expect(s.scene.settling()).toBe(true);
+  });
+
+  it('however often the guest changes their mind, at most two lots of steam are left behind and it all ends', () => {
+    const s = stage();
+    for (let i = 0; i < 8; i++) {
+      s.director.setIntent(i % 2 ? 'decline' : 'accept');
+      s.run(0.35, () => expect(s.scene.steamState.left.length).toBeLessThanOrEqual(2));
+    }
+    s.director.setIntent('decline');
+    s.run(STEAM_END + 1);
     expect(s.scene.steamState.visible).toBe(false);
     expect(s.scene.settling()).toBe(false);
   });
