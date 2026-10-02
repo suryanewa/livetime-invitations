@@ -16,10 +16,15 @@ export function posterUrl(category: Category, preset: string, pose: CanonicalPos
   return table.get(`${category}/${preset}/${pose}`) ?? table.get(`${category}/shared/${pose}`) ?? null;
 }
 
-/** Fullscreen backdrop stills (bare studio, BACKDROP_FIELD = 7 × the frame): assets/scenes/<category>/backdrop.webp */
-const backdrops = import.meta.glob('../../assets/scenes/*/backdrop.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+/**
+ * Fullscreen backdrop stills (bare studio, BACKDROP_FIELD = 7 × the frame): assets/scenes/<category>/backdrop.webp
+ * at the scene's rest framing, and (v1.5 decline pull-back) backdrop-declined.webp at its decline
+ * framing for the scenes whose declined pose is pulled back (Birthday, Dinner). A scene without one
+ * has one framing, so its declined poster takes the rest backdrop.
+ */
+const backdrops = import.meta.glob('../../assets/scenes/*/backdrop*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
-export function backdropUrl(category: Category): string | null {
-  const hit = Object.entries(backdrops).find(([path]) => path.endsWith(`/scenes/${category}/backdrop.webp`));
-  return hit ? hit[1] : null;
+export function backdropUrl(category: Category, pose: CanonicalPose = 'guest-ready'): string | null {
+  const find = (file: string) => Object.entries(backdrops).find(([path]) => path.endsWith(`/scenes/${category}/${file}`))?.[1] ?? null;
+  return (pose === 'declined' ? find('backdrop-declined.webp') : null) ?? find('backdrop.webp');
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BoxGeometry, Color, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Vector3 } from 'three';
-import { cameraDirection, fitPerspectiveToHero, PERSPECTIVE_FOV } from '../src/render/camera.ts';
+import { cameraDirection, fitPerspectiveToHero, PERSPECTIVE_FOV, placeHeroView, solveHeroFits } from '../src/render/camera.ts';
 import { HERO_FILL, PATH_CLEARANCE, silhouettePoints } from '../src/render/framing.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
@@ -12,7 +12,8 @@ import { dinnerFramePoints } from '../src/scenes/dinner/index.ts';
  * silhouette fill HERO_FILL.height of the frame (or HERO_FILL.width when the hero is wide and
  * low); across, the hero sits centred unless a path needs the room; every path stays inside
  * PATH_CLEARANCE. The per-scene fills are measured on the real silhouettes in the browser
- * (tests/browser/framing.spec.ts).
+ * (tests/browser/framing.spec.ts). Since v1.5 a scene with a bin has two fits (rest and decline;
+ * tests/pull.test.ts).
  */
 
 const box = (cx: number, cy: number, cz: number, hx: number, hy: number, hz: number) => {
@@ -115,7 +116,7 @@ describe('Hero framing rule (v1.4)', () => {
   });
 });
 
-describe('Dinner under the hero rule (recorded disposal exception)', () => {
+describe('Dinner under the hero rule: rest and decline fits (v1.5 decline pull-back)', () => {
   function plainLibrary(): MaterialLibrary {
     const direction = DIRECTIONS.L2;
     const cache = new Map<string, MeshStandardMaterial>();
@@ -123,12 +124,11 @@ describe('Dinner under the hero rule (recorded disposal exception)', () => {
     return { direction, get: (n: string) => cache.get(n) ?? (cache.set(n, make(n)), cache.get(n)!), unique: make, dispose() {} } as unknown as MaterialLibrary;
   }
 
-  it('the open bin sets the frame: the camera backs off, and the covered dish still fills at least 34 % of the width', () => {
-    // The hero rule would make the dish fill 75 % of the width; the covered dish carried over the
-    // open bin behind it cannot fit at that size, so the camera backs off. Measured on the real
-    // silhouette at 1:1: v1.3 0.434, v1.4 0.496 (the bin scaled with the dish: 31.7 × 22 cm),
-    // v1.5 0.354 (the real 47 cm pedal bin: the dish must rise over a 44.5 cm rim; recorded
-    // trade-off, docs/spec-revisions.md).
+  it('at rest the dish fills the rule (held only by its own cover\'s paths); at pull 1 every path, the open bin included, keeps its clearance', () => {
+    // v1.4 0.496 of the width and v1.5's merged bin 0.354 at 1:1, when one fixed camera held the
+    // carry over the 44.5 cm rim. Since the pull-back the rest fit holds the host and accept paths
+    // only: the cover set down beside the plate binds first, short of the 0.75 cap (the real
+    // silhouette: 0.724 at 3:4, 0.696 at 1:1, 0.547 of the height at 3:2; the browser spec).
     const hero: Vector3[] = [];
     for (let i = 0; i < 64; i++) {
       const a = (i / 64) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
@@ -136,14 +136,26 @@ describe('Dinner under the hero rule (recorded disposal exception)', () => {
       for (const [r, y] of COVER_PROFILE) hero.push(new Vector3(c * r, y, s * r).add(COVER_SEATED));
     }
     hero.push(new Vector3(0, DISH_HEIGHT, 0));
-    const paths = [...dinnerFramePoints(), ...openBinFramePoints(buildDisposalBin({ lib: plainLibrary() }), DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE)];
-    const camera = new PerspectiveCamera(PERSPECTIVE_FOV, 1, 0.05, 400);
-    const f = fitPerspectiveToHero(camera, dinnerBounds().getCenter(new Vector3()), 1, hero, paths, HERO_FILL, PATH_CLEARANCE);
-    expect(f.pathLimited).toBe(true);
-    expect(f.heroWidth).toBeGreaterThanOrEqual(0.34);
-    expect(f.heroWidth).toBeLessThan(HERO_FILL.width);
-    const e = ndc(camera, paths);
-    for (const v of [e.x0, e.y0]) expect(v).toBeGreaterThanOrEqual(-(1 - PATH_CLEARANCE) - 1e-3);
-    for (const v of [e.x1, e.y1]) expect(v).toBeLessThanOrEqual(1 - PATH_CLEARANCE + 1e-3);
+    const rest = dinnerFramePoints('rest');
+    const all = [...dinnerFramePoints(), ...openBinFramePoints(buildDisposalBin({ lib: plainLibrary() }), DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE)];
+    const aim = dinnerBounds().getCenter(new Vector3());
+    for (const aspect of [0.75, 1, 1.5]) {
+      const camera = new PerspectiveCamera(PERSPECTIVE_FOV, aspect, 0.05, 400);
+      const [r, d] = solveHeroFits(camera, aim, aspect, hero, [rest, all], HERO_FILL, PATH_CLEARANCE);
+      const label = `${aspect}`;
+      // The rule at rest: within 10 % of its cap on the binding axis, never past it.
+      const fill = Math.max(r!.heroWidth / HERO_FILL.width, r!.heroHeight / HERO_FILL.height);
+      expect(fill, label).toBeGreaterThan(0.9);
+      expect(fill, label).toBeLessThanOrEqual(1 + 1e-3);
+      // The decline fit is the wider one, path-limited by the carry over the bin.
+      expect(d!.pathLimited, label).toBe(true);
+      expect(d!.distance, label).toBeGreaterThan(r!.distance * 1.3);
+      for (const [fit, pts] of [[r!, rest], [d!, all]] as const) {
+        placeHeroView(camera, aim, aspect, fit.distance, fit.offset);
+        const e = ndc(camera, [...hero, ...pts]);
+        for (const v of [e.x0, e.y0]) expect(v, label).toBeGreaterThanOrEqual(-(1 - PATH_CLEARANCE) - 1e-3);
+        for (const v of [e.x1, e.y1]) expect(v, label).toBeLessThanOrEqual(1 - PATH_CLEARANCE + 1e-3);
+      }
+    }
   });
 });

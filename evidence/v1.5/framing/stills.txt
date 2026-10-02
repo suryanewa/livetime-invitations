@@ -1,0 +1,36 @@
+birthday host-ready: pull 0
+birthday guest-ready: pull 0
+birthday accepted: pull 0
+birthday declined: pull 1
+desktop birthday host-ready: poster vanilla-host-ready.webp over backdrop.webp
+desktop birthday guest-ready: poster vanilla-guest-ready.webp over backdrop.webp
+desktop birthday accepted: poster vanilla-accepted.webp over backdrop.webp
+desktop birthday declined: poster shared-declined.webp over backdrop.webp
+phone birthday host-ready: poster vanilla-host-ready.webp over backdrop.webp
+phone birthday guest-ready: poster vanilla-guest-ready.webp over backdrop.webp
+phone birthday accepted: poster vanilla-accepted.webp over backdrop.webp
+phone birthday declined: poster shared-declined.webp over backdrop.webp
+dinner host-ready: pull 0
+dinner guest-ready: pull 0
+dinner accepted: pull 0
+dinner declined: pull 1
+desktop dinner host-ready: poster shared-host-ready.webp over backdrop.webp
+desktop dinner guest-ready: poster shared-guest-ready.webp over backdrop.webp
+desktop dinner accepted: poster shared-accepted.webp over backdrop.webp
+desktop dinner declined: poster shared-declined.webp over backdrop.webp
+phone dinner host-ready: poster shared-host-ready.webp over backdrop.webp
+phone dinner guest-ready: poster shared-guest-ready.webp over backdrop.webp
+phone dinner accepted: poster shared-accepted.webp over backdrop.webp
+phone dinner declined: poster shared-declined.webp over backdrop.webp
+party host-ready: pull 0
+party guest-ready: pull 0
+party accepted: pull 0
+party declined: pull 0
+sports host-ready: pull 0
+sports guest-ready: pull 0
+sports accepted: pull 0
+sports declined: pull 0
+business host-ready: pull 0
+business guest-ready: pull 0
+business accepted: pull 0
+business declined: pull 0

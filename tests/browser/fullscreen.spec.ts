@@ -107,6 +107,34 @@ test('the poster sits on the frame square, with the backdrop still around it', a
   }
 });
 
+test('a pulled-back declined poster sits over its own backdrop; the other poses and scenes over the rest backdrop', async ({ page }) => {
+  // v1.5 decline pull-back: Birthday's and Dinner's declined pose is at the decline fit, wider than
+  // the rest fit the other posters are at, so its poster melts only into backdrop-declined.webp.
+  for (const [width, height] of [[1440, 900], [390, 844]] as const) {
+    await page.setViewportSize({ width, height });
+    for (const scene of ['birthday', 'dinner', 'party'] as const) {
+      await ready(page, `/?scene=${scene}`);
+      await page.getByRole('button', { name: 'Guest', exact: true }).click();
+      await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('static'));
+      const backdrop = () => page.locator('.lt-stage__backdrop').evaluate((el) => getComputedStyle(el).backgroundImage);
+      await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /guest-ready/);
+      expect(await backdrop(), `${scene} ${width}`).toMatch(/backdrop\.webp/);
+      await page.getByRole('button', { name: 'Decline' }).click();
+      await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /declined/);
+      await expect(page.locator('.lt-stage__poster')).toBeVisible();
+      await expect.poll(backdrop).toMatch(scene === 'party' ? /backdrop\.webp/ : /backdrop-declined\.webp/);
+      // Still on the frame square, and the backdrop still covers the viewport around it.
+      const f = await frame(page);
+      const p = await rect(page, '.lt-stage__poster');
+      expect(p.x).toBeCloseTo(f.x, 0);
+      expect(p.width).toBeCloseTo(f.size, 0);
+      const b = await rect(page, '.lt-stage__backdrop');
+      expect(b.x).toBeLessThanOrEqual(0);
+      expect(b.x + b.width).toBeGreaterThanOrEqual(width);
+    }
+  }
+});
+
 test('overlay text sits on a surface dense enough for 4.5:1 over any scene', async ({ page }) => {
   await ready(page);
   for (const sel of ['.sc-top', '.sc-dock']) {
