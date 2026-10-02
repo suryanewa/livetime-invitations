@@ -24,7 +24,8 @@ through the opening gap (in the dome's shadow), the dome's outer silver, and the
 - **What is visible.** The visible part is droplets that condense where warm, saturated air meets the cooler room,
   and that evaporate again as the cloud mixes in. So steam appears a short way off its source and is gone within a
   second or two, about 10–25 cm up ([UK SciWorks, *Why does it happen?*](https://www.pa.uky.edu/sciworks/THE/heat/fog.htm)).
-  In the model: no density at the surface, condensation that forms within 0.12 s, and evaporation with age and height.
+  In the model: no density at the surface (the column forms ≈ 1.3 cm off the porcelain), condensation that forms
+  within 0.06 s, densest at release and only thinning from then on, and evaporation with age and height.
 - **How it reads under light.** Steam is a transparent scatterer. Front light goes through it, and it pops only
   under a 3/4 backlight ([Pixel Valley Studio, *Capturing steam on video*](https://pixelvalleystudio.com/pmf-articles/capturing-steam-on-video-other-lighting-tips)),
   best against a dark ground.
@@ -36,11 +37,13 @@ through the opening gap (in the dome's shadow), the dome's outer silver, and the
   [starting plume following a thermal](https://www.sciencedirect.com/science/article/abs/pii/S1290072923003034),
   [head bubble of a starting plume](https://www.osti.gov/pages/servlets/purl/2422493), and PIV of natural convection
   ([DTU](https://orbit.dtu.dk/en/publications/temperature-and-velocity-fields-in-natural-convection-by-piv-and-/)).
-  In the model: puffs that accelerate buoyantly and slow as they mix (≤ 26 cm/s), and a column at 13–16 cm/s
-  (a hot plate is warmer than the studies' heated rods).
+  The air under a cloche on a hot dish is ≈ 40–50 K warmer than the room and the dome itself is hot, so it rises
+  more briskly than those gentle plumes. In the model: puffs that accelerate buoyantly and slow as they mix
+  (≤ 30 cm/s), and a column at 17–21 cm/s that flaps and curls as it rises.
 - **The tilt.** A tipped dome is a doorway at its raised rim. The warm layer flows out at the top of the gap while
   room air runs in along the plate (exchange flow, u ≈ 0.5 √(g′h), 5–7 cm/s for a 1–2 cm gap at ≈ 45 K). The
-  outflow turns up at once, by buoyancy.
+  outflow is caught at once by the warm boundary layer rising up the hot dome's outer wall: a thin sheet climbing
+  the raised side.
 - **Steam off a plate**, from the above: thin, wavering wisps, laminar at the base and curling higher, a column
   that leans with any draught, gone within ≈ 15–25 cm.
 
@@ -52,23 +55,26 @@ the CPU sets a handful of uniforms per frame.
 
 | Element | Count | Born (τ) | Where | Motion | Life |
 | --- | --- | --- | --- | --- | --- |
-| Spill | 16 puffs | 0.08–0.26 s, weighted to the widening gap | round the raised rim (all within 70° of it, mean within 30°), at the bead, just outside | exchange outflow 0.3–0.45 su/s (5–7 cm/s) turned upward, rolling up into a curl round the lip (1–2 cm radius, ≈ 120°, at the shear's speed) | 0.5–0.8 s |
-| Release | 8 | 0.21–0.32 s | round the raised side, between the plate and the lifting rim | outward, drawn up after the dome | 0.6–0.9 s |
-| Pocket | 14 | 0.30–0.51 s | inside the dome as it is carried off (warm air at its crown) | 22–42 % of the dome's velocity (its wake), then buoyant | 0.55–0.85 s |
-| Trail | 8 | 0.35–0.60 s | the dome's trailing rim | dragged after it, thinning | 0.5–0.7 s |
-| Column | 6 plumes | 0.30–0.42 s (once the rim has cleared the well), decaying with τ ≈ 0.55–0.75 s | the plate's well, r < 0.34 su | rises at 0.78–0.95 su/s (13–16 cm/s); meander frozen into the rising vapour; leans back-left with the dome's wake (0.32 su per su of height, dying away over 0.8 s) | gone ≈ 3.6 s |
+| Spill | 22 puffs | 0.10–0.30 s, weighted to the widening gap | round the raised rim (all within 70° of it, mean within 30°), 6–8 mm off the bead | up the raised side's outer wall at 15–24 cm/s (the exchange outflow caught by the hot wall's boundary layer, drawn up by the lifting dome): a thin filament sheet, drawn out 1.7–2.1× along the rise | 0.35–0.5 s |
+| Release | 10 | 0.21–0.35 s | under the lifting dome, at least 1.3 cm above the plate and below the rim | lifts off with the dome (30–50 % of its rise) and on, buoyant | 0.4–0.6 s |
+| Pocket | 14 | 0.30–0.49 s | inside the dome as it is carried off (weighted to its crown, where the warm air sat) | 20–35 % of the dome's velocity (its wake), then a fast buoyant rise, fraying | 0.45–0.7 s |
+| Column | 7 plumes | 0.24–0.32 s, as the rim clears the well: at full strength at once, then thinning (decay 0.5–0.65 s) | the middle of the plate's well, r < 0.26 su | rises at 17–21 cm/s; a meander frozen into the rising vapour, the whole plume flapping ±1–2 cm at 0.7 Hz, strands that churn and curl; a slight lean after the departing dome (its wake) | gone by STEAM_END, 3.44 s |
 
 - **Puffs** are camera-facing soft billboards. The vertex shader places each puff at its age: emission momentum
   decaying over 0.18 s, buoyant acceleration (0.2 s) and deceleration by entrainment (1.6 s), radius growth, meander
   growing with height, and the spill's curl. The fragment shader slices a domain-warped 3D value-noise field through
   the puff. The field is attached to the puff and churns as it rises. Density is soft throughout: no thresholded
-  edge, and the outline comes from the field, never the quad. As the puff evaporates it thins into world-space
-  filaments drawn out along the rise.
+  edge, a Gaussian envelope on a radius the field warps (so stacked puffs never print discs or rings), shrinking
+  from the edges in as it evaporates, and an outline that comes from the field, never the quad. Spill puffs are
+  mostly filament from birth (thin sheets drawn out along the rise, in world space). The billows fray into those
+  filaments as they evaporate.
 - **Plumes** are ribbons up from the plate, as wide as the camera's horizontal, so they shear with their path and
   never twist or fold. Their density at height h is the source as it was h/rise ago. So the column grows up off the
-  plate, then thins as the source weakens, while its earliest vapour rises away and evaporates (e^(−h/17 cm)). It
-  fades out over its top 7 cm, so no ribbon end ever shows. The fragment shader draws the strand or two a rising
-  sheet folds into, wandering side to side (laminar at the base) and breaking up higher.
+  plate at its strongest, then thins from the bottom as the source weakens, while its first vapour rises away and
+  evaporates (e^(−h/14 cm)). It fades in over its first 1.3 cm and out over its top 6 cm, so no ribbon end shows and
+  nothing lies on the plate. The fragment shader draws the strand or two a rising sheet folds into: wandering and
+  curling side to side (laminar for the first few centimetres), the pattern itself churning in time rather than
+  sliding up, breaking into wisps higher.
 - **Shading** (`STEAM_LOOK`): a near-white in-scatter (linear 0.94–0.97) through the rig's exposure and tone mapping.
   The window key is shaded by the dome, an analytic ellipsoid shadow with a soft penumbra, so steam under and behind
   the lifting cloche is dimmed to the room's share (0.77, the porcelain's measured shade-to-lit ratio). The top is a
@@ -85,12 +91,12 @@ the CPU sets a handful of uniforms per frame.
 - **Plays on the reveal only.** The accept's samples drive the steam clock (`steamState.tau` is the accept's time),
   so a replay starts it from zero and nothing accumulates. Decline and host never show steam: the cloche stays on.
 - **After the reveal**, the director poses `accepted` at 1.5 s and the steam carries on in `simulate`. `settling()`
-  stays true while it rises, until `STEAM_END` (3.6 s), when every puff has gone and every plume is below 1 %
+  stays true while it rises, until `STEAM_END` (3.44 s), when every puff has gone and every plume is below 1 %
   density (white at 1 % moves the greige cove by 0.3 of an 8-bit step). The scene then ends clear and the loop idles
   (browser test: no frames after it, and the frame equals the reduced-motion still).
 - **`settle()`** snaps the steam to rest. The exception is the settle that comes with a change of mind's cut: the
-  steam already released keeps rising on its own clock. Nothing more is released (`emitEnd`), and it fades out over
-  0.5 s while the cover rewinds onto the plate, because a mid-reveal change would otherwise pop the most visible
+  steam already released keeps rising on its own clock. Nothing more is released (`emitEnd`), and it clears over
+  0.25 s while the cover rewinds onto the plate, because a mid-reveal change would otherwise pop the most visible
   steam off in one frame. Fragments the returning dome passes over are dropped (inside its shell).
 - **Accepted still: no steam.** This covers posters, reduced motion and a saved accept (`STEAM_REST = null`).
   Rendered side by side at poster size (`evidence/v1.5/dinner/rest-compare.png`: none, and the column frozen at
@@ -135,7 +141,7 @@ The budget was < 1 ms. CPU work per frame is a handful of uniform writes.
 - **No refraction or heat shimmer.** A warm plate shimmers the background slightly. The stage has no scene-colour
   copy to distort, and the effect is near the threshold of visibility at this scale.
 - **One steam clock.** After accept → decline → accept in quick succession, the first reveal's fading steam is
-  replaced by the new reveal's when it starts. At most 0.5 s of fading steam is lost, at the moment the new reveal
-  begins.
+  replaced by the new reveal's when it starts. At most 0.25 s of clearing steam is lost, at the moment the new
+  reveal begins.
 - **Thin over light.** By design the steam is subtle against the cove and the porcelain (see Research). It is most
   legible in motion and over the silver.

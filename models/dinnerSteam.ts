@@ -21,7 +21,7 @@ import {
   Vector3,
 } from 'three';
 import { COVER_PROFILE, PLATE_PROFILE } from './dinnerContract.ts';
-import { PLUME, type Plume, PUFF_KINDS, type Puff, STEAM_TIME } from '../src/scenes/dinner/steam.ts';
+import { PLUME, type Plume, type Puff, STEAM_TIME } from '../src/scenes/dinner/steam.ts';
 import { REVEAL_DIR } from '../src/scenes/dinner/sequences.ts';
 
 /**
@@ -132,21 +132,21 @@ uniform vec3 uCamRight;
 uniform vec3 uCamUp;
 attribute vec4 iSpawn;  // spawn position, t0
 attribute vec4 iVel;    // emission velocity, life
-attribute vec4 iShape;  // rise W, neck, size, grow
+attribute vec4 iShape;  // rise W, wisp, size, grow
 attribute vec4 iLook;   // peak, seed, sway, curl
-attribute vec4 iCurl;   // outward x, outward z, curl rate, kind
+attribute vec4 iCurl;   // outward x, outward z, curl rate, stretch
 varying vec2 vCorner;
 varying vec3 vPos;
 varying vec3 vLocal;
 varying float vOpacity;
 varying float vErode;
+varying float vWisp;
 varying float vSeed;
 varying float vAge;
 
 const float TD = ${STEAM_TIME.drag.toFixed(4)};
 const float TB = ${STEAM_TIME.accel.toFixed(4)};
 const float TM = ${STEAM_TIME.mix.toFixed(4)};
-const float TC = ${STEAM_TIME.neck.toFixed(4)};
 const float TCURL = ${STEAM_TIME.curl.toFixed(4)};
 const float TIN = ${STEAM_TIME.fadeIn.toFixed(4)};
 
@@ -160,8 +160,6 @@ void main() {
   vec3 c = iSpawn.xyz + iVel.xyz * TD * (1.0 - exp(-age / TD));
   float rise = iShape.x / (1.0 - TB / TM) * (TM * (1.0 - exp(-age / TM)) - TB * (1.0 - exp(-age / TB)));
   c.y += rise;
-  float k = iShape.y * (1.0 - exp(-age / TC));
-  c.xz -= iSpawn.xz * k;
   if (iLook.w > 0.0) {
     float th = iCurl.z * TCURL * (1.0 - exp(-age / TCURL));
     c.xz += vec2(iCurl.x, iCurl.y) * iLook.w * sin(th);
@@ -173,14 +171,15 @@ void main() {
   c.x += amp * (sin((2.1 + 1.6 * h1) * age + 6.283 * h2) + 0.5 * sin((4.3 + 2.0 * h3) * age + 6.283 * h1));
   c.z += amp * (sin((1.9 + 1.4 * h3) * age + 6.283 * h1) + 0.5 * sin((3.7 + 2.2 * h2) * age + 6.283 * h3));
   float radius = iShape.z + iShape.w * age;
-  vOpacity = iLook.x * smoothstep(0.0, TIN, age) * (1.0 - smoothstep(0.45 * life, life, age)) * pow(iShape.z / radius, 0.8);
+  vOpacity = iLook.x * smoothstep(0.0, TIN, age) * (1.0 - smoothstep(0.2 * life, life, age)) * pow(iShape.z / radius, 0.8);
   vErode = smoothstep(0.0, life, age);
+  vWisp = iShape.y;
   vSeed = seed;
   vAge = age;
   vCorner = position.xy;
-  vec3 offset = (uCamRight * position.x + uCamUp * position.y) * radius;
-  vLocal = offset / radius;
-  vPos = c + offset;
+  // Drawn out along the rise: the quad (and the field sampled through it) is iCurl.w times taller.
+  vLocal = uCamRight * position.x + uCamUp * position.y;
+  vPos = c + (uCamRight * position.x + uCamUp * position.y * iCurl.w) * radius;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(vPos, 1.0);
 }
 `;
@@ -254,6 +253,7 @@ varying vec3 vPos;
 varying vec3 vLocal;
 varying float vOpacity;
 varying float vErode;
+varying float vWisp;
 varying float vSeed;
 varying float vAge;
 
@@ -265,19 +265,24 @@ void main() {
   // along the rise, domain-warped so it curls and churning as it goes. Soft throughout: steam has
   // no edge, only density falling away. The envelope's outline is warped by the same field, so
   // no puff reads as a disc, even over the dark silver or the bin.
-  vec3 q = vec3(vLocal.x, vLocal.y * 0.75, vLocal.z) * 1.5 + vec3(vSeed, vSeed * 0.71, vSeed * 1.37) + vec3(0.0, -0.9 * vAge, 0.3 * vAge);
+  vec3 q = vLocal * 1.5 + vec3(vSeed, vSeed * 0.71, vSeed * 1.37) + vec3(0.0, -0.9 * vAge, 0.3 * vAge);
   vec2 w = vec2(snoise(q * 0.9 + 3.1), snoise(q * 0.9 + 7.7));
   vec3 qw = q + 0.6 * vec3(w.x, w.y, 0.5 * w.x);
-  float env = (1.0 - smoothstep(0.1, 0.95, length(vCorner + 0.4 * w))) * (1.0 - smoothstep(0.75, 1.0, sqrt(r2)));
+  // The envelope: a Gaussian on a radius warped by the field (so its outline is the field's, and
+  // stacked puffs never print rings), shrinking as it evaporates (from the edges in), and zero
+  // well inside the quad's circle.
+  vec2 rw = vCorner + 0.55 * w;
+  float env = exp(-dot(rw, rw) * (2.6 + 2.6 * vErode)) * (1.0 - smoothstep(0.6, 1.0, sqrt(r2)));
   // (Low tier: one octave and no filaments, half the lookups.)
   float n = 0.5 + 0.5 * (uLow ? 0.85 * snoise(ROT * qw) : 0.7 * snoise(ROT * qw) + 0.3 * snoise(ROT * (ROT * qw) * 2.3 + 5.3));
-  // Filaments: thin sheets stretched along the rise, in world space so they run on from puff to
-  // puff, drifting up and bent by the same warp. They take over as the puff evaporates.
-  vec3 wq = vPos * vec3(3.0, 1.2, 3.0) + vec3(0.0, -uTime * 0.45, 0.0) + 0.45 * w.x;
+  // Filaments: thin sheets drawn out along the rise, in world space so they run on from puff to
+  // puff, drifting up and bent by the same warp. A sheet (the spill) is mostly filament from
+  // birth; a billow frays into them as it evaporates.
+  vec3 wq = vPos * vec3(3.4, 1.3, 3.4) + vec3(0.0, -uTime * 0.6, 0.0) + 0.45 * w.x;
   float sn = uLow ? 0.0 : snoise(ROT * wq);
   float sheet = 1.0 - sn * sn;
-  float dens = env * n * n * 1.7 * mix(1.0, 0.3 + 0.9 * sheet, vErode);
-  // Evaporation thins it from its faint parts first: it frays into wisps, then is gone.
+  float dens = env * n * n * 1.7 * mix(1.0, 0.25 + 0.95 * sheet * sheet, max(vWisp, vErode));
+  // Evaporation thins it from its faint parts first, then it is gone.
   float d = clamp((dens - 0.3 * vErode) / (1.0 - 0.3 * vErode), 0.0, 1.0);
   float k = contact(vPos);
   if (k < 0.0) discard;
@@ -300,7 +305,7 @@ uniform float uEmitEnd;
 uniform vec3 uCamRight;
 attribute vec4 iBase;   // base point on the plate, source start t0
 attribute vec4 iFlow;   // rise (su/s), decay (s), strength, seed
-attribute vec4 iWidth;  // half-width at the base, spread per su, sway per su, —
+attribute vec4 iWidth;  // half-width at the base, spread per su, sway per su, flap direction (angle)
 attribute vec4 iDirs;   // meander directions (x, z) × 2
 varying vec2 vRib;      // across (−1..1), height along the plume (su)
 varying vec3 vPos;
@@ -313,6 +318,9 @@ const float LENGTH = ${PLUME.length.toFixed(4)};
 const float ROOM = ${PLUME_ROOM.toFixed(2)};
 const float RAMP = ${PLUME.ramp.toFixed(4)};
 const float TOP = ${PLUME.top.toFixed(4)};
+const float BASE = ${PLUME.base.toFixed(4)};
+const float FLAP = ${PLUME.flap.toFixed(4)};
+const float FLAP_W = ${(2 * Math.PI * PLUME.flapHz).toFixed(5)};
 const float EVAPORATE = ${PLUME.evaporate.toFixed(4)};
 const float K1 = ${(2 * Math.PI / PLUME.wave1).toFixed(5)};
 const float K2 = ${(2 * Math.PI / PLUME.wave2).toFixed(5)};
@@ -326,6 +334,8 @@ vec3 centre(float h, float seed) {
   c.xz += vec2(${REVEAL_DIR.x.toFixed(5)}, ${REVEAL_DIR.z.toFixed(5)}) * drift * h;
   c.xz += iDirs.xy * amp * sin(K1 * s + seed);
   c.xz += iDirs.zw * ${PLUME.wave2Share.toFixed(3)} * amp * sin(K2 * s + 1.7 * seed);
+  // The whole plume flaps side to side (not carried up: the draught moves it, not the vapour).
+  c.xz += vec2(cos(iWidth.w), sin(iWidth.w)) * FLAP * h * sin(FLAP_W * uTime + seed + 1.5 * h);
   return c;
 }
 
@@ -339,8 +349,9 @@ void main() {
   float h = position.y * LENGTH;
   float seed = iFlow.w;
   float w = iWidth.x + iWidth.y * h;
-  // What is at height h left the plate h / rise ago; it thins as it evaporates and widens.
-  vDensity = iFlow.z * source(uTime - h / iFlow.x) * exp(-h / EVAPORATE) * sqrt(iWidth.x / w) * (1.0 - smoothstep(LENGTH - TOP, LENGTH, h));
+  // What is at height h left the plate h / rise ago; it forms a little off the surface, thins as
+  // it evaporates and widens, and is gone by the ribbon's top (plumeDensity).
+  vDensity = iFlow.z * source(uTime - h / iFlow.x) * smoothstep(0.0, BASE, h) * exp(-h / EVAPORATE) * sqrt(iWidth.x / w) * (1.0 - smoothstep(LENGTH - TOP, LENGTH, h));
   // Across is the camera's horizontal: the sheet shears with its meander but never twists or
   // folds over itself (a tangent-built frame flips where the path swings).
   vPos = centre(h, seed) + uCamRight * position.x * w * ROOM;
@@ -366,23 +377,24 @@ void main() {
   if (vDensity <= 0.0005) discard;
   float u = vRib.x * ROOM, h = vRib.y;
   // The sheet in the frame of the rising vapour (s = h − rise·τ), seen as the thin strands it
-  // folds into: each wanders side to side along its height (laminar at the base, freer above,
-  // a second strand peeling off the first), widening by diffusion as it rises, and breaking into
-  // wisps as it evaporates. Units across are the sheet's half-width; the ribbon is ROOM× wider
-  // so the wandering strands never meet its edges.
+  // folds into: each wanders and curls side to side along its height (laminar for the first few
+  // centimetres, freer above, a second strand peeling off the first), and the pattern itself
+  // churns as it rises (it is not a texture sliding up). The strands widen by diffusion and break
+  // into wisps as the vapour evaporates. Units across are the sheet's half-width; the ribbon is
+  // ROOM× wider so the wandering strands never meet its edges.
   float s = h - vRise * uTime;
-  float free = smoothstep(0.0, 0.35, h);
-  float c1 = (0.8 * snoise(vec3(s * 2.0, vSeed, 0.35 * uTime)) + (uLow ? 0.0 : 0.3 * snoise(vec3(s * 4.6, vSeed + 3.0, 0.0)))) * free * (1.0 + 0.6 * h);
-  float c2 = c1 + 0.9 * snoise(vec3(s * 1.6, vSeed + 5.0, 0.3 * uTime)) * free;
+  float free = smoothstep(0.0, 0.25, h);
+  float c1 = (0.85 * snoise(vec3(s * 2.6, vSeed, 0.9 * uTime)) + (uLow ? 0.0 : 0.35 * snoise(vec3(s * 5.5, vSeed + 3.0, 1.3 * uTime)))) * free * (1.0 + 0.6 * h);
+  float c2 = c1 + 0.9 * snoise(vec3(s * 2.0, vSeed + 5.0, 0.8 * uTime)) * free;
   float sig = 0.3 + 0.35 * h;
   float a1 = (u - c1) / sig, a2 = (u - c2) / (1.25 * sig);
   float strands = max(exp(-a1 * a1), 0.7 * exp(-a2 * a2));
-  float breakup = 0.5 + 0.5 * snoise(vec3(u * 1.2, s * 2.4, vSeed + 9.0));
-  float d = strands * mix(1.0, smoothstep(0.15, 0.85, breakup), smoothstep(0.1, 0.9, h));
+  float breakup = 0.5 + 0.5 * snoise(vec3(u * 1.2, s * 4.0, vSeed + 9.0 + 0.8 * uTime));
+  float d = strands * mix(1.0, smoothstep(0.1, 0.8, breakup), 0.85 * smoothstep(0.15, 0.9, h));
   d *= smoothstep(ROOM, 0.8 * ROOM, abs(u));
   float k = contact(vPos);
   if (k < 0.0) discard;
-  float a = d * k * vDensity * uFade;
+  float a = min(d * k * vDensity * uFade, 0.85);
   if (a < 0.002) discard;
   gl_FragColor = vec4(steamLight(vPos, 0.3), 1.0);
   // Tone mapped and encoded like the scene, then premultiplied by the coverage.
@@ -472,9 +484,9 @@ export class DinnerSteam {
     puffs.forEach((p, i) => {
       spawn.set([p.pos.x, p.pos.y, p.pos.z, p.t0], i * 4);
       vel.set([p.vel.x, p.vel.y, p.vel.z, p.life], i * 4);
-      shape.set([p.rise, p.neck, p.size, p.grow], i * 4);
+      shape.set([p.rise, p.wisp, p.size, p.grow], i * 4);
       look.set([p.peak, p.seed, p.sway, p.curl], i * 4);
-      curl.set([p.out.x, p.out.z, p.curlRate, PUFF_KINDS.indexOf(p.kind)], i * 4);
+      curl.set([p.out.x, p.out.z, p.curlRate, p.stretch], i * 4);
     });
     this.puffs = new Mesh(instanced(quad, { iSpawn: spawn, iVel: vel, iShape: shape, iLook: look, iCurl: curl }, n), material('fx_steam_puff', PUFF_VERTEX, PUFF_FRAGMENT));
     quad.dispose();
@@ -485,7 +497,7 @@ export class DinnerSteam {
     plumes.forEach((p, i) => {
       base.set([p.base.x, p.base.y, p.base.z, p.t0], i * 4);
       flow.set([p.rise, p.decay, p.strength, p.seed], i * 4);
-      width.set([p.width, p.spread, p.sway, 0], i * 4);
+      width.set([p.width, p.spread, p.sway, Math.atan2(p.dir3.z, p.dir3.x)], i * 4);
       dirs.set([p.dir1.x, p.dir1.z, p.dir2.x, p.dir2.z], i * 4);
     });
     this.plumes = new Mesh(instanced(strip, { iBase: base, iFlow: flow, iWidth: width, iDirs: dirs }, m), material('fx_steam_plume', PLUME_VERTEX, PLUME_FRAGMENT));

@@ -91,19 +91,19 @@ describe('Dinner steam plan (v1.5)', () => {
     for (const p of steamPlumes()) expect(p.base.y).toBeCloseTo(plateTop(Math.hypot(p.base.x, p.base.z)), 6);
   });
 
-  it('rises like a gentle thermal: 5–25 cm/s, decelerating as it mixes in; the column at 10–17 cm/s', () => {
+  it('rises like the warm air off a hot dish: at most 30 cm/s, decelerating as it mixes in; the column at 15–22 cm/s', () => {
     const a = newPuffState(), b = newPuffState();
     let vmax = 0;
     for (const p of steamPuffs()) {
       for (let t = p.t0 + 0.1; t < p.t0 + p.life - 0.01; t += 0.01) vmax = Math.max(vmax, (puffAt(p, t + 0.01, b)!.center.y - puffAt(p, t, a)!.center.y) / 0.01);
     }
-    expect(vmax * SU_CM).toBeLessThan(26);
+    expect(vmax * SU_CM).toBeLessThan(30);
     // The buoyant rise peaks early and slows as it entrains room air.
     const w = (t: number) => (riseAt(1, t + 0.005) - riseAt(1, t - 0.005)) / 0.01;
     expect(w(1.0)).toBeLessThan(w(0.4));
     for (const p of steamPlumes()) {
-      expect(p.rise * SU_CM).toBeGreaterThanOrEqual(10);
-      expect(p.rise * SU_CM).toBeLessThanOrEqual(17);
+      expect(p.rise * SU_CM).toBeGreaterThanOrEqual(15);
+      expect(p.rise * SU_CM).toBeLessThanOrEqual(22);
     }
   });
 
@@ -268,7 +268,8 @@ describe('Dinner steam on stage (v1.5)', () => {
       const st = s.scene.steamState;
       if (st.tau !== null) {
         expect(st.fade).toBeLessThanOrEqual(prev);
-        expect(prev - st.fade).toBeLessThan(0.05);
+        // A steady fade over STEAM_CHANGE_FADE: no frame drops it by more than its share.
+        expect(prev - st.fade).toBeLessThanOrEqual((1 / 60 / STEAM_CHANGE_FADE) * 1.001);
         prev = st.fade;
       }
     });
