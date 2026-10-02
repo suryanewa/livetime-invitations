@@ -72,8 +72,9 @@ export const CAKE_SCALE = 1.1;
  * World units per Birthday scene unit (v1.4, models/worldScale.ts): 1. Birthday was already
  * authored at the world scale: the cake on its stand (stand foot to the top tier's rosettes,
  * 1.5876 scan × 1.1 = 1.746) is 34.9 cm (reference 35 cm), the bottom tier 27.7 cm across its
- * piping, the stand 33.5 cm, a candle 4.8 cm. The bin is sized against it: the cake with candles
- * (23.6 cm) sinks below the 26 cm rim.
+ * piping, the stand 33.5 cm, a candle 4.8 cm. v1.5: the shared bin is a real 47 cm pedal bin
+ * (models/disposalBin.ts) at its real size here too: the cake with candles (23.6 cm) drops into
+ * its 29.6 cm mouth and 38.6 cm deep bucket.
  */
 export const BIRTHDAY_WORLD_SCALE = 1;
 
@@ -134,13 +135,24 @@ export function screenX(x: number, z: number): number {
   return x * Math.cos(az) - z * Math.sin(az);
 }
 
-/** Carry height of the cake's underside while it glides from the stand to the bin. */
-export const CARRY_HEIGHT = 1.42;
+/** Height the cake's underside clears the rim by while it crosses over. */
+export const RIM_CLEARANCE = 0.06;
 
 /**
- * Bin resting position (bin_root origin), behind-left of the stand and ≥ 1.95 from its axis so
- * the plate never touches the bin (radius 0.94). It is turned to face the stand so the cake
- * enters between the butterfly flaps (they hinge along the bin's local z axis).
+ * Carry height of the cake's underside at the top of the lift off the stand (v1.5: over the real
+ * bin's 44.5 cm rim, 1.5 cm above the hover height it then settles to over the opening, so it is
+ * clear of the rim with its lean before it reaches over it).
+ */
+export const CARRY_HEIGHT = BIN.rimTop + RIM_CLEARANCE + 0.075;
+
+/**
+ * Bin resting position (bin_root origin), behind-left of the stand, clear of the plate by more
+ * than 4 cm (stand 0.838 + bin 0.846 + 0.04 = 1.724; this is 2.01). It is turned to face the
+ * stand so the cake enters between the butterfly flaps (they hinge along the bin's local z axis).
+ * v1.5: a placement search over the real bin found this v1.2 place the best at every aspect
+ * (0.563 of the frame height at 3:4, 1:1 and 3:2; 0.524 with the real-size v1.5 flames, which
+ * no longer pad the hero's top); further left the 1:1 fill reaches 0.59 but the 3:4 one falls to
+ * 0.45 (the bin then sets the width).
  */
 export const BIN_POS = new Vector3(-1.04, 0, -1.72);
 export const BIN_YAW = Math.atan2(-BIN_POS.x, -BIN_POS.z);
@@ -152,9 +164,6 @@ export const WALL_Z = -4.3;
 
 /** Cake underside when resting on the bin liner floor. */
 export const IN_BIN = new Vector3(BIN_POS.x, BIN.floor, BIN_POS.z);
-
-/** Height the cake's underside clears the rim by while it crosses over. */
-export const RIM_CLEARANCE = 0.06;
 
 /** Candle hover height above its seated position before the host places it. */
 export const CANDLE_HOVER = 0.5;

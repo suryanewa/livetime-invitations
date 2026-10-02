@@ -5,7 +5,8 @@ import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, MASTER, CAKE_SCALE } from './birt
  * v1.5 runtime shading for the hand-finished cake (scripts/masters/recipes/birthdayFinish.ts builds
  * the geometry and maps these read). One composable `onBeforeCompile` per cake material:
  *
- * - bin shade (v1.2.1, all cake materials): the ramp that darkens the cake inside the bin;
+ * - (the bin's light on the cake inside it is models/disposalBin.ts patchBinVisibility, chained
+ *   after these and the flame light by models/birthday.ts; v1.2.1–v1.4 had a darkening ramp here);
  * - subsurface (frosting body and piping): buttercream is a fat-and-sugar foam, light enters it,
  *   so the key's terminator is soft and coloured by the frosting itself. A wrapped-diffuse term
  *   on the direct light only (the image-based light is already soft), tinted by the material;
@@ -84,22 +85,12 @@ export function patchMaterial(material: Material, patches: Patch[]): void {
   material.needsUpdate = true;
 }
 
-// ── Bin shade (v1.2.1) ─────────────────────────────────────────────────────────────
-export const BIN_SHADE = { above: 0.02, depth: 0.05, floor: 0.06 } as const;
+// ── Bin shade gate (v1.5: models/disposalBin.ts patchBinVisibility does the shading) ─────────
+/** The cake is switched to the bin's light only while all of it is `above` this far over the rim. */
+export const BIN_SHADE = { above: 0.02 } as const;
 export interface BinShade {
   readonly rimY: { value: number };
   readonly on: { value: number };
-}
-
-export function binShadePatch(shade: BinShade): Patch {
-  return {
-    key: 'bin',
-    uniforms: { uBinRimY: shade.rimY, uBinShadeOn: shade.on },
-    vertexHead: 'varying float vBinY;',
-    vertexEnd: 'vBinY = (modelMatrix * vec4(transformed, 1.0)).y;',
-    fragmentHead: 'varying float vBinY;\nuniform float uBinRimY;\nuniform float uBinShadeOn;',
-    beforeOpaque: `outgoingLight *= mix(1.0, ${BIN_SHADE.floor.toFixed(3)}, uBinShadeOn * (1.0 - smoothstep(uBinRimY - ${BIN_SHADE.depth.toFixed(3)}, uBinRimY + ${BIN_SHADE.above.toFixed(3)}, vBinY)));`,
-  };
 }
 
 // ── Subsurface (wrapped diffuse) ───────────────────────────────────────────────────

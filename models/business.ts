@@ -1,18 +1,25 @@
 import {
+  AdditiveBlending,
   type Box3,
-  CustomBlending,
-  OneFactor,
-  OneMinusSrcAlphaFactor,
   BufferAttribute,
   BufferGeometry,
+  ClampToEdgeWrapping,
   Color,
+  CustomBlending,
+  DataTexture,
+  LinearFilter,
+  LinearMipmapLinearFilter,
   type Material,
   type Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   type Object3D,
-  PointLight,
-  Shape,
-  ShapeGeometry,
+  OneFactor,
+  OneMinusSrcAlphaFactor,
+  PlaneGeometry,
+  RGBAFormat,
+  SRGBColorSpace,
+  UnsignedByteType,
   Vector3,
 } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
@@ -21,8 +28,9 @@ import type { MaterialVariants } from './imported.ts';
 import { LanyardStrand } from './lanyard.ts';
 import {
   BUSINESS_BOUNDS, BUSINESS_NODES, CARD, CARD_OFFSET_Y, D_RING, FACE, HANG_PIVOT, LANYARD_SPREAD, LANYARD_TOP_Y, READER, READER_SCALE, SCANNER_POS,
-  STATUS_TILE, STRAP, STRAP_TAB_TOP, type CardTemplate,
+  STATUS_PICTOGRAM, STATUS_PICTOGRAM_SIZE, STRAP, STRAP_TAB_TOP, type CardTemplate,
 } from './businessContract.ts';
+import { encodeEmission, statusGlyphField, type EmissionField } from './businessPrint.ts';
 import { collectNodes, type ModelContext } from './types.ts';
 
 export * from './businessContract.ts';
@@ -35,7 +43,7 @@ export { buildBusinessFrame } from './businessFrame.ts';
  * scene's empty contract nodes. Everything visible comes from the badge and reader masters.
  * `rigBusiness` is the runtime rig over the loaded GLB: the runtime strap (the master's woven
  * strap material on the existing curve rig, plus a sewn tab folded round the D-ring's bar), the
- * reader's LED status light and its spill, the gasket press, contact shadows and the dark
+ * reader's status pictogram, the gasket press, contact shadows and the dark
  * template (KHR_materials_variants).
  */
 
@@ -60,39 +68,90 @@ export interface BusinessRig {
 }
 
 /**
- * Status light (premium, no bloom, Master §5): the LED bar glows by emission in the status
- * token, its halo (the master's led_glow quad) fades in over it and the spill light tints the
- * card. Green sits brighter than red, so the two differ in value as well as hue.
+ * Status light (v1.5): light behind the reader's smoked cover glass, as a well-made access reader
+ * shows its outcome. One indicator, the **pictogram**: a dead-front glyph in the lower glass
+ * (STATUS_PICTOGRAM), invisible while off (nothing is drawn; the idle face is the master's black
+ * glass), lit as the shell's own check or minus (models/businessPrint.ts STATUS_ICON) with a
+ * soft-edged core, the diffuser's halo and a hotspot over the LED behind it (statusGlyphField),
+ * on the timing of src/scenes/business/sequences.ts `statusEnvelope`.
+ *
+ * The light is drawn as the radiance it adds through the glass (additive, tone-mapped with the
+ * scene: no bloom pass): the glass's own reflections stay over it, as they do over a lit icon
+ * behind a real cover glass. Its peak is a true HDR value, so the stroke's core rolls off towards
+ * white in the Neutral tone curve while its halo keeps the token's colour.
+ *
+ * The master's LED pipe at the top of the glass stays its dark lens (v1.2 lit it too). Its bar is
+ * the minus's own shape: lit beside the pictogram it read as a green minus over the check and as a
+ * second minus over the decline (two red dashes at the 192 px thumbnail). One light, one answer.
+ *
+ * Colours (DESIGN.md): the shell's two status colours as lights. Accept is `#3BE08A` (hue 149°:
+ * Saved Pine `#176B42` is 151°; the Party status light shares it). Decline is `#F12D22`, a red
+ * LED's red (hue 3°, a few degrees warm of Garnet `#A62D36`'s 355.5° pigment hue, with more green
+ * than blue): a bluish red pushed up the tone curve rolls off to pink (v1.5's first cut, Garnet's
+ * own hue `#ED313F`, lit pink at its core). The pair differs in value as well as hue, 2.4:1 in
+ * luminance and 1.8:1 for a deuteranope, and the glyph says which without either.
  */
-export const STATUS_COLOURS = { accept: '#3BE08A', decline: '#E53E3E' } as const;
+export const STATUS_COLOURS = { accept: '#3BE08A', decline: '#F12D22' } as const;
 export const GLOW = {
-  /** LED bar emissive intensity per status (below tone-mapping compression). */
-  led: { accept: 1, decline: 0.85 },
-  /** Halo opacity and emissive intensity. */
-  halo: { opacity: 0.9, intensity: 0.75 },
-  /** Status tile emissive intensity per status (below tone-mapping compression, like the LED). */
-  tile: { accept: 0.72, decline: 0.66 },
-  /** Spill light intensity (tints the card at the scan beat without washing its print). */
-  spill: 0.18,
+  /**
+   * Peak radiance of the pictogram's stroke core (× the status colour, linear, before exposure).
+   * Both cores pass the Neutral tone curve's shoulder (0.76 after the rig's 1.15 exposure) about
+   * threefold: bright and a little lifted towards white, never clipped flat (v1.5's first cut, 4.2
+   * and 5, pinned whole strokes at one near-white value and turned the red core pink). The minus
+   * carries 0.63 of the check's stroke and red 0.37 of green's luminance, so decline runs a little
+   * higher; a saturated red looks brighter than its luminance, and the pair reads balanced, the
+   * minus a shade quieter, as a decline that is not an alarm should.
+   */
+  glyph: { accept: 2.6, decline: 2.7 },
 } as const;
 /**
- * Spill light, face space: below the glass, out along the normal, under the status tile. The
- * camera sees the face nearly along its normal (3.4° above it), so a point light's mirror image in
- * the glossy glass lands just below the light: here on the steel lip under the glass, never on the
- * glass. From there it warms the pressed card's lower edge in the status colour. (v1.2 hung it
- * above the LED; with the card now pressed high, that lit the clip hardware green.)
+ * No spill light (v1.5). A 1.8 mm stroke behind smoked glass throws no light a viewer can see on the
+ * card 5 mm above it (v1.5's first cut aimed a 0.18 spot at the pressed card's edge: the frames moved
+ * by less than one level), and v1.2–v1.4's point light 0.16 out showed as a white glint on the glass
+ * once the matte tile no longer covered its mirror image.
  */
-export const STATUS_SPILL = { v: STATUS_TILE.v, out: 0.16, distance: 1.6 } as const;
-/**
- * Status tile glyphs (tile space, stage units, y up): a check for accept and a minus for decline,
- * stroked in the reader's glass black across the lit tile, so the outcome reads by shape too.
- */
-export const STATUS_GLYPHS = {
-  accept: [[-0.056, 0.002], [-0.02, -0.036], [0.058, 0.044]] as [number, number][],
-  decline: [[-0.058, 0], [0.058, 0]] as [number, number][],
-} as const;
 /** Idle LED lens (off): a neutral dark, not the master's green tint, so idle never reads as "accepted". */
 const LED_OFF = new Color(0.018, 0.02, 0.019);
+const LED_LENS_ROUGHNESS = 0.85;
+
+/**
+ * The pictogram's fields and their texels, computed once per page (a pure function of constants,
+ * about 40 ms each): a reset or a preset change rebuilds the rig, not the light.
+ */
+const glyphLight = (() => {
+  const cache = new Map<'accept' | 'decline', { field: EmissionField; texels: Uint8Array }>();
+  return (kind: 'accept' | 'decline') => {
+    let hit = cache.get(kind);
+    if (!hit) {
+      const field = statusGlyphField(kind, 512, STATUS_PICTOGRAM.extent);
+      cache.set(kind, (hit = { field, texels: encodeEmission(field) }));
+    }
+    return hit;
+  };
+})();
+
+/** An emission field as a texture: sRGB bytes (smooth halo), mipmapped, clamped. */
+function emissionTexture(field: EmissionField, texels: Uint8Array, name: string): DataTexture {
+  const t = new DataTexture(texels, field.width, field.height, RGBAFormat, UnsignedByteType);
+  t.name = name;
+  t.colorSpace = SRGBColorSpace;
+  t.wrapS = t.wrapT = ClampToEdgeWrapping;
+  t.magFilter = LinearFilter;
+  t.minFilter = LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = 8;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** Additive light through the glass: no lighting of its own, tone-mapped with the scene. */
+function lightMaterial(name: string, map: DataTexture): MeshBasicMaterial {
+  const m = new MeshBasicMaterial({ name, map, color: '#000000', transparent: true, blending: AdditiveBlending, depthWrite: false });
+  m.polygonOffset = true;
+  m.polygonOffsetFactor = -1;
+  m.polygonOffsetUnits = -4;
+  return m;
+}
 
 /**
  * Sewn strap tab: the master strap folded round the D-ring's top bar, both layers sewn together
@@ -180,48 +239,6 @@ export const VINYL = { dimming: 0.14 } as const;
 /** Strap layers leave the sewn tab at these clip-space z offsets (front, back). */
 const LAYER_Z = STRAP.layerZ;
 
-/** Rounded rectangle centred on the origin (xy plane, facing +z). */
-export function roundedTileGeometry(width: number, height: number, radius: number): BufferGeometry {
-  const w = width / 2, h = height / 2, r = Math.min(radius, w, h);
-  const shape = new Shape();
-  shape.moveTo(-w + r, -h);
-  shape.lineTo(w - r, -h);
-  shape.quadraticCurveTo(w, -h, w, -h + r);
-  shape.lineTo(w, h - r);
-  shape.quadraticCurveTo(w, h, w - r, h);
-  shape.lineTo(-w + r, h);
-  shape.quadraticCurveTo(-w, h, -w, h - r);
-  shape.lineTo(-w, -h + r);
-  shape.quadraticCurveTo(-w, -h, -w + r, -h);
-  return new ShapeGeometry(shape, 8);
-}
-
-/** A flat stroke along a polyline with round caps and joins (xy plane, facing +z). */
-export function strokeGeometry(points: readonly (readonly [number, number])[], width: number, segments = 12): BufferGeometry {
-  const pos: number[] = [];
-  const r = width / 2;
-  const tri = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => pos.push(ax, ay, 0, bx, by, 0, cx, cy, 0);
-  for (let i = 0; i + 1 < points.length; i++) {
-    const [ax, ay] = points[i]!, [bx, by] = points[i + 1]!;
-    const l = Math.hypot(bx - ax, by - ay) || 1;
-    const nx = (-(by - ay) / l) * r, ny = ((bx - ax) / l) * r;
-    tri(ax - nx, ay - ny, bx - nx, by - ny, bx + nx, by + ny);
-    tri(ax - nx, ay - ny, bx + nx, by + ny, ax + nx, ay + ny);
-  }
-  for (const [x, y] of points) {
-    for (let k = 0; k < segments; k++) {
-      const a0 = (k / segments) * Math.PI * 2, a1 = ((k + 1) / segments) * Math.PI * 2;
-      tri(x, y, x + Math.cos(a0) * r, y + Math.sin(a0) * r, x + Math.cos(a1) * r, y + Math.sin(a1) * r);
-    }
-  }
-  const g = new BufferGeometry();
-  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
-  const n = new Float32Array(pos.length);
-  for (let i = 2; i < n.length; i += 3) n[i] = 1;
-  g.setAttribute('normal', new BufferAttribute(n, 3));
-  return g;
-}
-
 function meshesUnder(o: Object3D): Mesh[] {
   const out: Mesh[] = [];
   o.traverse((c) => {
@@ -290,86 +307,56 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
     m.needsUpdate = true;
   });
 
-  // ── Status light: the LED bar, its halo quad and a spill light ──
+  // ── Status light: the dead-front pictogram; the LED pipe is the master's dark lens ──
+  const S = READER_SCALE;
   const ledMesh = meshesUnder(nodes.scanner_light!)[0]!;
   const led = (ledMesh.material as MeshStandardMaterial).clone();
-  led.name = 'reader_led_status';
+  led.name = 'reader_led_lens';
   led.color.copy(LED_OFF);
-  led.emissiveMap = null; // the master's map is a green-tinted mask; the status sets the colour
+  // A frosted lens, as a light pipe's is (it diffuses its LED): the master's 0.4 let the curved rim
+  // throw sub-pixel highlights that broke the unlit pill into a dotted dash at 1× (before v1.5 it
+  // was lit over them in every answer state).
+  led.roughness = LED_LENS_ROUGHNESS;
+  led.emissiveMap = null;
   led.emissive.set('#000000');
   led.emissiveIntensity = 0;
   ledMesh.material = led;
-  const haloMesh = meshesUnder(nodes.scanner_glow!)[0]!;
-  const halo = (haloMesh.material as MeshStandardMaterial).clone();
-  halo.name = 'reader_led_halo';
-  // Base colour black (texture rgb ignored), shape from the texture's alpha, colour by emission.
-  halo.color.set('#000000');
-  halo.emissiveMap = null;
-  halo.emissive.set('#000000');
-  halo.emissiveIntensity = 0;
-  halo.transparent = true;
-  halo.depthWrite = false;
-  halo.opacity = 0;
-  haloMesh.material = halo;
-  haloMesh.renderOrder = 1;
-  haloMesh.userData.noShadowCast = true;
   ledMesh.userData.noShadowCast = true;
-  // A light's range and inverse-square falloff are in world units: under the root's world scale
-  // (v1.4) the same spill reaches the same scene-unit distance with the same strength.
-  const worldScale = root.getWorldScale(new Vector3()).x;
-  const spillGain = worldScale * worldScale;
-  const spill = new PointLight('#ffffff', 0, STATUS_SPILL.distance * worldScale, 2);
-  spill.name = 'scanner_spill';
-  spill.position.set(0, STATUS_SPILL.v, STATUS_SPILL.out);
-  nodes.scanner_face!.add(spill);
-  // Status tile on the lower glass (on the pad, so it gives with the glass at the press): lit in the
-  // status colour with a check or a minus in the glass's black across it. Hidden while idle, so the
-  // idle reader is the master's.
-  const tileMat = new MeshStandardMaterial({ name: 'reader_status_tile', color: '#000000', roughness: 0.5, metalness: 0 });
-  const glyphMat = new MeshStandardMaterial({ name: 'reader_status_glyph', color: '#070808', roughness: 0.55, metalness: 0 });
-  const tile = mesh('scanner_status_tile', roundedTileGeometry(STATUS_TILE.width, STATUS_TILE.height, STATUS_TILE.radius), tileMat, nodes.scanner_pad);
-  tile.position.set(0, STATUS_TILE.v, FACE.glass + 0.0006);
-  const glyphs = {
-    accept: mesh('scanner_status_check', strokeGeometry(STATUS_GLYPHS.accept, STATUS_TILE.stroke), glyphMat, tile),
-    decline: mesh('scanner_status_minus', strokeGeometry(STATUS_GLYPHS.decline, STATUS_TILE.stroke), glyphMat, tile),
+  // The master's glow quad belongs to the lit pipe: it stays hidden.
+  const haloMesh = meshesUnder(nodes.scanner_glow!)[0]!;
+  haloMesh.visible = false;
+  haloMesh.userData.noShadowCast = true;
+  // The pictogram: one quad on the pad (it gives with the glass at the press), a field per glyph.
+  const lights = { accept: glyphLight('accept'), decline: glyphLight('decline') };
+  const fields = { accept: lights.accept.field, decline: lights.decline.field };
+  const glyphTex = {
+    accept: emissionTexture(fields.accept, lights.accept.texels, 'reader_status_check'),
+    decline: emissionTexture(fields.decline, lights.decline.texels, 'reader_status_minus'),
   };
-  for (const m of [tile, glyphs.accept, glyphs.decline]) {
-    m.castShadow = false;
-    m.receiveShadow = false;
-    m.userData.noShadowCast = true;
-  }
-  glyphs.accept.position.z = glyphs.decline.position.z = 0.0005;
-  tile.visible = false;
+  const pictogramMat = lightMaterial('reader_status_light', glyphTex.accept);
+  const pictogram = mesh('scanner_status_light', new PlaneGeometry(STATUS_PICTOGRAM_SIZE, STATUS_PICTOGRAM_SIZE), pictogramMat, nodes.scanner_pad);
+  pictogram.position.set(0, STATUS_PICTOGRAM.v, FACE.glass + 0.0004 * S);
+  pictogram.renderOrder = 1;
+  pictogram.castShadow = pictogram.receiveShadow = false;
+  pictogram.userData.noShadowCast = true;
+  pictogram.visible = false;
   let lastStatus: StatusLit | null = null, lastLevel = -1;
   const setStatus = (lit: StatusLit, level: number) => {
     const k = lit === 'off' ? 0 : Math.min(1, Math.max(0, level));
     if (lit === lastStatus && k === lastLevel) return;
     lastStatus = lit;
     lastLevel = k;
-    tile.visible = k > 0 && lit !== 'off';
-    glyphs.accept.visible = lit === 'accept';
-    glyphs.decline.visible = lit === 'decline';
-    if (lit === 'off' || k === 0) {
-      tileMat.emissive.set('#000000');
-      tileMat.emissiveIntensity = 0;
-      led.emissive.set('#000000');
-      led.emissiveIntensity = 0;
-      halo.emissive.set('#000000');
-      halo.emissiveIntensity = 0;
-      halo.opacity = 0;
-      spill.intensity = 0;
+    const on = lit !== 'off' && k > 0;
+    // Dead front: nothing is drawn while the light is off, so the idle face is the master's glass.
+    pictogram.visible = on;
+    if (!on) {
+      pictogramMat.color.set('#000000');
       return;
     }
     const colour = STATUS_COLOURS[lit];
-    tileMat.emissive.set(colour);
-    tileMat.emissiveIntensity = GLOW.tile[lit] * k;
-    led.emissive.set(colour);
-    led.emissiveIntensity = GLOW.led[lit] * k;
-    halo.emissive.set(colour);
-    halo.emissiveIntensity = GLOW.halo.intensity * GLOW.led[lit];
-    halo.opacity = GLOW.halo.opacity * k;
-    spill.color.set(colour);
-    spill.intensity = GLOW.spill * k * spillGain;
+    // Same program for either glyph: only the texture uniform changes.
+    pictogramMat.map = glyphTex[lit];
+    pictogramMat.color.set(colour).multiplyScalar(GLOW.glyph[lit] * fields[lit].peak * k);
   };
 
   // ── Gasket press: the glass and what is printed on it give; the gasket under it compresses ──
@@ -426,11 +413,10 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
       cardShadow.dispose();
       scannerShadow.dispose();
       led.dispose();
-      halo.dispose();
-      tileMat.dispose();
-      glyphMat.dispose();
-      for (const m of [tile, glyphs.accept, glyphs.decline]) m.geometry.dispose();
-      spill.removeFromParent();
+      glyphTex.accept.dispose();
+      glyphTex.decline.dispose();
+      pictogramMat.dispose();
+      pictogram.geometry.dispose();
     },
   };
 }

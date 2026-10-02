@@ -4,10 +4,10 @@ import { BIN_POS, BIN_YAW, birthdayBounds, STAND } from './birthdayContract.ts';
 import { createFlameLights, type FlameLights, type FlameRig, patchFlameLight, rigCandleFire, SmokeRig } from './birthdayFire.ts';
 import { BIRTHDAY_GLB_NODES } from './birthdayParts.ts';
 import { buildCakeGeometry, type CakePreset } from './cake.ts';
-import { BIN, buildDisposalBin } from './disposalBin.ts';
+import { attachBin, BIN, BIN_CONTACT, binLight, buildDisposalBin, patchBinVisibility } from './disposalBin.ts';
 import type { MaterialVariants } from './imported.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
-import { BIN_SHADE, binShadePatch, type BinShade, type CakePress, type CandleMelt, meltPatch, newCakePress, patchMaterial, pressPatch, ridgePatch, subsurfacePatch } from './cakeShaders.ts';
+import { BIN_SHADE, type BinShade, type CakePress, type CandleMelt, meltPatch, newCakePress, patchMaterial, pressPatch, ridgePatch, subsurfacePatch } from './cakeShaders.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
 /**
@@ -61,13 +61,14 @@ export interface BirthdayRig {
 export type BirthdayModel = BirthdayRig & BuiltModel;
 
 /**
- * Bin shade: inside the shared bin, below its rim, the ink liner blocks the key and most of the
- * fill, so whatever of the dropped cake still shows through the opening (the candle tips, the
- * crown rosettes) darkens with depth instead of staying key-lit on the black interior. A
- * world-height ramp on the cake's own materials (models/cakeShaders.ts binShadePatch): full light
- * BIN_SHADE.above the rim, BIN_SHADE.floor of it BIN_SHADE.depth below. `uBinShadeOn` gates it to
- * the cake over the bin (set only while the whole cake is above the rim, so switching it never
- * changes a pixel).
+ * Bin shade: inside the shared bin the cake sees the room only through the bin's mouth. Since
+ * v1.5 this is the physically based visibility of `patchBinVisibility` (models/disposalBin.ts:
+ * the indirect diffuse and specular light a point at depth d under the mouth still gets; the
+ * walls' shadow does the direct light), chained onto the cake's own materials after their
+ * frosting / melt patches and the flame light, and switched on (`binShade.on`) once the cake is
+ * over the opening with all of it above the rim plus BIN_SHADE.above, so switching it never
+ * changes a pixel. (v1.2–v1.4: a ramp to 6 % within 5 cm of the rim, which read as a dimmer in
+ * the 36 cm-deep bin.)
  */
 export { BIN_SHADE, type BinShade };
 
@@ -80,18 +81,18 @@ const WAX_BODY: Record<string, string> = { cake_candle_blue: '#AAC3DE', cake_can
 /**
  * v1.5 cake shading, by the role the recipe recorded (`userData.frosting`): the body gets the
  * subsurface wrap and the candles' press; piping and rosettes the wrap and their ridges; pearls
- * only the bin shade. The subsurface tint is the material's own colour, deepened (light that has
- * travelled inside a dyed frosting comes out more saturated; the near-white piping, a butter cream).
+ * nothing of their own (every cake material gets the flame light and the bin's light below). The
+ * subsurface tint is the material's own colour, deepened (light that has travelled inside a dyed
+ * frosting comes out more saturated; the near-white piping, a butter cream).
  */
-function patchFrosting(material: Material, shade: BinShade, press: CakePress, body: Mesh | null): void {
+function patchFrosting(material: Material, press: CakePress, body: Mesh | null): void {
   const role = material.userData.frosting as string | undefined;
   const c = (material as MeshStandardMaterial).color ?? new Color(1, 1, 1);
   const peak = Math.max(c.r, c.g, c.b, 1e-6);
   const deep: [number, number, number] = [c.r / peak, c.g / peak, c.b / peak];
   const cream = peak > 0.9 && Math.min(c.r, c.g, c.b) / peak > 0.9;
-  if (role === 'body' && body) patchMaterial(material, [binShadePatch(shade), subsurfacePatch(0.35, deep.map((x) => 0.7 * x) as [number, number, number]), pressPatch(body, press)]);
-  else if (role === 'piping') patchMaterial(material, [binShadePatch(shade), subsurfacePatch(0.4, (cream ? [1, 0.88, 0.74] : deep).map((x) => 0.6 * x) as [number, number, number]), ridgePatch()]);
-  else patchMaterial(material, [binShadePatch(shade)]);
+  if (role === 'body' && body) patchMaterial(material, [subsurfacePatch(0.35, deep.map((x) => 0.7 * x) as [number, number, number]), pressPatch(body, press)]);
+  else if (role === 'piping') patchMaterial(material, [subsurfacePatch(0.4, (cream ? [1, 0.88, 0.74] : deep).map((x) => 0.6 * x) as [number, number, number]), ridgePatch()]);
 }
 
 /** Candle nodes present under the cake (six on the master, three on the v1.1 tooling cake), in order. */
@@ -107,9 +108,7 @@ function candleIds(root: Object3D): string[] {
  */
 export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext['lib'], preset: CakePreset = 'vanilla', variants?: MaterialVariants): BirthdayRig {
   const dir = lib.direction;
-  root.add(binRoot);
-  binRoot.position.copy(BIN_POS);
-  binRoot.rotation.set(0, BIN_YAW, 0);
+  attachBin(root, binRoot, lib, BIN_POS, BIN_YAW);
   applyShadowProxies(root);
   const nodes = collectNodes(root, BIRTHDAY_NODES);
 
@@ -125,7 +124,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     name: 'cake_shadow', width: STAND.foot * 2, depth: STAND.foot * 2, spread: [1.9, 2.1], opacity: dir.shadow.opacity, line: 0.42, color: dir.shadow.color,
   }));
   const binShadow = replace('bin_shadow', new ContactShadow({
-    name: 'bin_shadow', width: BIN.radius * 1.9, depth: BIN.radius * 1.9, spread: [1.15, 1.5], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,
+    name: 'bin_shadow', ...BIN_CONTACT, spread: [...BIN_CONTACT.spread], opacity: dir.shadow.opacity, color: dir.shadow.color,
   }));
   nodes.cake_shadow = cakeShadow;
 
@@ -143,7 +142,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
   });
   for (const m of variants?.materials ?? []) if (isCake(m) && !isWax(m)) cakeMaterials.add(m);
   const body = root.getObjectByName('frosting_cake_buttercream') as Mesh | undefined;
-  for (const m of cakeMaterials) patchFrosting(m, binShade, press, body?.isMesh ? body : null);
+  for (const m of cakeMaterials) patchFrosting(m, press, body?.isMesh ? body : null);
   const waxClones: Material[] = [];
   /** Every cake material the flames light (frosting, each candle's wax), patched once at the end. */
   const lit = new Set<Material>(cakeMaterials);
@@ -169,21 +168,23 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
       waxClones.push(own);
       waxMesh.material = own;
       melt = { a: { value: new Vector4() }, b: { value: new Vector4() }, dir: { value: { x: 1, y: 0 } }, body: { value: new Vector3().setFromColor(linear(WAX_BODY[shared.name] ?? '#FFFFFF')) } };
-      patchMaterial(own, [binShadePatch(binShade), meltPatch(waxMesh, melt)]);
+      patchMaterial(own, [meltPatch(waxMesh, melt)]);
       lit.add(own);
     } else {
       const m = waxMesh?.material as Material | undefined;
-      if (m && isCake(m)) {
-        patchMaterial(m, [binShadePatch(binShade)]);
-        lit.add(m);
-      }
+      if (m && isCake(m)) lit.add(m);
     }
     const fire = rigCandleFire(candle, flame, wick, lib, flameQuad, flameLights, ids.indexOf(id));
     return { candle, seatedY: candle.position.y, wickY: wick.position.y, flameY: flame.position.y, melt, wax: waxNode ?? null, flame, fire, wick };
   });
   const smoke = new SmokeRig(nodes.cake_secondary!, candles.length);
-  // The flames light the cake's own materials, chained after the cake's patches (models/birthdayFire.ts).
-  for (const m of lit) patchFlameLight(m, flameLights);
+  // The flames light the cake's own materials, chained after the cake's patches (models/birthdayFire.ts);
+  // then the bin's light, once the cake is in it (models/disposalBin.ts patchBinVisibility).
+  const light = binLight(binRoot);
+  for (const m of lit) {
+    patchFlameLight(m, flameLights);
+    patchBinVisibility(m, light, binShade.on);
+  }
 
   const flapL = root.getObjectByName('bin_flap_l')!;
   const flapR = root.getObjectByName('bin_flap_r')!;

@@ -239,7 +239,7 @@ export class BusinessScene implements SceneInstance {
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
-    // Warm both template variants with the status tile shown (it is hidden while idle, and the
+    // Warm both template variants with the status pictogram shown (it is hidden while idle, and the
     // compiler skips hidden meshes); colour and level changes are uniforms and need no new program.
     const other: CardTemplate = this.template === 'light' ? 'dark' : 'light';
     const scene = this.root.parent ?? this.root;

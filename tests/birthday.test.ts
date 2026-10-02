@@ -12,11 +12,11 @@ import {
   RIM_CLEARANCE, screenX, STAND, STAND_TOP,
 } from '../models/birthdayContract.ts';
 import { BIRTHDAY_GLB_NODES, buildBirthdayGeometry } from '../models/birthdayParts.ts';
-import { BIN, buildDisposalBin } from '../models/disposalBin.ts';
+import { BIN, BIN_CLOSE, buildDisposalBin } from '../models/disposalBin.ts';
 import { BIN_SHADE } from '../models/birthday.ts';
 import {
-  CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LEAN, CANDLE_PRESS, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, IGNITE, IGNITE_START, LEAN_FADE,
-  LIFT_TO,
+  CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LEAN, CANDLE_PRESS, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAPS_CLOSE, IGNITE, IGNITE_START,
+  LEAN_FADE, LIFT_TO,
 } from '../src/scenes/birthday/poses.ts';
 import { BREATH_AT, burnRate, extinguishedAt, type FlameState } from '../src/scenes/birthday/fire.ts';
 import {
@@ -404,7 +404,8 @@ describe('Birthday choreography', () => {
     })();
     const f = at('decline', closingStarts);
     expect(f.cakePos.y + CAKE_TOTAL_HEIGHT).toBeLessThan(BIN.rimTop - 0.012);
-    expect(at('decline', 1.2).flaps).toBeLessThan(0.05);
+    // v1.5: the bin's soft close: nearly shut (the damper's last gap) BIN_CLOSE.toGap after it starts.
+    expect(at('decline', FLAPS_CLOSE + BIN_CLOSE.toGap).flaps).toBeLessThan(0.05);
     expect(at('decline', 1.5).cakeVisible).toBe(false);
     expect(at('decline', 0.2).flames.every((f) => f.out)).toBe(true);
   });

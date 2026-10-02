@@ -32,6 +32,7 @@ import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 import { composeMasters, createSceneNodes, optimizeComposed } from './masters/compose.ts';
 import { formatReport, measure } from './masters/report.ts';
 import { RECIPES } from './masters/recipes/index.ts';
+import { BIN_RECIPE, finishBin } from './bin/finish.ts';
 import type { SceneRecipe } from './masters/types.ts';
 
 /** Direction exported to runtime GLB (the showcase's production look). */
@@ -101,14 +102,20 @@ async function exportScene(name: string) {
 
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
   const doc = await io.readBinary(new Uint8Array(glb));
-  await doc.transform(
-    dedup(),
-    weld(),
-    // keepAttributes: placeholder materials carry no textures, but the runtime library does.
-    prune({ keepLeaves: true, keepAttributes: true }),
-    // UVs stay float: signature tiling uses UV ranges beyond 0–1 with no texture transform.
-    quantize({ pattern: /^(POSITION|NORMAL)$/, quantizePosition: 14, quantizeNormal: 10 }),
-  );
+  if (name === 'bin') {
+    // v1.5: the bin carries its own PBR textures (scripts/bin/), through the masters' chain.
+    await finishBin(doc, (line) => console.log(line));
+    await optimizeComposed(doc, BIN_RECIPE, (line) => console.log(line));
+  } else {
+    await doc.transform(
+      dedup(),
+      weld(),
+      // keepAttributes: placeholder materials carry no textures, but the runtime library does.
+      prune({ keepLeaves: true, keepAttributes: true }),
+      // UVs stay float: signature tiling uses UV ranges beyond 0–1 with no texture transform.
+      quantize({ pattern: /^(POSITION|NORMAL)$/, quantizePosition: 14, quantizeNormal: 10 }),
+    );
+  }
   const out = await io.writeBinary(doc);
   const file = OUTPUT[name] ? join(import.meta.dirname, '..', 'assets', ...OUTPUT[name]!) : join(import.meta.dirname, '..', 'assets', 'scenes', name, `${name}.glb`);
   await mkdir(dirname(file), { recursive: true });
@@ -121,6 +128,7 @@ async function exportScene(name: string) {
     `${name}: raw ${(glb.byteLength / 1024).toFixed(1)} KiB → optimised ${(out.byteLength / 1024).toFixed(1)} KiB` +
       ` (gzip ${(gzipSync(out).byteLength / 1024).toFixed(1)} KiB) · ${nodes} nodes · ${meshes} meshes · ${prims} primitives`,
   );
+  if (name === 'bin') console.log(formatReport(measure(name, doc, out, BIN_RECIPE.contract)));
 }
 
 /**
