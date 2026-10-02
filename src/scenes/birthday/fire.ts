@@ -24,13 +24,18 @@ import type { SequenceName } from '../../core/types.ts';
  *   as a smooth pulse. A flame leans with the flow at atan(U / w_b) (w_b: the flame gas's own
  *   buoyant velocity), is drawn out and thinned, necks at its base, lifts off the wick when the
  *   flow exceeds the base's anchoring speed, and goes out from the base up over 100–200 ms while
- *   the detached gas is carried downstream and cools: yellow, orange, dull red (Planck), dark.
- * - **Smoke.** The glowing wick keeps vaporising wax for a few seconds; the vapour condenses into
- *   a white-grey aerosol a millimetre above the ember. Its streakline is a buoyant point-source
- *   plume, w ∝ (F/z)^(1/3): ≈0.4 m/s a few centimetres up, slowing with height. It is laminar for
- *   its first ≈7 cm, then sinuous waves grow, fold into curls and the thread splits and widens into
- *   wisps that fade. The extinguished flame's last soot is the first smoke: the dying flame body
- *   becomes the head of the same streakline, so flame and smoke are one continuous thread.
+ *   the detached gas is carried downstream, shrinking and dimming while still yellow-orange (cut
+ *   off from its fuel the soot burns out in tens of milliseconds: it never lingers as a red ghost).
+ *   Declined, the flames are snuffed instead (SNUFF): starved of air, shrinking onto the wick.
+ * - **Smoke.** The bared wick keeps vaporising wax: a dense burst the instant the flame lets go of
+ *   it (the wick and pool at their hottest), then a smoulder that thins to a fading thread over
+ *   3–5.5 s; a snuffed wick leaves a briefer, weaker wisp (SmokeKind). The vapour condenses into
+ *   a white aerosol a millimetre above the ember: the ribbon is dense and white at the wick from
+ *   the first frame the flame has gone. Its streakline is a buoyant point-source plume,
+ *   w ∝ (F/z)^(1/3): ≈0.4 m/s a few centimetres up, slowing with height. Each plume is laminar
+ *   for its first 4–9 cm (its own seed), then sinuous waves grow, fold into curls and the thread
+ *   splits and widens into wisps that fade; the stirred air the breath leaves behind (shared
+ *   eddies) bends neighbouring plumes together, so they lean, meet and merge.
  */
 
 // ── Units ────────────────────────────────────────────────────────────────────
@@ -207,7 +212,7 @@ export const BREATH = {
   standoff: 3.5 * MM,
   /**
    * Blow-off: the last of it lets go at this fraction of the extinction and drifts at `carry` × the
-   * flow, cooling: the same gas then drifts on as the first smoke (SMOKE.puffCarry).
+   * flow while it dims; the wick's vapour streams through the same place as the first smoke.
    */
   blowOff: 0.5,
   carry: 0.35,
@@ -386,7 +391,8 @@ export function flameState(i: number, t: number, sequence: SequenceName, out: Fl
     const tBlow = b.lift + BREATH.blowOff * b.out;
     out.lift = BREATH.standoff * smooth(k / BREATH.blowOff) + BREATH.carry * smooth((k - BREATH.blowOff) / (1 - BREATH.blowOff)) * Math.max(0, breathDrift(i, tBlow, t));
     out.cut = smooth(k);
-    // Cut off from its fuel the soot cools within tens of milliseconds: dark by 70 % of the way.
+    // Cut off from its fuel the soot burns out and cools within tens of milliseconds: the flame
+    // dims as it shrinks (still yellow-orange: it never lingers as a red ghost), gone by 70 %.
     out.cool = smooth((k - 0.1) / 0.6);
     // Cut off from its fuel the flame shrinks as it dies.
     out.height *= 1 - 0.45 * smooth(k);
@@ -408,43 +414,90 @@ export function burnRate(i: number, t: number, sequence: SequenceName): number {
 }
 const burnTmp = newFlameState();
 
-// ── Ember ────────────────────────────────────────────────────────────────────
+// ── What follows a flame going out: ember, ash, smoke ─────────────────────────
+/**
+ * What put candle i's flame out, so what its wick does next, on that kind's own clock: the guest's
+ * breath (accept time: a burst of white vapour into the moving air, the bared ember flaring
+ * orange) or a snuff (decline time: the flame starved as the bin arrives; a brief, weaker wisp,
+ * the ember barely glowing). A change of mind keeps whichever already happened running.
+ */
+export type SmokeKind = 'breath' | 'snuff';
+
+export interface SmokeSource {
+  /** When the wick is bared (the flame lets go of it), on the kind's clock. */
+  bare: number;
+  /** Vapour output (0–1) and how slowly the wick cools (× the e-folding times). */
+  strength: number;
+  slow: number;
+  /** Peak ember glow (0–1). */
+  ember: number;
+}
+
+const SOURCES: Record<SmokeKind, SmokeSource[]> = {
+  breath: Array.from({ length: CANDLE_COUNT }, (_, i) => ({ bare: BREATH_AT[i]!.lift, strength: 0.75 + 0.35 * rand(i, 26), slow: 0.8 + 0.5 * rand(i, 27), ember: 1 })),
+  // A starved flame smokes as it shrinks onto the wick: the wisp leaves from halfway through the snuff.
+  snuff: Array.from({ length: CANDLE_COUNT }, (_, i) => ({ bare: SNUFF.start + SNUFF.stagger * i + 0.5 * SNUFF.length, strength: 0.5 + 0.2 * rand(i, 28), slow: 0.45 + 0.2 * rand(i, 29), ember: 0.62 })),
+};
+
+export function smokeSource(i: number, kind: SmokeKind = 'breath'): SmokeSource {
+  return SOURCES[kind][i]!;
+}
+
 export const EMBER = {
-  /** Wick glow while the flame burns over it (most of it hidden in the dark zone). */
-  lit: 0.35,
-  /** Fresh oxygen on the bare wick: it flares to full glow in 50 ms, then cools (e-folding 0.8 s). */
+  /** Wick glow while the flame burns over it: a dull red tip in the dark zone (≈1,150 K). */
+  lit: 0.6,
+  /** Fresh oxygen on the bare wick: it flares to its peak in 50 ms, then cools (e-folding 0.8 s). */
   flare: 0.05,
   decay: 0.8,
-  /** Dark by 3 s after lift-off. */
+  /** Dark by 3 s after the flame leaves it. */
   end: 3,
 } as const;
 
-/** Glow of candle `i`'s wick tip at accept time `t` (0 cold, 1 bright orange). */
-export function emberAt(i: number, t: number): number {
-  const b = BREATH_AT[i]!;
-  const a = t - b.lift;
+/** Glow of candle `i`'s wick tip at time `t` of `kind`'s clock (0 cold, 1 bright orange). */
+export function emberAt(i: number, t: number, kind: SmokeKind = 'breath'): number {
+  const src = smokeSource(i, kind);
+  const a = t - src.bare;
   if (a <= 0) return t < 0 ? 0 : EMBER.lit;
-  const flare = EMBER.lit + (1 - EMBER.lit) * smooth(a / EMBER.flare);
-  return flare * Math.exp(-Math.max(0, a - EMBER.flare) / EMBER.decay) * (1 - smooth((a - EMBER.end * 0.6) / (EMBER.end * 0.4)));
+  const flare = EMBER.lit + (src.ember - EMBER.lit) * smooth(a / EMBER.flare);
+  return flare * Math.exp(-Math.max(0, a - EMBER.flare) / (EMBER.decay * src.slow)) * (1 - smooth((a - EMBER.end * 0.6) / (EMBER.end * 0.4)));
+}
+
+/**
+ * The wick's char (0 fresh white cotton – 1 black) after `litTime` seconds of burning: a lit wick
+ * chars within ≈0.1 s of burning where the flame wraps it.
+ */
+export function wickChar(litTime: number): number {
+  return smooth(litTime / 0.1);
+}
+
+/**
+ * The grey ash tip candle `i`'s wick is left with at time `t` of `kind`'s clock, as its ember
+ * cools (0 – 1): from ≈0.3 s after the flame leaves it, complete ≈1.6 s later.
+ */
+export function ashAt(i: number, t: number, kind: SmokeKind = 'breath'): number {
+  return smooth((t - smokeSource(i, kind).bare - 0.3) / 1.6);
 }
 
 // ── Smoke ────────────────────────────────────────────────────────────────────
 export const SMOKE = {
   /**
-   * Wick vapour emission: a burst as the flame leaves (the wick and pool are at their hottest:
-   * e-folding 0.3 s) and a cooling tail (1.3 s), rising in 30 ms after lift-off, stopped by 3.6 s.
+   * Wick vapour emission: a burst the instant the flame leaves (the wick and the molten pool are
+   * at their hottest: e-folding 0.3 s; dense from the first 8 ms), then the wick smoulders on as a
+   * thin thread (e-folding 4.5 s, × each wick's own cooling) that fades out from 3 s to 5.5 s.
    */
-  rise: 0.02,
+  rise: 0.008,
   burst: 0.3,
-  decay: 1.3,
-  stop: 3.6,
+  decay: 4.5,
+  stop: 5.5,
   /** Plume: w = c·(z + z0)^(−1/3) (point-source plume, m/s with z in m), reached after τacc. */
   c: 0.13,
   z0: 0.01,
   accel: 0.12,
   /** Thread width at the wick and its laminar growth (mm, mm per √s). */
-  width0: 1.1,
-  widthGrow: 2.6,
+  width0: 1.2,
+  widthGrow: 1.8,
+  /** Widest a drawn thread gets (m). */
+  maxWidth: 0.004,
   /** Laminar → transitional: sinuous waves grow around this height (m) over zGrow. */
   zTransition: 0.07,
   zGrow: 0.013,
@@ -455,22 +508,26 @@ export const SMOKE = {
   /** Turbulent split into wisps above this height (m), their spread angle (half-width per height). */
   zSplit: 0.1,
   spread: 0.14,
-  /** A turbulent round jet spreads at ≈12° half-angle: swept smoke widens by this much per distance carried. */
-  jetSpread: 0.12,
-  /** Wick vapour rides the breath at 80 % of it; the flame's cooled gas keeps the flame's own drift. */
+  /** Swept smoke widens by this much per distance carried (the wick's wake keeps it narrow at first). */
+  jetSpread: 0.06,
+  /** Wick vapour rides the breath at 60 % of it (it leaves in the wick's own wake). */
   wickCarry: 0.6,
-  puffCarry: 0.35,
   /** Room draft: a slow drift (m/s) and lean of the column. */
   draft: 0.012,
-  /** Opacity of the dense stem, the head puff and age fade (s). */
-  alpha: 0.65,
-  puffAlpha: 0.16,
-  fade: [0.7, 1.6] as const,
   /**
-   * The whole tail is over (accept time, s): the thinning column (under 1 % opacity by 3 s) is
-   * faded to exactly nothing over the last 0.8 s, so the loop can idle without a pop.
+   * The air the breath leaves stirred: eddies of 6–14 cm drifting at a few cm/s, decaying
+   * (e-folding 2.2 s) into the room's own gentle stirring (`ambient` of it). Shared by all six
+   * plumes, so neighbours bend together and can meet.
    */
-  end: 3.8,
+  eddy: { speed: 0.05, decay: 2.2, ambient: 0.35, memory: 0.7 },
+  /**
+   * Optical depth of the column at full emission where it leaves the wick (all strands: opacity
+   * 1 − e^−depth, ≈ 0.9 for the fresh ribbon, ≈ 0.2 for the last thin thread); age fade (s).
+   */
+  depth: 2.4,
+  fade: [1.0, 2.2] as const,
+  /** The whole tail is over (time on the smoke's clock, s): faded to exactly nothing by then. */
+  end: 6.5,
 } as const;
 
 /** Smoke streakline sampling: wick parcels, newest (at the wick) to oldest. */
@@ -478,17 +535,14 @@ export const SMOKE_POINT_COUNT = 64;
 export const SMOKE_STRAND_COUNT = 3;
 /** Share of the smoke in each strand: the main thread and two wisps that split off it. */
 const STRAND_SHARE = [0.56, 0.26, 0.18] as const;
-/** Soot puff: soft blobs along the upper (sooty) flame, per candle. */
-export const PUFF_COUNT = 7;
 
-/** Wick vapour emission rate of candle `i` at accept time `t` (0–1). */
-export function smokeRate(i: number, t: number): number {
-  const a = t - BREATH_AT[i]!.lift;
+/** Wick vapour emission rate of candle `i` at time `t` of `kind`'s clock (0–1). */
+export function smokeRate(i: number, t: number, kind: SmokeKind = 'breath'): number {
+  const src = smokeSource(i, kind);
+  const a = t - src.bare;
   if (a <= 0) return 0;
-  // No two wicks are alike (length, how much wax they hold, how hot the ember is): each source has
-  // its own strength (0.7–1.1) and cooling time (×0.75–1.25), seeded.
-  const strength = 0.7 + 0.4 * rand(i, 26), slow = 0.75 + 0.5 * rand(i, 27);
-  return strength * smooth(a / SMOKE.rise) * (0.55 * Math.exp(-a / (SMOKE.burst * slow)) + 0.45 * Math.exp(-a / (SMOKE.decay * slow))) * (1 - smooth((a - SMOKE.stop * 0.55) / (SMOKE.stop * 0.45)));
+  return src.strength * smooth(a / SMOKE.rise) * (0.55 * Math.exp(-a / (SMOKE.burst * src.slow)) + 0.45 * Math.exp(-a / (SMOKE.decay * src.slow)))
+    * (1 - smooth((a - 3) / (SMOKE.stop - 3)));
 }
 
 /** Height (m) a plume parcel has risen `age` seconds after leaving the wick, for a source of strength `q` (0–1). */
@@ -508,7 +562,7 @@ export function plumeVelocity(z: number, q: number): number {
 }
 
 export interface SmokeStrand {
-  /** Points along the thread (cake_secondary space): x, y, z per point. */
+  /** Points along the thread (the smoke mesh's space): x, y, z per point. */
   position: Float32Array;
   /** Thread width (scene units) and opacity per point. */
   width: Float32Array;
@@ -526,54 +580,87 @@ export function newSmokeStrand(): SmokeStrand {
   };
 }
 
+/** The shared eddies (fixed seed): horizontal wavevectors (1/m), vertical wavenumber, angular rate, phase, weight. */
+const EDDIES = Array.from({ length: 5 }, (_, k) => {
+  const lam = 0.06 + 0.08 * rand(91, k);
+  const dir = 6.283 * rand(92, k);
+  const kh = (2 * Math.PI) / lam;
+  return { kx: kh * Math.cos(dir), kz: kh * Math.sin(dir), ky: ((2 * Math.PI) / (0.08 + 0.1 * rand(93, k))) * (rand(94, k) - 0.5), w: 0.6 + 1.2 * rand(95, k), ph: 6.283 * rand(96, k), a: 0.6 + 0.4 * rand(97, k) };
+});
+const EDDY_NORM = 1 / Math.sqrt(EDDIES.reduce((s, e) => s + e.a * e.a, 0) / 2);
+
 /**
- * Axis point of a flame state at fraction s (0 base, 1 tip) relative to its rest base anchor, in
- * the cake's plan axes (scene units). The same curve the shader draws: a straight lean from the
- * base, the tip curling back up by `bend` (a quadratic offset), the base carried off by `lift`.
+ * Displacement (m, horizontal x/z of the smoke's space) the stirred air gives a parcel now at
+ * (x, y, z) m, `age` s after it left the wick, at time `t` on a clock where the stirring began at
+ * `t0` (the breath; −∞: the room's own). Divergence-free in plan (each eddy moves air across its
+ * wavevector), evaluated where the parcel is and remembered over ≈0.7 s (older motion
+ * decorrelates), so plumes passing the same place bend the same way.
  */
-export function flameAxis(f: FlameState, s: number, out: [number, number, number], scale = 1): [number, number, number] {
-  const L = FLAME_REST.length * f.height * scale;
-  const ct = Math.cos(f.tilt), st = Math.sin(f.tilt);
-  const b = 0.5 * L * f.tilt * f.bend * s * s;
-  const h = f.lift + st * s * L - ct * b;
-  out[0] = f.dirX * h;
-  out[1] = ct * s * L + st * b;
-  out[2] = f.dirZ * h;
-  return out;
+function eddyAt(x: number, y: number, z: number, t: number, t0: number, age: number, out: number[]): void {
+  const e = SMOKE.eddy;
+  const amp = e.speed * (e.ambient + (1 - e.ambient) * (t > t0 ? Math.exp(-(t - t0) / e.decay) : 0)) * EDDY_NORM;
+  const mem = e.memory * (1 - Math.exp(-age / e.memory));
+  let dx = 0, dz = 0;
+  for (const m of EDDIES) {
+    const s = Math.sin(m.kx * x + m.kz * z + m.ky * y - m.w * t + m.ph) * m.a;
+    const kh = Math.hypot(m.kx, m.kz);
+    dx += (-m.kz / kh) * s;
+    dz += (m.kx / kh) * s;
+  }
+  out[0] = dx * amp * mem;
+  out[1] = dz * amp * mem;
 }
-
-const tmpFlame = newFlameState();
-const tmpAxis: [number, number, number] = [0, 0, 0];
+const eddyTmp = [0, 0];
 
 /**
- * Candle `i`'s smoke thread `strand` at accept time `t`, as a streakline: every point is a parcel
- * of wax vapour that left the wick at its birth, moved since by the breath (closed-form drift with
- * the jet's eddies), its plume rise, the room draft and the growing sinuous instability. `wick` is
- * the wick tip in cake_secondary space. Returns whether any of it is visible.
+ * Where candle i's wick was when a parcel was born at `birth` (the smoke mesh's space): the wick,
+ * or a carried cake's. Returns how fast the wick was moving through the air then (m/s; nothing or
+ * 0 for a wick standing still).
  */
-export function smokeStrand(i: number, strand: number, t: number, wick: readonly [number, number, number], out: SmokeStrand): boolean {
+export type WickAt = (birth: number, out: [number, number, number]) => number | void;
+/** A wick carried through the air strings its vapour out along its path: half as dense per length at this speed (m/s). */
+const STRUNG_AT = 0.15;
+const wickTmp: [number, number, number] = [0, 0, 0];
+
+/**
+ * Candle `i`'s smoke thread `strand` at time `t` of `kind`'s clock, as a streakline: every point is
+ * a parcel of wax vapour that left the wick at its birth (where the wick was then: `wickAt`), moved
+ * since by the breath (closed-form drift), its plume rise, the stirred air the breath left (shared
+ * eddies), the room draft and the growing sinuous instability, decorrelated per plume. Parcels
+ * born after `emitUntil` (a wick fallen into the bin) carry no smoke. Returns whether any shows.
+ */
+export function smokeStrand(i: number, strand: number, t: number, wickAt: WickAt, out: SmokeStrand, kind: SmokeKind = 'breath', emitUntil = Infinity): boolean {
+  const src = smokeSource(i, kind);
+  const breath = kind === 'breath';
   const b = BREATH_AT[i]!;
   const share = STRAND_SHARE[strand]!;
   let visible = false;
-  const span = Math.max(0, Math.min(t - b.lift, SMOKE.stop + SMOKE.fade[1]));
-  // Per-candle and per-strand variation of the instability.
+  const span = Math.max(0, Math.min(t - src.bare, SMOKE.stop + SMOKE.fade[1]));
+  // No two plumes alike: phases, wavelength, amplitude, the beat of the disturbances, the plane
+  // the waves swing in, how soon it turns turbulent.
   const ph1 = 6.283 * rand(i, 20), ph2 = 6.283 * rand(i, 21), phs = 6.283 * rand(i * 3 + strand, 22);
-  const kScale = 0.85 + 0.3 * rand(i, 23);
+  const kScale = 0.75 + 0.6 * rand(i, 23);
   const draftDir = 0.6 + 0.5 * rand(i, 24);
+  const ampScale = 0.6 + 0.8 * rand(i, 34);
+  const beat = 0.7 + 1.5 * rand(i, 33);
+  const cSpeed = 0.6 + 0.3 * rand(i, 36);
+  const swing = 6.283 * rand(i, 35);
+  const ux = Math.cos(swing) * SCREEN_RIGHT[0] + Math.sin(swing) * TOWARD_CAMERA[0], uz = Math.cos(swing) * SCREEN_RIGHT[1] + Math.sin(swing) * TOWARD_CAMERA[1];
+  const vx = -Math.sin(swing) * SCREEN_RIGHT[0] + Math.cos(swing) * TOWARD_CAMERA[0], vz = -Math.sin(swing) * SCREEN_RIGHT[1] + Math.cos(swing) * TOWARD_CAMERA[1];
+  const stirFrom = breath ? BREATH.start : -Infinity;
+  const tailFade = smokeTail(t);
   const n = SMOKE_POINT_COUNT;
   for (let k = 0; k < n; k++) {
-    // Newest first, spaced in age (a little denser near the wick).
+    // Newest first, spaced in age (denser near the wick).
     const a = span * (k / (n - 1)) ** 1.25;
     const birth = t - a;
-    const q = smokeRate(i, birth);
+    const moving = wickAt(birth, wickTmp) || 0;
+    const q = birth <= emitUntil ? smokeRate(i, birth, kind) : 0;
     const zr = plumeRise(a, q); // metres risen
     // Breath drift (downstream, closed form) from birth to now.
-    const drift = SMOKE.wickCarry * breathDrift(i, birth, t);
-    // Line density of the streak ∝ emission / transport speed at birth: vapour leaving the wick
-    // into the breath is spread thinner.
-    const dilute = 1 / (1 + breathAt(i, birth) / 2.5);
-    let px = wick[0] + b.dirX * drift, pz = wick[2] + b.dirZ * drift;
-    let py = wick[1] + zr * MPS;
+    const drift = breath ? SMOKE.wickCarry * breathDrift(i, birth, t) : 0;
+    let px = wickTmp[0] + b.dirX * drift, pz = wickTmp[2] + b.dirZ * drift;
+    let py = wickTmp[1] + zr * MPS;
     // Room draft: slow drift back-right, and a slow lean of the column that the old parcels carry.
     const dr = SMOKE.draft * MPS * a;
     px += dr * Math.cos(draftDir) * 0.8;
@@ -583,26 +670,27 @@ export function smokeStrand(i: number, strand: number, t: number, wick: readonly
     pz += lean * SCREEN_RIGHT[1];
     // Sinuous instability: laminar low down, waves growing through the transition and folding
     // into curls (the vertical part in quadrature makes the streakline loop once it exceeds 1/k).
-    // The transition height differs from plume to plume (±20 %) and with the source's strength.
-    const zt = SMOKE.zTransition * (0.8 + 0.4 * rand(i, 25)) * (0.85 + 0.15 * q);
-    const grow = 1 / (1 + Math.exp(-(zr - zt) / SMOKE.zGrow));
+    const zt = SMOKE.zTransition * (0.7 + 0.6 * rand(i, 25)) * (0.85 + 0.15 * q);
+    // Exactly laminar at the wick (the logistic's foot taken off), saturating above the transition.
+    const g0 = 1 / (1 + Math.exp(zt / SMOKE.zGrow));
+    const grow = Math.max(0, 1 / (1 + Math.exp(-(zr - zt) / SMOKE.zGrow)) - g0) / (1 - g0);
     const lam = SMOKE.wavelength * kScale * (1 + 0.9 * Math.max(0, zr - zt) / 0.1);
     const k1 = (2 * Math.PI) / lam;
-    const c = SMOKE.phaseSpeed * plumeVelocity(zr, q);
-    const phase = k1 * zr - k1 * c * a - 2 * Math.PI * 1.3 * birth + ph1;
+    const c = SMOKE.phaseSpeed * cSpeed * plumeVelocity(zr, q);
+    const phase = k1 * zr - k1 * c * a - 2 * Math.PI * beat * birth + ph1;
     // Intermittent: the disturbances that seed the instability come and go (a seeded envelope over
     // the parcels' birth), so the column calms, kinks, and only sometimes rolls into a curl.
-    const env = 0.35 + 0.65 * smooth(0.5 + 0.5 * (0.6 * Math.sin(2 * Math.PI * 0.53 * birth + ph2) + 0.4 * Math.sin(2 * Math.PI * 1.37 * birth + ph1 * 1.7)));
-    const A = SMOKE.amplitude * grow * (0.6 + 0.4 * q) * env;
+    const env = 0.3 + 0.7 * smooth(0.5 + 0.5 * (0.6 * Math.sin(2 * Math.PI * 0.53 * beat * birth + ph2) + 0.4 * Math.sin(2 * Math.PI * 1.37 * birth + ph1 * 1.7)));
+    const A = SMOKE.amplitude * ampScale * grow * (0.6 + 0.4 * q) * env;
     // A second, shorter mode at an incommensurate wavenumber breaks the regularity.
     const phase2 = 1.62 * k1 * zr - 1.62 * k1 * c * 1.1 * a + ph2;
-    const ax = A * (Math.sin(phase) + 0.35 * Math.sin(phase2)), az = 0.7 * A * Math.sin(phase * 0.71 + ph2), ay = 0.85 * A * Math.cos(phase);
+    const au = A * (Math.sin(phase) + 0.35 * Math.sin(phase2)), av = 0.7 * A * Math.sin(phase * 0.71 + ph2), ay = 0.85 * A * Math.cos(phase);
     // Split: the wisps leave the main thread above zSplit, each on its own wave.
     const split = strand === 0 ? 0 : 1 / (1 + Math.exp(-(zr - SMOKE.zSplit) / 0.02));
     const sp = SMOKE.spread * Math.max(0, zr - SMOKE.zSplit * 0.8) * split;
-    const sx = sp * Math.sin(1.7 * phase + phs), sz = sp * Math.cos(1.3 * phase + phs);
-    px += (ax + sx) * MPS * SCREEN_RIGHT[0] + (az + sz) * MPS * TOWARD_CAMERA[0];
-    pz += (ax + sx) * MPS * SCREEN_RIGHT[1] + (az + sz) * MPS * TOWARD_CAMERA[1];
+    const su = sp * Math.sin(1.7 * phase + phs), sv = sp * Math.cos(1.3 * phase + phs);
+    px += ((au + su) * ux + (av + sv) * vx) * MPS;
+    pz += ((au + su) * uz + (av + sv) * vz) * MPS;
     py += ay * MPS;
     // The breath is a turbulent jet: smoke it carries wanders about the mean path, the more the
     // further it has been carried (two incommensurate eddy scales).
@@ -614,87 +702,41 @@ export function smokeStrand(i: number, strand: number, t: number, wick: readonly
       pz += amp * (0.6 * e1 * SCREEN_RIGHT[1] + 0.5 * e2 * TOWARD_CAMERA[1]) * MPS;
       py += amp * 0.7 * Math.cos(dm / 0.012 + 1.7 + 6.283 * rand(i * 5 + strand, 32)) * MPS;
     }
+    // The stirred air: shared by every plume, so neighbours bend together and can meet.
+    eddyAt(px / MPS, py / MPS, pz / MPS, t, stirFrom, a, eddyTmp);
+    px += eddyTmp[0]! * MPS;
+    pz += eddyTmp[1]! * MPS;
     out.position[k * 3] = px;
     out.position[k * 3 + 1] = py;
     out.position[k * 3 + 2] = pz;
     // Width (m): the thread thickens by diffusion, spreads turbulently above the transition and
     // in the breath's jet.
-    const w = SMOKE.width0 * 1e-3 + SMOKE.widthGrow * 1e-3 * Math.sqrt(a / 0.5) + SMOKE.spread * Math.max(0, zr - SMOKE.zTransition) * grow + SMOKE.jetSpread * dm;
-    out.width[k] = w * MPS * (strand === 0 ? 1 : 0.8);
+    const w = SMOKE.width0 * 1e-3 + SMOKE.widthGrow * 1e-3 * Math.sqrt(a / 0.5) + SMOKE.spread * Math.max(0, zr - zt) * grow + SMOKE.jetSpread * dm;
+    // Drawn no wider than SMOKE.maxWidth: a turbulent column breaks into wisps rather than widening as
+    // one sheet (a wide ribbon folding over itself draws hard-edged planes); its opacity still thins
+    // with the full width.
+    out.width[k] = Math.min(w, SMOKE.maxWidth) * MPS * (strand === 0 ? 1 : 0.8);
     out.age[k] = a;
-    // Opacity: the vapour condenses a millimetre above the ember (6 ms), thins as it widens and
-    // fades with age.
-    let alpha = SMOKE.alpha * q * dilute * smooth(a / 0.006) * Math.pow((SMOKE.width0 * 1e-3) / w, 0.75);
-    alpha *= (1 - smooth((a - SMOKE.fade[0]) / (SMOKE.fade[1] - SMOKE.fade[0]))) * share * smokeTail(t);
+    // Opacity of the whole column here: the vapour condenses a millimetre above the ember (4 ms),
+    // thins as it widens and fades with age; it leaves the wick dense even in the breath (in the
+    // wick's own wake). The strands share its optical depth (Beer–Lambert): where they still
+    // overlap, low down, they composite back to exactly the column's opacity.
+    const dilute = (breath ? 1 / (1 + breathAt(i, birth) / 6) : 1) / (1 + moving / STRUNG_AT);
+    let depth = SMOKE.depth * q * dilute * smooth(a / 0.004) * Math.pow((SMOKE.width0 * 1e-3) / w, 0.75);
+    depth *= (1 - smooth((a - SMOKE.fade[0]) / (SMOKE.fade[1] - SMOKE.fade[0]))) * tailFade;
+    const alpha = 1 - Math.exp(-share * depth);
     out.alpha[k] = alpha;
     if (alpha > 1e-4) visible = true;
   }
   return visible;
 }
 
-export interface SmokePuffs {
-  /** Centres (cake_secondary space), radii (scene units) and opacities of the soot puff's blobs. */
-  position: Float32Array;
-  radius: Float32Array;
-  alpha: Float32Array;
-}
-
-export function newSmokePuffs(): SmokePuffs {
-  return { position: new Float32Array(PUFF_COUNT * 3), radius: new Float32Array(PUFF_COUNT), alpha: new Float32Array(PUFF_COUNT) };
-}
-
-/**
- * The blown-out flame's own soot, as soft blobs along its upper (sooty) part. While the flame
- * dies each blob sits on the flame's axis and greys as the flame cools (the flame's colour going
- * to grey in place); once the extinction front has passed it, it drifts on with the gas, rising
- * (hot), widening in the jet and fading. Returns whether any is visible.
- */
-export function smokePuffs(i: number, t: number, wick: readonly [number, number, number], out: SmokePuffs): boolean {
-  const b = BREATH_AT[i]!;
-  let visible = false;
-  for (let k = 0; k < PUFF_COUNT; k++) {
-    const s = 0.3 + (0.68 * k) / (PUFF_COUNT - 1);
-    // The extinction front reaches s at `pass`; until then the blob rides the flame.
-    const pass = b.lift + b.out * invSmooth(s);
-    const birth = Math.min(t, pass);
-    const a = Math.max(0, t - pass);
-    const f = flameState(i, Math.min(birth, extinguishedAt(i) - 1e-6), 'accept', tmpFlame);
-    flameAxis(f, s, tmpAxis, flameScale(i));
-    const drift = t > pass ? SMOKE.puffCarry * breathDrift(i, pass, t) : 0;
-    const dm = drift / MPS;
-    const zr = plumeRise(a, 1.3);
-    // Slight scatter about the axis so the cloud is not a row of beads.
-    const jx = (rand(i * 11 + k, 40) - 0.5) * 1.2 * MM, jz = (rand(i * 11 + k, 41) - 0.5) * 1.2 * MM;
-    out.position[k * 3] = wick[0] + tmpAxis[0] + b.dirX * drift + jx;
-    out.position[k * 3 + 1] = wick[1] + (FLAME_REST.base - WICK_TIP_Y) + tmpAxis[1] + zr * MPS;
-    out.position[k * 3 + 2] = wick[2] + tmpAxis[2] + b.dirZ * drift + jz;
-    const r0 = Math.max(1.6 * MM, 1.7 * FLAME_REST.radius * flameScale(i) * f.width * flameProfile(Math.min(0.97, s)));
-    const r = r0 + (SMOKE.jetSpread * dm * MPS) / 2 + 2.5 * MM * Math.sqrt(a / 0.5);
-    out.radius[k] = r;
-    // Greying with the flame's dying (continuous through `pass`), most soot in the upper flame,
-    // diluting with the blob's area and fading.
-    const D = smooth((t - b.lift) / b.out);
-    const alpha = t <= b.lift ? 0 : SMOKE.puffAlpha * D * smooth((s - 0.25) / 0.4) * (r0 / r) ** 2 * Math.exp(-a / 0.5) * smokeTail(t);
-    out.alpha[k] = alpha;
-    if (alpha > 1e-4) visible = true;
-  }
-  return visible;
-}
-
-/** Inverse of smoothstep on [0, 1] (Newton, from a cubic-root start). */
-function invSmooth(y: number): number {
-  if (y <= 0) return 0;
-  if (y >= 1) return 1;
-  // Closed form: x = 0.5 − sin(asin(1 − 2y) / 3).
-  return 0.5 - Math.sin(Math.asin(1 - 2 * y) / 3);
-}
-
-/** Whether any smoke (or ember) can be showing at accept time `t`. */
+/** Whether any smoke (or ember) can be showing at time `t` of the smoke's clock. */
 export function smokeAlive(t: number): boolean {
   return t >= 0 && t < SMOKE.end;
 }
 
-/** Global fade of the tail's last 0.8 s: exactly 0 from SMOKE.end. */
+/** Global fade of the tail's last 1.5 s: exactly 0 from SMOKE.end. */
 function smokeTail(t: number): number {
-  return 1 - smooth((t - (SMOKE.end - 0.8)) / 0.8);
+  return 1 - smooth((t - (SMOKE.end - 1.5)) / 1.5);
 }

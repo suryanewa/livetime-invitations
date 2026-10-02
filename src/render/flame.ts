@@ -120,16 +120,19 @@ export interface FlameUniforms {
 /** Emission scale: the steady flame's luminous core integrates to ≈5 (three stops over white). */
 export const FLAME_GAIN = 480;
 /** Veiling-glare halo strength (fraction of the 1,900 K soot's radiance). */
-export const FLAME_GLOW = 0.05;
+export const FLAME_GLOW = 0.03;
 
 /**
- * The camera's glare on a flame, in screen space (CSS px): a point-spread of σ 3 px (bleed) with a
- * 9 px skirt, carrying FLAME_GLARE of the flame's on-screen flux (luminous area in px² × its
- * radiance, ≈5 on the film's scale). A real lens and sensor spread a few per cent of a bright
- * source's light this way; it is why a small candle flame in a photograph glows larger than it
- * is. The peak is capped (FLAME_GLARE_CAP × its radiance) so a close-up's large flame gets no blob.
+ * The camera's glare on a flame, in screen space (CSS px): a point-spread of σ 1.6 px (bleed)
+ * with a faint 6 px skirt (8 % of its peak). A real lens and sensor spread a few per cent of a bright source's light this
+ * way, and a sensor's bloom has a fixed pixel footprint: however small a candle flame is in the
+ * picture, it is far brighter than the room (≈100×), so it always saturates a few pixels and glows
+ * round them. So the glare's peak is the larger of `floor` (on the film's scale, × the flame's
+ * luminous output) and `fraction` of the flame's on-screen flux (luminous area in px² × its
+ * radiance, ≈5 on the film's scale); capped at `cap` × its radiance, so a close-up's large flame
+ * gets no blob. The floor is what keeps six glowing points on a 192 px thumbnail.
  */
-export const FLAME_GLARE = { sigma: 3, skirt: 9, fraction: 0.05, cap: 0.6 } as const;
+export const FLAME_GLARE = { sigma: 1.6, skirt: 6, fraction: 0.05, floor: 1.0, cap: 0.6 } as const;
 
 export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: FlameUniforms } {
   const uniforms: FlameUniforms = {
@@ -244,18 +247,23 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
         // the wick there is only the faint blue envelope.
         float rin = 0.78 * (1.0 - smoothstep(uWidest * 0.8, uWidest * 2.0, s));
         float soot = smoothstep(rin - 0.2, rin + 0.12, r) * edge;
-        soot *= smoothstep(uWidest * 0.55, uWidest * 1.15, s) * (1.0 - 0.5 * smoothstep(0.72, 1.0, s));
+        soot *= smoothstep(uWidest * 0.75, uWidest * 1.25, s) * (1.0 - 0.5 * smoothstep(0.72, 1.0, s));
         soot *= sootFormed(lit);
         // Temperature: hottest soot mid-flame; cooler at the tip and the outer mantle; the cut-off gas cools.
         float T = 1900.0 - 330.0 * smoothstep(0.45, 1.0, s) - 160.0 * smoothstep(0.55, 1.05, r);
-        T -= 1250.0 * cool;
+        // Cut off from its fuel the soot burns out: the flame dims (intensity) and cools a little,
+        // still yellow-orange; a blown flame never lingers as a red ghost.
+        T -= 280.0 * cool;
         T -= 260.0 * (1.0 - lit);
         vec3 col = soot * blackbody(T);
-        // Blue cup: a thin shell at the base, fading up the sides under the soot zone.
-        float shell = smoothstep(0.5, 0.88, r) * (1.0 - smoothstep(0.96, 1.12, r));
-        float cup = shell * (1.0 - smoothstep(0.02, 0.24, s)) + 0.6 * exp(-pow(s / 0.06, 2.0)) * (1.0 - smoothstep(0.6, 1.0, r));
+        // Blue sheath: the reaction zone round the bottom of the flame is a thin, translucent shell
+        // (CH*, C2* chemiluminescence), brightest where it curves under the flame and nearly
+        // invisible up its sides; inside it the fuel-rich gas round the wick is dark (no blob of
+        // blue round the wick: seen through it, the wick stays dark).
+        float shell = smoothstep(0.76, 0.93, r) * (1.0 - smoothstep(0.97, 1.08, r));
+        float cup = shell * (1.0 - smoothstep(0.0, 0.17, s)) * (0.35 + 0.65 * (1.0 - smoothstep(0.0, 0.07, s)));
         // A fresh or starved flame is mostly blue; the cooling gas has no blue left.
-        col += cup * vec3(0.008, 0.02, 0.105) * (1.0 + 2.2 * (1.0 - lit)) * (1.0 - cool);
+        col += cup * vec3(0.006, 0.016, 0.085) * (1.0 + 2.2 * (1.0 - lit)) * (1.0 - cool);
         return col * alive;
       }
 
@@ -292,20 +300,20 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
         float Te = 900.0 + 420.0 * uEmber;
         L += step(1e-3, uEmber) * 420.0 * exp(-dperp2 / (se * se)) * blackbody(Te);
         // Veiling glare round the luminous zone (the lens's bloom), windowed to the quad.
-        vec3 c = uBase + uAxisY * (0.45 * uShape.x);
+        vec3 c = uBase + uAxisY * (0.55 * uShape.x);
         vec3 wc = c - ro;
         float ac = dot(wc, rd);
         float dc2 = max(dot(wc, wc) - ac * ac, 0.0);
-        float sg = 1.7 * uShape.y;
-        L += uGlow * intensity * exp(-0.5 * dc2 / (sg * sg)) * blackbody(1900.0 - 900.0 * uState.y);
+        float sg = 1.5 * uShape.y;
+        L += uGlow * intensity * exp(-0.5 * dc2 / (sg * sg)) * blackbody(1900.0 - 280.0 * uState.y);
         // The camera's own glare (lens and sensor point-spread): its width is fixed on the sensor,
         // in pixels, not in millimetres of flame; its energy a fixed fraction of the flame's flux
         // on screen (uPsfPeak, set per frame from the projected size). Two lobes: the bleed and
         // the faint skirt.
         vec2 dp = gl_FragCoord.xy - uScreenC;
         float r2 = dot(dp, dp);
-        float psf = 0.75 * exp(-0.5 * r2 / (uPsf.x * uPsf.x)) + 0.25 * (uPsf.x * uPsf.x) / (uPsf.y * uPsf.y) * exp(-0.5 * r2 / (uPsf.y * uPsf.y));
-        L += uPsfPeak * psf * blackbody(1900.0 - 900.0 * uState.y);
+        float psf = exp(-0.5 * r2 / (uPsf.x * uPsf.x)) + 0.08 * exp(-0.5 * r2 / (uPsf.y * uPsf.y));
+        L += uPsfPeak * psf * blackbody(1900.0 - 280.0 * uState.y);
         L *= 1.0 - smoothstep(0.75, 1.0, max(abs(vQuad.x), abs(vQuad.y)));
         // A camera's response, per channel: an overexposed blackbody saturates red, then green,
         // through orange and yellow to a warm white (a hue-preserving tone curve turns it pink).
@@ -336,16 +344,19 @@ export interface SmokeUniforms {
 }
 
 /**
- * Smoke radiance: a little under the lit cove's, so a thin thread reads grey over the wall and
- * lighter over shade (and over cocoa); faintly cool, as sub-micron droplets side-scatter blue.
+ * Smoke radiance (linear, before the tone curve): wax aerosol is white (sub-micron droplets scatter
+ * nearly all the light they catch, faintly bluish), so where it is dense it is brighter than the
+ * greige cove behind it (≈ 0.6 albedo): ≈ 245 of 255 on screen against the wall's ≈ 210 (v1.5
+ * judge: '#c9c9cb' matched the wall and vanished). A thread reads as a pale wisp over the wall and
+ * stands out more over shade, the bin or cocoa.
  */
-export const SMOKE_COLOR = '#7b7c80';
+export const SMOKE_RADIANCE = [1.4, 1.414, 1.456] as const;
 
 export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniforms } {
   const uniforms: SmokeUniforms = {
     uViewportH: { value: 1000 },
     uMinPx: { value: 1.3 },
-    uColor: { value: new Color(SMOKE_COLOR) },
+    uColor: { value: new Color().setRGB(...SMOKE_RADIANCE) },
     uTime: { value: 0 },
   };
   const m = new ShaderMaterial({
@@ -371,15 +382,19 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
         vec3 tn = (modelViewMatrix * vec4(aNext, 1.0)).xyz;
         vec3 tng = tn - tp;
         vec3 view = normalize(-c.xyz);
-        vec3 side = cross(tng, view);
-        float sl = length(side);
-        side = sl > 1e-12 ? side / sl : vec3(1.0, 0.0, 0.0);
         float pxPerUnit = uViewportH * 0.5 * projectionMatrix[1][1] / max(1e-5, -c.z);
         float w = aWidth;
         float a = aAlpha;
         float px = w * pxPerUnit;
         // Never thinner than uMinPx: widen and keep the same amount of smoke (no shimmer).
         if (px < uMinPx) { a *= px / uMinPx; w = uMinPx / pxPerUnit; }
+        // Across the thread on screen. Where it points at the camera its projected tangent is
+        // shorter than its width and that direction is noise: blend towards the screen horizontal
+        // (a rising thread's own side), so an end-on stretch draws as a soft blob of its width,
+        // never a fan of strips (a star).
+        vec3 side = cross(tng, view) + vec3(1.5 * w, 0.0, 0.0);
+        float sl = length(side);
+        side = sl > 1e-12 ? side / sl : vec3(1.0, 0.0, 0.0);
         // The Gaussian cross-section reaches past the nominal width.
         c.xyz += side * aSide * w * 1.1;
         gl_Position = projectionMatrix * c;
@@ -416,57 +431,4 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
   });
   m.toneMapped = true;
   return m as ShaderMaterial & { uniforms: SmokeUniforms };
-}
-
-/**
- * Soot puff: soft camera-facing Gaussian blobs (the blown-out flame's own soot), same colour as
- * the smoke threads, with a little turbulent texture so overlapping blobs read as one cloud.
- */
-export function createPuffMaterial(color: Color): ShaderMaterial & { uniforms: { uColor: { value: Color } } } {
-  const uniforms = { uColor: { value: color } };
-  const m = new ShaderMaterial({
-    name: 'fx_puff',
-    uniforms,
-    vertexShader: /* glsl */ `
-      attribute vec2 aCorner;
-      attribute float aRadius;
-      attribute float aAlpha;
-      varying vec2 vCorner;
-      varying float vAlpha;
-      varying float vSeed;
-      void main() {
-        vec4 c = modelViewMatrix * vec4(position, 1.0);
-        c.xy += aCorner * aRadius * 2.2;
-        gl_Position = projectionMatrix * c;
-        vCorner = aCorner * 2.2;
-        vAlpha = aAlpha;
-        vSeed = position.x * 91.7 + position.z * 53.3;
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform vec3 uColor;
-      varying vec2 vCorner;
-      varying float vAlpha;
-      varying float vSeed;
-      float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float n2(vec2 p) {
-        vec2 i = floor(p), f = fract(p);
-        f = f * f * (3.0 - 2.0 * f);
-        return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y);
-      }
-      void main() {
-        float r2 = dot(vCorner, vCorner);
-        float g = exp(-1.6 * r2);
-        float tex = 0.8 + 0.4 * n2(vCorner * 1.7 + vSeed) * n2(vCorner * 3.1 - vSeed);
-        float a = clamp(vAlpha * g * tex * (1.0 - smoothstep(4.0, 4.84, r2)), 0.0, 1.0);
-        gl_FragColor = vec4(uColor, a);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-    blending: NormalBlending,
-  });
-  m.toneMapped = true;
-  return m as ShaderMaterial & { uniforms: { uColor: { value: Color } } };
 }

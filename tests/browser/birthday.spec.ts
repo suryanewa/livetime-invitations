@@ -161,7 +161,7 @@ test('Frosting variants and the Low tier on the cake master: visible, exact roun
 });
 
 test('Live fire: lit flames keep the loop running; after Accept the smoke rises past the sequence, then the loop idles', async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   await page.addInitScript(() => {
     const raf = window.requestAnimationFrame.bind(window);
     (window as any).__rafCalls = 0;
@@ -181,12 +181,17 @@ test('Live fire: lit flames keep the loop running; after Accept the smoke rises 
   expect(await calls()).toBeGreaterThan(before + 30);
   await page.getByRole('button', { name: 'Accept' }).click();
   await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('accepted-pose');
-  // The smoke outlives the 1.4 s sequence (to 3.8 s after the breath): still drawing just after.
+  // The smoke outlives the 1.4 s sequence (the wicks smoulder on: SMOKE.end, 6.5 s after the
+  // accept began): still drawing just after, and still 3 s later.
   before = await calls();
   await page.waitForTimeout(600);
   expect(await calls()).toBeGreaterThan(before + 10);
+  await page.waitForTimeout(2400);
+  before = await calls();
+  await page.waitForTimeout(500);
+  expect(await calls()).toBeGreaterThan(before + 10);
   // Then nothing moves: the loop stops and stays stopped.
-  await page.waitForTimeout(2600);
+  await page.waitForTimeout(2300);
   before = await calls();
   await page.waitForTimeout(1500);
   expect(await calls()).toBe(before);

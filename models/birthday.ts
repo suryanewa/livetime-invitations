@@ -177,7 +177,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     const fire = rigCandleFire(candle, flame, wick, lib, flameQuad, flameLights, ids.indexOf(id));
     return { candle, seatedY: candle.position.y, wickY: wick.position.y, flameY: flame.position.y, melt, wax: waxNode ?? null, flame, fire, wick };
   });
-  const smoke = new SmokeRig(nodes.cake_secondary!, candles.length);
+  const smoke = new SmokeRig(root, candles.length);
   // The flames light the cake's own materials, chained after the cake's patches (models/birthdayFire.ts);
   // then the bin's light, once the cake is in it (models/disposalBin.ts patchBinVisibility).
   const light = binLight(binRoot);

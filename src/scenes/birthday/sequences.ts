@@ -6,7 +6,7 @@ import {
   ACROSS_FROM, BIN_AT, BIN_DROP_G, BIN_FROM, CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_COUNT, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_PRESS, CANDLE_START, CARRY, CARRY_FROM,
   CARRY_LEAN, CARRY_TO, DROPPED, DURATIONS, FLAPS_CLOSE, HOVER_OVER_BIN, LEAN_FADE, LEAN_MAX, LIFT_TO, ON_STAND, PRESENT_YAW,
 } from './poses.ts';
-import { burnRate, flameState, type FlameState, litFlame, newFlameState, noFlame } from './fire.ts';
+import { BREATH, burnRate, flameState, type FlameState, litFlame, newFlameState, noFlame, SMOKE, type SmokeKind, SNUFF } from './fire.ts';
 import { BIN_CLOSE, dropHeight, flapsClosing } from '../../../models/disposalBin.ts';
 
 /**
@@ -50,10 +50,17 @@ export interface BirthdayFrame {
   /** Each candle's authored flame (fire.ts): ignition, the breath, extinction. Flicker rides on top. */
   flames: FlameState[];
   /**
-   * Accept time at which the ember and smoke are sampled (−1: none). A secondary channel: the
-   * canonical poses carry none, and after the accept sequence the scene's live clock continues it.
+   * Time on the smoke's own clock (`smokeKind`'s: accept time for the breath, decline time for a
+   * snuff) at which the embers and smoke are sampled (−1: none). A secondary channel: the canonical
+   * poses carry none, and after a sequence the scene's live clock continues it.
    */
   smokeTime: number;
+  smokeKind: SmokeKind;
+  /**
+   * On the smoke's clock, when the cake set off for the bin (the decline began; −1: it stays on
+   * its stand): smoke born after that left wicks that were being carried (sequences.ts cakeAt).
+   */
+  smokeCarry: number;
   binPos: Vector3;
   binVisible: boolean;
   /** Flap opening fraction (0 closed, 1 open). */
@@ -65,7 +72,7 @@ const filled = (v: number) => Array.from({ length: CANDLE_COUNT }, () => v);
 export function newFrame(): BirthdayFrame {
   return frameFor('guest-ready', {
     cakePos: new Vector3(), cakeYaw: 0, cakeLean: 0, cakeVisible: true, cakeInBin: false, drop: filled(0), press: filled(1), lean: filled(1), litTime: filled(0),
-    cakeDip: 0, cakeTiltX: 0, cakeTiltZ: 0, flames: Array.from({ length: CANDLE_COUNT }, () => newFlameState()), smokeTime: -1,
+    cakeDip: 0, cakeTiltX: 0, cakeTiltZ: 0, flames: Array.from({ length: CANDLE_COUNT }, () => newFlameState()), smokeTime: -1, smokeKind: 'breath', smokeCarry: -1,
     binPos: new Vector3(), binVisible: false, flaps: 0,
   });
 }
@@ -86,6 +93,8 @@ export function frameFor(pose: CanonicalPose, out: BirthdayFrame): BirthdayFrame
   out.cakeDip = out.cakeTiltX = out.cakeTiltZ = 0;
   for (const f of out.flames) (pose === 'guest-ready' ? litFlame : noFlame)(f);
   out.smokeTime = -1;
+  out.smokeKind = 'breath';
+  out.smokeCarry = -1;
   out.binPos.copy(pose === 'declined' ? BIN_AT : BIN_FROM);
   out.binVisible = pose === 'declined';
   out.flaps = 0;
@@ -262,8 +271,35 @@ function host(t: number, out: BirthdayFrame): void {
 }
 
 // ── Accept: 1.4 s ─────────────────────────────────────────────────────────────
-function accept(t: number, out: BirthdayFrame): void {
+/**
+ * A change of mind carries the fire that already happened into the next sequence: the flames the
+ * breath (or a snuff) has reached go on going out, on that event's own clock, and their smoke keeps
+ * rising; they never relight. `clock` is the event's time at the cut (BirthdayScene.interruptCut).
+ */
+export interface FireChange {
+  kind: SmokeKind;
+  clock: number;
+}
+
+/** The fire of a carried change at time t of the new sequence (flames, smoke clock, lit time). */
+function carriedFire(change: FireChange, t: number, out: BirthdayFrame): void {
+  const seq = change.kind === 'breath' ? 'accept' : 'decline';
+  const tc = change.clock + t;
+  for (let i = 0; i < CANDLE_COUNT; i++) {
+    flameState(i, tc, seq, out.flames[i]);
+    out.litTime[i] = litTime(seq, i, Math.min(tc, DURATIONS[seq]));
+  }
+  out.smokeTime = tc;
+  out.smokeKind = change.kind;
+}
+
+function accept(t: number, out: BirthdayFrame, change: FireChange | null): void {
   frameFor('guest-ready', out);
+  if (change) {
+    // Changed back from a snuff: the snuffed candles stay out; their wisps rise on.
+    carriedFire(change, t, out);
+    return;
+  }
   // 0.06–0.55: the guest's breath sweeps the cake; each flame leans, necks, lifts off and goes out
   // from the base up, nearest the mouth first (fire.ts). Its last gas becomes the first smoke.
   for (let i = 0; i < CANDLE_COUNT; i++) {
@@ -271,6 +307,7 @@ function accept(t: number, out: BirthdayFrame): void {
     out.litTime[i] = litTime('accept', i, t);
   }
   out.smokeTime = t;
+  out.smokeKind = 'breath';
 }
 
 // ── Decline: 1.5 s ────────────────────────────────────────────────────────────
@@ -349,36 +386,69 @@ export function carryLean(t: number): number {
   return th * leanFade(t);
 }
 
-function decline(t: number, out: BirthdayFrame): void {
+/**
+ * The cake's path to the bin at decline time t (cake_authored's position): 0.22–0.76 lifted off the
+ * stand (by 0.58), carried across from 0.39 and brought to rest over the opening, steadied on its
+ * plate; 0.76 let go, it falls into the bin (gravity) and the bin's front wall hides it; below the
+ * rim by 0.99 s. Also places smoke born on the moving cake (BirthdayScene).
+ */
+export function cakeAt(t: number, out: Vector3): Vector3 {
+  if (t < CARRY_FROM) return out.copy(ON_STAND);
+  if (t < CARRY_TO) {
+    const u = carryAcross(t);
+    out.set(lerp(ON_STAND.x, HOVER_OVER_BIN.x, u), 0, lerp(ON_STAND.z, HOVER_OVER_BIN.z, u));
+    out.y = t < LIFT_TO ? lerp(ON_STAND.y, CARRY, LIFT(seg(t, CARRY_FROM, LIFT_TO))) : lerp(CARRY, HOVER_OVER_BIN.y, smoothstep(seg(t, LIFT_TO, CARRY_TO)));
+    return out;
+  }
+  return out.set(HOVER_OVER_BIN.x, dropHeight(HOVER_OVER_BIN.y, DROPPED.y, t - CARRY_TO, BIN_DROP_G), HOVER_OVER_BIN.z);
+}
+
+/** Decline time after which the wicks are falling into the bin: no new smoke rises from them. */
+export const SMOKE_EMIT_UNTIL = CARRY_TO + 0.08;
+
+function decline(t: number, out: BirthdayFrame, change: FireChange | null): void {
   frameFor('guest-ready', out);
-  // 0–0.25: the bin slides into the margin and opens; the flames are snuffed (fire.ts).
+  // 0–0.25: the bin slides into the margin and opens; the flames are snuffed (fire.ts), each
+  // leaving a brief wisp. After a change of mind, the breath's fire carries on instead.
   out.binVisible = t > 0;
   out.binPos.lerpVectors(BIN_FROM, BIN_AT, EASE.travel(seg(t, 0, 0.24)));
-  for (let i = 0; i < CANDLE_COUNT; i++) {
-    flameState(i, t, 'decline', out.flames[i]);
-    out.litTime[i] = litTime('decline', i, t);
+  if (change) {
+    carriedFire(change, t, out);
+    out.smokeCarry = change.clock;
+  } else {
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      flameState(i, t, 'decline', out.flames[i]);
+      out.litTime[i] = litTime('decline', i, t);
+    }
+    out.smokeTime = t;
+    out.smokeKind = 'snuff';
+    out.smokeCarry = 0;
   }
   out.flaps = flaps(t);
-  // 0.22–0.76: cake and candles are lifted off the stand (by 0.58), carried across from 0.39 and
-  // brought to rest over the opening, steadied on its plate. 0.76: let go, it falls into the bin
-  // (gravity) and the bin's front wall hides it; it is below the rim by 0.99 s.
-  if (t < CARRY_FROM) out.cakePos.copy(ON_STAND);
-  else if (t < CARRY_TO) {
-    const u = carryAcross(t);
-    out.cakePos.set(lerp(ON_STAND.x, HOVER_OVER_BIN.x, u), 0, lerp(ON_STAND.z, HOVER_OVER_BIN.z, u));
-    out.cakePos.y = t < LIFT_TO ? lerp(ON_STAND.y, CARRY, LIFT(seg(t, CARRY_FROM, LIFT_TO))) : lerp(CARRY, HOVER_OVER_BIN.y, smoothstep(seg(t, LIFT_TO, CARRY_TO)));
-  } else out.cakePos.set(HOVER_OVER_BIN.x, dropHeight(HOVER_OVER_BIN.y, DROPPED.y, t - CARRY_TO, BIN_DROP_G), HOVER_OVER_BIN.z);
+  cakeAt(t, out.cakePos);
   out.cakeLean = carryLean(t);
   out.cakeInBin = t >= CARRY_TO;
   // Once the flaps have closed over it, the hidden cake stops rendering.
   out.cakeVisible = t < FLAPS_GAP_AT;
 }
 
-export function sampleSequence(sequence: SequenceName, t: number, out: BirthdayFrame): BirthdayFrame {
+/**
+ * The frame of `sequence` at t. `change`: a change of mind's carried fire (accept and decline
+ * only; FireChange).
+ */
+export function sampleSequence(sequence: SequenceName, t: number, out: BirthdayFrame, change: FireChange | null = null): BirthdayFrame {
   const tc = Math.min(Math.max(t, 0), DURATIONS[sequence]);
   if (sequence === 'host') host(tc, out);
-  else if (sequence === 'accept') accept(tc, out);
-  else decline(tc, out);
+  else if (sequence === 'accept') accept(tc, out, change);
+  else decline(tc, out, change);
   return out;
 }
+
+/** Whether a fire event of `kind` has begun by `clock` on its own clock (a change carries it from then). */
+export function fireBegun(kind: SmokeKind, clock: number): boolean {
+  return clock >= (kind === 'breath' ? BREATH.start : SNUFF.start);
+}
+
+/** A clock at which every candle of a fire is long out and its smoke gone (a canonical blown-out pose). */
+export const FIRE_DONE = SMOKE.end;
 

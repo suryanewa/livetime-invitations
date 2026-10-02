@@ -15,10 +15,12 @@ import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.
 import { birthdayFramePoints } from './framing.ts';
 import { MELT_CAP, meltState, newMeltState } from './melt.ts';
 import { CANDLE_LEAN, DURATIONS, ON_STAND } from './poses.ts';
-import { frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from './sequences.ts';
-import { EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, newFlicker, SMOKE } from './fire.ts';
+import { cakeAt, carryLean, FIRE_DONE, type FireChange, fireBegun, frameFor, LEAN_AXIS, newFrame, sampleSequence, SMOKE_EMIT_UNTIL, type BirthdayFrame } from './sequences.ts';
+import { ashAt, EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, MPS, newFlicker, SMOKE, type SmokeKind, wickChar } from './fire.ts';
 
 const UP = new Vector3(0, 1, 0);
+/** Half-step (s) of the carried cake's speed, for the smoke it strings out. */
+const SPEED_H = 1 / 240;
 
 export class BirthdayScene implements SceneInstance {
   readonly category = 'birthday' as const;
@@ -54,13 +56,29 @@ export class BirthdayScene implements SceneInstance {
   private liveTime = 0;
   /** Flicker gain: 0 after settle() (still flames), back to 1 over FLICKER.resume while simulating. */
   private flickerGain = 0;
-  /** Smoke tail: the accept time the smoke and embers continue at after the sequence ends (null: none). */
-  private tail: number | null = null;
-  /** The last sampled sequence and time (the tail starts where accept left off). */
+  /**
+   * Smoke tail: the smoke and embers carrying on after a sequence has ended on its own pose, on the
+   * smoke's clock (its kind's; `carry`: when the cake set off, frame.smokeCarry). Null: none.
+   */
+  private tail: { clock: number; kind: SmokeKind; carry: number } | null = null;
+  /** The last sampled sequence and time (the tail starts where it left off). */
   private last: { sequence: SequenceName; t: number } | null = null;
+  /**
+   * A change of mind (v1.5): the fire already under way, captured by `interruptCut` and kept
+   * through the director's cut (settle, guest-ready) until the next sequence takes it over at t = 0.
+   * The candles the breath or a snuff has reached stay out and their smoke keeps rising.
+   */
+  private pendingChange: FireChange | null = null;
+  private change: FireChange | null = null;
+  /** The cut keeps the live lit time (the melt the guest watched form does not pop back). */
+  private keepLive = false;
   private readonly flicker = newFlicker();
+  /** Each candle's wick tip in cake_secondary space (the melt burns it down), for the smoke. */
   private readonly wicks: [number, number, number][];
   private readonly wickTmp = new Vector3();
+  private readonly cakeTmp = new Vector3();
+  private readonly cakeTmp2 = new Vector3();
+  private readonly qBirth = new Quaternion();
 
   constructor(readonly rig: BirthdayRig, config: Extract<SceneConfig, { category: 'birthday' }>) {
     this.root = rig.root;
@@ -113,20 +131,28 @@ export class BirthdayScene implements SceneInstance {
   }
 
   pose(pose: CanonicalPose): void {
-    // The accept sequence ending on its own pose hands the smoke over to the live clock: it keeps
-    // rising from where the sequence left it (the canonical pose itself carries none).
-    const last = this.last;
-    this.tail = pose === 'accepted' && last?.sequence === 'accept' && last.t > DURATIONS.accept - 0.25 ? last.t : null;
+    // A sequence ending on its own pose (accept → accepted, decline → declined) hands its smoke to
+    // the live clock: it keeps rising from where the sequence left it (the canonical pose carries none).
+    const last = this.last, f = this.frame;
+    const ended = !!last && ((pose === 'accepted' && last.sequence === 'accept') || (pose === 'declined' && last.sequence === 'decline')) && last.t > DURATIONS[last.sequence] - 0.25;
+    this.tail = ended && f.smokeTime >= 0 && f.smokeTime < SMOKE.end ? { clock: f.smokeTime, kind: f.smokeKind, carry: f.smokeCarry } : null;
+    // The director's cut after `interruptCut` passes through guest-ready: the change stays pending.
+    if (pose !== 'guest-ready') this.pendingChange = null;
+    this.change = null;
     this.last = null;
     this.restingLit = pose === 'guest-ready';
     this.apply(frameFor(pose, this.frame));
   }
 
   sample(sequence: SequenceName, t: number): void {
+    // The director's cut after `interruptCut` lands here at t = 0: the carried fire takes over.
+    if (this.pendingChange && this.last === null && t === 0 && sequence !== 'host') this.change = this.pendingChange;
+    else if (this.last?.sequence !== sequence) this.change = null;
+    this.pendingChange = null;
     this.tail = null;
     this.last = { sequence, t };
     this.restingLit = false;
-    this.apply(sampleSequence(sequence, t, this.frame));
+    this.apply(sampleSequence(sequence, t, this.frame, this.change));
   }
 
   /**
@@ -138,8 +164,8 @@ export class BirthdayScene implements SceneInstance {
     this.liveTime += dt;
     this.flickerGain = Math.min(1, this.flickerGain + dt / FLICKER.resume);
     if (this.tail !== null) {
-      this.tail += dt;
-      if (this.tail >= SMOKE.end) this.tail = null;
+      this.tail.clock += dt;
+      if (this.tail.clock >= SMOKE.end) this.tail = null;
     }
     if (this.restingLit && this.liveLit < MELT_CAP) {
       this.liveLit = Math.min(MELT_CAP, this.liveLit + dt);
@@ -152,30 +178,40 @@ export class BirthdayScene implements SceneInstance {
     return this.tail !== null || this.frame.flames.some((f) => f.intensity > 0) || (this.restingLit && this.liveLit < MELT_CAP);
   }
 
-  /** Rest: still flames (no flicker), no smoke, the melt back to the canonical pose's. */
+  /**
+   * Rest: still flames (no flicker), no smoke, the melt back to the canonical pose's. Right after
+   * a change of mind's `interruptCut` the lit time is kept (the fire it carries keeps the smoke).
+   */
   settle(): void {
     this.flickerGain = 0;
     this.tail = null;
-    this.liveLit = 0;
+    if (!this.keepLive) this.liveLit = 0;
+    this.keepLive = false;
     this.applyMelt(this.frame);
   }
 
-  /** Accept time the ember and smoke are drawn at (−1: none). */
-  private smokeClock(): number {
-    return this.frame.smokeTime >= 0 ? this.frame.smokeTime : this.tail ?? -1;
+  /** The smoke's clock, kind and carry now: the sequence's, or the tail's (null: none). */
+  private smoke(): { clock: number; kind: SmokeKind; carry: number } | null {
+    const f = this.frame;
+    if (f.smokeTime >= 0) return { clock: f.smokeTime, kind: f.smokeKind, carry: f.smokeCarry };
+    return this.tail;
   }
 
   /** Compose the authored flames with the live flicker, the embers and the smoke, and draw them. */
   beforeRender(): void {
     const f = this.frame;
-    const clock = this.smokeClock();
+    const sm = this.smoke();
+    const clock = sm?.clock ?? -1;
     const g = this.flickerGain;
     const gain = g * g * (3 - 2 * g);
     this.rig.candles.forEach((c, i) => {
       const flame = f.flames[i]!;
       flicker(i, this.liveTime, flame.intensity > 0 ? gain : 0, this.flicker);
-      // The wick glows inside a burning flame; bare after the breath, it flares and cools.
-      const ember = clock >= 0 ? emberAt(i, clock) : EMBER.lit * flame.lit * (flame.out ? 0 : 1);
+      // The wick glows inside a burning flame; bare after the breath, it flares and cools to ash.
+      const ember = sm ? emberAt(i, sm.clock, sm.kind) : EMBER.lit * flame.lit * (flame.out ? 0 : 1);
+      const char = wickChar((f.litTime[i] ?? 0) + this.liveLit);
+      c.fire.wick.char.value = char;
+      c.fire.wick.ash.value = sm ? ashAt(i, sm.clock, sm.kind) : flame.out && char > 0 ? 1 : 0;
       poseFlame(c.fire, c.candle, flame, this.flicker, ember);
       // Wick tip (burnt down by the melt) in cake_secondary space, for the smoke.
       const w = this.wickTmp.copy(c.fire.wickTip);
@@ -185,13 +221,53 @@ export class BirthdayScene implements SceneInstance {
       this.wicks[i]![1] = w.y;
       this.wicks[i]![2] = w.z;
     });
-    this.rig.smoke.update(clock, this.wicks);
+    // The smoke rises in the room (birthday_root): each parcel from where its wick was when it was
+    // born, on the cake on its stand or, once it set off for the bin, carried (sequences.ts cakeAt).
+    if (!sm) {
+      this.rig.smoke.update(-1, 'breath', () => {});
+      return;
+    }
+    const carry = sm.carry;
+    this.rig.smoke.update(clock, sm.kind, (i, birth, out) => {
+      const w = this.wicks[i]!;
+      const v = this.wickTmp.set(w[0], w[1], w[2]);
+      let p = this.cakeTmp.copy(ON_STAND);
+      let speed = 0;
+      if (carry >= 0 && birth > carry) {
+        // On the carried cake: where it was then, leaning as it swung, and how fast it moved.
+        const td = birth - carry;
+        speed = cakeAt(td + SPEED_H, this.cakeTmp).distanceTo(cakeAt(Math.max(0, td - SPEED_H), this.cakeTmp2)) / (2 * SPEED_H * MPS);
+        p = cakeAt(td, this.cakeTmp);
+        v.applyQuaternion(this.qBirth.setFromAxisAngle(LEAN_AXIS, carryLean(td)));
+      }
+      out[0] = p.x + v.x;
+      out[1] = p.y + v.y;
+      out[2] = p.z + v.z;
+      return speed;
+    }, carry >= 0 ? carry + SMOKE_EMIT_UNTIL : Infinity);
   }
 
-  /** From the bin (or on the way), a straight blend back would pull the cake through the stand. */
+  /**
+   * A change of mind. From the bin (or on the way) a straight blend back would pull the cake
+   * through the stand: cut to the lit cake on its stand, as before. Otherwise the fire already under
+   * way is carried across (the director's 0 ms cut, then the new sequence continues it): blown-out
+   * or snuffed candles stay out, their smoke keeps rising on its own clock, and the lit time is kept
+   * so the melt does not pop back. Before any fire has begun the lit cake blends as before (lit time kept).
+   */
   interruptCut(): boolean {
     const f = this.frame;
-    return f.binVisible || !f.cakeVisible || f.cakePos.distanceTo(ON_STAND) > 1e-3;
+    const lifted = !f.cakeVisible || f.cakePos.distanceTo(ON_STAND) > 1e-3;
+    const cut = lifted || f.binVisible;
+    const seq = this.last?.sequence ?? null;
+    this.pendingChange = null;
+    if (seq === 'host') return cut;
+    this.keepLive = true;
+    // Lifted off its stand: the clean cut back to the lit cake (the accept then has its candles to blow).
+    if (lifted) return true;
+    const sm = this.smoke();
+    if (sm && fireBegun(sm.kind, sm.clock)) this.pendingChange = { kind: sm.kind, clock: sm.clock };
+    else if (seq === null && f.flames.every((fl) => fl.out)) this.pendingChange = { kind: 'breath', clock: FIRE_DONE };
+    return cut || this.pendingChange !== null;
   }
 
   /** Low tier for the imported stand, frosting and candle materials (the library handles the rest). */
@@ -206,7 +282,6 @@ export class BirthdayScene implements SceneInstance {
     n.bin_root!.visible = true;
     for (const c of this.rig.candles) c.fire.quad.visible = true;
     this.rig.smoke.mesh.visible = true;
-    this.rig.smoke.puffMesh.visible = true;
     await renderer.compileAsync(scene, camera);
     this.rig.setPreset(this.preset === 'vanilla' ? 'cocoa' : 'vanilla');
     await renderer.compileAsync(scene, camera);
