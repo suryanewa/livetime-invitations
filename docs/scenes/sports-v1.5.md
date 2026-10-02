@@ -268,9 +268,10 @@ seven headless Chromes; it now measures against a reference kernel (above).
 
 ## Tests
 
-Round 1: unit 286, browser 87. Polish round (merged with `v1.5/integration` 5072dd4): unit (`pnpm test`) **372
-passed** (`tests/sports.test.ts`: 48, now with the change of mind, the net's hang, its rolling stop and the load-robust
-cost test); browser (`pnpm test:browser`, port 5504) **95 passed**. `pnpm typecheck` clean.
+Round 1: unit 286, browser 87. Polish round, merged with `v1.5/integration` 79a061a: unit (`pnpm test`) **391
+passed** in 29 files (`tests/sports.test.ts`: 48, now with the change of mind, the net's hang, its rolling stop and the
+load-robust cost test; it passes at load average 24–28 too); browser (`pnpm test:browser`, port 5504) **95 passed**.
+`pnpm typecheck` clean.
 
 ## Evidence (`evidence/v1.5/sports/`)
 
