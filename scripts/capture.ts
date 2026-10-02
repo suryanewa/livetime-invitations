@@ -143,7 +143,8 @@ const SCENE_CAPTURE = {
     presets: [['vanilla', '{ category: "birthday", cake: "vanilla" }'], ['cocoa', '{ category: "birthday", cake: "cocoa" }']],
     // Declined shows the empty stand and the closed bin: identical for both frostings.
     sharedDeclined: true,
-    clips: { host: 1.6, accept: 1.7, decline: 1.8, change: 2.6 },
+    // v1.5 polish: the careful candle placement makes the host beat ≈ 2.45 s.
+    clips: { host: 2.8, accept: 1.7, decline: 1.8, change: 2.6 },
   },
   sports: {
     presets: [['orange', '{ category: "sports", ball: "orange" }'], ['cream', '{ category: "sports", ball: "cream" }']],
