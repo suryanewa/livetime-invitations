@@ -122,6 +122,22 @@ Lit time comes from the clip (∫ flameScale, so a flame drives the melt in prop
 after the blow) plus the live seconds at rest at guest-ready (`BirthdayScene.simulate`; reduced motion never
 advances it, so canonical poses stay exact).
 
+**Change of mind, declined → accept (guest-experience review).** It was a hard one-frame cut: the bin vanished, the
+cake jumped back onto its stand, lit, and the camera reframed. Now, as Dinner does, the decline rewinds along its own
+path (`src/scenes/birthday/change.ts`): the flaps re-open, the cake rises out of the bin, crosses back and is set on
+its stand, the bin slides out; then the accept plays (the candles are already placed; the host beat is not replayed).
+
+- Paced by path length (the cake's seen move plus the bin's, each in units of the decline's own fastest frame; the
+  cake's fall out of sight below the rim and the camera-only first 0.12 s cost nothing), leaving at the decline's
+  own speed and landing softly; no frame faster than 1.6 × the decline's own (the cake ≤ 3.9 m/s against its fall's
+  2.5 m/s). Rewind 0.15 s (bin only) to 0.57 s (mid-drop); 0.52 s from the declined pose.
+- The camera comes home on its own C1 curve (`src/scenes/birthday/pull.ts`, Dinner's rule): from the interrupted pull
+  at its own speed, never tighter than the decline at the same scene state, at home 0–0.11 s after the scene's rewind.
+- The fire is never rewound: candles the snuff had reached stay out (their wax goes on setting), their melt stays
+  where it was; a candle still burning at the change (the first 20–60 ms) burns on and the accept's breath blows it
+  out. The accepted pose after a change keeps that fire state (the canonical pose would pop the melt).
+- Back to decline mid-rewind: it plays on from where it is. Reduced motion still cuts with the pose.
+
 ## Hand-off to the fire owner (`v1.5/birthday-fire`)
 
 - `src/scenes/birthday/melt.ts`: `meltState(candle, tLit, out?)`, `candleShortening(candle, tLit)` (scene units; lower
@@ -137,6 +153,12 @@ advances it, so canonical poses stay exact).
 - `src/scenes/birthday/index.ts`: `simulate(dt)` advances `liveLit` at guest-ready and `liveCool` after a watched
   blow-out; `settling()` ORs both; `interruptCut()` sets `interrupting`, so the next `settle()` keeps `liveLit`.
   If the fire branch carries the live lit time its own way, keep one of the two and make `applyMeltTo` read it.
+- Change of mind (`change.ts`, `pull.ts`, `index.ts` `interruptCut`/`pose`/`sample`/`settle`/`framePull`): from the
+  decline (playing or declined) `interruptCut` plans the rewind and arms it; the director's settle and guest-ready
+  pass through; the accept's samples come from `sampleAnswerChange`. It sets the fire in its frames by a simple rule
+  (snuffed candles continue the decline's snuff forward and stay out; burning ones burn on, then meet the breath). The
+  fire branch's `FireChange` (carried smoke) should take over the fire fields there: keep `sampleAnswerChange`'s
+  motion and replace its fire loop with `carriedFire`. Accept → decline is untouched (the cake is on its stand).
 
 ## Evidence
 

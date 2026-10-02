@@ -9,7 +9,7 @@ import type { CakePreset } from '../../../models/cake.ts';
 import { BIN, flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
-import { declinePull, silhouettePoints } from '../../render/framing.ts';
+import { silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { birthdayFramePoints, birthdayRestFramePoints } from './framing.ts';
@@ -17,6 +17,8 @@ import { MELT_CAP, meltState, newMeltState, SET_AFTER, solidify } from './melt.t
 import { runGroove } from '../../../models/cakeShaders.ts';
 import { CANDLE_LEAN, DURATIONS, ON_STAND } from './poses.ts';
 import { frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from './sequences.ts';
+import { type AnswerChange, changeTime, planAnswerChange, sampleAnswerChange } from './change.ts';
+import { birthdayPull } from './pull.ts';
 import { EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, newFlicker, SMOKE } from './fire.ts';
 
 const UP = new Vector3(0, 1, 0);
@@ -37,8 +39,12 @@ export class BirthdayScene implements SceneInstance {
   readonly restFramePoints = birthdayRestFramePoints();
 
   private readonly frame = newFrame();
-  /** v1.5 decline pull-back: the camera's place between the rest (0) and decline (1) fits. */
-  private pull = 0;
+  /** What is showing: the last outcome sampled (or posed) and its time, for a change of mind. */
+  private shown: { seq: SequenceName; t: number; rate: number } | null = null;
+  /** The change of mind in progress (change.ts): the next outcome's playback rewinds the decline first. */
+  private change: AnswerChange | null = null;
+  /** The director poses guest-ready between interruptCut and the new outcome's first sample. */
+  private changeArmed = false;
   private preset: CakePreset;
   private readonly qYaw = new Quaternion();
   private readonly qTilt = new Quaternion();
@@ -129,35 +135,51 @@ export class BirthdayScene implements SceneInstance {
   }
 
   pose(pose: CanonicalPose): void {
+    // The director's cut of a change of mind passes through guest-ready: the change stays armed.
+    const c = this.change, cutOfChange = this.changeArmed;
+    if (this.changeArmed) this.changeArmed = false;
+    else this.change = null;
     // The accept sequence ending on its own pose hands the smoke over to the live clock: it keeps
     // rising from where the sequence left it (the canonical pose itself carries none).
     const last = this.last;
     this.tail = pose === 'accepted' && last?.sequence === 'accept' && last.t > DURATIONS.accept - 0.25 ? last.t : null;
     this.last = null;
     this.restingLit = pose === 'guest-ready';
+    this.shown = pose === 'accepted' ? { seq: 'accept', t: DURATIONS.accept, rate: 0 } : pose === 'declined' ? { seq: 'decline', t: DURATIONS.decline, rate: 0 } : null;
+    // A change of mind played to its end rests on its outcome with the fire it carried: the candles
+    // the snuff reached stay out, their melt where it was (the canonical pose would pop it).
+    if (!cutOfChange && c && pose === (c.next === 'accept' ? 'accepted' : 'declined')) {
+      this.apply(sampleAnswerChange(c, DURATIONS[c.next], this.frame));
+      this.tail = this.frame.smokeTime >= 0 ? this.frame.smokeTime : null;
+      this.frame.smokeTime = -1;
+      this.restingOut = true;
+      return;
+    }
     // The wax goes on setting on the live clock only where the guest watched the blow-out (as the
     // smoke); a canonical 'accepted' reached any other way is still.
     this.restingOut = this.tail !== null;
-    this.pull = pose === 'declined' ? 1 : 0;
     this.apply(frameFor(pose, this.frame));
   }
 
   sample(sequence: SequenceName, t: number): void {
+    this.changeArmed = false;
+    if (this.change && sequence !== this.change.next) this.change = null;
     this.tail = null;
     this.last = { sequence, t };
+    this.shown = { seq: sequence, t, rate: 1 };
     this.restingLit = false;
     this.restingOut = false;
-    this.pull = sequence === 'decline' ? declinePull(t) : 0;
-    this.apply(sampleSequence(sequence, t, this.frame));
+    const c = this.change;
+    this.apply(c ? sampleAnswerChange(c, t, this.frame) : sampleSequence(sequence, t, this.frame));
   }
 
   /**
    * v1.5 decline pull-back: the camera eases out as the bin comes in and the cake is lifted
-   * (src/render/framing.ts DECLINE_PULL), at the decline fit before the carry crests the rim; a change of mind
-   * (the director's cut to guest-ready) cuts the camera with the scene.
+   * (src/render/framing.ts DECLINE_PULL), at the decline fit before the carry crests the rim. On a
+   * change of mind from the decline it comes back in on its own curve as the decline rewinds (pull.ts).
    */
   framePull(): number {
-    return this.pull;
+    return birthdayPull(this.shown, this.change);
   }
 
   /**
@@ -194,6 +216,11 @@ export class BirthdayScene implements SceneInstance {
 
   /** Rest: still flames (no flicker), no smoke, the melt back to the canonical pose's. */
   settle(): void {
+    // The settle that comes with a change of mind's cut: nothing is snapped, the change carries it.
+    if (this.changeArmed) {
+      this.interrupting = false;
+      return;
+    }
     this.flickerGain = 0;
     this.tail = null;
     // A change of mind keeps the melt (the candles were really lit that long); load, replay and
@@ -233,9 +260,23 @@ export class BirthdayScene implements SceneInstance {
     this.rig.smoke.update(clock, this.wicks);
   }
 
-  /** From the bin (or on the way), a straight blend back would pull the cake through the stand. */
+  /**
+   * A change of mind. From the decline (playing, or declined) a straight blend back would pull the
+   * cake through the stand and a cut teleports it: the director is asked to cut, and the cut is
+   * never seen, because the accept's playback first rewinds the decline along its own path from
+   * exactly the current frame (change.ts), the camera with it (pull.ts). Changing back to the
+   * decline mid-rewind plays it on from where it is. Otherwise (the cake on its stand) a blend.
+   */
   interruptCut(): boolean {
     this.interrupting = true;
+    const s = this.shown, c = this.change;
+    const [from, at, rate] = c && s && s.seq === c.next ? changeTime(c, s.t) : s ? [s.seq, s.t, s.rate] as const : [null, 0, 0] as const;
+    if (s && from === 'decline') {
+      this.change = planAnswerChange('decline', at, rate, s.seq === 'accept' ? 'decline' : 'accept');
+      this.changeArmed = true;
+      return true;
+    }
+    this.change = null;
     const f = this.frame;
     return f.binVisible || !f.cakeVisible || f.cakePos.distanceTo(ON_STAND) > 1e-3;
   }
