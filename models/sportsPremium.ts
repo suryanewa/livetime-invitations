@@ -128,10 +128,11 @@ function buildMasterStand(lib: Lib, hoop: Object3D): void {
   // recessed foot (shadow gap) and the fill cap and socket on top.
   const hz = (B.front - B.back) / 2, cz = (B.front + B.back) / 2;
   const H = B.height;
-  const roll = 0.11;
+  // Blow-moulded: a generous round over the top edge, a crisp recessed foot below.
+  const roll = 0.1, inset = roll + 0.03;
   const plan = planRoundedRect(B.halfWidth, hz, B.corner, 10, 0, cz);
-  const side = sweep(plan, profile([[-0.035, 0], [-0.02, 0.0, 0.006], [0, 0.03, 0.012], [0, H - roll, roll * 0.9], [-roll, H]], 6));
-  const top = cap(planContour(B.halfWidth, hz, B.corner, 10, -roll, 0, cz), H, true);
+  const side = sweep(plan, profile([[-0.035, 0], [-0.02, 0.0, 0.006], [0, 0.03, 0.012], [0, H, roll], [-inset, H]], 10));
+  const top = cap(planContour(B.halfWidth, hz, B.corner, 10, -inset, 0, cz), H, true);
   const under = cap(planContour(B.halfWidth, hz, B.corner, 10, -0.035, 0, cz), 0, false);
   const fill = place(turned([[0, 0], [0.105, 0, 0.004], [0.105, 0.03, 0.01], [0.085, 0.045, 0.012], [0, 0.045]], { segments: 40, filletSegments: 2 }), { y: H - 0.003, z: B.back + 0.5 });
   const socket = onPole(turned([[0, -0.06], [P.lower + 0.07, -0.06], [P.lower + 0.07, 0.03, 0.03], [P.lower + 0.012, 0.1, 0.01], [0, 0.1]], { segments: 40, filletSegments: 3 }));
@@ -152,7 +153,9 @@ function buildMasterStand(lib: Lib, hoop: Object3D): void {
   // Arms: box section from the pole's axis (inside the sleeve) to the back plate; the lower one is longer (the pole leans).
   const armTo = back - plateT;
   const arms = [upperY, lowerY].map((y) => place(roundedBox(A.width, A.height, armTo - axisZ(y), 0.012, 2), { y, z: (axisZ(y) + armTo) / 2 }));
-  mesh('hoop_stand', mergeParts([side, top, under, fill, socket, ...wheels, lower, collarG, knob, upper, sleeve, ...arms].map((geometry) => ({ geometry }))), lib.get('mat_body_ink'), hoop);
+  // Satin HDPE (base, socket, fill cap, wheels, collar and knob) and black powder-coated steel (pole, sleeve, arms).
+  mesh('hoop_stand', mergeParts([side, top, under, fill, socket, ...wheels, collarG, knob].map((geometry) => ({ geometry }))), lib.get('mat_stand_plastic'), hoop);
+  mesh('hoop_pole', mergeParts([lower, upper, sleeve, ...arms].map((geometry) => ({ geometry }))), lib.get('mat_stand_steel'), hoop);
 
   // Steel: the back plate on the board's flat back, the arms' through-bolts and the wheel hubs.
   const plateH = armSpan + 0.2;

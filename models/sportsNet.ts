@@ -17,17 +17,18 @@ import { BALL_R, BOARD, BOARD_PIVOT, RECOIL_LIMIT, RIM_BACKSTOP, RIM_HINGE, RIM_
  * **Simulation** (`NetSim`): position-based (Verlet with XPBD constraints, Macklin et al. 2016,
  * "small steps": 4 substeps per 1/120 s fixed step, one constraint pass each), gravity 9.81 m/s²,
  * per-knot mass of a 40 g nylon mini net (±10 % seeded jitter, so the net is not a perfect
- * lathe), cords as stiff tension-only constraints (they go slack under compression, so the net can
- * bunch and billow), the diamond's two diagonals as soft shear springs (the knots' and the braid's
- * bending stiffness: the net keeps its open diamonds instead of collapsing to a rope), air drag on
- * the cords, the board face as a wall behind the net, and the ball as a moving sphere: knots
- * inside it are pushed out along its normal and dragged along its surface by friction (μ 0.5).
+ * lathe), cords as elastic tension-only constraints (braided nylon: they stretch under the ball's
+ * drag and snap back, and go slack under compression, so the net can bunch and billow), the
+ * diamond's two diagonals as soft shear springs (the knots' and the braid's bending stiffness: the
+ * net keeps its open diamonds instead of collapsing to a rope), air drag on the cords, the board
+ * face as a wall behind the net, and the ball as a moving sphere: knots inside it are pushed out
+ * along its normal and dragged along its surface by the leather's grip.
  * The hanging rest pose is the equilibrium under gravity (`rest`), solved once.
  *
  * **Rendering** (`NetSkin`): the master's strand and knot meshes become skinned meshes with one
  * bone per cord piece (its frame: along the cord, radial, binormal, stretched with the cord) and
  * one per knot (its frame from the cords above it). The GPU does the per-vertex work (~70k
- * vertices), the CPU only sets 180 bone transforms; the shadow pass skins the same way. The
+ * vertices), the CPU only sets 190 bone transforms; the shadow pass skins the same way. The
  * loops stay on the rim.
  *
  * **Rim and board** (`HoopSprings`): the cords pinned to the loops pull on the rim; their summed
@@ -78,9 +79,11 @@ function components(pos: ArrayLike<number>, index: ArrayLike<number> | null): Co
   };
   if (index) for (let i = 0; i < index.length; i += 3) { join(index[i]!, index[i + 1]!); join(index[i]!, index[i + 2]!); }
   else for (let i = 0; i < n; i += 3) { join(i, i + 1); join(i, i + 2); }
-  const key = new Map<string, number>();
+  // Coincident positions (to 0.05 mm) join too: an exact integer key (|coordinate| < 2 su).
+  const key = new Map<number, number>();
+  const q = (v: number) => Math.round(v * 2e4) + 40000;
   for (let i = 0; i < n; i++) {
-    const k = `${Math.round(pos[i * 3]! * 2e4)},${Math.round(pos[i * 3 + 1]! * 2e4)},${Math.round(pos[i * 3 + 2]! * 2e4)}`;
+    const k = (q(pos[i * 3]!) * 80001 + q(pos[i * 3 + 1]!)) * 80001 + q(pos[i * 3 + 2]!);
     const o = key.get(k);
     if (o === undefined) key.set(k, i);
     else join(o, i);
@@ -237,14 +240,17 @@ export const NET_SIM = {
   substeps: 4,
   /** Whole-net mass (kg): a nylon mini net. */
   mass: 0.04,
-  /** Cord compliance (su/N): 2 % stretch of a 5 cm piece under 1 N (a 3-ply nylon cord). */
-  cordCompliance: 0.006,
+  /**
+   * Cord compliance (su/N): a 5 cm piece stretches 4.3 mm (9 %) per newton. Braided nylon net
+   * cord is that elastic; it stores the ball's drag and snaps the net back up when the ball leaves.
+   */
+  cordCompliance: 0.012,
   /** Diamond diagonals: soft (the knots' and braid's stiffness), compliance in su/N. */
   shearCompliance: 0.4,
   /** Air drag on the cords (1/s): velocity decays e^(−drag·t). */
   drag: 0.8,
-  /** Ball–cord friction (fraction of the relative tangential velocity removed per contact step). */
-  friction: 0.6,
+  /** Ball–cord grip (fraction of the relative tangential velocity removed per contact step): pebbled leather on cord. */
+  friction: 0.7,
   /** Cord radius at a knot (su): the ball keeps this clearance from a knot's centre. */
   knotRadius: 0.018,
   /** Settled when every knot moves slower than this (su/s) and lies within `restTolerance` of rest. */
@@ -357,6 +363,16 @@ export class NetSim {
     this.settle();
   }
 
+  /** The motion state (positions, previous positions), to carry it across an interruption. */
+  save(): { x: Float64Array; prev: Float64Array; settled: boolean } {
+    return { x: this.x.slice(), prev: this.prev.slice(), settled: this.settled };
+  }
+  restore(state: { x: Float64Array; prev: Float64Array; settled: boolean }): void {
+    this.x.set(state.x);
+    this.prev.set(state.prev);
+    this.settled = state.settled;
+  }
+
   /** Snap to the hanging rest pose. */
   settle(): void {
     this.x.set(this.rest);
@@ -429,7 +445,8 @@ export class NetSim {
       if (this.tensionOnly[c] && C <= 0) continue;
       const wa = w[a]!, wb = w[b]!;
       const alpha = this.cc[c]! / h2;
-      const dl = (-C - alpha * 0) / (wa + wb + alpha);
+      // XPBD with one pass per substep (λ starts at 0 each substep).
+      const dl = -C / (wa + wb + alpha);
       const nx = dx / d, ny = dy / d, nz = dz / d;
       x[a * 3] = x[a * 3]! - wa * dl * nx; x[a * 3 + 1] = x[a * 3 + 1]! - wa * dl * ny; x[a * 3 + 2] = x[a * 3 + 2]! - wa * dl * nz;
       x[b * 3] = x[b * 3]! + wb * dl * nx; x[b * 3 + 1] = x[b * 3 + 1]! + wb * dl * ny; x[b * 3 + 2] = x[b * 3 + 2]! + wb * dl * nz;
@@ -496,7 +513,8 @@ export class NetSim {
  * I ≈ 0.045 kg·m²) on a break-away spring of 80 N·m/rad (5° under 7 N·m: a firm hand pull at the
  * front of a mini rim), ζ 0.15 (7 Hz); the board (3 kg polycarbonate in a steel frame, I ≈ 0.27
  * kg·m² about its back) on a 1¾" steel pole and its clamp, 2500 N·m/rad, ζ 0.06 (15 Hz). A swish
- * moves the rim about half a degree and the board a few hundredths: the net does the work.
+ * (≈ 6 N on the hooks at its peak) dips the rim about a degree, and it springs back onto its stop
+ * against the board; the board moves a few hundredths of a degree: the net does the work.
  */
 export const HOOP_SPRINGS = {
   rim: { inertia: 0.045, stiffness: 80, zeta: 0.15 },
@@ -533,6 +551,12 @@ export class HoopSprings {
   settle(): void {
     this.rim = this.board = this.rimV = this.boardV = 0;
     this.settled = true;
+  }
+  save(): [number, number, number, number, boolean] {
+    return [this.rim, this.board, this.rimV, this.boardV, this.settled];
+  }
+  restore(state: [number, number, number, number, boolean]): void {
+    [this.rim, this.board, this.rimV, this.boardV, this.settled] = state;
   }
 }
 

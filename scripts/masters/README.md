@@ -230,7 +230,7 @@ pass: the report gives the cost, do not trade fidelity for it.
    holds aside, at any tier; never the stage's environment map).
 6. Mesh nodes are quantised (KHR_mesh_quantization: normalised Int16 positions plus a node
    scale/offset). Anything that rewrites vertices must dequantise first and bake the node transform
-   (see `netDeform` in models/sports.ts). Mapped and created contract nodes are empty and leave the
+   (see `rigNet` in models/sports.ts). Mapped and created contract nodes are empty and leave the
    exporter at their pivot with unit scale (the mesh of a mapped node is on its `<name>_mesh` child,
    which gets the quantisation scale/offset). Builder mesh nodes that are leaves get it too. So
    animate position, rotation and scale (squash, recoil) on empty nodes (`ball_secondary`, a mapped
@@ -264,7 +264,7 @@ export const recipe: SceneRecipe = {
     {
       file: 'basketball-hoop.glb',
       anchor: 'hoop_root',
-      scale: HOOP_SCALE,                                 // rim inner radius 0.451 → 0.4 (1.6 × BALL_R)
+      scale: HOOP_SCALE,                                 // rim inner radius 0.451 → 0.5115 (the 14.5" rim, v1.5)
       align: { node: 'rim-ring', point: 'center', to: RIM_LOCAL.toArray() },
       materials: { steel: { rename: 'hoop_steel', ownEnv: 1.1 }, rope: { rename: 'hoop_rope' } /* … */ },
       decimate: { 'net-knots': { ratio: 0.4, error: 0.001 } },
@@ -299,7 +299,7 @@ contract node found. The report:
 ```
 
 Runtime: `src/scenes/sports/index.ts` (variants, prepareImported, setLowDetail, disposeImported) and
-`models/sports.ts` (`rigSports(root, lib, preset, variants)`, `netDeform` on the master net).
+`models/sports.ts` (`rigSports(root, lib, preset, variants)`, `rigNet`: the master net's cord lattice simulated and skinned, models/sportsNet.ts).
 
 ## Files
 

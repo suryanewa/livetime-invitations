@@ -4,7 +4,7 @@ import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
   BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netRestRadius, POLE, recoilPoint, RIM, RIM_CENTER, RIM_LOCAL, rigSports, SPORTS_WALL_Z, SPORTS_WORLD_SCALE, STAND, type BallPreset, type SportsRig,
 } from '../../../models/sports.ts';
-import type { BallContact } from '../../../models/sportsNet.ts';
+import type { BallContact, HoopSprings, NetSim } from '../../../models/sportsNet.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { silhouettePoints } from '../../render/framing.ts';
@@ -116,7 +116,8 @@ export function blendClearance(from: Vector3, to: Vector3 = BALL_AT.guest, sampl
  * Spec revision #9: blend through guest-ready wherever a straight blend is clean, and cut where it
  * would pass the ball through the rim, net, board, arms, pole or base, or while the ball is still
  * playing out its physics after the sequence (`tail`: a blend would first snap it to rest). The
- * net keeps simulating through a blend or a cut (it reacts to the ball leaving it).
+ * net keeps swinging through either (`SportsScene.refresh` carries its motion over the director's
+ * settle), so it answers the ball leaving it.
  */
 export function sportsInterruptCut(ball: Vector3, tail: boolean): boolean {
   return tail || blendClearance(ball) < BALL_R + BLEND_MARGIN;
@@ -156,7 +157,13 @@ export class SportsScene implements SceneInstance {
   private tail: Clock | null = null;
   /** The ball's time as the net last saw it (the net steps through the ball's path, not frame to frame). */
   private netClock: Clock | null = null;
-  private readonly ballNow = new Vector3();
+  /**
+   * The net's and the hoop springs' motion as the last `settle()` found it. An interruption (the
+   * director's cut or blend) settles and then calls `refresh()`, which restores it: the net keeps
+   * swinging through a change of mind. Reduced motion, a replay or a reset never refresh, so there
+   * the net stays snapped to rest. Dropped by the next sample or step.
+   */
+  private carry: { net: ReturnType<NetSim['save']>; springs: ReturnType<HoopSprings['save']> } | null = null;
   private readonly contact: BallContact = { center: new Vector3(), previous: new Vector3() };
 
   constructor(readonly rig: SportsRig, config: Extract<SceneConfig, { category: 'sports' }>) {
@@ -200,6 +207,7 @@ export class SportsScene implements SceneInstance {
   }
 
   sample(sequence: SequenceName, t: number): void {
+    this.carry = null;
     // A new run of a sequence starts the net's view of the ball afresh.
     if (!this.netClock || this.netClock.seq !== sequence || t < this.netClock.t - 1e-6 || this.tail) this.netClock = { seq: sequence, t };
     this.tail = null;
@@ -209,6 +217,7 @@ export class SportsScene implements SceneInstance {
 
   /** The continuous channel: the tail, the net (stepping along the ball's own path) and the hoop springs. */
   simulate(dt: number): void {
+    this.carry = null;
     if (this.tail) {
       this.tail.t = Math.min(this.tail.t + dt, REST_AT[this.tail.seq]);
       this.apply(sampleTrack(this.tail.seq, this.tail.t, this.frame));
@@ -248,6 +257,7 @@ export class SportsScene implements SceneInstance {
     this.sampling = null;
     this.netClock = null;
     const net = this.rig.net;
+    this.carry = net && !net.sim.settled ? { net: net.sim.save(), springs: this.rig.springs.save() } : null;
     if (net) {
       net.sim.settle();
       net.skin.update();
@@ -256,8 +266,16 @@ export class SportsScene implements SceneInstance {
     this.rig.recoil.set(0, 0);
   }
 
-  /** Interruption blends move the ball directly; the shadow follows the drawn ball (the net keeps simulating). */
+  /** Interruptions: the net's motion carries over the director's settle; the shadow follows the drawn ball. */
   refresh(): void {
+    const net = this.rig.net;
+    if (this.carry && net) {
+      net.sim.restore(this.carry.net);
+      this.rig.springs.restore(this.carry.springs);
+      this.rig.recoil.set(this.rig.springs.board, this.rig.springs.rim);
+      net.skin.update();
+    }
+    this.carry = null;
     const n = this.rig.nodes;
     this.updateShadow(n.ball_authored!.position, 1 - n.ball_secondary!.scale.y);
   }
@@ -300,7 +318,6 @@ export class SportsScene implements SceneInstance {
   private apply(f: SportsFrame): void {
     const n = this.rig.nodes;
     n.ball_authored!.position.copy(f.ballPos);
-    this.ballNow.copy(f.ballPos);
     // Squash (volume-preserving, along the floor normal) on ball_secondary, which never rotates,
     // so its scale axis stays the contact normal while the ball spins inside it.
     const sv = 1 - f.squash, sh = 1 / Math.sqrt(sv);

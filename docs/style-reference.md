@@ -10,7 +10,7 @@ Owner: *"the sense of scale with the models is pretty poor. Make it feel more co
 | --- | --- | --- | --- |
 | Party | 12-inch LP, 30.48 cm | 1 (already) | plinth 42.1 × 32.4 cm |
 | Birthday | cake on its stand, 35 cm | 1 (already) | stand 33.5 cm, cake 27.7 cm across, bin 37.6 cm |
-| Sports | mini ball, 18 cm | 1.8 | rim 28.8 cm inner (1.6 ×), board 58.6 × 46 cm, rim 62 cm up |
+| Sports | mini ball, 18 cm | 1.8 | v1.5: a mini hoop system at 4 ft: rim 36.8 cm inner (ball / rim 0.49), board 74.9 × 58.9 cm, rim 121.9 cm up, base behind the board |
 | Dinner | dinner plate, 27 cm | 0.844 | cloche 22 cm, covered dish 15.9 cm tall, bin 31.7 cm |
 | Business | CR80 card, 5.4 cm | 0.381 | holder 5.7 × 8.9 cm, strap 1.7 cm, reader 7.0 × 10.4 cm |
 
@@ -187,7 +187,7 @@ Surya asked that every interaction use the new models: *"buttery smooth and the 
 - **Ball:** the basketball master (81k triangles; albedo, ORM and normal maps at 2048×1365, clearcoat 0.2) at r 0.25. Its great-circle seam cross faces the guest at guest-ready, as the v1.1 shader ball's did. The master's curved seams bow towards the cross, as on the scanned ball. A load-time multiply (`LEATHER_GRADE`) deepened the orange to about (222, 82, 24) at guest-ready *(removed in v1.3)*. **Cream preset:** a second albedo generated from the orange one, with the panels remapped to ivory (236, 229, 212) so the lit side separates from the peach stage by hue. The pebble mottling and seams are kept, and it is stored as a material variant. The v1.1 coral equator and limb darkening are not carried over.
 - **Hoop:** the master's board (dark wood frame, grey laminate face, white target), red powder-coated rim on its bracket, zinc steel hardware and a 20-strand twisted-rope net. It is scaled so the rim's inner diameter stays 1.6× the ball's. The v1.1 cream board, ink backer frame, coral target inlay and perforation row are replaced by the master's own design.
 - **Stand:** the v1.1 ink pole, ogee base, clamp and arm, with the chrome trim ring and a back plate on the master board (code-authored).
-- **Net:** the master's net is narrower than the ball at rest. On the made shot a **ball-following bulge** (`NetPose`, `netOpening`) opens each row just enough to clear the ball at that height, with strands, loops and knots moving together. The net stretches (≤ 20 %) while the ball drags it, then rebounds and settles to exactly rest 0.6 s after contact. The far layer keeps its 0.8 shade. *(The v1.2 foundation's uniform `netOpenScale` flare is superseded.)*
+- **Net:** the master's net is narrower than the ball at rest. *(v1.5: superseded by the simulated net, docs/scenes/sports-v1.5.md: the master's cord lattice, 10 loops, 6 × 10 knots, 120 cords, simulated with XPBD and skinned; the ball opens it, drags it, it whips back and settles over ≈ 2 s.)* v1.2: on the made shot a **ball-following bulge** (`NetPose`, `netOpening`) opened each row just enough to clear the ball at that height. The far layer keeps its 0.8 shade.
 - **Physics upgrades:**
   - Spin is integrated from continuous angular-velocity profiles: 2.5 rev/s of backspin on the made shot and 2.2 on the airball. The net grips the ball and eases its spin, and from the floor it rolls without sliding after a 35 ms skid.
   - Every floor contact gets a volume-preserving squash on `ball_secondary` (≤ 10 %, scaled by impact speed).

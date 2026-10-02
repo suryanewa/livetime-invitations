@@ -1,7 +1,7 @@
 import { type BufferAttribute, Float32BufferAttribute, type Material, Matrix4, type Mesh, type Object3D, Quaternion, Vector3 } from 'three';
 import { cameraDirection } from '../src/render/camera.ts';
 import { ContactShadow } from '../src/render/contactShadow.ts';
-import { BALL_R, BOARD_PIVOT, POLE, recoilPoint, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES, type BallPreset } from './sportsContract.ts';
+import { BALL_R, BOARD_PIVOT, recoilPoint, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES, STAND, type BallPreset } from './sportsContract.ts';
 import { analyseNet, HoopSprings, NetSim, NetSkin, netMeshKind } from './sportsNet.ts';
 import { buildSportsGeometry } from './sportsPremium.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
@@ -167,8 +167,9 @@ export function rigSports(root: Object3D, lib: ModelContext['lib'], preset: Ball
   const ballShadow = replace('ball_shadow', new ContactShadow({
     name: 'ball_shadow', shape: 'round', width: BALL_R * 2, depth: BALL_R * 2, spread: [1.3, 2.2], opacity: dir.shadow.opacity, line: 0.35, color: dir.shadow.color,
   }));
+  // The base is a rounded slab: a rectangular blob under its footprint.
   const hoopShadow = replace('hoop_shadow', new ContactShadow({
-    name: 'hoop_shadow', shape: 'round', width: POLE.baseRadius * 2, depth: POLE.baseRadius * 2, spread: [1.3, 1.5], opacity: dir.shadow.opacity * 0.9, line: 0.4, color: dir.shadow.color,
+    name: 'hoop_shadow', shape: 'rect', width: STAND.base.halfWidth * 2, depth: STAND.base.front - STAND.base.back, spread: [1.15, 1.12], opacity: dir.shadow.opacity * 0.9, line: 0.4, color: dir.shadow.color,
   }));
   nodes.ball_shadow = ballShadow;
   nodes.hoop_shadow = hoopShadow;

@@ -230,8 +230,9 @@ const netExited = (p: Vector3) => p.y + BALL_R < RIM_CENTER.y - NET.depth;
 // ── Tracks ─────────────────────────────────────────────────────────────────────────
 interface Built {
   gather: Gather;
+  /** The physics from RELEASE_AT to rest (knots at absolute sequence times). */
   track: BallTrack;
-  /** Seconds after RELEASE_AT … the knots are absolute times. */
+  /** World orientation at t = 0: the track's (and the gather's) rotations compose in front of it. */
   start: Quaternion;
 }
 

@@ -564,7 +564,7 @@ describe('Sports runtime GLB and the simulated net', async () => {
     expect(box.min.z).toBeCloseTo(h.z + BOARD.front - BOARD.thickness, 2);
     const hardware = new Box3().setFromPoints(vertices(node('hoop_hardware')));
     expect(hardware.max.z).toBeCloseTo(h.z + BOARD.front - BOARD.thickness, 2);
-    const stand = vertices(node('hoop_stand'));
+    const stand = [...vertices(node('hoop_stand')), ...vertices(node('hoop_pole'))];
     expect(Math.min(...stand.map((v) => v.y))).toBeCloseTo(0, 3);
     // Everything of the stand stays behind the board's back plate.
     expect(Math.max(...stand.map((v) => v.z))).toBeLessThanOrEqual(hardware.max.z - 0.01);
