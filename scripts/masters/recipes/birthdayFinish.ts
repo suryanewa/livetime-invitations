@@ -33,11 +33,15 @@
  * Everything is a pure function of the master and fixed seeds: `pnpm models birthday` is
  * deterministic.
  */
-import type { Accessor, Document, Material, Primitive } from '@gltf-transform/core';
+import type { Accessor, Document, Material, Node, Primitive } from '@gltf-transform/core';
 import { KHRMaterialsSheen } from '@gltf-transform/extensions';
 import { CAKE_SCALE, CANDLE_SINK, MASTER, MASTER_CANDLES } from '../../../models/birthdayContract.ts';
 import { BIN } from '../../../models/disposalBin.ts';
 import { loadSharp } from '../sharp.ts';
+import { Baker, Occupancy } from './birthdayBake.ts';
+import {
+  add, appendMesh, backMound, baseSmears, dot, emptyMesh, len, MM, mul, norm, pipedDot, type PipeMesh, pulledLine, recomputeNormals as recomputePipeNormals, ropeBorder, seedOf, shell, spiralRosette, STAR, stream, sub, swagStrand,
+} from './birthdayPiping.ts';
 
 type V3 = [number, number, number];
 
@@ -113,11 +117,12 @@ function accessor(doc: Document, type: 'SCALAR' | 'VEC2' | 'VEC3', array: Float3
   return doc.createAccessor().setType(type).setArray(array as Float32Array<ArrayBuffer>).setBuffer(doc.getRoot().listBuffers()[0]!);
 }
 
-function setGeometry(doc: Document, prim: Primitive, g: { pos: number[]; nrm: number[]; uv: number[]; idx: number[]; extra?: Record<string, number[]> }): void {
+function setGeometry(doc: Document, prim: Primitive, g: { pos: number[]; nrm: number[]; uv: number[]; idx: number[]; uv1?: number[]; extra?: Record<string, number[]> }): void {
   for (const sem of prim.listSemantics()) prim.setAttribute(sem, null);
   prim.setAttribute('POSITION', accessor(doc, 'VEC3', new Float32Array(g.pos)));
   prim.setAttribute('NORMAL', accessor(doc, 'VEC3', new Float32Array(g.nrm)));
   prim.setAttribute('TEXCOORD_0', accessor(doc, 'VEC2', new Float32Array(g.uv)));
+  if (g.uv1) prim.setAttribute('TEXCOORD_1', accessor(doc, 'VEC2', new Float32Array(g.uv1)));
   for (const [name, values] of Object.entries(g.extra ?? {})) prim.setAttribute(name, accessor(doc, 'SCALAR', new Float32Array(values)));
   prim.setIndices(accessor(doc, 'SCALAR', new Uint32Array(g.idx)));
 }
@@ -203,17 +208,49 @@ export function radialDrift(tier: TierId, theta: number, y: number): number {
   let d = F.barrel * ((2 * yy - 1) ** 2 - 1 / 3);
   // The ovality leans a little with height (a hand-scraped side is never a perfect cylinder).
   for (const k of F.drift) d += k.a * Math.cos(k.m * theta + k.phase + 0.35 * (yy - 0.5) * k.m);
+  // v1.6: the scraper's hand waves, 2–8 cm round the tier (≈ ±1 mm on the silhouette), their phase
+  // drifting with height so they run as soft diagonal swells; and a slow horizontal wave up the side.
+  for (const w of HAND_WAVES[tier]) d += 1.5 * w.a * Math.cos(w.m * theta + w.phase + w.k * (yy - 0.5));
+  d += 0.0016 * Math.sin(2 * Math.PI * 3.1 * yy + 1.7 * Math.cos(theta + (tier === 'top' ? 0.4 : 2.2)));
   return d;
 }
+
+/** The scraper's mid-frequency waves (fraction of the tier's radius; m waves round it; k radians of drift up the side). */
+export const HAND_WAVES: Record<TierId, { m: number; a: number; phase: number; k: number }[]> = {
+  bottom: [{ m: 5, a: 0.0042, phase: 0.4, k: 2.1 }, { m: 8, a: 0.0031, phase: 2.6, k: -3.3 }, { m: 12, a: 0.0021, phase: 5.1, k: 4.4 }, { m: 17, a: 0.0012, phase: 1.3, k: -2.2 }],
+  top: [{ m: 6, a: 0.0048, phase: 3.3, k: -2.6 }, { m: 9, a: 0.0034, phase: 0.9, k: 3.1 }, { m: 13, a: 0.0022, phase: 4.2, k: -4.0 }, { m: 18, a: 0.0013, phase: 2.0, k: 2.5 }],
+};
 
 /** Height offset of a tier's top surface at (x, z) (scan units; ≈ ±0.0032 = ±0.7 mm). */
 export function topUneven(tier: TierId, x: number, z: number): number {
   const T = TIERS[tier], F = FIELDS[tier];
   let t = (F.tilt.a * (x * Math.cos(F.tilt.phase) + z * Math.sin(F.tilt.phase))) / T.R;
   for (const b of F.bumps) t += b.a * Math.exp(-((x - b.x) ** 2 + (z - b.z) ** 2) / (2 * b.s * b.s));
+  // v1.6: the hand-coated edge. Scraping the side pushes a crown of buttercream up over the edge;
+  // the spatula sweeps it in, leaving a soft raised lip just inside the edge (0.2–0.9 mm, with the
+  // odd pulled peak) and a shallow valley inside it where the blade lifted.
+  const r = Math.hypot(x, z), th = Math.atan2(z, x);
+  const L = EDGE_LIP[tier];
+  const lipH = (L.h + L.var * fbmTheta(th, tier === 'top' ? 331 : 337)) * MM_SCAN;
+  t += Math.max(0, lipH) * Math.exp(-(((r - (T.R - L.at)) / L.w) ** 2));
+  t -= L.valley * MM_SCAN * Math.exp(-(((r - (T.R - L.vAt)) / L.vW) ** 2)) * (0.6 + 0.4 * fbmTheta(th + 1.3, 341));
   // The bottom tier's top under the upper tier carries its weight flat: only the exposed ledge waves.
-  if (tier === 'bottom') t *= smoothstep(0.44, 0.5, Math.hypot(x, z));
+  if (tier === 'bottom') t *= smoothstep(0.44, 0.5, r);
   return t;
+}
+
+const MM_SCAN = 1 / 220;
+/** The thickness range the packed `_FOOD` attribute stores (mm; models/cakeShaders.ts reads it). */
+export const FOOD_THICK_MM = 16;
+/** The edge lip and valley (mm; scan-unit offsets inward from the tier's radius). */
+export const EDGE_LIP: Record<TierId, { h: number; var: number; at: number; w: number; valley: number; vAt: number; vW: number }> = {
+  bottom: { h: 0.45, var: 0.4, at: 0.012, w: 0.011, valley: 0.25, vAt: 0.04, vW: 0.02 },
+  top: { h: 0.5, var: 0.45, at: 0.013, w: 0.011, valley: 0.3, vAt: 0.042, vW: 0.02 },
+};
+/** Smooth noise round the tier in [−1, 1] (≈ 9 cells round, periodic). */
+function fbmTheta(theta: number, seed: number): number {
+  const u = ((theta / (2 * Math.PI)) * 9 + 90) % 9;
+  return fbm(u, 0.5, seed, 3, 9);
 }
 
 /** Hand wobble of side piping: along the surface (tangential) and up/down, scan units. */
@@ -305,7 +342,7 @@ function deform(pos: Float32Array, nrm: Float32Array | null, map: (p: V3, out: V
 interface ProfilePoint { r: number; y: number; nr: number; ny: number }
 
 /** The master tier's profile rings (it is a 160-segment lathe), bottom centre → top centre. */
-function masterProfile(prim: Primitive): ProfilePoint[] {
+export function masterProfile(prim: Primitive): ProfilePoint[] {
   const pos = read(prim.getAttribute('POSITION')!), nrm = read(prim.getAttribute('NORMAL')!), uv = read(prim.getAttribute('TEXCOORD_0')!);
   const rings = new Map<number, { r: number; y: number; nr: number; ny: number; n: number }>();
   for (let i = 0; i < pos.length / 3; i++) {
@@ -321,6 +358,40 @@ function masterProfile(prim: Primitive): ProfilePoint[] {
     const l = Math.hypot(k.nr, k.ny) || 1;
     return { r: k.r / k.n, y: k.y / k.n, nr: k.nr / l, ny: k.ny / l };
   });
+}
+
+/**
+ * v1.6: the hand-coated edge's bead. The master's top edge is a 3.7–4.4 mm fillet of constant radius
+ * (razor-clean at laptop size): replaced by a softer bead, `EDGE_BEAD` mm, tangent to the side and the
+ * top (the lip and its variation round the tier come from the finish field, topUneven).
+ */
+export const EDGE_BEAD: Record<TierId, number> = { bottom: 6.0, top: 6.5 };
+function handProfile(prof: ProfilePoint[], tier: TierId): ProfilePoint[] {
+  const rho = EDGE_BEAD[tier] / 220;
+  const capStart = prof.findIndex((p, i) => i > 2 && p.ny > 0.995);
+  const firstEdge = prof.findIndex((p) => p.ny > -0.995);
+  // The side's top and the top's edge, from the master's straight runs either side of its corner.
+  const side = prof.slice(firstEdge, capStart).filter((p) => p.nr > 0.995);
+  const sTop = side[side.length - 1]!, sBelow = side[side.length - 2]!;
+  const cap = prof.slice(capStart);
+  const slope = (sTop.r - sBelow.r) / (sTop.y - sBelow.y);
+  const Rs = (y: number) => sTop.r + slope * (y - sTop.y);
+  const yTopAt = (r: number) => { // the cap (r descending)
+    for (let i = 0; i < cap.length - 1; i++) { const a = cap[i]!, b = cap[i + 1]!; if (r <= a.r && r >= b.r) return a.y + ((b.y - a.y) * (a.r - r)) / Math.max(a.r - b.r, 1e-9); }
+    return cap[cap.length - 1]!.y;
+  };
+  const Yt = yTopAt(sTop.r - 0.02) + 0.0004;
+  const cr = Rs(Yt - rho) - rho, cy = Yt - rho;
+  const out: ProfilePoint[] = [];
+  for (const p of prof.slice(0, capStart)) if (!(p.ny > -0.995 && p.y > cy)) out.push(p);
+  // The bead: a quarter circle from the side to the top, finely sampled (≈ 0.4 mm).
+  const steps = 22;
+  for (let k = 0; k <= steps; k++) {
+    const a = (k / steps) * (Math.PI / 2);
+    out.push({ r: cr + rho * Math.cos(a), y: cy + rho * Math.sin(a), nr: Math.cos(a), ny: Math.sin(a) });
+  }
+  for (const p of cap) if (p.r < cr - 1e-4) out.push(p);
+  return out;
 }
 
 /** Catmull-Rom between profile points, with normals interpolated by angle. */
@@ -363,7 +434,7 @@ function monotone(xs: number[], ys: number[]): (x: number) => [number, number] {
   };
 }
 
-interface Mesh { pos: number[]; nrm: number[]; uv: number[]; idx: number[] }
+interface Mesh { pos: number[]; nrm: number[]; uv: number[]; idx: number[]; uv1?: number[] }
 
 /** Triangulates between two closed rings of vertex indices sorted by angle (both starting at angle 0). */
 function zipper(idx: number[], a: number[], aAng: number[], b: number[], bAng: number[]): void {
@@ -406,9 +477,8 @@ function ringAngles(r: number, step: number, dense?: { step: number; reach: numb
  * the same profile: 256 segments around, rings ≤ 1.2 cm apart on the sides; the top as polar rings
  * (planar UVs), with the candle annulus of the top tier at 0.002 (0.44 mm).
  */
-function rebuildTier(prim: Primitive, tier: TierId): Mesh {
+function rebuildTier(prof: ProfilePoint[], tier: TierId): Mesh {
   const T = TIERS[tier];
-  const prof = masterProfile(prim);
   // The cap: the last ring before the top's flat (ny ≈ 1) start, then the master's cap rings.
   const capStart = prof.findIndex((p, i) => i > 2 && p.ny > 0.995);
   const lathe = prof.slice(0, capStart + 1);
@@ -423,18 +493,22 @@ function rebuildTier(prim: Primitive, tier: TierId): Mesh {
   for (let i = 1; i < rings.length; i++) s.push(s[i - 1]! + Math.hypot(rings[i]!.r - rings[i - 1]!.r, rings[i]!.y - rings[i - 1]!.y));
   const s0 = s[bottom.length - 1]!, s1 = s[s.length - 1]!;
 
-  const m: Mesh = { pos: [], nrm: [], uv: [], idx: [] };
+  const m: Mesh = { pos: [], nrm: [], uv: [], idx: [], uv1: [] };
   const N = 256;
   const ringStart: number[] = [];
   rings.forEach((p, k) => {
     ringStart.push(m.pos.length / 3);
     const v = 0.02 + (0.46 * clamp(s[k]! - s0, 0, s1 - s0)) / (s1 - s0);
+    // v1.6 unique atlas (uv1): this tier's side band, by angle and arc length (the hidden underside
+    // squeezed into the band's first rows).
+    const v1 = UNIQUE.side[tier] + UNIQUE.band * (0.02 + (0.96 * clamp(s[k]! - s0, 0, s1 - s0)) / (s1 - s0));
     for (let j = 0; j <= N; j++) {
       const th = (2 * Math.PI * j) / N;
       const c = Math.cos(th), sn = Math.sin(th);
       m.pos.push(p.r * c, p.y, p.r * sn);
       m.nrm.push(p.nr * c, p.ny, p.nr * sn);
       m.uv.push((T.repeats * j) / N, v);
+      m.uv1!.push(j / N, v1);
     }
   });
   for (let k = 0; k < rings.length - 1; k++) {
@@ -462,6 +536,8 @@ function rebuildTier(prim: Primitive, tier: TierId): Mesh {
     m.pos.push(x, y, z);
     m.nrm.push(nx / l, 1 / l, nz / l);
     m.uv.push(0.5 + (0.23 * x) / T.mapR, 0.75 - (0.23 * z) / T.mapR);
+    // Unique atlas: this tier's top as a planar square in the atlas' lower half.
+    m.uv1!.push(UNIQUE.top[tier] + 0.25 * (1 + 0.98 * x / UNIQUE.topR[tier]), 0.5 + 0.25 * (1 + 0.98 * z / UNIQUE.topR[tier]));
     return m.pos.length / 3 - 1;
   };
   let prevIdx: number[] = [], prevAng: number[] = [];
@@ -496,7 +572,7 @@ function orient(m: Mesh): void {
 interface PrimData { prim: Primitive; pos: Float32Array; nrm: Float32Array; idx: Uint32Array }
 interface Component { verts: { d: PrimData; i: number }[]; min: V3; max: V3; centroid: V3 }
 
-function primData(prim: Primitive): PrimData {
+export function primData(prim: Primitive): PrimData {
   return { prim, pos: read(prim.getAttribute('POSITION')!), nrm: read(prim.getAttribute('NORMAL')!), idx: new Uint32Array(prim.getIndices()!.getArray()!) };
 }
 
@@ -513,7 +589,7 @@ function weldIds(d: PrimData): Int32Array {
   return ids;
 }
 
-function components(d: PrimData): Component[] {
+export function components(d: PrimData): Component[] {
   const n = d.pos.length / 3, parent = new Int32Array(n).map((_, i) => i);
   const find = (a: number): number => { while (parent[a] !== a) { parent[a] = parent[parent[a]!]!; a = parent[a]!; } return a; };
   const union = (a: number, b: number) => { a = find(a); b = find(b); if (a !== b) parent[a] = b; };
@@ -875,6 +951,20 @@ function sphereComponents(d: PrimData): { mesh: Mesh; count: number } {
 export const ATLAS = 2048;
 
 /**
+ * v1.6 unique atlas (TEXCOORD_1, one texel per place on the body, 0.75 mm on the bottom tier's side):
+ * what the body's light depends on that cannot repeat (the piping's occlusion and contact). Bands:
+ * the bottom tier's side in v 0–0.125, the top tier's side in 0.125–0.25 (u = angle, 1024 × 128 each);
+ * the tops as 512² planar squares in the lower half (bottom tier left, top tier right).
+ */
+export const UNIQUE = {
+  width: 1024, height: 1024,
+  band: 0.125,
+  side: { bottom: 0, top: 0.125 } as Record<'bottom' | 'top', number>,
+  top: { bottom: 0, top: 0.5 } as Record<'bottom' | 'top', number>,
+  topR: { bottom: 0.575, top: 0.44 } as Record<'bottom' | 'top', number>,
+} as const;
+
+/**
  * An air pocket (cm): position, radii and orientation, an irregular outline (two lobes), depth, and
  * whether it is an open bubble (steep wall) or a soft dent.
  */
@@ -955,6 +1045,14 @@ function sideHeight(x: number, y: number, P: Pockets): { h: number; pocket: numb
   // Soft waviness (1–4 cm), ±0.25 mm: the scraper's passes, what keeps the broad highlight from
   // reading as a lathe at a distance (slopes ≈ 2–4°).
   h += 0.025 * fbm(u * 7, y * 0.4, 17, 3, 7);
+  // v1.6 knife chatter: where the scraper juddered as it was pulled round, near-vertical ripples
+  // ≈ 2.9 mm apart, 25–55 µm, in patches over about a third of the side (they read in the satin
+  // highlight at laptop size: slopes of 3–6°).
+  const chatterEnv = Math.max(0, fbm(u * 4, y * 0.13, 83, 2, 4) * 2.4 - 0.45);
+  if (chatterEnv > 0) {
+    const ph = (2 * Math.PI * 69 * (x + 0.1 * y)) / period + 2.2 * fbm(u * 6, y * 0.25, 89, 2, 6);
+    h += 0.0022 * Math.min(chatterEnv, 1) * (Math.sin(ph) + 0.25 * Math.sin(2 * ph + 1.1));
+  }
   let pocket = 0;
   for (const p of P.near(x, y, scratch)) {
     let dx = x - p.x;
@@ -986,6 +1084,15 @@ function strokesFor(seed: number, radius: number): Stroke[] {
 
 function topHeight(x: number, z: number, S: Stroke[], P: Pockets): { h: number; pocket: number; edge: number } {
   let h = 0.016 * fbm(x * 0.35, z * 0.35, 23, 3);
+  // v1.6 the turntable's spiral: the cake turned under a resting spatula leaves an Archimedean
+  // spiral of shallow ridges (≈ 7.5 mm apart, up to 70 µm), patchy, fading out at the centre where
+  // the blade was lifted; the knife strokes below are laid over it.
+  const rr = Math.hypot(x, z), th = Math.atan2(z, x);
+  const spiralEnv = smoothstep(0.6, 2.2, rr) * Math.max(0, 0.55 + 0.6 * fbm(x * 0.4 + 3, z * 0.4, 97, 2));
+  if (spiralEnv > 0) {
+    const ph = (2 * Math.PI * rr) / 0.75 - th + 1.4 * fbm(x * 0.5, z * 0.5, 101, 2);
+    h += 0.007 * spiralEnv * (Math.sin(ph) + 0.3 * Math.sin(2 * ph + 0.7));
+  }
   let edge = 0;
   for (const s of S) {
     const dx = x - s.cx, dz = z - s.cz;
@@ -1130,6 +1237,10 @@ function halve(data: Uint8Array, size: number): Uint8Array {
   return out;
 }
 
+async function pngWH(data: Uint8Array, w: number, h: number): Promise<Uint8Array> {
+  return new Uint8Array(await loadSharp()(data, { raw: { width: w, height: h, channels: 4 } }).png({ compressionLevel: 6 }).toBuffer());
+}
+
 async function png(data: Uint8Array, size: number): Promise<Uint8Array> {
   return new Uint8Array(await loadSharp()(data, { raw: { width: size, height: size, channels: 4 } }).png({ compressionLevel: 6 }).toBuffer());
 }
@@ -1267,133 +1378,472 @@ export interface FinishReport {
   lines: string[];
 }
 
+// ── v1.6: the piping regenerated as sculpted star-tip sweeps (birthdayPiping.ts) ─────────
+/** The side's radius at height y on the master's own profile (the tier's outer surface, scan units). */
+function sideRadius(prof: ProfilePoint[]): (y: number) => number {
+  // The outer run: from the first point off the bottom cap to the last before the top cap.
+  const a = prof.findIndex((p) => p.ny > -0.995);
+  const b = prof.findIndex((p, i) => i > a && p.ny > 0.995);
+  const run = prof.slice(Math.max(0, a - 1), b + 1).sort((p, q) => p.y - q.y);
+  return (y: number) => {
+    if (y <= run[0]!.y) return run[0]!.r;
+    for (let i = 0; i < run.length - 1; i++) {
+      const p = run[i]!, q = run[i + 1]!;
+      if (y <= q.y) return p.r + ((q.r - p.r) * (y - p.y)) / Math.max(q.y - p.y, 1e-9);
+    }
+    return run[run.length - 1]!.r;
+  };
+}
+
+interface Local { theta: number; rMin: number; rMax: number; tMin: number; tMax: number; yMin: number; yMax: number; centroid: V3 }
+/** A master piece's extents in its own (radial, tangential, height) frame about the cake axis. */
+function localOf(c: Component, R: number): Local {
+  const theta = Math.atan2(c.centroid[2], c.centroid[0]);
+  const o: Local = { theta, rMin: Infinity, rMax: -Infinity, tMin: Infinity, tMax: -Infinity, yMin: Infinity, yMax: -Infinity, centroid: c.centroid };
+  for (const { d, i } of c.verts) {
+    const x = d.pos[3 * i]!, y = d.pos[3 * i + 1]!, z = d.pos[3 * i + 2]!;
+    const r = Math.hypot(x, z), a = Math.atan2(z, x) - theta;
+    const t = Math.atan2(Math.sin(a), Math.cos(a)) * r;
+    o.rMin = Math.min(o.rMin, r - R); o.rMax = Math.max(o.rMax, r - R);
+    o.tMin = Math.min(o.tMin, t); o.tMax = Math.max(o.tMax, t);
+    o.yMin = Math.min(o.yMin, y); o.yMax = Math.max(o.yMax, y);
+  }
+  return o;
+}
+
+/** Fine spheres (sugar pearls), each a dragée a hair out of round. */
+function pearlSpheres(list: { c: V3; r: number }[], seed: number): Mesh {
+  const m: Mesh = { pos: [], nrm: [], uv: [], idx: [] };
+  const SEG = 20, RINGS = 13;
+  list.forEach(({ c, r }, k) => {
+    const g = stream(seed + 31 * k);
+    const ax: V3 = [1 + 0.035 * g.s(), 1 + 0.035 * g.s(), 1 + 0.035 * g.s()];
+    const start = m.pos.length / 3;
+    for (let i = 0; i <= RINGS; i++) {
+      const ph = (i / RINGS) * Math.PI;
+      for (let j = 0; j <= SEG; j++) {
+        const th = (j / SEG) * 2 * Math.PI;
+        const nx = Math.sin(ph) * Math.cos(th), ny = Math.cos(ph), nz = Math.sin(ph) * Math.sin(th);
+        m.pos.push(c[0] + r * ax[0] * nx, c[1] + r * ax[1] * ny, c[2] + r * ax[2] * nz);
+        const nn = norm([nx / ax[0], ny / ax[1], nz / ax[2]]);
+        m.nrm.push(...nn);
+        m.uv.push(j / SEG, i / RINGS);
+      }
+    }
+    for (let i = 0; i < RINGS; i++) for (let j = 0; j < SEG; j++) {
+      const a = start + i * (SEG + 1) + j;
+      m.idx.push(a, a + SEG + 1, a + 1, a + 1, a + SEG + 1, a + SEG + 2);
+    }
+  });
+  orient(m);
+  return m;
+}
+
+/** The master's 21 × 9 swag strands: per strand, the feet on the surface, its normals and its size. */
+function masterStrands(prim: Primitive, R: (y: number) => number): { feet: V3[]; normals: V3[]; w: number; h: number }[] {
+  const pos = read(prim.getAttribute('POSITION')!);
+  const per = STRAND.rings * STRAND.side;
+  if ((pos.length / 3) % per) throw new Error('birthday finish: swags are not 21 × 9 strands');
+  const out: { feet: V3[]; normals: V3[]; w: number; h: number }[] = [];
+  for (let s = 0; s < pos.length / 3 / per; s++) {
+    const P = (k: number, j: number): V3 => { const i = s * per + k * STRAND.side + j; return [pos[3 * i]!, pos[3 * i + 1]!, pos[3 * i + 2]!]; };
+    const feet: V3[] = [], normals: V3[] = [];
+    let w = 0, h = 0;
+    // The master's end rings are drawn to a point: the path runs between the second and the second-last.
+    for (let k = 1; k < STRAND.rings - 1; k++) {
+      const q0 = P(k, 0), q8 = P(k, STRAND.side - 1), apex = P(k, (STRAND.side - 1) / 2);
+      const M: V3 = [(q0[0] + q8[0]) / 2, (q0[1] + q8[1]) / 2, (q0[2] + q8[2]) / 2];
+      const th = Math.atan2(M[2], M[0]);
+      const n: V3 = [Math.cos(th), 0, Math.sin(th)];
+      const r = R(M[1]);
+      feet.push([r * n[0], M[1], r * n[2]]);
+      normals.push(n);
+      const out = Math.hypot(apex[0], apex[2]) - r;
+      h = Math.max(h, out);
+      let lat = 0;
+      for (let j = 0; j < STRAND.side; j++) { const q = P(k, j); lat = Math.max(lat, len(sub(q, add(M, mul(n, dot(sub(q, M), n)))))); }
+      w = Math.max(w, lat);
+    }
+    out.push({ feet, normals, w, h });
+  }
+  return out;
+}
+
+/**
+ * Regenerates every piped part of the master as sculpted star-tip sweeps (birthdayPiping.ts) at the
+ * master's own placements, sizes and counts, each from its own seed. Returns the vertex count.
+ */
+function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId, ProfilePoint[]>, log: (line: string) => void): void {
+  for (const node of nodes) {
+    const name = node.getName();
+    const info = nodeInfo(name);
+    if (!info || info.kind === 'body') continue;
+    const tier = info.tier;
+    const T = TIERS[tier];
+    const R = sideRadius(profiles[tier]);
+    const prims = node.getMesh()!.listPrimitives();
+    const part = name.slice(`tier_${tier}`.length).replace(/^_/, '');
+    const out = emptyMesh();
+    const seed0 = seedOf(name);
+    const pearls: { c: V3; r: number }[] = [];
+    const comps = () => components(primData(prims[0]!)).map((c) => localOf(c, T.R));
+    switch (part) {
+      case 'swags': {
+        const strands = masterStrands(prims[0]!, R);
+        strands.forEach((st, k) => appendMesh(out, swagStrand(st.feet, st.normals, 0.95 * st.w, 0.92 * st.h, seed0 + 7919 * k)));
+        break;
+      }
+      case 'drops': {
+        comps().forEach((c, k) => {
+          const g = stream(seed0 + k);
+          const w = (c.tMax - c.tMin) / 2, h = c.rMax;
+          appendMesh(out, pulledLine(c.theta, c.yMax - 0.004, c.yMin + 0.002, R, 0.86 * w, 0.82 * h, (s) => 1 - 0.1 * s + 0.04 * Math.sin(5 * s + k), { ...STAR, teeth: 16, perTooth: 5 }, seed0 + 101 * k, { amp: 0.14, lean: 0.03 * g.s(), twist: 0.6 }));
+        });
+        break;
+      }
+      case 'tassels': {
+        comps().forEach((c, k) => {
+          const w = (c.tMax - c.tMin) / 2, h = c.rMax;
+          const fan = c.yMax - c.yMin > 0.012 * 1.2 && w > 0.04;
+          if (fan) {
+            // A flared skirt: narrow at its collar, widest just above where it stands on the border.
+            appendMesh(out, pulledLine(c.theta, c.yMax, c.yMin + 0.004, R, 0.8 * w, 0.78 * h, (s) => 0.35 + 0.65 * Math.pow(s, 0.8) - 0.15 * smoothstep(0.9, 1, s), { ...STAR, teeth: 18, perTooth: 4 }, seed0 + 211 * k, { amp: 0.2, cap0: 0.12, tail: 0.05, twist: 0.3, flare: 0.2 }));
+          } else {
+            // An onion bulb under a thin collar.
+            appendMesh(out, pulledLine(c.theta, c.yMax, c.yMin, R, 0.82 * w, 0.82 * h, (s) => 0.3 + 0.75 * Math.sin(Math.PI * Math.pow(s, 0.85)) ** 0.9, { ...STAR, teeth: 14, perTooth: 4 }, seed0 + 307 * k, { amp: 0.18, cap0: 0.15, tail: 0.15, twist: 0.8 }));
+          }
+        });
+        break;
+      }
+      case 'dots': {
+        comps().forEach((c, k) => {
+          const yc = (c.yMin + c.yMax) / 2;
+          const r = R(yc);
+          const n: V3 = [Math.cos(c.theta), 0, Math.sin(c.theta)];
+          const size = 0.5 * Math.max(c.tMax - c.tMin, c.yMax - c.yMin);
+          appendMesh(out, pipedDot([r * n[0], yc, r * n[2]], n, [0, -1, 0], 0.92 * size, seed0 + 409 * k));
+        });
+        break;
+      }
+      case 'shell_border': {
+        const ledge = tier === 'bottom' ? MASTER.plateTop : TIERS.bottom.y1;
+        const list = comps();
+        // A shell border is piped one way round: each head is squeezed onto the last one's tail.
+        const angles = list.map((c) => c.theta).sort((a, b) => a - b);
+        const gaps = angles.map((a, i) => (i ? a - angles[i - 1]! : a + 2 * Math.PI - angles[angles.length - 1]!)).sort((a, b) => a - b);
+        const spacing = gaps[Math.floor(gaps.length / 2)]!;
+        list.forEach((c, k) => {
+          const depth = c.rMax - c.rMin;
+          const rS = T.R + depth * 0.36;
+          const lengthS = spacing * rS * 1.42;
+          const th0 = c.theta - 0.42 * spacing;
+          // The bottom border beds into the plate down to the master's underside (MASTER.cakeBottom, the
+          // contract's cake_secondary origin); the upper one a millimetre into the ledge.
+          const sinkDepth = tier === 'bottom' ? 1.15 * (ledge - MASTER.cakeBottom) : 0.9 * MM;
+          const sh = shell(th0, ledge, T.R, lengthS, 0.95 * (c.yMax - ledge), depth, 1, seed0 + 503 * k, sinkDepth);
+          // Flat on the underside the contract measures from (hidden in the plate).
+          if (tier === 'bottom') for (let i = 1; i < sh.pos.length; i += 3) sh.pos[i] = Math.max(sh.pos[i]!, MASTER.cakeBottom);
+          appendMesh(out, sh);
+        });
+        break;
+      }
+      case 'rope_edge': {
+        const pd = primData(prims[0]!);
+        let y0 = Infinity, y1 = -Infinity;
+        for (let i = 1; i < pd.pos.length; i += 3) { y0 = Math.min(y0, pd.pos[i]!); y1 = Math.max(y1, pd.pos[i]!); }
+        appendMesh(out, ropeBorder((y0 + y1) / 2, R, 0.95 * (y1 - y0), seed0));
+        break;
+      }
+      case 'rosettes':
+      case 'top_rosettes': {
+        const crown = part === 'top_rosettes';
+        const pearlComps = prims[1] ? components(primData(prims[1])) : [];
+        comps().forEach((c, k) => {
+          const g = stream(seed0 + 601 * k);
+          const yc = (c.yMin + c.yMax) / 2;
+          const radial: V3 = [Math.cos(c.theta), 0, Math.sin(c.theta)];
+          const pc = pearlComps.reduce((best, p) => (len(sub(p.centroid, c.centroid)) < len(sub(best.centroid, c.centroid)) ? p : best), pearlComps[0]!);
+          const pr = pc ? (pc.max[1] - pc.min[1]) / 2 : 0.012;
+          if (crown) {
+            // Small rosettes round the top's edge, tipped a little outward over it.
+            const rr = T.R + (c.rMin + c.rMax) / 2;
+            const centre: V3 = [rr * radial[0], T.y1 - 0.003, rr * radial[2]];
+            const axis = norm(add([0, 1, 0], mul(radial, 0.06 + 0.04 * g.s())));
+            const size = 0.5 * (c.tMax - c.tMin);
+            const { mesh, top } = spiralRosette(centre, axis, radial, size * (1 + 0.05 * g.s()), seed0 + 613 * k, { rope: 0.4, turns: 1.2, fine: 0.75 });
+            appendMesh(out, mesh);
+            pearls.push({ c: add(top, mul(axis, -0.35 * pr)), r: pr * (1 + 0.04 * g.s()) });
+          } else {
+            // Big rosettes on the tier's top edge, facing out and a little up.
+            const yr = yc - 0.007;
+            const r0 = R(yr);
+            const centre: V3 = [r0 * radial[0], yr, r0 * radial[2]];
+            const axis = norm(add(radial, [0, 0.24 + 0.08 * g.s(), 0]));
+            const size = 0.5 * Math.max(c.tMax - c.tMin, c.yMax - c.yMin);
+            const R0 = size * (1 + 0.05 * g.s());
+            const { mesh, top } = spiralRosette(centre, axis, [0, 1, 0], R0, seed0 + 619 * k, { rope: 0.4, turns: 1.25, droop: [0, -0.9 * MM * (1 + 0.4 * g.s()), 0] });
+            appendMesh(out, mesh);
+            // Its back: the soft mound of buttercream it was piped onto the edge with (seen from
+            // behind, over the far side of the top), not the flat underside of a coil.
+            appendMesh(out, backMound(centre, axis, R0, seed0 + 631 * k));
+            pearls.push({ c: add(top, mul(axis, -0.3 * pr)), r: pr * (1 + 0.04 * g.s()) });
+          }
+        });
+        break;
+      }
+      case 'pearls':
+      case 'border_pearls': {
+        // Dragées pressed into the frosting where the master set them: sizes ±6 %, a third sunk.
+        components(primData(prims[0]!)).forEach((c, k) => {
+          const g = stream(seed0 + 701 * k);
+          const pts = c.verts.map(({ d, i }) => [d.pos[3 * i]!, d.pos[3 * i + 1]!, d.pos[3 * i + 2]!] as V3);
+          let { c: ctr, r } = fitSphere(pts);
+          const box = (c.max[0] - c.min[0] + c.max[1] - c.min[1] + c.max[2] - c.min[2]) / 6;
+          if (!(r > 0.3 * box && r < 2.5 * box) || dist(ctr, c.centroid) > 2 * box) { ctr = c.centroid; r = box; }
+          pearls.push({ c: ctr, r: r * (1 + 0.06 * g.s()) });
+        });
+        break;
+      }
+      default:
+        throw new Error(`birthday finish: no generator for ${name}`);
+    }
+    const before = prims.reduce((a, p) => a + p.getAttribute('POSITION')!.getCount(), 0);
+    if (part === 'pearls' || part === 'border_pearls') {
+      const m = pearlSpheres(pearls, seed0);
+      setGeometry(doc, prims[0]!, m);
+      log(`  piping ${name}: ${pearls.length} dragées (${before} → ${m.pos.length / 3} vertices)`);
+      continue;
+    }
+    const bad = out.pos.findIndex((v) => !Number.isFinite(v)), badN = out.nrm.findIndex((v) => !Number.isFinite(v));
+    if (bad >= 0 || badN >= 0) throw new Error(`birthday finish: ${name} has a non-finite ${bad >= 0 ? 'position' : 'normal'} (vertex ${Math.floor(Math.max(bad, badN) / 3)})`);
+    setGeometry(doc, prims[0]!, { pos: out.pos, nrm: out.nrm, uv: new Array((out.pos.length / 3) * 2).fill(0), idx: out.idx, extra: { _RIDGE: out.ridge } });
+    if (prims[1] && pearls.length) setGeometry(doc, prims[1], pearlSpheres(pearls, seed0 + 1));
+    log(`  piping ${name}: sculpted (${before} → ${out.pos.length / 3 + (prims[1] ? pearls.length * 425 : 0)} vertices)`);
+  }
+}
+
+/**
+ * A piped part on a tier's edge rests on the cake: its underside (the vertices facing back along
+ * `axis`, the hidden half of its ropes) is draped onto the tier's surface wherever it would hang in
+ * the air (over the bead, above the top inside the edge, off the side), a little under it, so the part
+ * merges into the frosting it was piped on instead of floating over it.
+ */
+function drapeOnTier(m: PipeMesh, axis: V3, prof: ProfilePoint[]): void {
+  // The outer profile (bottom edge → side → bead → top), as a polyline in (r, y).
+  const a = prof.findIndex((p) => p.ny > -0.995);
+  const line = prof.slice(Math.max(0, a - 1));
+  for (let i = 0; i < m.pos.length; i += 3) {
+    const n: V3 = [m.nrm[i]!, m.nrm[i + 1]!, m.nrm[i + 2]!];
+    if (dot(n, axis) > -0.1) continue;
+    const x = m.pos[i]!, y = m.pos[i + 1]!, z = m.pos[i + 2]!;
+    const r = Math.hypot(x, z);
+    // Nearest point of the profile, and which side of it this vertex is on.
+    let best = Infinity, br = 0, by = 0, bnr = 0, bny = 0;
+    for (let k = 0; k < line.length - 1; k++) {
+      const p = line[k]!, q = line[k + 1]!;
+      const dr = q.r - p.r, dy = q.y - p.y, l2 = dr * dr + dy * dy || 1e-12;
+      const t = clamp(((r - p.r) * dr + (y - p.y) * dy) / l2, 0, 1);
+      const pr = p.r + dr * t, py = p.y + dy * t;
+      const d = Math.hypot(r - pr, y - py);
+      if (d < best) { best = d; br = pr; by = py; bnr = p.nr + (q.nr - p.nr) * t; bny = p.ny + (q.ny - p.ny) * t; }
+    }
+    const outside = (r - br) * bnr + (y - by) * bny;
+    if (outside <= -0.0006) continue;
+    const nl = Math.hypot(bnr, bny) || 1;
+    const inset = 0.6 / 220;
+    const r2 = br - (bnr / nl) * inset, y2 = by - (bny / nl) * inset;
+    const s = r > 1e-9 ? r2 / r : 0;
+    m.pos[i] = x * s; m.pos[i + 1] = y2; m.pos[i + 2] = z * s;
+  }
+  recomputePipeNormals(m);
+}
+
+/**
+ * Bakes occlusion and thickness on the finished frosting (positions in scan units, the master's own
+ * frame) and returns the body's unique occlusion map: R the room's occlusion (10 mm reach, three's
+ * aoMap), G contact (2.5 mm), B how much of the sky a point sees past the piping (unused: 255), A 255.
+ */
+async function bakeLight(doc: Document, nodes: Node[], log: (line: string) => void): Promise<Uint8Array> {
+  const t0 = performance.now();
+  const grid = new Occupancy([-0.68, -0.29, -0.68], [0.68, 0.68, 0.68], 0.0025);
+  const frosting: { node: Node; prim: Primitive; info: NonNullable<ReturnType<typeof nodeInfo>> }[] = [];
+  for (const node of [...nodes, ...doc.getRoot().listNodes().filter((n) => n.getName() === 'cake_smears')]) {
+    const smear = node.getName() === 'cake_smears';
+    const info = smear ? { tier: 'bottom' as TierId, kind: 'ledge' as Kind } : nodeInfo(node.getName());
+    const stand = node.getName() === 'cake_stand';
+    if (!info && !stand) continue;
+    const M = node.getWorldMatrix();
+    for (const prim of node.getMesh()?.listPrimitives() ?? []) {
+      let pos = read(prim.getAttribute('POSITION')!);
+      if (stand) {
+        // The plate the cake stands on (its top only matters): into the frosting's frame.
+        const q = new Float32Array(pos.length);
+        for (let i = 0; i < pos.length; i += 3) {
+          const x = pos[i]!, y = pos[i + 1]!, z = pos[i + 2]!;
+          q[i] = M[0]! * x + M[4]! * y + M[8]! * z + M[12]!;
+          q[i + 1] = M[1]! * x + M[5]! * y + M[9]! * z + M[13]!;
+          q[i + 2] = M[2]! * x + M[6]! * y + M[10]! * z + M[14]!;
+        }
+        pos = q;
+      } else frosting.push({ node, prim, info: info! });
+      grid.addTriangles(pos, prim.getIndices()!.getArray()!);
+    }
+  }
+  const baker = new Baker(grid, 24);
+  let verts = 0, aoSum = 0, thickMin = Infinity, thickMax = 0;
+  for (const { prim, info } of frosting) {
+    if (info.kind === 'body') continue;
+    const pos = read(prim.getAttribute('POSITION')!), nrm = read(prim.getAttribute('NORMAL')!);
+    const n = pos.length / 3;
+    const ao = new Float32Array(n), thick = new Float32Array(n);
+    const pearl = prim.getMaterial()?.getName() === 'cake_pearl';
+    for (let i = 0; i < n; i++) {
+      const p: V3 = [pos[3 * i]!, pos[3 * i + 1]!, pos[3 * i + 2]!], nn: V3 = [nrm[3 * i]!, nrm[3 * i + 1]!, nrm[3 * i + 2]!];
+      const o = baker.occlusion(p, nn);
+      ao[i] = o.far * (0.7 + 0.3 * o.near);
+      aoSum += ao[i]!;
+      if (!pearl) {
+        thick[i] = baker.thickness(p, nn) / MM_SCAN;
+        thickMin = Math.min(thickMin, thick[i]!); thickMax = Math.max(thickMax, thick[i]!);
+      }
+    }
+    verts += n;
+    // Packed for the runtime (models/cakeShaders.ts foodPatch): one normalised RGBA8 attribute, x the
+    // tooth ridge (−1…1 → 0…1), y the occlusion, z the thickness over FOOD_THICK_MM, w unused.
+    const ridge = prim.getAttribute('_RIDGE') ? read(prim.getAttribute('_RIDGE')!) : null;
+    const food = new Uint8Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      food[4 * i] = Math.round(255 * clamp(0.5 + 0.5 * (ridge ? ridge[i]! : 0), 0, 1));
+      food[4 * i + 1] = Math.round(255 * clamp(ao[i]!, 0, 1));
+      food[4 * i + 2] = Math.round(255 * clamp(thick[i]! / FOOD_THICK_MM, 0, 1));
+      food[4 * i + 3] = 255;
+    }
+    prim.setAttribute('_RIDGE', null);
+    prim.setAttribute('_FOOD', doc.createAccessor().setType('VEC4').setArray(food).setNormalized(true).setBuffer(doc.getRoot().listBuffers()[0]!));
+  }
+  // The body: rasterised in its unique atlas, one bake per texel.
+  const W = UNIQUE.width, H = UNIQUE.height;
+  const tex = new Uint8Array(W * H * 4);
+  const filled = new Uint8Array(W * H);
+  let texels = 0;
+  for (const { prim, info } of frosting) {
+    if (info.kind !== 'body') continue;
+    const pos = read(prim.getAttribute('POSITION')!), nrm = read(prim.getAttribute('NORMAL')!), uv = read(prim.getAttribute('TEXCOORD_1')!);
+    const idx = prim.getIndices()!.getArray()!;
+    for (let t = 0; t < idx.length; t += 3) {
+      const a = idx[t]!, b = idx[t + 1]!, c = idx[t + 2]!;
+      const ax = uv[2 * a]! * W, ay = uv[2 * a + 1]! * H, bx = uv[2 * b]! * W, by = uv[2 * b + 1]! * H, cx = uv[2 * c]! * W, cy = uv[2 * c + 1]! * H;
+      const area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay);
+      if (Math.abs(area) < 1e-12) continue;
+      const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx))), x1 = Math.min(W - 1, Math.ceil(Math.max(ax, bx, cx)));
+      const y0 = Math.max(0, Math.floor(Math.min(ay, by, cy))), y1 = Math.min(H - 1, Math.ceil(Math.max(ay, by, cy)));
+      for (let py = y0; py <= y1; py++) for (let px = x0; px <= x1; px++) {
+        const k = py * W + px;
+        if (filled[k]) continue;
+        const qx = px + 0.5, qy = py + 0.5;
+        const w0 = ((bx - qx) * (cy - qy) - (cx - qx) * (by - qy)) / area;
+        const w1 = ((cx - qx) * (ay - qy) - (ax - qx) * (cy - qy)) / area;
+        const w2 = 1 - w0 - w1;
+        if (w0 < -1e-4 || w1 < -1e-4 || w2 < -1e-4) continue;
+        const P: V3 = [0, 0, 0], N: V3 = [0, 0, 0];
+        for (let e = 0; e < 3; e++) {
+          P[e] = w0 * pos[3 * a + e]! + w1 * pos[3 * b + e]! + w2 * pos[3 * c + e]!;
+          N[e] = w0 * nrm[3 * a + e]! + w1 * nrm[3 * b + e]! + w2 * nrm[3 * c + e]!;
+        }
+        const o = baker.occlusion(P, norm(N));
+        tex[4 * k] = Math.round(255 * o.far);
+        tex[4 * k + 1] = Math.round(255 * o.near);
+        tex[4 * k + 2] = 255;
+        tex[4 * k + 3] = 255;
+        filled[k] = 1;
+        texels++;
+      }
+    }
+  }
+  // Texels under the piping (wholly enclosed: no ray gets out of the crease) are never seen, but a
+  // bilinear sample at the contact line would read their black: treat them as gutters too, refilled
+  // from the visible frosting next to them.
+  for (let k = 0; k < W * H; k++) if (filled[k] && tex[4 * k + 1]! < 40) filled[k] = 0;
+  // Dilate into the gutters (mip levels and bilinear filtering read across island edges).
+  for (let pass = 0; pass < 10; pass++) {
+    const next = filled.slice();
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const k = y * W + x;
+      if (filled[k]) continue;
+      const acc = [0, 0, 0, 0];
+      let c = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const xx = (x + dx + W) % W, yy = y + dy;
+        if (yy < 0 || yy >= H) continue;
+        const j = yy * W + xx;
+        if (!filled[j]) continue;
+        for (let e = 0; e < 4; e++) acc[e]! += tex[4 * j + e]!;
+        c++;
+      }
+      if (!c) continue;
+      for (let e = 0; e < 4; e++) tex[4 * k + e] = Math.round(acc[e]! / c);
+      next[k] = 1;
+    }
+    filled.set(next);
+  }
+  for (let k = 0; k < W * H; k++) if (!filled[k]) { tex[4 * k] = 255; tex[4 * k + 1] = 255; tex[4 * k + 2] = 255; tex[4 * k + 3] = 255; }
+  // Two passes of a 3 × 3 tent (u wraps): the 24 rays' speckle out, the contact lines kept (≈ 1 texel).
+  for (let pass = 0; pass < 2; pass++) {
+    const src = tex.slice();
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) for (let e = 0; e < 2; e++) {
+      let acc = 0, wsum = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= H) continue;
+        const w = (2 - Math.abs(dx)) * (2 - Math.abs(dy));
+        acc += w * src[4 * (yy * W + ((x + dx + W) % W)) + e]!;
+        wsum += w;
+      }
+      tex[4 * (y * W + x) + e] = Math.round(acc / wsum);
+    }
+  }
+  log(`  bake: ${verts} piping vertices (mean occlusion ${(aoSum / Math.max(verts, 1)).toFixed(3)}, thickness ${thickMin.toFixed(1)}–${thickMax.toFixed(1)} mm), ${texels} body texels (${W}×${H}) in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  return tex;
+}
+
 export async function finishCake(doc: Document, log: (line: string) => void): Promise<void> {
   const root = doc.getRoot();
   const nodes = root.listNodes();
-  const rand = mulberry32(0xb17d);
 
   // 1. Tiers: rebuilt dense lathes (the finish field is applied with everything else below).
   const geometry = new Map<Primitive, PrimData>();
+  const profiles = {} as Record<TierId, ProfilePoint[]>;
   for (const node of nodes) {
     const info = nodeInfo(node.getName());
     if (!info || info.kind !== 'body') continue;
     const prim = node.getMesh()!.listPrimitives()[0]!;
+    profiles[info.tier] = handProfile(masterProfile(prim), info.tier);
     const before = prim.getAttribute('POSITION')!.getCount();
-    const m = rebuildTier(prim, info.tier);
+    const m = rebuildTier(profiles[info.tier], info.tier);
     setGeometry(doc, prim, m);
     log(`  finish ${node.getName()}: rebuilt ${before} → ${m.pos.length / 3} vertices (dense top annulus at the sockets)`);
   }
 
-  // 1b. Swag strands rebuilt smooth with tucked tails; dots and sugar pearls as fine spheres.
-  for (const node of nodes) {
-    const info = nodeInfo(node.getName());
-    if (!info || info.kind === 'body') continue;
-    for (const prim of node.getMesh()!.listPrimitives()) {
-      const mat = prim.getMaterial()?.getName() ?? '';
-      const before = prim.getAttribute('POSITION')!.getCount();
-      if (/_swags$/.test(node.getName())) {
-        const m = refineStrands(prim, TIERS[info.tier].R);
-        if (!m) throw new Error(`birthday finish: ${node.getName()} is not 21 × 9 strands`);
-        setGeometry(doc, prim, m);
-        log(`  finish ${node.getName()}: strands ${before} → ${m.pos.length / 3} vertices (16 sides × 40, tails tucked)`);
-      } else if (/_dots$/.test(node.getName()) || mat === 'cake_pearl') {
-        const { mesh, count } = sphereComponents(primData(prim));
-        setGeometry(doc, prim, mesh);
-        log(`  finish ${node.getName()} (${mat}): ${count} round pieces as fine spheres (${before} → ${mesh.pos.length / 3} vertices)`);
-      }
-    }
-  }
+  // 2. v1.6: every piped part regenerated as a sculpted star-tip sweep at the master's placements.
+  regeneratePiping(doc, nodes, profiles, log);
 
-  // 2. Decorations: sizes, twists and the two softened rosettes (before the finish field, about
-  //    the points where they touch the cake).
-  let jittered = 0;
-  for (const node of nodes) {
-    const info = nodeInfo(node.getName());
-    if (!info || info.kind === 'body') continue;
-    const prims = node.getMesh()!.listPrimitives();
-    const datas = prims.map((p) => { const d = primData(p); geometry.set(p, d); return d; });
-    if (/_(drops|tassels|shell_border|rosettes|top_rosettes)$/.test(node.getName())) {
-      for (const d of datas) if (d.prim.getMaterial()?.getName() !== 'cake_pearl') tuckOpenEdges(d, 0.006, /_shell_border$/.test(node.getName()) ? 0.003 : 0);
-    }
-    if (/rope_edge$/.test(node.getName())) {
-      // The master's twisted rope is coarse (its twists read as saw teeth up close): relax it into
-      // rounded twists, as a rope piped from a star tip settles.
-      for (const d of datas) for (const c of components(d)) { taubin(c, 3); recomputeNormals(c); }
-      log(`  finish ${node.getName()}: twists relaxed (Taubin, 3 passes)`);
-    }
-    if (!info.mount) continue;
-    // Rosette meshes carry their centre pearls as a second primitive: a pearl moves with the
-    // rosette it sits in.
-    const main = components(datas[0]!);
-    const extras = datas.slice(1).flatMap((d) => components(d));
-    const owner = (c: Component) => {
-      let best = -1, bd = Infinity;
-      main.forEach((m, k) => { const d = Math.hypot(c.centroid[0] - m.centroid[0], c.centroid[1] - m.centroid[1], c.centroid[2] - m.centroid[2]); if (d < bd) { bd = d; best = k; } });
-      return best;
-    };
-    const softened = SOFTENED.find((s) => s.node === node.getName());
-    let softIndex = -1;
-    if (softened) {
-      let bd = Infinity;
-      main.forEach((m, k) => {
-        const a = Math.atan2(m.centroid[2], m.centroid[0]);
-        const d = Math.abs(Math.atan2(Math.sin(a - softened.angle), Math.cos(a - softened.angle)));
-        if (d < bd) { bd = d; softIndex = k; }
-      });
-    }
-    const groups = main.map((m) => [m]);
-    for (const e of extras) groups[owner(e)]!.push(e);
-    groups.forEach((group, k) => {
-      const c = group[0]!;
-      const o = anchorOf(c, info.mount!);
-      const s = 1 + info.jitter! * (2 * rand() - 1);
-      const tw = (info.twist ?? 0) * (2 * rand() - 1);
-      const out: V3 = [c.centroid[0] - o[0], c.centroid[1] - o[1], c.centroid[2] - o[2]];
-      const l = Math.hypot(...out) || 1;
-      const axis: V3 = info.mount === 'crown' ? [0, 1, 0] : [out[0] / l, out[1] / l, out[2] / l];
-      const tmp: V3 = [0, 0, 0], p: V3 = [0, 0, 0];
-      for (const part of group) {
-        for (const { d, i } of part.verts) {
-          p[0] = d.pos[3 * i]!; p[1] = d.pos[3 * i + 1]!; p[2] = d.pos[3 * i + 2]!;
-          rigid(p, o, axis, tw, s, tmp);
-          d.pos[3 * i] = tmp[0]; d.pos[3 * i + 1] = tmp[1]; d.pos[3 * i + 2] = tmp[2];
-          p[0] = d.nrm[3 * i]!; p[1] = d.nrm[3 * i + 1]!; p[2] = d.nrm[3 * i + 2]!;
-          rotateNormal(p, axis, tw, tmp);
-          d.nrm[3 * i] = tmp[0]; d.nrm[3 * i + 1] = tmp[1]; d.nrm[3 * i + 2] = tmp[2];
-        }
-      }
-      jittered++;
-      if (k !== softIndex) return;
-      // Softened: the star ridges relaxed, the rosette slumped 8 % and drooping at its outer edge.
-      const size = Math.hypot(c.max[0] - c.min[0], c.max[1] - c.min[1], c.max[2] - c.min[2]);
-      const slump = (q: V3, outQ: V3) => {
-        const dx = q[0] - o[0], dz = q[2] - o[2];
-        const reach = Math.hypot(dx, dz) / size;
-        outQ[0] = o[0] + dx * 1.03;
-        outQ[1] = o[1] + (q[1] - o[1]) * 0.92 - 0.006 * reach * reach;
-        outQ[2] = o[2] + dz * 1.03;
-        return outQ;
-      };
-      taubin(c, 5);
-      for (const { d, i } of c.verts) {
-        p[0] = d.pos[3 * i]!; p[1] = d.pos[3 * i + 1]!; p[2] = d.pos[3 * i + 2]!;
-        slump(p, tmp);
-        d.pos[3 * i] = tmp[0]; d.pos[3 * i + 1] = tmp[1]; d.pos[3 * i + 2] = tmp[2];
-      }
-      recomputeNormals(c);
-      // Its pearl rides down with the rosette's top: moved as its centre moves.
-      for (const part of group.slice(1)) {
-        const moved = slump(part.centroid, [0, 0, 0]);
-        for (const { d, i } of part.verts) {
-          d.pos[3 * i] = d.pos[3 * i]! + moved[0] - part.centroid[0];
-          d.pos[3 * i + 1] = d.pos[3 * i + 1]! + moved[1] - part.centroid[1];
-          d.pos[3 * i + 2] = d.pos[3 * i + 2]! + moved[2] - part.centroid[2];
-        }
-      }
-      log(`  finish ${node.getName()}: softened the rosette at ${((Math.atan2(c.centroid[2], c.centroid[0]) * 180) / Math.PI).toFixed(0)}° (master)`);
-    });
-  }
-  log(`  finish: ${jittered} beads, shells, dots, pearls and rosettes varied in size (shells ±10 %, rosettes ±9–10 %, dots ±12 %, pearls ±7 %) and twist`);
+  // 2b. v1.6: the base: a smear of the coat and a crumb or two on the plate. They belong to the stand
+  //     (a child of its node, so they stay on it when the cake is carried off), in their own material
+  //     (the body's colour; a cocoa variant in the recipe).
+  const standNode = nodes.find((n) => n.getName() === 'cake_stand');
+  if (!standNode) throw new Error('birthday finish: no cake_stand');
+  if (standNode.getWorldMatrix().some((v, i) => Math.abs(v - (i % 5 === 0 ? 1 : 0)) > 1e-9)) throw new Error('birthday finish: cake_stand is not at the master origin');
+  const bodyMat = root.listMaterials().find((m) => m.getName() === 'cake_buttercream')!;
+  const smearMat = doc.createMaterial('cake_smear').setBaseColorFactor(bodyMat.getBaseColorFactor()).setRoughnessFactor(0.55).setMetallicFactor(0).setExtras({ frosting: 'smear' });
+  // Where (the master's frame; the lens looks along master 75°): one smear front right, one at the
+  // left edge of the view, one behind; a crumb in view, two behind.
+  const deg = Math.PI / 180;
+  const sm = baseSmears(MASTER.plateTop, 0.5985, 0x5e3a, [43 * deg, 128 * deg, 262 * deg], [58 * deg, 200 * deg, 305 * deg]);
+  const smearPrim = doc.createPrimitive().setMaterial(smearMat);
+  setGeometry(doc, smearPrim, { pos: sm.pos, nrm: sm.nrm, uv: new Array((sm.pos.length / 3) * 2).fill(0), idx: sm.idx, extra: { _RIDGE: sm.ridge } });
+  smearPrim.setAttribute('TEXCOORD_0', null);
+  standNode.addChild(doc.createNode('cake_smears').setMesh(doc.createMesh('cake_smears').addPrimitive(smearPrim)));
+  log(`  base: 3 smears and 3 crumbs on the plate (${sm.pos.length / 3} vertices)`);
 
   // 3. The finish field on every frosting part; then convexity on piping and rosettes.
   let maxR = 0, top = -Infinity;
@@ -1410,13 +1860,16 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
       prim.setAttribute('POSITION', accessor(doc, 'VEC3', d.pos));
       prim.setAttribute('NORMAL', accessor(doc, 'VEC3', d.nrm));
       for (let i = 0; i < d.pos.length; i += 3) { maxR = Math.max(maxR, Math.hypot(d.pos[i]!, d.pos[i + 2]!)); top = Math.max(top, d.pos[i + 1]!); }
-      const mat = prim.getMaterial()?.getName() ?? '';
-      if (mat === 'cake_piping' || mat === 'cake_rosette') prim.setAttribute('_RIDGE', accessor(doc, 'SCALAR', new Float32Array(convexity(d))));
       // Piping, rosettes and pearls carry no texture: their UVs are dead weight (≈ 2 MiB).
       if (info.kind !== 'body') prim.setAttribute('TEXCOORD_0', null);
     }
   }
   log(`  finish field: tiers ±1.4 % from round, tops ±0.7 mm; frosting now reaches r ${maxR.toFixed(5)}, top ${top.toFixed(5)} (scan)`);
+
+  // 3b. v1.6: baked light transport (birthdayBake.ts) on the finished frosting: occlusion per vertex on
+  //     the piping, rosettes and pearls (and thickness on the piping and rosettes), and the body's
+  //     unique occlusion map (uv1).
+  const contact = await bakeLight(doc, nodes, log);
 
   // 4. Materials: no clearcoat on the frosting; generated relief and roughness on the body; a
   //    very slight sheen on the piping and rosettes; the runtime's subsurface and press settings.
@@ -1432,6 +1885,9 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
   body.setMetallicRoughnessTexture(doc.createTexture('cake_buttercream_roughness').setImage(await png(halve(roughness, ATLAS), ATLAS / 2)).setMimeType('image/png'));
   body.setBaseColorTexture(doc.createTexture('cake_buttercream_finish').setImage(await png(halve(albedo, ATLAS), ATLAS / 2)).setMimeType('image/png'));
   body.setRoughnessFactor(1).setMetallicFactor(0);
+  // v1.6: the unique occlusion map (uv1): R the room's occlusion (three's aoMap), G contact.
+  body.setOcclusionTexture(doc.createTexture('cake_buttercream_contact').setImage(await pngWH(contact, UNIQUE.width, UNIQUE.height)).setMimeType('image/png'));
+  body.getOcclusionTextureInfo()!.setTexCoord(1);
   body.setExtras({ ...(body.getExtras() as object), frosting: 'body' });
   log(`  finish maps: relief ${ATLAS}², roughness and albedo finish ${ATLAS / 2}² (roughness ${stats.min.toFixed(2)}–${stats.max.toFixed(2)}, mean ${stats.mean.toFixed(3)})`);
   const sheenExt = doc.createExtension(KHRMaterialsSheen);

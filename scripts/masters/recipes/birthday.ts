@@ -87,9 +87,13 @@ const candleNodes: Record<string, NodeMap> = Object.fromEntries(
 
 const frostingPolicy = (key: keyof typeof FROSTING): MaterialPolicy => ({ rename: FROSTING[key], baseColorFactor: lin(PALETTE.vanilla[key]) });
 
-const cocoa: MaterialVariantSpec[] = (Object.keys(FROSTING) as (keyof typeof FROSTING)[]).map((key) => ({
-  variant: 'cocoa', of: FROSTING[key], name: `${FROSTING[key]}_cocoa`, baseColorFactor: lin(PALETTE.cocoa[key]),
-}));
+const cocoa: MaterialVariantSpec[] = [
+  ...(Object.keys(FROSTING) as (keyof typeof FROSTING)[]).map((key) => ({
+    variant: 'cocoa', of: FROSTING[key], name: `${FROSTING[key]}_cocoa`, baseColorFactor: lin(PALETTE.cocoa[key]),
+  })),
+  // v1.6: the smear of the coat on the plate (birthdayFinish.ts) is the body's colour.
+  { variant: 'cocoa', of: 'cake_smear', name: 'cake_smear_cocoa', baseColorFactor: lin(PALETTE.cocoa.body) },
+];
 
 export const recipe: SceneRecipe = {
   scene: 'birthday',

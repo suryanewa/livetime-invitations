@@ -573,12 +573,20 @@ describe('Birthday runtime GLB matches the contract', async () => {
     for (const m of doc.getRoot().listMaterials()) expect(['candle_wick', 'candle_flame']).not.toContain(m.getName());
   });
 
-  it('the stand is the master at CAKE_SCALE, its foot on the floor at the origin', () => {
+  it('the stand is the master at CAKE_SCALE, its foot on the floor at the origin (with the base smears on its plate)', () => {
     const tray = node('tray');
     expect(tray.getMesh()).toBeNull();
     expect(tray.getScale()).toEqual([1, 1, 1]);
     expect(new Vector3(...tray.getTranslation()).length()).toBeLessThan(1e-4);
-    const b = boxIn(tray, node('birthday_root'));
+    // The stand's own mesh (v1.6: the tray also carries the smear of the coat and the crumbs).
+    const b = boxIn(node('tray_mesh'), node('birthday_root'));
+    const smears = node('cake_smears');
+    expect(smears.getParentNode()).toBe(tray);
+    const sb = boxIn(smears, node('birthday_root'));
+    // On the plate's top, thinner than a millimetre and a half; just outside the bottom border.
+    expect(sb.min.y).toBeGreaterThan(STAND.top - 0.003);
+    expect(sb.max.y).toBeLessThan(STAND.top + 0.0075);
+    expect(Math.max(-sb.min.x, sb.max.x, -sb.min.z, sb.max.z)).toBeLessThan(STAND.radius);
     expect(Math.abs(b.min.y)).toBeLessThan(2e-4);
     expect(Math.abs(b.max.y - STAND.top)).toBeLessThan(2e-4);
     expect(Math.abs(b.max.x - STAND.radius)).toBeLessThan(1e-3);
@@ -700,24 +708,40 @@ describe('Birthday runtime GLB matches the contract', async () => {
     expect(fs / fn).toBeGreaterThan(0.98);
     expect(fmin).toBeGreaterThan(0.93);
     expect(cocoa.getBaseColorTexture()).toBe(body.getBaseColorTexture());
-    // A very slight sheen on the piping and rosettes, and the convexity the runtime reads.
+    // A very slight sheen on the piping and rosettes.
     for (const n of ['cake_piping', 'cake_rosette']) {
       const sheen = mat(n).getExtension('KHR_materials_sheen') as unknown as { getSheenColorFactor(): number[] } | null;
       expect(Math.max(...sheen!.getSheenColorFactor())).toBeLessThanOrEqual(0.15);
     }
+    // v1.6: the piping's baked light, packed per vertex (RGBA8, normalised): x the star tip's teeth
+    // (crest … groove), y the occlusion (creases dark, open crests light), z the thickness the
+    // translucency reads (thin crests to the body under a rope).
     for (const name of ['frosting_cake_piping', 'frosting_cake_rosette']) {
-      const ridge = node(name).getMesh()!.listPrimitives()[0]!.getAttribute('_RIDGE');
-      expect(ridge, name).not.toBeNull();
-      const a = ridge!.getArray()!;
-      let lo = Infinity, hi = -Infinity;
-      for (const v of a) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
-      expect(lo).toBeLessThan(-0.3);
-      expect(hi).toBeGreaterThan(0.3);
+      const food = node(name).getMesh()!.listPrimitives()[0]!.getAttribute('_FOOD');
+      expect(food, name).not.toBeNull();
+      expect(food!.getNormalized()).toBe(true);
+      expect(food!.getElementSize()).toBe(4);
+      const a = food!.getArray()!;
+      const lo = [255, 255, 255], hi = [0, 0, 0];
+      let open = 0;
+      for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 3; c++) { lo[c] = Math.min(lo[c]!, a[i + c]!); hi[c] = Math.max(hi[c]!, a[i + c]!); if (c === 1 && a[i + 1]! > 200) open++; }
+      expect(lo[0]).toBeLessThan(60);
+      expect(hi[0]).toBeGreaterThan(200);
+      expect(lo[1]).toBeLessThan(40);
+      expect(hi[1]).toBeGreaterThan(240);
+      expect(open / (a.length / 4)).toBeGreaterThan(0.2);
+      expect(hi[2]! - lo[2]!).toBeGreaterThan(100);
     }
+    expect(node('frosting_cake_pearl').getMesh()!.listPrimitives()[0]!.getAttribute('_FOOD')).not.toBeNull();
+    // The body's unique contact map: the room's occlusion (R) and contact (G) on a second UV set.
+    expect(body.getOcclusionTextureInfo()!.getTexCoord()).toBe(1);
+    expect(body.getOcclusionTexture()!.getSize()).toEqual([1024, 1024]);
+    expect(cocoa.getOcclusionTexture()).toBe(body.getOcclusionTexture());
+    expect(node('frosting_cake_buttercream').getMesh()!.listPrimitives()[0]!.getAttribute('TEXCOORD_1')).not.toBeNull();
     expect(mat('cake_buttercream').getExtras()).toMatchObject({ frosting: 'body' });
   });
 
-  it('the finished tiers are not perfect cylinders: the top tier 2–3 mm off centre, its side 1–2 % out of round at low frequency, the top uneven by under a millimetre', () => {
+  it('the tiers are hand-coated: the top tier 2–3 mm off centre, its side 1–2 % out of round, with the scraper\'s hand waves, the top uneven by under a millimetre', () => {
     const body = node('frosting_cake_buttercream');
     const toCs = worldOf(node('cake_secondary')).invert().multiply(worldOf(body));
     const pos = body.getMesh()!.listPrimitives()[0]!.getAttribute('POSITION')!;
@@ -749,14 +773,41 @@ describe('Birthday runtime GLB matches the contract', async () => {
     const drift = Math.max(...radii.map((r, k) => Math.abs((r - c1 * Math.cos(ang(k)) - s1 * Math.sin(ang(k))) / mean - 1)));
     expect(drift).toBeGreaterThan(0.008);
     expect(drift).toBeLessThan(0.02);
-    // Low frequency: neighbouring 5° bins differ by far less than the drift.
-    for (let k = 0; k < 72; k++) expect(Math.abs(radii[k]! - radii[(k + 1) % 72]!) / mean).toBeLessThan(0.004);
+    // v1.6: the scraper's hand waves (2–8 cm round the tier): neighbouring 5° bins differ, but by
+    // ≤ 1.2 % (≈ 1.1 mm), never a step.
+    const steps = radii.map((r, k) => Math.abs(r - radii[(k + 1) % 72]!) / mean);
+    expect(Math.max(...steps)).toBeLessThan(0.012);
+    expect(Math.max(...steps)).toBeGreaterThan(0.003);
     // The candles stand on a top within ±1 mm of the master's.
     for (const ys of socketY) {
       expect(ys.length).toBeGreaterThan(50);
       const y = ys.reduce((a, b) => a + b, 0) / ys.length;
       expect(Math.abs(y - top)).toBeLessThan(0.005);
     }
+  });
+
+  it('v1.6: the tiers\' top edges are a soft hand-coated bead (≈ 6–7 mm), not the master\'s razor 4 mm corner', () => {
+    const body = node('frosting_cake_buttercream');
+    const toCs = worldOf(node('cake_secondary')).invert().multiply(worldOf(body));
+    const pos = body.getMesh()!.listPrimitives()[0]!.getAttribute('POSITION')!;
+    const e = [0, 0, 0];
+    const yMid = (0.4 - MASTER.cakeBottom) * CAKE_SCALE, top = (MASTER.tierTop - MASTER.cakeBottom) * CAKE_SCALE, R = 0.43 * CAKE_SCALE;
+    const pts: Vector3[] = [];
+    for (let i = 0; i < pos.getCount(); i++) pts.push(new Vector3(...(pos.getElement(i, e) as [number, number, number])).applyMatrix4(toCs));
+    const dists: number[] = [];
+    for (let b = 0; b < 36; b++) {
+      const inBin = (v: Vector3) => Math.floor(((Math.atan2(v.z, v.x) + Math.PI) / (2 * Math.PI)) * 36) % 36 === b;
+      const side = pts.filter((v) => inBin(v) && Math.abs(v.y - yMid) < 0.03 && Math.abs(Math.hypot(v.x, v.z) - R) < 0.03);
+      const Rb = side.reduce((a, v) => a + Math.hypot(v.x, v.z), 0) / side.length;
+      // The corner a cut cylinder would have, and how far the frosting stays from it.
+      let d = Infinity;
+      for (const v of pts) if (inBin(v) && v.y > top - 0.03 && Math.hypot(v.x, v.z) > Rb - 0.03) d = Math.min(d, Math.hypot(Math.hypot(v.x, v.z) - Rb, v.y - top));
+      dists.push(d);
+    }
+    dists.sort((a, b) => a - b);
+    // A fillet of radius ρ stays ρ(√2 − 1) from its corner: 2.9 mm for the 7.15 mm bead, 1.7 mm for v1.5's 4.1 mm.
+    expect(dists[18]!).toBeGreaterThan(0.011);
+    expect(dists[18]!).toBeLessThan(0.02);
   });
 
   it('the candles are re-tessellated from the master (fine enough to melt) and carry their melt profile', () => {
