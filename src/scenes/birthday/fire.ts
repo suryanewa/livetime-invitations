@@ -397,19 +397,15 @@ export function flameState(i: number, t: number, sequence: SequenceName, out: Fl
 }
 
 /**
- * Seconds of steady-flame-equivalent burning of candle `i` from the start of `sequence` to `t`
- * (∫ intensity dt): the melt's clock (#6). Guest-ready time adds 1 per second on the live clock.
+ * How hard candle `i`'s flame heats its wax at time `t` of `sequence` (0–1): its radiant output
+ * times its size (growth; a flame stretched by the breath is pushed off the wax, so no more than
+ * its rest size). The melt's clock (#6) integrates it: sequences.ts litTime, melt.ts meltState.
  */
-export function litTime(i: number, t: number, sequence: SequenceName): number {
-  const n = Math.max(0, Math.ceil(t / 0.002));
-  const s = newFlameState();
-  let sum = 0;
-  for (let k = 0; k < n; k++) {
-    const a = (k * t) / n, b = ((k + 1) * t) / n;
-    sum += flameState(i, (a + b) / 2, sequence, s).intensity * (b - a);
-  }
-  return sum;
+export function burnRate(i: number, t: number, sequence: SequenceName): number {
+  const f = flameState(i, t, sequence, burnTmp);
+  return f.intensity * Math.min(1, f.height);
 }
+const burnTmp = newFlameState();
 
 // ── Ember ────────────────────────────────────────────────────────────────────
 export const EMBER = {

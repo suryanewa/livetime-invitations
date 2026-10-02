@@ -8,6 +8,7 @@
  * Exception: a Vec3 `NodeMap.pivot` is in the node's parent space before reparenting (scan units for
  * a top-level master node).
  */
+import type { Document } from '@gltf-transform/core';
 import type { Object3D } from 'three';
 import type { ModelContext } from '../../models/types.ts';
 
@@ -118,6 +119,13 @@ export interface MasterRecipe {
   nodes?: Record<string, NodeMap>;
   /** Master nodes whose meshes (whole subtree) skip the shadow pass (`userData.noShadowCast`). */
   noShadowCast?: string[];
+  /**
+   * Deterministic edit of the master's own document (scan units, before decimate and merge): runs
+   * after `drop` and `materials`, so material names are already the renamed ones. For geometry and
+   * texture work no policy covers (v1.5 Birthday: the hand-finished frosting, generated relief and
+   * roughness maps, re-tessellated candles). Must be a pure function of the master.
+   */
+  transform?: (doc: Document, log: (line: string) => void) => void | Promise<void>;
 }
 
 /** Join static same-material meshes under `parent` into one mesh child per material. */

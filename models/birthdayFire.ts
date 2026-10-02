@@ -105,6 +105,8 @@ export interface FlameRig {
   wickTip: Vector3;
   /** This flame's slot in the shared FlameLights. */
   index: number;
+  /** How far the candle's top has burnt down (melt.ts candleShortening): the wick and flame follow. */
+  shorten: number;
   lights: FlameLights;
   /** The wick's own material (charred, ember-lit tip). */
   wickMaterial: MeshStandardMaterial;
@@ -205,10 +207,12 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   wm?.geometry.computeBoundingBox();
   const w = wickMaterial(lib, wm?.geometry.boundingBox?.max.y ?? 0);
   if (wm) wm.material = w.material;
-  return { node, quad, material, wickTip: top, index, lights, wickMaterial: w.material, wickEmber: w.ember };
+  return { node, quad, material, wickTip: top, index, shorten: 0, lights, wickMaterial: w.material, wickEmber: w.ember };
 }
 
 const qInv = new Quaternion();
+const qCake = new Quaternion();
+const toNode = new Matrix4();
 const up = new Vector3();
 const flow = new Vector3();
 const sway = new Vector3();
@@ -231,12 +235,18 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   // The light is the flame's luminous (soot) output: a fresh blue bead lights almost nothing.
   r.lights.intensity.value[r.index] = CANDLE_LIGHT * Math.max(0, f.intensity * fl.intensity) * sootFormed(f.lit);
   if (!visible) return;
-  // World up and the cake-plan flow in the flame's frame (the flame node has no rotation of its own).
+  // World up and the cake-plan flow in the flame node's frame (the node may be counter-rotated
+  // against its candle's lean, or not: both go through world space).
   r.node.updateWorldMatrix(true, false);
   r.node.getWorldQuaternion(qInv).invert();
   up.set(0, 1, 0).applyQuaternion(qInv);
-  flow.set(f.dirX, 0, f.dirZ).applyQuaternion(qInv.copy(candle.quaternion).invert());
+  if (candle.parent) candle.parent.getWorldQuaternion(qCake);
+  else qCake.identity();
+  flow.set(f.dirX, 0, f.dirZ).applyQuaternion(qCake).applyQuaternion(qInv);
   flow.addScaledVector(up, -flow.dot(up)).normalize();
+  // Candle space → the node's frame (its position, lowered with the melt, and its rotation).
+  r.node.updateMatrix();
+  toNode.copy(r.node.matrix).invert();
   // Lean = breath lean along the flow + room-draft sway.
   sway.set(fl.swayX, 0, fl.swayZ).addScaledVector(up, -fl.swayX * up.x - fl.swayZ * up.z);
   dirH.copy(flow).multiplyScalar(f.tilt).add(sway);
@@ -252,7 +262,7 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   const R = FLAME_REST.radius * size * Math.max(f.width, 1e-3) * fl.width;
   const bend = 0.5 * L * tilt * f.bend;
   // Base: on the wick's axis at the cup's height, carried downstream once it has lifted off.
-  anchor.set(r.wickTip.x, FLAME_REST.base, r.wickTip.z).sub(r.node.position);
+  anchor.set(r.wickTip.x, FLAME_REST.base - r.shorten, r.wickTip.z).applyMatrix4(toNode);
   u.uBase.value.copy(anchor).addScaledVector(flow, f.lift);
   u.uShape.value[0] = L;
   u.uShape.value[1] = R;
@@ -262,7 +272,7 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   u.uState.value[1] = f.cool;
   u.uState.value[2] = Math.max(0, f.intensity * fl.intensity);
   u.uState.value[3] = f.lit;
-  u.uWick.value.copy(r.wickTip).sub(r.node.position);
+  u.uWick.value.set(r.wickTip.x, r.wickTip.y - r.shorten, r.wickTip.z).applyMatrix4(toNode);
   u.uEmber.value = ember;
   u.uPhase.value = fl.phase;
   tip.copy(u.uBase.value).addScaledVector(u.uAxisY.value, L).addScaledVector(u.uAxisX.value, -bend);

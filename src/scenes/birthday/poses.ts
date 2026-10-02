@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
-import { BIN_POS, BIN_START, CANDLE_COUNT, CANDLE_HOVER, CARRY_HEIGHT, IN_BIN, LEAN_MAX, RIM_CLEARANCE, STAND_TOP } from '../../../models/birthdayContract.ts';
+import { BIN_POS, BIN_START, CANDLE, CANDLE_COUNT, CANDLE_HOVER, CARRY_HEIGHT, IN_BIN, LEAN_MAX, RIM_CLEARANCE, STAND_TOP } from '../../../models/birthdayContract.ts';
 import { BIN } from '../../../models/disposalBin.ts';
+import { mulberry32 } from '../../motion/random.ts';
 
 /**
  * Birthday canonical poses and path keys (Birthday sub-spec, v1.2 on the cake master). Cake
@@ -20,18 +21,48 @@ export const PRESENT_YAW = -0.14;
 const each = (f: (i: number) => number) => Array.from({ length: CANDLE_COUNT }, (_, i) => f(i));
 
 /**
- * Candle placement (0.18–0.94 s): six candles in a cascade, 55 ms apart, left to right. Each
- * lowers for CANDLE_DESCENT on a weighted ease (from rest, accelerating, landing at
- * CANDLE_LAND_SPEED), then presses into the buttercream and settles on a damped spring.
+ * Candle placement (0.18–0.89 s; v1.5, edit #5 "candles must actually interact with the cake as
+ * they would in real life as they're placed"): six candles in a cascade, 55 ms apart, left to
+ * right. Each is brought down for CANDLE_DESCENT (from rest; the hand slows as it nears the cake)
+ * and meets the buttercream at CANDLE_CONTACT_SPEED, its base CANDLE.insert above the seat. Then
+ * it is pushed in: buttercream is a soft plastic solid (it yields, it does not spring back), and
+ * its resistance grows with depth as more of the candle's side is in contact, so the candle
+ * decelerates (deceleration rising linearly from 0) and stops exactly at the seat after
+ * CANDLE_PRESS. The plug it pushes aside rises as a collar round the socket (models/cakeShaders.ts)
+ * and the cake takes the push as a sub-millimetre dip and tilt (CAKE_LOAD).
  */
 export const CANDLE_START = each((i) => 0.18 + 0.055 * i);
 export const CANDLE_DESCENT = 0.3;
-/** Landing speed (units/s) the descent hands to the settle: C1 at contact. */
-export const CANDLE_LAND_SPEED = 0.35;
-/** Settle spring: 6 Hz, ζ 0.5 (≈5 mm press, ≈1 mm rebound), faded to exact rest by CANDLE_SETTLE. */
-export const CANDLE_SETTLE = { hz: 6, zeta: 0.5, length: 0.18 } as const;
+/** Speed (units/s) at which the base meets the frosting: 4.4 cm/s, a careful hand. C1 at contact. */
+export const CANDLE_CONTACT_SPEED = 0.22;
+/**
+ * Push-in time: velocity v(u) = −v₀(1 − u²) over the insertion depth (u = s / CANDLE_PRESS), so
+ * depth = ⅔ v₀ T: T = 1.5 · CANDLE.insert / v₀ (3.7 mm in 0.128 s; peak deceleration 3.5 units/s²).
+ */
+export const CANDLE_PRESS = (1.5 * CANDLE.insert) / CANDLE_CONTACT_SPEED;
 /** End of each candle's placement: seated exactly at its socket from here on. */
-export const CANDLE_SEATED = CANDLE_START.map((s) => s + CANDLE_DESCENT + CANDLE_SETTLE.length);
+export const CANDLE_SEATED = CANDLE_START.map((s) => s + CANDLE_DESCENT + CANDLE_PRESS);
+
+/**
+ * The lean of a hand-placed candle: a fixed, seeded angle (0.6–1.8°, within the brief's 2°) and
+ * direction per candle (radians about y in the cake's space, atan2(z, x): the way its top leans and
+ * its low side faces). It develops as the candle seats (the push is never quite along its axis).
+ * Seed chosen so the six lean every which way, as six hands' worth of candles do, and four low
+ * sides (where the runs form, melt.ts) face the camera.
+ */
+export const CANDLE_LEAN: readonly { angle: number; azimuth: number }[] = (() => {
+  const r = mulberry32(27 * 7919);
+  return Array.from({ length: CANDLE_COUNT }, () => ({ angle: ((0.6 + 1.2 * r()) * Math.PI) / 180, azimuth: r() * 2 * Math.PI }));
+})();
+
+/**
+ * The cake takes each push: the stand is rigid ceramic, the cake on it a stiff spring (sponge
+ * and buttercream, ≈ 1.5 kg at ≈ 14 Hz, ζ 0.35). `dip` is the static settling under a full push
+ * (≈ 3 N: 0.24 mm; the overlapping cascade peaks at ≈ 0.5 mm), `tilt` the rock about its underside
+ * centre per unit push at the socket radius (0.07°: a 25 cm cake on a flat plate barely rocks; the
+ * give is mostly the sponge under the candle).
+ */
+export const CAKE_LOAD = { hz: 14, zeta: 0.35, dip: 0.0012, tilt: 0.0012, release: 0.035 } as const;
 
 /**
  * Flames (v1.5): ignition, the breath, extinction and smoke are physics in fire.ts (IGNITE_START,

@@ -87,6 +87,17 @@ describe('master importer: export chain on a synthetic master', async () => {
       anchor: 'test_root',
       scale: 0.5,
       offset: [1, 0, 0],
+      materials: { vinyl: { rename: 'vinyl_renamed' } },
+      // Runs on the master's own document after the material policies (it sees the new name),
+      // before placement: lifts `base` by 0.1 scan units and marks the material.
+      transform: (src) => {
+        const vinyl = src.getRoot().listMaterials().find((m) => m.getName() === 'vinyl_renamed');
+        vinyl?.setExtras({ transformed: true });
+        const base = src.getRoot().listNodes().find((n) => n.getName() === 'base')!;
+        const pos = base.getMesh()!.listPrimitives()[0]!.getAttribute('POSITION')!;
+        const e = [0, 0, 0];
+        for (let i = 0; i < pos.getCount(); i++) { pos.getElement(i, e); pos.setElement(i, [e[0]!, e[1]! + 0.1, e[2]!]); }
+      },
       nodes: { leaf: { rename: 'candle', pivot: { node: 'leaf', point: 'bottom' }, extras: { noShadowCast: true } } },
     }],
     join: [{ parent: 'test_root' }],
@@ -125,6 +136,15 @@ describe('master importer: export chain on a synthetic master', async () => {
     expect(box.min.y).toBeCloseTo(0, 3);
     expect(box.max.y).toBeCloseTo(0.5, 3);
     expect((box.min.x + box.max.x) / 2).toBeCloseTo(0, 3);
+  });
+
+  it('a master `transform` runs after the material policies and before placement, and its edits survive the chain', () => {
+    const vinyl = out.getRoot().listMaterials().find((m) => m.getName() === 'vinyl_renamed')!;
+    expect(vinyl.getExtras()).toMatchObject({ transformed: true });
+    // base: box y 0..1 lifted to 0.1..1.1 scan units, × 0.5 → 0.05..0.55 under test_root.
+    const b = boxIn(findNode(out, 'test_root_stone'), findNode(out, 'test_root'));
+    expect(b.min.y).toBeCloseTo(0.05, 3);
+    expect(b.max.y).toBeCloseTo(0.55, 3);
   });
 
   it('a scene join never bakes a contract node or its mesh holder into the static mesh', () => {

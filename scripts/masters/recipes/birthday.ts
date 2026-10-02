@@ -1,6 +1,7 @@
 import { CAKE_SCALE, CAKE_YAW, MASTER_CANDLES, STAND_TOP } from '../../../models/birthdayContract.ts';
 import { BIRTHDAY_CANDLE_IDS, BIRTHDAY_GLB_NODES, buildBirthdayGeometry } from '../../../models/birthdayParts.ts';
 import type { MaterialPolicy, MaterialVariantSpec, NodeMap, Quat, SceneRecipe } from '../types.ts';
+import { finishCake } from './birthdayFinish.ts';
 
 /**
  * Birthday recipe: the scan-to-CAD cake master on the code-authored candle rig.
@@ -49,7 +50,18 @@ import type { MaterialPolicy, MaterialVariantSpec, NodeMap, Quat, SceneRecipe } 
  *   the studio, judged again under the new rigs.
  * - Materials keep the master's clearcoat and the pearls' iridescence; renamed `cake_*` so no
  *   library name (and no other scene) collides. Textures: the candles' 256×4 wax LUTs only (kept
- *   exact by the LUT rule).
+ *   exact by the LUT rule). v1.5 (next line) takes the clearcoat off the frosting.
+ * - v1.5 (edits #3, #5, #6; docs/scenes/birthday-v1.5-cake.md): the master's `transform` is the
+ *   hand finish (birthdayFinish.ts). Tiers rebuilt as dense lathes of their own profile (the top's
+ *   candle annulus at 0.44 mm, so the runtime can press collars into it) with a relief UV atlas;
+ *   a finish field on every frosting part (tiers ±1.4 % from round at low frequency, tops ±0.7 mm,
+ *   a hand wobble on the side piping); beads, shells, dots, pearls and rosettes ±2–9 % in size and
+ *   up to ±12° in twist about where they touch the cake; two rosettes softened. Frosting without
+ *   clearcoat; the body with generated relief (normal), roughness (0.45–0.70, lossless) and a
+ *   faint albedo finish, shared by both presets; piping and rosettes with a very slight sheen and
+ *   a `_RIDGE` convexity. Candles re-tessellated from the master's own twisted six-flute surface
+ *   (128 around, 0.39 mm rows) with a `_PROFILE` the melt shader deforms (models/cakeShaders.ts).
+ *   CAKE_RADIUS and the crown height were re-measured after the finish (models/birthdayContract.ts).
  */
 
 const lin = (hex: string): [number, number, number, number] => {
@@ -90,6 +102,9 @@ export const recipe: SceneRecipe = {
       rotation: yaw,
       align: { node: 'cake_stand', point: 'bottom', to: [0, -STAND_TOP, 0] },
       drop: ['candle_wicks', 'candle_flames'],
+      // v1.5: the hand finish (birthdayFinish.ts): dense tiers, relief and roughness maps, size and
+      // shape imperfection, no clearcoat on the frosting, re-tessellated candles.
+      transform: finishCake,
       materials: {
         glazed_ceramic: { rename: 'cake_stand_ceramic' },
         buttercream: frostingPolicy('body'),
@@ -109,10 +124,12 @@ export const recipe: SceneRecipe = {
   shadowProxies: [
     { name: 'tray_shadow_proxy', from: ['tray'], parent: 'birthday_root', ratio: 0.02, error: 0.01 },
     { name: 'cake_shadow_proxy', from: ['frosting_cake_buttercream', 'frosting_cake_piping', 'frosting_cake_rosette', 'frosting_cake_pearl'], parent: 'cake_secondary', ratio: 0.01, error: 0.02 },
-    ...BIRTHDAY_CANDLE_IDS.map((id) => ({ name: `candle_${id}_shadow_proxy`, from: [`candle_${id}_wax`], parent: `candle_${id}`, ratio: 0.12, error: 0.02 })),
+    ...BIRTHDAY_CANDLE_IDS.map((id) => ({ name: `candle_${id}_shadow_proxy`, from: [`candle_${id}_wax`], parent: `candle_${id}`, ratio: 0.06, error: 0.02 })),
   ],
   variants: ['vanilla', 'cocoa'],
   materialVariants: cocoa,
-  textures: { maxSize: 2048, quality: 90 },
+  // The generated roughness map stays exact (its 0.45–0.70 range is the point; lossy WebP overshot it).
+  // The generated roughness map stays exact (its 0.45–0.70 range is the point; lossy WebP overshot it).
+  textures: { maxSize: 2048, quality: 90, lossless: ['cake_buttercream/metallicRoughnessTexture'] },
   contract: BIRTHDAY_GLB_NODES,
 };

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { Color, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { Color, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { blackbodyAt, createFlameMaterial, sootRadiance } from '../src/render/flame.ts';
 import { rigBirthday } from '../models/birthday.ts';
@@ -10,11 +10,12 @@ import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
 import { DURATIONS } from '../src/scenes/birthday/poses.ts';
 import {
-  BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, flameAxis, flameScale, flameState, flicker, FLICKER, litTime, MM, newFlicker, newSmokePuffs, newSmokeStrand, plumeRise,
+  BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, flameAxis, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokePuffs, newSmokeStrand, plumeRise,
   POOL_Y, PUFF_COUNT, SMOKE, SMOKE_POINT_COUNT, smokePuffs, smokeRate, smokeStrand, WICK_TIP_Y,
 } from '../src/scenes/birthday/fire.ts';
 
 /** Wick tip of candle i in cake_secondary space (seated, nominal). */
+const IGNITE_START_OF = (i: number) => 0.84 + 0.02 * i;
 const wick = (i: number): [number, number, number] => [CANDLE_SOCKETS[i]![0], CANDLE.seat + WICK_TIP_Y, CANDLE_SOCKETS[i]![1]];
 const MPS = 5;
 
@@ -68,16 +69,14 @@ describe('Birthday fire: the flame', () => {
     expect(lum(blackbodyAt(1300, new Color()))).toBeLessThan(0.01);
   });
 
-  it('exposes the flame state for the melt: litTime grows only while lit, by up to 1 s per second', () => {
+  it('gives the melt its burn rate: 0 unlit, 1 for the steady flame, never more for a stretched one, 0 once out', () => {
     for (let i = 0; i < CANDLE_COUNT; i++) {
-      expect(litTime(i, 0.8, 'host')).toBe(0);
-      const t1 = litTime(i, 1.3, 'host');
-      expect(t1).toBeGreaterThan(0.05);
-      expect(t1).toBeLessThan(1.3 - 0.84);
-      const acc = litTime(i, DURATIONS.accept, 'accept');
-      expect(acc).toBeGreaterThan(BREATH_AT[i]!.arrive * 0.95);
-      expect(acc).toBeLessThan(extinguishedAt(i));
-      expect(litTime(i, 1, 'decline')).toBeLessThan(0.2);
+      expect(burnRate(i, IGNITE_START_OF(i) - 0.001, 'host')).toBe(0);
+      expect(burnRate(i, 1.3, 'host')).toBe(1);
+      expect(burnRate(i, 0.01, 'accept')).toBe(1);
+      for (let t = 0; t < 1.4; t += 0.005) expect(burnRate(i, t, 'accept')).toBeLessThanOrEqual(1);
+      expect(burnRate(i, extinguishedAt(i) + 0.001, 'accept')).toBe(0);
+      expect(burnRate(i, 0.3, 'decline')).toBe(0);
     }
   });
 });
@@ -292,7 +291,35 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     scene.beforeRender();
     const pos = rig.smoke.mesh.geometry.getAttribute('position');
     const c = rig.candles[0]!;
-    const w = c.fire.wickTip.clone().add(c.candle.position);
+    // The wick tip as the candle stands: leaned by its hand placement, burnt down by the melt.
+    expect(c.candle.quaternion.angleTo(new Quaternion())).toBeGreaterThan(0);
+    const w = c.fire.wickTip.clone().setY(c.fire.wickTip.y - c.fire.shorten).applyQuaternion(c.candle.quaternion).add(c.candle.position);
     expect(new Vector3(pos.getX(0), pos.getY(0), pos.getZ(0)).distanceTo(w)).toBeLessThan(0.05 * MM);
+  });
+
+  it('the melt burns the top down and the flame, its ember and its light follow the wick', () => {
+    const { rig, scene } = build();
+    scene.pose('guest-ready');
+    scene.settle();
+    scene.beforeRender();
+    const c = rig.candles[2]!;
+    const u = c.fire.material.uniforms;
+    const toWorld = (v: Vector3) => v.clone().applyMatrix4(c.flame.matrixWorld);
+    c.flame.updateWorldMatrix(true, false);
+    const base0 = toWorld(u.uBase.value), wick0 = toWorld(u.uWick.value), s0 = c.fire.shorten;
+    // A long look at the lit cake: the candles burn on (simulate), the tops go down by a hair.
+    for (let k = 0; k < 30 * 120; k++) scene.simulate(1 / 120);
+    scene.beforeRender();
+    c.flame.updateWorldMatrix(true, false);
+    const ds = c.fire.shorten - s0;
+    expect(ds).toBeGreaterThan(0.2 * MM);
+    expect(c.fire.shorten).toBeLessThanOrEqual(0.8 * MM + 1e-9);
+    // World down by the same amount (the candle's lean is ≤ 2°: cos ≈ 1).
+    expect(base0.y - toWorld(u.uBase.value).y).toBeCloseTo(ds, 4);
+    expect(wick0.y - toWorld(u.uWick.value).y).toBeCloseTo(ds, 4);
+    expect(rig.flameLights.pos.value[2]!.y).toBeLessThan(base0.y + FLAME_REST.length);
+    // The flame stands along world up although its candle leans (the node undoes the lean).
+    const axisWorld = u.uAxisY.value.clone().transformDirection(c.flame.matrixWorld);
+    expect(axisWorld.y).toBeGreaterThan(Math.cos((3.5 * Math.PI) / 180));
   });
 });
