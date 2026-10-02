@@ -4,7 +4,7 @@ import glbUrl from '../../../assets/scenes/birthday/birthday.glb?url';
 import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import { rigBirthday, type BirthdayRig } from '../../../models/birthday.ts';
 import { poseFlame } from '../../../models/birthdayFire.ts';
-import { BIN_POS, BIN_YAW, WALL_Z } from '../../../models/birthdayContract.ts';
+import { BIN_POS, BIN_YAW, MASTER, CAKE_SCALE, WALL_Z } from '../../../models/birthdayContract.ts';
 import type { CakePreset } from '../../../models/cake.ts';
 import { BIN, flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
@@ -13,12 +13,15 @@ import { silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { birthdayFramePoints } from './framing.ts';
-import { MELT_CAP, meltState, newMeltState } from './melt.ts';
+import { MELT_CAP, meltState, newMeltState, SET_AFTER, solidify } from './melt.ts';
+import { runGroove } from '../../../models/cakeShaders.ts';
 import { CANDLE_LEAN, DURATIONS, ON_STAND } from './poses.ts';
 import { frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from './sequences.ts';
 import { EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, newFlicker, SMOKE } from './fire.ts';
 
 const UP = new Vector3(0, 1, 0);
+/** Height of the upper tier's top above the cake's underside (cake space): the squash's lever. */
+const CAKE_TOP_Y = (MASTER.tierTop - MASTER.cakeBottom) * CAKE_SCALE;
 
 export class BirthdayScene implements SceneInstance {
   readonly category = 'birthday' as const;
@@ -48,6 +51,14 @@ export class BirthdayScene implements SceneInstance {
    */
   private liveLit = 0;
   private restingLit = false;
+  /** v1.5 polish: seconds the blown-out candles have cooled at rest (the wax sets), capped. */
+  private liveCool = 0;
+  private restingOut = false;
+  /**
+   * An interruption (a change of mind) is under way: the director asks `interruptCut()` and then
+   * calls `settle()`; the melt the guest watched form is carried across it instead of reset.
+   */
+  private interrupting = false;
 
   // ── Fire: the secondary channel (v1.5) ──
   /** Live clock (s) the flicker is sampled at; `simulate` advances it. */
@@ -80,6 +91,7 @@ export class BirthdayScene implements SceneInstance {
       const d = new Vector3(Math.cos(a), 0, Math.sin(a)).applyQuaternion(c.wax.quaternion.clone().invert());
       const l = Math.hypot(d.x, d.z) || 1;
       c.melt.dir.value = { x: d.x / l, y: d.z / l };
+      c.melt.groove.value = runGroove(d.x / l, d.z / l);
     });
     this.pose('guest-ready');
     // The hero: every real mesh (the fire's camera-facing quads and ribbons excluded), plus each
@@ -119,6 +131,9 @@ export class BirthdayScene implements SceneInstance {
     this.tail = pose === 'accepted' && last?.sequence === 'accept' && last.t > DURATIONS.accept - 0.25 ? last.t : null;
     this.last = null;
     this.restingLit = pose === 'guest-ready';
+    // The wax goes on setting on the live clock only where the guest watched the blow-out (as the
+    // smoke); a canonical 'accepted' reached any other way is still.
+    this.restingOut = this.tail !== null;
     this.apply(frameFor(pose, this.frame));
   }
 
@@ -126,6 +141,7 @@ export class BirthdayScene implements SceneInstance {
     this.tail = null;
     this.last = { sequence, t };
     this.restingLit = false;
+    this.restingOut = false;
     this.apply(sampleSequence(sequence, t, this.frame));
   }
 
@@ -145,18 +161,32 @@ export class BirthdayScene implements SceneInstance {
       this.liveLit = Math.min(MELT_CAP, this.liveLit + dt);
       this.applyMelt(this.frame);
     }
+    if (this.cooling()) {
+      this.liveCool += dt;
+      this.applyMelt(this.frame);
+    }
   }
 
   /** Frames are needed while any flame burns (it flickers), smoke is rising or the melt still forms. */
   settling(): boolean {
-    return this.tail !== null || this.frame.flames.some((f) => f.intensity > 0) || (this.restingLit && this.liveLit < MELT_CAP);
+    return this.tail !== null || this.frame.flames.some((f) => f.intensity > 0) || (this.restingLit && this.liveLit < MELT_CAP) || this.cooling();
+  }
+
+  /** The blown-out wax is still setting on the live clock (until every pool and run has set). */
+  private cooling(): boolean {
+    return this.restingOut && this.frame.cool.some((c) => c > 0 && c + this.liveCool < SET_AFTER);
   }
 
   /** Rest: still flames (no flicker), no smoke, the melt back to the canonical pose's. */
   settle(): void {
     this.flickerGain = 0;
     this.tail = null;
-    this.liveLit = 0;
+    // A change of mind keeps the melt (the candles were really lit that long); load, replay and
+    // reduced motion return it to the canonical pose's.
+    if (!this.interrupting) this.liveLit = 0;
+    this.interrupting = false;
+    this.liveCool = 0;
+    this.restingOut = false;
     this.applyMelt(this.frame);
   }
 
@@ -190,6 +220,7 @@ export class BirthdayScene implements SceneInstance {
 
   /** From the bin (or on the way), a straight blend back would pull the cake through the stand. */
   interruptCut(): boolean {
+    this.interrupting = true;
     const f = this.frame;
     return f.binVisible || !f.cakeVisible || f.cakePos.distanceTo(ON_STAND) > 1e-3;
   }
@@ -204,7 +235,12 @@ export class BirthdayScene implements SceneInstance {
     const scene = this.root.parent ?? this.root;
     const n = this.rig.nodes;
     n.bin_root!.visible = true;
-    for (const c of this.rig.candles) c.fire.quad.visible = true;
+    for (const c of this.rig.candles) {
+      c.fire.quad.visible = true;
+      // The molten wax (hidden until the melt shows it) is warmed too.
+      if (c.run) c.run.visible = true;
+      if (c.pool) c.pool.visible = true;
+    }
     this.rig.smoke.mesh.visible = true;
     this.rig.smoke.puffMesh.visible = true;
     await renderer.compileAsync(scene, camera);
@@ -224,7 +260,7 @@ export class BirthdayScene implements SceneInstance {
 
   // ── internals ─────────────────────────────────────────────────────────────
   private applyMelt(f: BirthdayFrame): void {
-    applyMeltTo(this, f, this.liveLit, this.melt);
+    applyMeltTo(this, f, this.liveLit, this.liveCool, this.melt);
   }
 
   private apply(f: BirthdayFrame): void {
@@ -239,7 +275,11 @@ export class BirthdayScene implements SceneInstance {
     // pushes (a sub-millimetre dip and tilt on its underside centre), then the presentation yaw.
     this.qTilt.setFromEuler(this.euler.set(f.cakeTiltX, 0, f.cakeTiltZ));
     n.cake_secondary!.quaternion.setFromAxisAngle(LEAN_AXIS, f.cakeLean).multiply(this.qTilt).multiply(this.qYaw.setFromAxisAngle(UP, f.cakeYaw));
-    n.cake_secondary!.position.y = f.cakeDip;
+    // The pushes compress the sponge: the cake squashes about its underside (volume kept).
+    const sy = 1 + f.cakeDip / CAKE_TOP_Y;
+    n.cake_secondary!.scale.set(1 + 0.5 * (1 - sy), sy, 1 + 0.5 * (1 - sy));
+    // The plate's contact ring under the bead border goes as the cake leaves its seat.
+    this.rig.plate.lift.value = f.cakePos.distanceTo(ON_STAND);
     this.rig.candles.forEach((c, i) => {
       c.candle.position.y = c.seatedY + (f.drop[i] ?? 0);
       // A hand-placed candle's lean, about its base (the top leans towards its azimuth).
@@ -261,7 +301,7 @@ export class BirthdayScene implements SceneInstance {
 }
 
 /** The scene's private melt step, shared by apply and simulate. */
-function applyMeltTo(scene: BirthdayScene, f: BirthdayFrame, live: number, m: ReturnType<typeof newMeltState>): void {
+function applyMeltTo(scene: BirthdayScene, f: BirthdayFrame, live: number, liveCool: number, m: ReturnType<typeof newMeltState>): void {
   const press = scene.rig.press.press.value;
   scene.rig.candles.forEach((c, i) => {
     meltState(i, (f.litTime[i] ?? 0) + live, m);
@@ -272,9 +312,14 @@ function applyMeltTo(scene: BirthdayScene, f: BirthdayFrame, live: number, m: Re
     c.fire.shorten = m.shorten;
     if (c.melt) {
       c.melt.a.value.set(m.shorten, m.round, m.soften, m.pool);
-      // Run half-width 1.1 mm (scene units).
-      c.melt.b.value.set(m.bead, m.run, 0.0055, 0);
+      c.melt.b.value.set(m.bead, m.run, 0, 0);
+      // Out: the pool and run set (the live cooling only after the canonical blow-out).
+      c.melt.solid.value = solidify((f.cool[i] ?? 0) + ((f.cool[i] ?? 0) > 0 ? liveCool : 0));
+      c.melt.foot.value = f.press[i] ?? 0;
     }
+    // The molten wax shows once there is some: the pool in the cup, the run once it leaves the rim.
+    if (c.pool) c.pool.visible = m.pool > 0.02;
+    if (c.run) c.run.visible = m.run > 0.0002;
     const lean = CANDLE_LEAN[i]!;
     press[i]?.set(f.press[i] ?? 0, m.gloss, lean.azimuth, f.lean[i] ?? 0);
   });

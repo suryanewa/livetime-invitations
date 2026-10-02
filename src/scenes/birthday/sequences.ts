@@ -3,10 +3,11 @@ import { cubicBezier, EASE, lerp, seg, smoothstep } from '../../motion/curves.ts
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 import { CANDLE, CANDLE_SOCKETS } from '../../../models/birthdayContract.ts';
 import {
-  ACROSS_FROM, BIN_AT, BIN_DROP_G, BIN_FROM, CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_COUNT, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_PRESS, CANDLE_START, CARRY, CARRY_FROM,
+  ACROSS_FROM, BIN_AT, BIN_DROP_G, BIN_FROM, CAKE_LOAD, CANDLE_COUNT, CANDLE_HOVER, CANDLE_SEATED, CANDLE_START, CARRY, CARRY_FROM,
   CARRY_LEAN, CARRY_TO, DROPPED, DURATIONS, FLAPS_CLOSE, HOVER_OVER_BIN, LEAN_FADE, LEAN_MAX, LIFT_TO, ON_STAND, PRESENT_YAW,
 } from './poses.ts';
 import { burnRate, flameState, type FlameState, litFlame, newFlameState, noFlame } from './fire.ts';
+import { candleDrop, pressOf, push } from './placement.ts';
 import { BIN_CLOSE, dropHeight, flapsClosing } from '../../../models/disposalBin.ts';
 
 /**
@@ -43,6 +44,11 @@ export interface BirthdayFrame {
    * pure function of it.
    */
   litTime: number[];
+  /**
+   * Seconds since each candle's flame went out (0 while it burns, or before it was lit): its
+   * molten pool and run set (melt.ts solidify), on the clip; the scene adds the live part.
+   */
+  cool: number[];
   /** The cake's give under the pushes (host): its underside centre's dip (units, ≤ 0) and tilt (radians about x and z). */
   cakeDip: number;
   cakeTiltX: number;
@@ -64,7 +70,7 @@ const filled = (v: number) => Array.from({ length: CANDLE_COUNT }, () => v);
 
 export function newFrame(): BirthdayFrame {
   return frameFor('guest-ready', {
-    cakePos: new Vector3(), cakeYaw: 0, cakeLean: 0, cakeVisible: true, cakeInBin: false, drop: filled(0), press: filled(1), lean: filled(1), litTime: filled(0),
+    cakePos: new Vector3(), cakeYaw: 0, cakeLean: 0, cakeVisible: true, cakeInBin: false, drop: filled(0), press: filled(1), lean: filled(1), litTime: filled(0), cool: filled(0),
     cakeDip: 0, cakeTiltX: 0, cakeTiltZ: 0, flames: Array.from({ length: CANDLE_COUNT }, () => newFlameState()), smokeTime: -1,
     binPos: new Vector3(), binVisible: false, flaps: 0,
   });
@@ -82,7 +88,10 @@ export function frameFor(pose: CanonicalPose, out: BirthdayFrame): BirthdayFrame
   setAll(out.press, pose === 'host-ready' ? 0 : 1);
   setAll(out.lean, pose === 'host-ready' ? 0 : 1);
   const burnt = pose === 'guest-ready' ? GUEST_READY_LIT : pose === 'accepted' ? ACCEPTED_LIT : pose === 'declined' ? DECLINED_LIT : null;
-  for (let i = 0; i < CANDLE_COUNT; i++) out.litTime[i] = burnt ? burnt[i]! : 0;
+  for (let i = 0; i < CANDLE_COUNT; i++) {
+    out.litTime[i] = burnt ? burnt[i]! : 0;
+    out.cool[i] = pose === 'accepted' ? DURATIONS.accept - OUT_ACCEPT[i]! : pose === 'declined' ? DURATIONS.decline - OUT_DECLINE[i]! : 0;
+  }
   out.cakeDip = out.cakeTiltX = out.cakeTiltZ = 0;
   for (const f of out.flames) (pose === 'guest-ready' ? litFlame : noFlame)(f);
   out.smokeTime = -1;
@@ -92,7 +101,7 @@ export function frameFor(pose: CanonicalPose, out: BirthdayFrame): BirthdayFrame
   return out;
 }
 
-// ── Host: 1.3 s ───────────────────────────────────────────────────────────────
+// ── Host (≈ 2.45 s) ───────────────────────────────────────────────────────────────
 
 /** Cubic Hermite on u ∈ [0, 1] from p0 (tangent m0) to p1 (tangent m1), tangents per unit u. */
 const hermite = (u: number, p0: number, m0: number, p1: number, m1: number) => {
@@ -100,40 +109,7 @@ const hermite = (u: number, p0: number, m0: number, p1: number, m1: number) => {
   return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
 };
 
-/**
- * Height of a candle above its seat, `tau` seconds after it starts lowering (v1.5).
- * Approach: cubic Hermite from rest at CANDLE_HOVER to first contact (the base CANDLE.insert above
- * the seat, at the buttercream's surface), arriving at CANDLE_CONTACT_SPEED: the hand gathers
- * speed and slows again as it nears the cake. Push-in: v = −v₀(1 − u²), u = s / CANDLE_PRESS: the
- * buttercream's resistance grows with depth, so the candle decelerates harder the deeper it goes
- * and stops exactly at the seat (C1 at contact and at the stop; frosting is plastic: no rebound).
- */
-export function candleDrop(tau: number): number {
-  if (tau <= 0) return CANDLE_HOVER;
-  if (tau < CANDLE_DESCENT) {
-    const u = tau / CANDLE_DESCENT;
-    return hermite(u, CANDLE_HOVER, 0, CANDLE.insert, -CANDLE_CONTACT_SPEED * CANDLE_DESCENT);
-  }
-  const s = tau - CANDLE_DESCENT;
-  if (s >= CANDLE_PRESS) return 0;
-  const u = s / CANDLE_PRESS;
-  return CANDLE.insert - CANDLE_CONTACT_SPEED * CANDLE_PRESS * (u - (u * u * u) / 3);
-}
-
-/** How far a candle at `drop` above its seat has been pushed in (0 at the surface or above – 1 seated). */
-export const pressOf = (drop: number) => Math.min(1, Math.max(0, 1 - drop / CANDLE.insert));
-
-/**
- * The push on the cake from candle i at time t (host), as a fraction of a full push: it builds
- * over the first 12 ms of contact to 35 %, grows with depth to 100 % as the resistance does, and
- * goes as the hand lets go (CAKE_LOAD.release).
- */
-function push(i: number, t: number): number {
-  const contact = CANDLE_START[i]! + CANDLE_DESCENT, end = contact + CANDLE_PRESS;
-  if (t <= contact) return 0;
-  if (t < end) return 0.35 * smoothstep(seg(t, contact, contact + 0.012)) + 0.65 * seg(t, contact, end);
-  return 1 - smoothstep(seg(t, end, end + CAKE_LOAD.release));
-}
+export { candleDrop, pressOf } from './placement.ts';
 
 /**
  * The cake's give (dip, tilt about x, tilt about z): each a damped oscillator (CAKE_LOAD) driven
@@ -141,14 +117,15 @@ function push(i: number, t: number): number {
  * before the end of the host beat so guest-ready is exact.
  */
 const LOAD_DT = 1 / 4000;
-const LOAD_FADE = [1.04, 1.2] as const;
+/** The ring-down is faded to exactly 0 after the last push (≈ 0.3 s, 3 periods) and before the beat ends. */
+const LOAD_FADE = [Math.max(...CANDLE_SEATED) + 0.28, Math.max(...CANDLE_SEATED) + 0.5] as const;
 const LOAD_TABLE = (() => {
   const w = 2 * Math.PI * CAKE_LOAD.hz, z = CAKE_LOAD.zeta;
   const rs = Math.hypot(...CANDLE_SOCKETS[0]!);
   const target = (t: number): [number, number, number] => {
     let y = 0, ax = 0, az = 0;
     for (let i = 0; i < CANDLE_COUNT; i++) {
-      const f = push(i, t);
+      const f = push(i, t, CAKE_LOAD.release);
       if (!f) continue;
       const [sx, sz] = CANDLE_SOCKETS[i]!;
       y -= CAKE_LOAD.dip * f;
@@ -237,6 +214,22 @@ export const GUEST_READY_LIT = Array.from({ length: CANDLE_COUNT }, (_, i) => li
 export const ACCEPTED_LIT = GUEST_READY_LIT.map((g, i) => g + litDuring('accept', i, DURATIONS.accept));
 export const DECLINED_LIT = GUEST_READY_LIT.map((g, i) => g + litDuring('decline', i, DURATIONS.decline));
 
+/** When each flame is out for good in accept and decline (s): the last instant its burn rate is above 0. */
+function outTimes(sequence: 'accept' | 'decline'): number[] {
+  return Array.from({ length: CANDLE_COUNT }, (_, i) => {
+    for (let ms = Math.round(DURATIONS[sequence] * 1000); ms >= 0; ms--) if (flameScaleOf(sequence, i, ms / 1000) > 0) return (ms + 1) / 1000;
+    return 0;
+  });
+}
+export const OUT_ACCEPT = outTimes('accept');
+export const OUT_DECLINE = outTimes('decline');
+
+/** Seconds since candle i's flame went out, at time t of a sequence (0 in host: still burning). */
+export function coolTime(sequence: SequenceName, i: number, t: number): number {
+  if (sequence === 'host') return 0;
+  return Math.max(0, t - (sequence === 'accept' ? OUT_ACCEPT : OUT_DECLINE)[i]!);
+}
+
 /** Candle i's lit time at time t of a sequence (the clip's part; the scene adds the live part). */
 export function litTime(sequence: SequenceName, i: number, t: number): number {
   return sequence === 'host' ? litDuring('host', i, t) : GUEST_READY_LIT[i]! + litDuring(sequence, i, t);
@@ -250,7 +243,7 @@ function host(t: number, out: BirthdayFrame): void {
   out.cakeYaw = lerp(PRESENT_YAW, 0, EASE.travel(seg(t, 0, 0.2)));
   for (let i = 0; i < CANDLE_COUNT; i++) {
     // 0.18–0.89: six candles brought down 55 ms apart and pushed into the buttercream.
-    out.drop[i] = candleDrop(t - CANDLE_START[i]!);
+    out.drop[i] = candleDrop(t - CANDLE_START[i]!, i);
     out.press[i] = pressOf(out.drop[i]!);
     out.lean[i] = smoothstep(out.press[i]!);
     // 0.84–1.28: each wick catches once its candle has seated and its flame grows (fire.ts).
@@ -269,6 +262,7 @@ function accept(t: number, out: BirthdayFrame): void {
   for (let i = 0; i < CANDLE_COUNT; i++) {
     flameState(i, t, 'accept', out.flames[i]);
     out.litTime[i] = litTime('accept', i, t);
+    out.cool[i] = coolTime('accept', i, t);
   }
   out.smokeTime = t;
 }
@@ -357,6 +351,7 @@ function decline(t: number, out: BirthdayFrame): void {
   for (let i = 0; i < CANDLE_COUNT; i++) {
     flameState(i, t, 'decline', out.flames[i]);
     out.litTime[i] = litTime('decline', i, t);
+    out.cool[i] = coolTime('decline', i, t);
   }
   out.flaps = flaps(t);
   // 0.22–0.76: cake and candles are lifted off the stand (by 0.58), carried across from 0.39 and
