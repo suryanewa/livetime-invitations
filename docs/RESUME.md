@@ -118,7 +118,9 @@ Still open:
   (413); the full browser suite was started and killed before it finished, so the browser tests, the
   poster-staleness check on the recaptured Birthday and Dinner stills and the decline strips are **unverified**
   on `main` (the bin owner's own run of the same code before the merge was 107/109 browser, the two failures the
-  posters since recaptured). First thing next session: `pnpm test:browser` on `main`. Left from that round: its warm-up still costs one ~30 ms task
+  posters since recaptured). **Run afterwards on `main` at `03ca155`:** 108 passed, one failure
+  (`business.spec.ts › Optional card drag…`) that passed 3/3 when re-run alone — a load flake while three new owner
+  sessions were starting their Chromes; so the push is verified. Left from that round: its warm-up still costs one ~30 ms task
   at rest on a throttled phone; the round's write-up in `docs/scenes/bin-v1.5.md` and a review of
   `evidence/v1.5/bin/guest/` were not done by the owner.
 - **Owner decisions, pending:** revisions #37 (the record plays on; the deck order), #38 (the mini hoop system and
