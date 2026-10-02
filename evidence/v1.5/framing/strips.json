@@ -1,0 +1,5506 @@
+{
+ "birthday-decline": {
+  "fits": {
+   "restDistance": 12.408687599211623,
+   "declineDistance": 14.019191930430395
+  },
+  "solvesDuring": 0,
+  "peakZoomPerFrame": 0.006543887984371581,
+  "worstSpeedChangePerFrame": 0.0007859221698124507,
+  "worstAt": 96,
+  "rows": [
+   {
+    "ms": 0,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 16,
+    "pull": 0.0023271182195265584,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 32,
+    "pull": 0.009646222330091814,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 48,
+    "pull": 0.022461551051921266,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 64,
+    "pull": 0.04123439892291487,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 80,
+    "pull": 0.06631162073687061,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 96,
+    "pull": 0.09782922258056931,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 112,
+    "pull": 0.135605009931946,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 128,
+    "pull": 0.17905322740646404,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 144,
+    "pull": 0.2271670667268131,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 160,
+    "pull": 0.2786034197987287,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 176,
+    "pull": 0.3318611784957977,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 192,
+    "pull": 0.38548624101500695,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 208,
+    "pull": 0.43823740778546877,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 224,
+    "pull": 0.4891697156142592,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 240,
+    "pull": 0.5376412722046972,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 256,
+    "pull": 0.5832705772875634,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 272,
+    "pull": 0.6258757793355008,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 288,
+    "pull": 0.6654156257892174,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 304,
+    "pull": 0.7019410433576553,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 320,
+    "pull": 0.7355591641093028,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 336,
+    "pull": 0.7664069264602061,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 352,
+    "pull": 0.7946397689382544,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 368,
+    "pull": 0.8204131730562116,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 384,
+    "pull": 0.8438810818399824,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 400,
+    "pull": 0.8651909653244828,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 416,
+    "pull": 0.8844824165002653,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 432,
+    "pull": 0.9018837136168115,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 448,
+    "pull": 0.917515851996564,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 464,
+    "pull": 0.931489699195594,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 480,
+    "pull": 0.9439072998825464,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 496,
+    "pull": 0.9548624645147018,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 512,
+    "pull": 0.9644414019214811,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 528,
+    "pull": 0.9727233525991769,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 544,
+    "pull": 0.9797811981481362,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 560,
+    "pull": 0.9856820338588663,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 576,
+    "pull": 0.9904876984809311,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 592,
+    "pull": 0.9942552593901156,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 608,
+    "pull": 0.9970374538112731,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 624,
+    "pull": 0.998883110237792,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 640,
+    "pull": 0.9998373983754162,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 656,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 672,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 688,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 704,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 720,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 736,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 752,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 768,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 784,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 800,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 816,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 832,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 848,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 864,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 880,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 896,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 912,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 928,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 944,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 960,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 976,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 992,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1008,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1024,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1040,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1056,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1072,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1088,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1104,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1120,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1136,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1152,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1168,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1184,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1200,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1216,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1232,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1248,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1264,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1280,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1296,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1312,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1328,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1344,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1360,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1376,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1392,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1408,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1424,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1440,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1456,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1472,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1488,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1504,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1520,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1536,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1552,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1568,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1584,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1600,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1616,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1632,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1648,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1664,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1680,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1696,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1712,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1728,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1744,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1760,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1776,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1792,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1808,
+    "pull": 1,
+    "visual": "declined-pose"
+   }
+  ]
+ },
+ "dinner-decline": {
+  "fits": {
+   "restDistance": 7.24003591384326,
+   "declineDistance": 13.13889124045127
+  },
+  "solvesDuring": 0,
+  "peakZoomPerFrame": 0.031957880791261085,
+  "worstSpeedChangePerFrame": 0.003838147455160911,
+  "worstAt": 112,
+  "rows": [
+   {
+    "ms": 0,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 16,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 32,
+    "pull": 0.0023271182195265545,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 48,
+    "pull": 0.009646222330091795,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 64,
+    "pull": 0.02246155105192122,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 80,
+    "pull": 0.041234398922914806,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 96,
+    "pull": 0.06631162073687044,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 112,
+    "pull": 0.09782922258056913,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 128,
+    "pull": 0.13560500993194569,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 144,
+    "pull": 0.17905322740646368,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 160,
+    "pull": 0.2271670667268128,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 176,
+    "pull": 0.2786034197987284,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 192,
+    "pull": 0.3318611784957973,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 208,
+    "pull": 0.3854862410150065,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 224,
+    "pull": 0.43823740778546855,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 240,
+    "pull": 0.48916971561425876,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 256,
+    "pull": 0.537641272204697,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 272,
+    "pull": 0.5832705772875632,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 288,
+    "pull": 0.6258757793355004,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 304,
+    "pull": 0.6654156257892171,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 320,
+    "pull": 0.7019410433576552,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 336,
+    "pull": 0.7355591641093027,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 352,
+    "pull": 0.7664069264602058,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 368,
+    "pull": 0.7946397689382543,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 384,
+    "pull": 0.8204131730562114,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 400,
+    "pull": 0.8438810818399824,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 416,
+    "pull": 0.8651909653244827,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 432,
+    "pull": 0.8844824165002653,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 448,
+    "pull": 0.9018837136168114,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 464,
+    "pull": 0.9175158519965638,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 480,
+    "pull": 0.9314896991955937,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 496,
+    "pull": 0.9439072998825462,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 512,
+    "pull": 0.9548624645147017,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 528,
+    "pull": 0.9644414019214811,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 544,
+    "pull": 0.9727233525991767,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 560,
+    "pull": 0.9797811981481361,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 576,
+    "pull": 0.9856820338588663,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 592,
+    "pull": 0.9904876984809312,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 608,
+    "pull": 0.9942552593901155,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 624,
+    "pull": 0.9970374538112731,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 640,
+    "pull": 0.9988831102377921,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 656,
+    "pull": 0.9998373983754162,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 672,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 688,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 704,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 720,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 736,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 752,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 768,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 784,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 800,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 816,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 832,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 848,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 864,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 880,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 896,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 912,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 928,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 944,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 960,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 976,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 992,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1008,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1024,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1040,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1056,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1072,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1088,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1104,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1120,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1136,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1152,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1168,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1184,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1200,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1216,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1232,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1248,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1264,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1280,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1296,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1312,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1328,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1344,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1360,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1376,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1392,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1408,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1424,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1440,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1456,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1472,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1488,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1504,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1520,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1536,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1552,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1568,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1584,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1600,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1616,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1632,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1648,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1664,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1680,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1696,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1712,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1728,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1744,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1760,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1776,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1792,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1808,
+    "pull": 1,
+    "visual": "declined-pose"
+   }
+  ]
+ },
+ "dinner-change-0.10s": {
+  "fits": {
+   "restDistance": 7.24003591384326,
+   "declineDistance": 13.13889124045127
+  },
+  "solvesDuring": 0,
+  "peakZoomPerFrame": 0.014944781929519051,
+  "worstSpeedChangePerFrame": 0.007945624651373563,
+  "worstAt": 128,
+  "rows": [
+   {
+    "ms": 0,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 16,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 32,
+    "pull": 0.0023271182195265545,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 48,
+    "pull": 0.009646222330091795,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 64,
+    "pull": 0.02246155105192122,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 80,
+    "pull": 0.041234398922914806,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 96,
+    "pull": 0.06631162073687044,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 112,
+    "pull": 0.0882129710324652,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 128,
+    "pull": 0.09678162816648513,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 144,
+    "pull": 0.09293214605927308,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 160,
+    "pull": 0.07935087672486604,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 176,
+    "pull": 0.05983669656171345,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 192,
+    "pull": 0.03864173264339588,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 208,
+    "pull": 0.019812089009343434,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 224,
+    "pull": 0.006528572955554153,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 240,
+    "pull": 0.0004474213253125965,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 256,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 272,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 288,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 304,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 320,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 336,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 352,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 368,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 384,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 400,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 416,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 432,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 448,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 464,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 480,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 496,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 512,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 528,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 544,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 560,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 576,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 592,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 608,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 624,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 640,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 656,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 672,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 688,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 704,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 720,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 736,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 752,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 768,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 784,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 800,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 816,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 832,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 848,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 864,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 880,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 896,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 912,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 928,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 944,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 960,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 976,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 992,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1008,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1024,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1040,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1056,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1072,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1088,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1104,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1120,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1136,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1152,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1168,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1184,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1200,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1216,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1232,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1248,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1264,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1280,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1296,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1312,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1328,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1344,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1360,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1376,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1392,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1408,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1424,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1440,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1456,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1472,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1488,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1504,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1520,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1536,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1552,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1568,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1584,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1600,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1616,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1632,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1648,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1664,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1680,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1696,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1712,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1728,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1744,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1760,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1776,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1792,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1808,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1824,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1840,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1856,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1872,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1888,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1904,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1920,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1936,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1952,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1968,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1984,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2000,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2016,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2032,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2048,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2064,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2080,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2096,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2112,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2128,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2144,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2160,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2176,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2192,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2208,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2224,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2240,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2256,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2272,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2288,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2304,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2320,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2336,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2352,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2368,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2384,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2400,
+    "pull": 0,
+    "visual": "accepted-pose"
+   }
+  ]
+ },
+ "dinner-change-0.45s": {
+  "fits": {
+   "restDistance": 7.24003591384326,
+   "declineDistance": 13.13889124045127
+  },
+  "solvesDuring": 0,
+  "peakZoomPerFrame": 0.04844862884654089,
+  "worstSpeedChangePerFrame": 0.007647220704250071,
+  "worstAt": 528,
+  "rows": [
+   {
+    "ms": 0,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 16,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 32,
+    "pull": 0.0023271182195265545,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 48,
+    "pull": 0.009646222330091795,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 64,
+    "pull": 0.02246155105192122,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 80,
+    "pull": 0.041234398922914806,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 96,
+    "pull": 0.06631162073687044,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 112,
+    "pull": 0.09782922258056913,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 128,
+    "pull": 0.13560500993194569,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 144,
+    "pull": 0.17905322740646368,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 160,
+    "pull": 0.2271670667268128,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 176,
+    "pull": 0.2786034197987284,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 192,
+    "pull": 0.3318611784957973,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 208,
+    "pull": 0.3854862410150065,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 224,
+    "pull": 0.43823740778546855,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 240,
+    "pull": 0.48916971561425876,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 256,
+    "pull": 0.537641272204697,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 272,
+    "pull": 0.5832705772875632,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 288,
+    "pull": 0.6258757793355004,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 304,
+    "pull": 0.6654156257892171,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 320,
+    "pull": 0.7019410433576552,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 336,
+    "pull": 0.7355591641093027,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 352,
+    "pull": 0.7664069264602058,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 368,
+    "pull": 0.7946397689382543,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 384,
+    "pull": 0.8204131730562114,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 400,
+    "pull": 0.8438810818399824,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 416,
+    "pull": 0.8651909653244827,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 432,
+    "pull": 0.8844824165002653,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 448,
+    "pull": 0.9018837136168114,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 464,
+    "pull": 0.9161037274792263,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 480,
+    "pull": 0.9231390367104224,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 496,
+    "pull": 0.9199917645653983,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 512,
+    "pull": 0.9048227016971999,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 528,
+    "pull": 0.876821665049447,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 544,
+    "pull": 0.8360778567488594,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 560,
+    "pull": 0.7834502229977829,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 576,
+    "pull": 0.720437812966716,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 592,
+    "pull": 0.6490501376868352,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 608,
+    "pull": 0.5716775289425212,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 624,
+    "pull": 0.49096149816388546,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 640,
+    "pull": 0.40966509531929696,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 656,
+    "pull": 0.33054326780790677,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 672,
+    "pull": 0.2562132193521748,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 688,
+    "pull": 0.18902476889039668,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 704,
+    "pull": 0.13093070946922955,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 720,
+    "pull": 0.08335716713621695,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 736,
+    "pull": 0.04707395983231686,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 752,
+    "pull": 0.022064956284426143,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 768,
+    "pull": 0.007398434897907198,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 784,
+    "pull": 0.0010974426491169413,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 800,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 816,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 832,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 848,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 864,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 880,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 896,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 912,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 928,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 944,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 960,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 976,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 992,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1008,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1024,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1040,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1056,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1072,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1088,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1104,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1120,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1136,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1152,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1168,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1184,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1200,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1216,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1232,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1248,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1264,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1280,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1296,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1312,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1328,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1344,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1360,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1376,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1392,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1408,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1424,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1440,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1456,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1472,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1488,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1504,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1520,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1536,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1552,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1568,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1584,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1600,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1616,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1632,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1648,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1664,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1680,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1696,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1712,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1728,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1744,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1760,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1776,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1792,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1808,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1824,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1840,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1856,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1872,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1888,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1904,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1920,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1936,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1952,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1968,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1984,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2000,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2016,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2032,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2048,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2064,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2080,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2096,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2112,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2128,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2144,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2160,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2176,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2192,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2208,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2224,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2240,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2256,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2272,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2288,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2304,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2320,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2336,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2352,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2368,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2384,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2400,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2416,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2432,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2448,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2464,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2480,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2496,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2512,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2528,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2544,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2560,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2576,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2592,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2608,
+    "pull": 0,
+    "visual": "accepted-pose"
+   }
+  ]
+ },
+ "dinner-change-after": {
+  "fits": {
+   "restDistance": 7.24003591384326,
+   "declineDistance": 13.13889124045127
+  },
+  "solvesDuring": 0,
+  "peakZoomPerFrame": 0.048759997089123736,
+  "worstSpeedChangePerFrame": 0.0065356944786732415,
+  "worstAt": 2048,
+  "rows": [
+   {
+    "ms": 0,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 16,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 32,
+    "pull": 0.0023271182195265545,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 48,
+    "pull": 0.009646222330091795,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 64,
+    "pull": 0.02246155105192122,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 80,
+    "pull": 0.041234398922914806,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 96,
+    "pull": 0.06631162073687044,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 112,
+    "pull": 0.09782922258056913,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 128,
+    "pull": 0.13560500993194569,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 144,
+    "pull": 0.17905322740646368,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 160,
+    "pull": 0.2271670667268128,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 176,
+    "pull": 0.2786034197987284,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 192,
+    "pull": 0.3318611784957973,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 208,
+    "pull": 0.3854862410150065,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 224,
+    "pull": 0.43823740778546855,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 240,
+    "pull": 0.48916971561425876,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 256,
+    "pull": 0.537641272204697,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 272,
+    "pull": 0.5832705772875632,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 288,
+    "pull": 0.6258757793355004,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 304,
+    "pull": 0.6654156257892171,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 320,
+    "pull": 0.7019410433576552,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 336,
+    "pull": 0.7355591641093027,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 352,
+    "pull": 0.7664069264602058,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 368,
+    "pull": 0.7946397689382543,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 384,
+    "pull": 0.8204131730562114,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 400,
+    "pull": 0.8438810818399824,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 416,
+    "pull": 0.8651909653244827,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 432,
+    "pull": 0.8844824165002653,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 448,
+    "pull": 0.9018837136168114,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 464,
+    "pull": 0.9175158519965638,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 480,
+    "pull": 0.9314896991955937,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 496,
+    "pull": 0.9439072998825462,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 512,
+    "pull": 0.9548624645147017,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 528,
+    "pull": 0.9644414019214811,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 544,
+    "pull": 0.9727233525991767,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 560,
+    "pull": 0.9797811981481361,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 576,
+    "pull": 0.9856820338588663,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 592,
+    "pull": 0.9904876984809312,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 608,
+    "pull": 0.9942552593901155,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 624,
+    "pull": 0.9970374538112731,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 640,
+    "pull": 0.9988831102377921,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 656,
+    "pull": 0.9998373983754162,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 672,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 688,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 704,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 720,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 736,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 752,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 768,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 784,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 800,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 816,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 832,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 848,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 864,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 880,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 896,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 912,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 928,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 944,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 960,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 976,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 992,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1008,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1024,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1040,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1056,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1072,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1088,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1104,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1120,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1136,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1152,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1168,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1184,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1200,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1216,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1232,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1248,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1264,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1280,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1296,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1312,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1328,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1344,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1360,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1376,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1392,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1408,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1424,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1440,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1456,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1472,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1488,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1504,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1520,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1536,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1552,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1568,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1584,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1600,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1616,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1632,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1648,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1664,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1680,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 1696,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1712,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1728,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1744,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1760,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1776,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1792,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1808,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1824,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1840,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1856,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1872,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1888,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1904,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1920,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1936,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1952,
+    "pull": 1,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1968,
+    "pull": 0.9996646539895278,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1984,
+    "pull": 0.9960206318676047,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2000,
+    "pull": 0.9856078620581883,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2016,
+    "pull": 0.9660666285584406,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2032,
+    "pull": 0.9360358848974573,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2048,
+    "pull": 0.895038299370002,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2064,
+    "pull": 0.8433653002702406,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2080,
+    "pull": 0.7819621211254757,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2096,
+    "pull": 0.7123128459298804,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2112,
+    "pull": 0.6363254543782323,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2128,
+    "pull": 0.556216867099649,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2144,
+    "pull": 0.47439799089132084,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2160,
+    "pull": 0.3933587639522462,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2176,
+    "pull": 0.3155532011169653,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2192,
+    "pull": 0.24328443908929498,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2208,
+    "pull": 0.178589781676063,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2224,
+    "pull": 0.12312574502083862,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2240,
+    "pull": 0.07805310283767408,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2256,
+    "pull": 0.04392193164483216,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2272,
+    "pull": 0.020556655998526185,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2288,
+    "pull": 0.006941093726646197,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2304,
+    "pull": 0.001103501162503684,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2320,
+    "pull": 0.0000016183785573886666,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2336,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2352,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2368,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2384,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2400,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2416,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2432,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2448,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2464,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2480,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2496,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2512,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2528,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2544,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2560,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2576,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2592,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2608,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2624,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2640,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2656,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2672,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2688,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2704,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2720,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2736,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2752,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2768,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2784,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2800,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2816,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2832,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2848,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2864,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2880,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2896,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2912,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2928,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2944,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2960,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2976,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 2992,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3008,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3024,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3040,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3056,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3072,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3088,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3104,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3120,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3136,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3152,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3168,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3184,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3200,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 3216,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3232,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3248,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3264,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3280,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3296,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3312,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3328,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3344,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3360,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3376,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3392,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3408,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3424,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3440,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3456,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3472,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3488,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3504,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3520,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3536,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3552,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3568,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3584,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 3600,
+    "pull": 0,
+    "visual": "accepted-pose"
+   }
+  ]
+ },
+ "birthday-change-0.45s": {
+  "fits": {
+   "restDistance": 12.408687599211623,
+   "declineDistance": 14.019191930430395
+  },
+  "solvesDuring": 0,
+  "peakZoomPerFrame": 0.11005723293512978,
+  "worstSpeedChangePerFrame": 0.1121807202331196,
+  "worstAt": 448,
+  "rows": [
+   {
+    "ms": 0,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 16,
+    "pull": 0.0023271182195265584,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 32,
+    "pull": 0.009646222330091814,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 48,
+    "pull": 0.022461551051921266,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 64,
+    "pull": 0.04123439892291487,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 80,
+    "pull": 0.06631162073687061,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 96,
+    "pull": 0.09782922258056931,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 112,
+    "pull": 0.135605009931946,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 128,
+    "pull": 0.17905322740646404,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 144,
+    "pull": 0.2271670667268131,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 160,
+    "pull": 0.2786034197987287,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 176,
+    "pull": 0.3318611784957977,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 192,
+    "pull": 0.38548624101500695,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 208,
+    "pull": 0.43823740778546877,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 224,
+    "pull": 0.4891697156142592,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 240,
+    "pull": 0.5376412722046972,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 256,
+    "pull": 0.5832705772875634,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 272,
+    "pull": 0.6258757793355008,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 288,
+    "pull": 0.6654156257892174,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 304,
+    "pull": 0.7019410433576553,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 320,
+    "pull": 0.7355591641093028,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 336,
+    "pull": 0.7664069264602061,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 352,
+    "pull": 0.7946397689382544,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 368,
+    "pull": 0.8204131730562116,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 384,
+    "pull": 0.8438810818399824,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 400,
+    "pull": 0.8651909653244828,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 416,
+    "pull": 0.8844824165002653,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 432,
+    "pull": 0.9018837136168115,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 448,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 464,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 480,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 496,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 512,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 528,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 544,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 560,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 576,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 592,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 608,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 624,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 640,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 656,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 672,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 688,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 704,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 720,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 736,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 752,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 768,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 784,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 800,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 816,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 832,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 848,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 864,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 880,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 896,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 912,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 928,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 944,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 960,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 976,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 992,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1008,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1024,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1040,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1056,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1072,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1088,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1104,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1120,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1136,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1152,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1168,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1184,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1200,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1216,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1232,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1248,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1264,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1280,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1296,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1312,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1328,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1344,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1360,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1376,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1392,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1408,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1424,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1440,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1456,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1472,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1488,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1504,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1520,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1536,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1552,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1568,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1584,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1600,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1616,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1632,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1648,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1664,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1680,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1696,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1712,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1728,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1744,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1760,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1776,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1792,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1808,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1824,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1840,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 1856,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1872,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1888,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1904,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1920,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1936,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1952,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1968,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 1984,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2000,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2016,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2032,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2048,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2064,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2080,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2096,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2112,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2128,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2144,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2160,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2176,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2192,
+    "pull": 0,
+    "visual": "accepted-pose"
+   },
+   {
+    "ms": 2208,
+    "pull": 0,
+    "visual": "accepted-pose"
+   }
+  ]
+ },
+ "dinner-change-to-decline-0.5s": {
+  "fits": {
+   "restDistance": 7.24003591384326,
+   "declineDistance": 13.13889124045127
+  },
+  "solvesDuring": 0,
+  "peakZoomPerFrame": 0.0319578807912613,
+  "worstSpeedChangePerFrame": 0.003838147455160911,
+  "worstAt": 592,
+  "rows": [
+   {
+    "ms": 0,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 16,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 32,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 48,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 64,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 80,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 96,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 112,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 128,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 144,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 160,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 176,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 192,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 208,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 224,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 240,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 256,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 272,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 288,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 304,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 320,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 336,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 352,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 368,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 384,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 400,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 416,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 432,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 448,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 464,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 480,
+    "pull": 0,
+    "visual": "accept-playing"
+   },
+   {
+    "ms": 496,
+    "pull": 0,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 512,
+    "pull": 0.0023271182195265584,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 528,
+    "pull": 0.009646222330091814,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 544,
+    "pull": 0.022461551051921266,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 560,
+    "pull": 0.04123439892291487,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 576,
+    "pull": 0.06631162073687061,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 592,
+    "pull": 0.09782922258056931,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 608,
+    "pull": 0.135605009931946,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 624,
+    "pull": 0.17905322740646404,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 640,
+    "pull": 0.2271670667268131,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 656,
+    "pull": 0.2786034197987287,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 672,
+    "pull": 0.3318611784957977,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 688,
+    "pull": 0.38548624101500695,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 704,
+    "pull": 0.43823740778546877,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 720,
+    "pull": 0.4891697156142592,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 736,
+    "pull": 0.5376412722046972,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 752,
+    "pull": 0.5832705772875634,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 768,
+    "pull": 0.6258757793355008,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 784,
+    "pull": 0.6654156257892174,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 800,
+    "pull": 0.7019410433576553,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 816,
+    "pull": 0.7355591641093028,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 832,
+    "pull": 0.7664069264602061,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 848,
+    "pull": 0.7946397689382544,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 864,
+    "pull": 0.8204131730562116,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 880,
+    "pull": 0.8438810818399824,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 896,
+    "pull": 0.8651909653244828,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 912,
+    "pull": 0.8844824165002653,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 928,
+    "pull": 0.9018837136168115,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 944,
+    "pull": 0.917515851996564,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 960,
+    "pull": 0.931489699195594,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 976,
+    "pull": 0.9439072998825464,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 992,
+    "pull": 0.9548624645147018,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1008,
+    "pull": 0.9644414019214811,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1024,
+    "pull": 0.9727233525991767,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1040,
+    "pull": 0.9797811981481361,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1056,
+    "pull": 0.9856820338588663,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1072,
+    "pull": 0.9904876984809312,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1088,
+    "pull": 0.9942552593901155,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1104,
+    "pull": 0.9970374538112731,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1120,
+    "pull": 0.9988831102377921,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1136,
+    "pull": 0.9998373983754162,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1152,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1168,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1184,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1200,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1216,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1232,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1248,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1264,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1280,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1296,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1312,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1328,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1344,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1360,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1376,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1392,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1408,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1424,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1440,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1456,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1472,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1488,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1504,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1520,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1536,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1552,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1568,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1584,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1600,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1616,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1632,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1648,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1664,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1680,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1696,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1712,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1728,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1744,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1760,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1776,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1792,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1808,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1824,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1840,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1856,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1872,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1888,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1904,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1920,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1936,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1952,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1968,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 1984,
+    "pull": 1,
+    "visual": "decline-playing"
+   },
+   {
+    "ms": 2000,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2016,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2032,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2048,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2064,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2080,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2096,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2112,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2128,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2144,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2160,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2176,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2192,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2208,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2224,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2240,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2256,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2272,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2288,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2304,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2320,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2336,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2352,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2368,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2384,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2400,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2416,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2432,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2448,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2464,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2480,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2496,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2512,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2528,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2544,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2560,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2576,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2592,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2608,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2624,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2640,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2656,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2672,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2688,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2704,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2720,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2736,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2752,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2768,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2784,
+    "pull": 1,
+    "visual": "declined-pose"
+   },
+   {
+    "ms": 2800,
+    "pull": 1,
+    "visual": "declined-pose"
+   }
+  ]
+ }
+}

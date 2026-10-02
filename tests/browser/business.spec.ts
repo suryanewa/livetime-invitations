@@ -174,13 +174,18 @@ test('The status pictogram is dead-front while idle, lights in its colour with a
         if (inBox(x, y, GLASS) && hi >= 200 && sat <= 25) glint++;
       }
     }
-    // The glyph's shape without colour: the extent of the pixels above 60 % of the box's peak luminance.
     const peak = Math.max(...px.map((p) => p.l));
-    const core = px.filter((p) => p.l > 0.6 * peak);
-    const ext = (k: 'x' | 'y') => Math.max(...core.map((p) => p[k])) - Math.min(...core.map((p) => p[k])) + 1;
     const median = lit.length ? [0, 1, 2].map((k) => lit.map((p) => p[k]!).sort((a, b) => a - b)[lit.length >> 1]!) : [0, 0, 0];
-    return { count: lit.length, median, litWidth: lx1 - lx0 + 1, glint, peak, brightest, coreW: ext('x'), coreH: ext('y') };
+    return { count: lit.length, median, litWidth: lx1 - lx0 + 1, glint, peak, brightest, px };
   });
+  /** The glyph's shape without colour: the extent of the light it adds over the idle glass (luminance, above 60 % of its peak). */
+  const shape = (m: { px: { x: number; y: number; l: number }[] }, idle: { px: { l: number }[] }) => {
+    const added = m.px.map((p, i) => ({ ...p, a: p.l - idle.px[i]!.l }));
+    const top = Math.max(...added.map((p) => p.a));
+    const core = added.filter((p) => p.a > 0.6 * top);
+    const ext = (k: 'x' | 'y') => Math.max(...core.map((p) => p[k])) - Math.min(...core.map((p) => p[k])) + 1;
+    return { w: ext('x'), h: ext('y') };
+  };
   // Relative luminance, and the same under deuteranopia (Machado 2009, severity 1).
   const lin = (v: number) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
   const lum = ([r, g, b]: number[]) => 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
@@ -204,21 +209,23 @@ test('The status pictogram is dead-front while idle, lights in its colour with a
 
   for (const [label, m] of [['accept', accept], ['decline', decline]] as const) {
     // The light reads at 540 px (v1.4's tile was 37 × 26 px of flat colour; the glyph and its halo
-    // are about 20 px across: 178 coloured pixels for the check, 129 for the minus).
-    expect(m.count, label).toBeGreaterThan(100);
-    expect(m.litWidth, label).toBeGreaterThan(16);
-    // HDR: the stroke's core rolls a little towards white (its darkest channel at 143 / 153, the
-    // tokens' at 59 / 34: a hotspot, not a flat token sticker) without clipping flat (v1.5's first
-    // cut pinned the whole stroke at (180, 255, 213) and (255, 195, 199))…
-    expect(Math.min(...m.brightest), label).toBeGreaterThan(110);
-    expect(Math.min(...m.brightest), label).toBeLessThan(180);
+    // are about 19 px across: 148 coloured pixels for the check, 110 for the minus).
+    expect(m.count, label).toBeGreaterThan(80);
+    expect(m.litWidth, label).toBeGreaterThan(15);
+    // HDR, hue held: the core is bright (its strongest channel near full) and a little lifted from
+    // the token (its weakest at 95 / 82, the tokens' at 59 / 34), but it keeps its colour: v1.5's
+    // first cuts washed it to (180, 255, 213) / (255, 195, 199) and then to a salmon (255, 154, 153).
+    expect(Math.max(...m.brightest), label).toBeGreaterThan(235);
+    expect(Math.min(...m.brightest), label).toBeGreaterThan(60);
+    expect(Math.min(...m.brightest), label).toBeLessThan(125);
     // …and no glint of a light on the glass beside it.
     expect(m.glint, label).toBe(0);
   }
   // One envelope: the check and the minus are as wide as each other (within 20 %).
-  expect(Math.abs(accept.coreW - decline.coreW) / Math.max(accept.coreW, decline.coreW)).toBeLessThan(0.2);
+  const a = shape(accept, idle), d = shape(decline, idle);
+  expect(Math.abs(a.w - d.w) / Math.max(a.w, d.w)).toBeLessThan(0.2);
   // Without colour: the check stands about twice the minus's height.
-  expect(accept.coreH).toBeGreaterThan(decline.coreH * 1.8);
+  expect(a.h).toBeGreaterThan(d.h * 1.8);
   // The halo keeps the token's hue: green and red, far apart.
   expect(accept.median[1]! - accept.median[0]!).toBeGreaterThan(90);
   expect(decline.median[0]! - decline.median[1]!).toBeGreaterThan(90);
