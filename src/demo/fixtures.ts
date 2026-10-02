@@ -73,7 +73,7 @@ export const PRESETS: Record<Category, PresetOption[]> = {
     { label: 'Cobalt label', config: { category: 'party', songId: 'sample-track-a', label: 'cobalt' } },
   ],
   birthday: [
-    { label: 'Vanilla', config: { category: 'birthday', cake: 'vanilla' } },
+    { label: 'Blue', config: { category: 'birthday', cake: 'vanilla' } },
     { label: 'Cocoa', config: { category: 'birthday', cake: 'cocoa' } },
   ],
   sports: [

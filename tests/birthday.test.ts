@@ -445,9 +445,9 @@ describe('Birthday runtime GLB matches the contract', async () => {
     for (const n of ['cake_candle_pink', 'cake_candle_blue']) expect(mat(n).getBaseColorTexture()?.getSize()).toEqual([256, 4]);
   });
 
-  it('vanilla is the ivory rebuild’s palette at the master’s own roughness (no studio regrade)', () => {
+  it('the default (\'vanilla\' key) is the owner’s blue theme at the master’s own roughness (no studio regrade)', () => {
     // v1.2.1 darkened the body to #E0D3BF at roughness 0.58 for the v1.1 peach stage; removed in v1.3.
-    expect(PALETTE.vanilla.body).toBe('#F3E9D8');
+    expect(PALETTE.vanilla).toMatchObject({ body: '#B0CBFF', piping: '#FFFDFA', rosette: '#88B0F7' });
     const mat = (n: string) => doc.getRoot().listMaterials().find((m) => m.getName() === n)!;
     expect(mat('cake_buttercream').getRoughnessFactor()).not.toBeCloseTo(0.58, 3);
     expect(mat('cake_buttercream').getRoughnessFactor()).toBeCloseTo(mat('cake_buttercream_cocoa').getRoughnessFactor(), 6);

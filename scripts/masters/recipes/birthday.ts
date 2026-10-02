@@ -40,7 +40,9 @@ import type { MaterialPolicy, MaterialVariantSpec, NodeMap, Quat, SceneRecipe } 
  *   baseColorFactor; the shipped structure, the original ivory rebuild's warmth); cocoa is a
  *   KHR_materials_variants copy of the same four materials (chocolate body, milk-chocolate
  *   piping, dark rosettes, ivory pearls). Stand and candles keep the master's colours.
- * - Vanilla (studio pass v1.3): back to the ivory rebuild's palette (body #F3E9D8, piping
+ * - 2026-10-02: the owner asked for the blue theme, so the default ('vanilla' key) is the master's blue palette
+ *   (#B0CBFF / #FFFDFA / #88B0F7) instead of ivory.
+ * - Vanilla (studio pass v1.3, superseded by the line above): back to the ivory rebuild's palette (body #F3E9D8, piping
  *   #FFFDF8, rosettes #F3E3C7) at the master's own roughness. v1.2.1 had darkened the body to
  *   #E0D3BF at roughness 0.58 (piping #FFFCF6, rosettes #F7EFE1) because the ivory sat in the
  *   tone mapper's shoulder and read as a flat cut-out on the v1.1 peach stage: a compensation for
@@ -57,7 +59,9 @@ const lin = (hex: string): [number, number, number, number] => {
 
 /** Frosting palettes (sRGB). */
 export const PALETTE = {
-  vanilla: { body: '#F3E9D8', piping: '#FFFDF8', rosette: '#F3E3C7', pearl: '#FFFFFF' },
+  // 'vanilla' is the config key (public API, posters); the look is the blue theme chosen by the owner
+  // (powder-blue body, warm-white piping, cornflower rosettes: tools/cake_palette.py in the Models repo).
+  vanilla: { body: '#B0CBFF', piping: '#FFFDFA', rosette: '#88B0F7', pearl: '#FFFFFF' },
   cocoa: { body: '#5E3727', piping: '#94603F', rosette: '#4A281A', pearl: '#F4EADB' },
 } as const;
 
