@@ -8,8 +8,8 @@ import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { DinnerScene } from '../src/scenes/dinner/index.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  buildPlumes, buildPuffs, domeClearance, newPuffState, PLUME, plumeCenter, plumeDensity, POCKET_CLEAR, PUFF_COUNTS, PUFF_KINDS, plumeSource, puffAt, riseAt, STEAM_END, steamEndAfter, STEAM_REST,
-  steamPlumes, steamPuffs,
+  buildPlumes, buildPuffs, domeClearance, newPuffState, PLUME, plumeCenter, plumeDensity, POCKET_CLEAR, PUFF_COUNTS, PUFF_KINDS, leftSteamEnd, plumeSource, puffAt, riseAt, STEAM_END, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade,
+  steamPlumes, steamPuffs, VIEW_RIGHT,
 } from '../src/scenes/dinner/steam.ts';
 
 /**
@@ -118,7 +118,7 @@ describe('Dinner steam plan (v1.5)', () => {
     for (const p of steamPlumes()) expect(p.base.y).toBeCloseTo(plateTop(Math.hypot(p.base.x, p.base.z)), 6);
   });
 
-  it('rises like the warm air off a hot dish: at most 30 cm/s, decelerating as it mixes in; the column at 15–22 cm/s', () => {
+  it('rises like the warm air off a hot dish: at most 30 cm/s, decelerating as it mixes in; the column at 20–25 cm/s', () => {
     const a = newPuffState(), b = newPuffState();
     let vmax = 0;
     for (const p of steamPuffs()) {
@@ -129,15 +129,15 @@ describe('Dinner steam plan (v1.5)', () => {
     const w = (t: number) => (riseAt(1, t + 0.005) - riseAt(1, t - 0.005)) / 0.01;
     expect(w(1.0)).toBeLessThan(w(0.4));
     for (const p of steamPlumes()) {
-      expect(p.rise * SU_CM).toBeGreaterThanOrEqual(15);
-      expect(p.rise * SU_CM).toBeLessThanOrEqual(22);
+      expect(p.rise * SU_CM).toBeGreaterThanOrEqual(20);
+      expect(p.rise * SU_CM).toBeLessThanOrEqual(25);
     }
   });
 
   it('the column is a broad sheet over the well (60–85 % of its width), not a strand', () => {
     // Across the camera's view (its horizontal is 20° off the scene's x), each sheet's half-width
     // either side of its base.
-    const right = new Vector3(Math.cos((20 * Math.PI) / 180), 0, -Math.sin((20 * Math.PI) / 180));
+    const right = VIEW_RIGHT;
     const lo = Math.min(...steamPlumes().map((p) => p.base.dot(right) - p.width));
     const hi = Math.max(...steamPlumes().map((p) => p.base.dot(right) + p.width));
     const share = (hi - lo) / (2 * PLATE.wellRadius);
@@ -157,14 +157,15 @@ describe('Dinner steam plan (v1.5)', () => {
       return m;
     };
     // Dense above the plate's far rim (h ≳ 0.3 su from the camera) through the second after the
-    // reveal, thinning; a thin tail still there at 4 s (≈ 4 levels of 255 over the cove, measured),
-    // a twentieth of the peak; below 1 % everywhere (invisible over the cove) by STEAM_END.
+    // reveal, thinning; a thin tail still there at 4 s (p99.9 ≈ 11 levels of 255 over the cove,
+    // measured: the thin steam breaks into filaments that keep their light), a twentieth of the
+    // peak; below STEAM_GONE everywhere (gone) by STEAM_END.
     expect(maxDensity(1.2, 0.3, 0.9)).toBeGreaterThan(0.3);
     expect(maxDensity(1.8, 0.3, 0.9)).toBeGreaterThan(0.15);
     expect(maxDensity(1.8)).toBeLessThan(maxDensity(1.2));
-    expect(maxDensity(4.0, 0.3, 0.9)).toBeGreaterThan(0.04);
+    expect(maxDensity(4.0, 0.3, 0.9)).toBeGreaterThan(0.03);
     expect(maxDensity(4.0)).toBeLessThan(0.1 * maxDensity(1.0));
-    expect(maxDensity(STEAM_END)).toBeLessThanOrEqual(0.0101);
+    expect(maxDensity(STEAM_END)).toBeLessThanOrEqual(STEAM_GONE * 1.01);
     for (const p of steamPuffs()) expect(p.t0 + p.life).toBeLessThanOrEqual(STEAM_END);
     expect(STEAM_END).toBeGreaterThan(DURATIONS.accept + 4);
     expect(STEAM_END).toBeLessThan(DURATIONS.accept + 5.5);
@@ -334,17 +335,24 @@ describe('Dinner steam on stage (v1.5)', () => {
     expect(after.visible).toBe(true);
     expect(after.tau).toBeNull();
     expect(after.left).toHaveLength(1);
-    expect(after.left[0]).toMatchObject({ tau: cut, emitEnd: cut, until: steamEndAfter(cut) });
+    expect(after.left[0]).toMatchObject({ tau: cut, emitEnd: cut, until: leftSteamEnd(cut) });
+    expect(leftSteamEnd(cut)).toBeLessThanOrEqual(steamEndAfter(cut));
+    // Stirred by the returning cover, it thins smoothly from the cut (no step), to 1 % within ≈ 2.5 s.
+    expect(stirFade(0)).toBe(1);
+    expect(1 - stirFade(1 / 60)).toBeLessThan(0.01);
+    expect(stirFade(0.5)).toBeGreaterThan(0.3);
+    expect(stirFade(2.5)).toBeLessThan(0.01);
+    expect(after.fade).toBe(1);
     // The rewind sets the cover back on the plate: what it closes over then stays under it (the
     // first frame that counts has it seated, or barely lifted with the plate).
     const capture = after.left[0]!.capture;
     expect(capture - cut).toBeGreaterThanOrEqual(REWIND.min);
     expect(capture - cut).toBeLessThanOrEqual(REWIND.max.decline + 1 / 60);
     const seated = frameFor('guest-ready', newFrame()).coverPos;
-    // It disperses over its own life (well over a second here), then it has gone and the loop idles,
+    // It disperses over its own life (over half a second here; stirred, thinning from the cut), then it has gone and the loop idles,
     // the decline's end (its pose) notwithstanding.
     const until = after.left[0]!.until;
-    expect(until - cut).toBeGreaterThan(1);
+    expect(until - cut).toBeGreaterThan(0.6);
     let prev = cut, frames = 0, closed = false;
     s.run(until - cut + 0.1, () => {
       const l = s.scene.steamState.left;
@@ -359,6 +367,8 @@ describe('Dinner steam on stage (v1.5)', () => {
     });
     expect(closed).toBe(true);
     expect(frames / 60).toBeCloseTo(until - cut, 1);
+    expect(s.scene.steamState.visible).toBe(false);
+    s.run(DURATIONS.decline + 1);
     expect(s.director.state).toBe('declined-pose');
     expect(s.scene.steamState.visible).toBe(false);
     expect(s.scene.settling()).toBe(false);

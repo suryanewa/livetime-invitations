@@ -381,8 +381,8 @@ export const PLUME = {
    * After the first rush (`decay`), the warm plate goes on steaming thinly for several seconds:
    * this share of the source decays over `tailDecay` (s), visible to about 4 s.
    */
-  tail: 0.3,
-  tailDecay: 1.5,
+  tail: 0.32,
+  tailDecay: 1.4,
   /**
    * A change of mind: the source dies away over this (s) once the cover starts back down, so the
    * detached column's base is a soft gradient (≈ 3 cm at its rise), never an edge.
@@ -408,7 +408,20 @@ export const PLUME = {
    */
   drift: 0,
   driftDecay: 0.6,
+  /**
+   * The room's draught: the whole column leans slowly from side to side across the view (su of
+   * lean per su of height, at `leanHz`), so it never stands as a parallel-sided slab.
+   */
+  lean: 0.12,
+  leanHz: 0.13,
 } as const;
+
+/** The draught's lean of the column at τ (su per su of height, along the camera's horizontal). */
+export function plumeLean(tau: number): number {
+  return PLUME.lean * Math.sin(2 * Math.PI * PLUME.leanHz * tau + 0.6);
+}
+/** The camera's horizontal in the scene (the neutral-room view; the ribbons' across direction is the live camera's). */
+export const VIEW_RIGHT = new Vector3(Math.cos((20 * Math.PI) / 180), 0, -Math.sin((20 * Math.PI) / 180));
 
 /** The wake's lean of the column at τ (su per su of height, along REVEAL_DIR). */
 export function plumeDrift(tau: number): number {
@@ -432,7 +445,7 @@ export function buildPlumes(): Plume[] {
   // incense): three overlapping sheets side by side across the camera's view, together about 70 %
   // of the well's width at the base, that break into many irregular wisps as they rise (the
   // wisps are the fragment shader's).
-  const right = new Vector3(Math.cos((20 * Math.PI) / 180), 0, -Math.sin((20 * Math.PI) / 180));
+  const right = VIEW_RIGHT;
   const offsets = [-0.19, 0.0, 0.19];
   for (let i = 0; i < PLUME_COUNT; i++) {
     const base = right.clone().multiplyScalar(offsets[i]! + range(-0.03, 0.03)).add(new Vector3(0, 0, range(0.0, 0.08)));
@@ -443,11 +456,13 @@ export function buildPlumes(): Plume[] {
       // The rim clears the well between 0.22 and 0.34 s (it lifts off at ≈ 0.22 s).
       t0: range(0.22, 0.3),
       decay: range(0.45, 0.6),
-      // 17–21 cm/s: the first rush off a hot dish (a thermal plume, w ≈ 0.1–0.3 m/s).
-      rise: range(1.0, 1.2),
+      // 21–24 cm/s: the first rush off a hot dish ≈ 45 K above the room (a thermal plume,
+      // w ≈ √(g·ΔT/T·L) ≈ 0.27 m/s over 5 cm), so it clears the plate's far rim as the dome leaves.
+      rise: range(1.25, 1.45),
       strength: range(1.9, 2.3),
       width: range(0.15, 0.19),
-      spread: range(0.12, 0.18),
+      // Widening as it rises and mixes in (≈ 1.5× the source by 17 cm, as real steam fans out).
+      spread: range(0.18, 0.26),
       sway: range(0.04, 0.06),
       dir1: new Vector3(Math.cos(d1), 0, Math.sin(d1)),
       dir2: new Vector3(Math.cos(d2), 0, Math.sin(d2)),
@@ -493,6 +508,7 @@ export function plumeCenter(p: Plume, h: number, tau: number, out: Vector3): Vec
   out.copy(p.base);
   out.y += h;
   out.addScaledVector(REVEAL_DIR, plumeDrift(tau) * h);
+  out.addScaledVector(VIEW_RIGHT, plumeLean(tau) * h);
   out.addScaledVector(p.dir1, amp * Math.sin(k1 * s + p.seed));
   out.addScaledVector(p.dir2, PLUME.wave2Share * amp * Math.sin(k2 * s + 1.7 * p.seed));
   out.addScaledVector(p.dir3, PLUME.flap * h * Math.sin(2 * Math.PI * PLUME.flapHz * tau + p.seed + 1.5 * h));
@@ -506,9 +522,14 @@ export function plumeCenter(p: Plume, h: number, tau: number, out: Vector3): Vec
 export const STEAM_REST: { tau: number; fade: number } | null = null;
 
 /**
+ * Density below which the column has gone: measured, its last wisps then lift the greige cove by
+ * at most a level or two over a few pixels (`evidence/v1.5/dinner/polish/steam-visibility-curve.txt`),
+ * so ending there shows no step.
+ */
+export const STEAM_GONE = 0.006;
+/**
  * When the steam has gone (s of τ): the last puff, and the column once every plume's density has
- * fallen below 1 % everywhere along it (white at 1 % over the greige cove moves it 0.3 of an
- * 8-bit step: gone).
+ * fallen below STEAM_GONE everywhere along it.
  */
 export const STEAM_END = (() => {
   let end = Math.max(...steamPuffs().map((p) => p.t0 + p.life));
@@ -517,7 +538,7 @@ export const STEAM_END = (() => {
     for (; t < 10; t += 0.01) {
       let max = 0;
       for (let h = 0; h <= PLUME.length; h += 0.02) max = Math.max(max, plumeDensity(p, h, t));
-      if (t > p.t0 + PLUME.ramp && max < 0.01) break;
+      if (t > p.t0 + PLUME.ramp && max < STEAM_GONE) break;
     }
     end = Math.max(end, t);
   }
@@ -526,7 +547,7 @@ export const STEAM_END = (() => {
 
 /**
  * When steam whose release stopped at `emitEnd` (a change of mind) has gone (s of τ, ≤ STEAM_END):
- * its last puff, and the column once its density is below 1 % everywhere (as STEAM_END; coarse
+ * its last puff, and the column once its density is below STEAM_GONE everywhere (as STEAM_END; coarse
  * steps, a few thousand evaluations, so it costs nothing at the cut).
  */
 export function steamEndAfter(emitEnd: number, emitStart = -Infinity): number {
@@ -536,12 +557,33 @@ export function steamEndAfter(emitEnd: number, emitStart = -Infinity): number {
     let t = emitEnd + PLUME.cut;
     for (; t < STEAM_END; t += 0.05) {
       let max = 0;
-      for (let h = 0; h <= PLUME.length && max < 0.01; h += 0.04) max = Math.max(max, plumeDensity(p, h, t, emitStart, emitEnd));
-      if (max < 0.01) break;
+      for (let h = 0; h <= PLUME.length && max < STEAM_GONE; h += 0.04) max = Math.max(max, plumeDensity(p, h, t, emitStart, emitEnd));
+      if (max < STEAM_GONE) break;
     }
     end = Math.max(end, t);
   }
   return Math.min(STEAM_END, Math.ceil(end * 100) / 100);
+}
+
+/**
+ * Steam a change of mind leaves behind is stirred: the cover comes back down through it and the
+ * dish is carried off, so it mixes into the room faster than a column rising in still air, and its
+ * droplets evaporate sooner. Its light falls with this time scale (s) from the cut, from a smooth
+ * start (`stirFade`). Without it, the column's upper half lingered in front of the bin as the
+ * camera came round to it, reading as smoke from the bin.
+ */
+export const STEAM_STIR = 0.4;
+export function stirFade(age: number): number {
+  const e = Math.max(0, age);
+  return Math.exp(-(e * e) / (STEAM_STIR * (e + 0.2)));
+}
+/** When steam left behind at `cut` has gone: its own life, or stirred below 1 % (≤ STEAM_END). */
+export function leftSteamEnd(cut: number, emitStart = -Infinity): number {
+  let until = steamEndAfter(cut, emitStart);
+  for (let e = 0; e < until - cut; e += 0.02) {
+    if (stirFade(e) < 0.01) { until = Math.min(until, Math.ceil((cut + e) * 100) / 100); break; }
+  }
+  return until;
 }
 
 export interface PuffState {

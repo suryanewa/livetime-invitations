@@ -18,7 +18,7 @@ import {
   type AnswerChange, changeTime, CONTENT_END, coverBlendSafe, DURATIONS, frameFor, newFrame, planAnswerChange, sampleAnswerChange, sampleSequence,
   type DinnerFrame,
 } from './sequences.ts';
-import { STEAM_END, steamEndAfter, STEAM_REST, steamPlumes, steamPuffs } from './steam.ts';
+import { leftSteamEnd, STEAM_END, STEAM_REST, steamPlumes, steamPuffs, stirFade } from './steam.ts';
 import { dinnerPull } from './pull.ts';
 
 /**
@@ -306,13 +306,15 @@ export class DinnerScene implements SceneInstance {
     slot.t = tau;
     slot.start = emitStart;
     slot.end = tau;
-    slot.until = steamEndAfter(tau, emitStart);
+    slot.until = leftSteamEnd(tau, emitStart);
     slot.capture = Infinity;
   }
 
   private syncSteam(): void {
     this.steam.update(0, { tau: this.steamT, emitStart: this.steamEmitStart, fade: this.steamFade });
-    this.leftSteam.forEach((g, i) => this.steam.update(i + 1, { tau: g.t, emitStart: g.start, emitEnd: g.end, capture: g.capture }));
+    this.leftSteam.forEach((g, i) => this.steam.update(i + 1, {
+      tau: g.t, emitStart: g.start, emitEnd: g.end, capture: g.capture, fade: g.t === null ? 1 : stirFade(g.t - g.end),
+    }));
   }
 
   /**

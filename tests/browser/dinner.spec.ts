@@ -87,8 +87,8 @@ test('Accept releases steam that rises on after the reveal, then fades clear: th
   const t = await calls();
   await page.waitForTimeout(300);
   expect(await calls()).toBeGreaterThan(t + 5);
-  // Gone by STEAM_END (6.3 s of the reveal's clock, ≈ 4.8 s after the accepted pose): idle.
-  await page.waitForTimeout(2200);
+  // Gone by STEAM_END (6.6 s of the reveal's clock, ≈ 5.1 s after the accepted pose): idle.
+  await page.waitForTimeout(2700);
   const b = await calls();
   await page.waitForTimeout(800);
   expect(await calls()).toBeLessThanOrEqual(b + 1);
