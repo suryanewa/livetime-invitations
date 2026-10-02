@@ -77,21 +77,20 @@ export interface EmissionField {
 }
 
 /**
- * The shell's own status glyphs, exactly (src/ui/guestControls.ts, DESIGN.md "check for Accept, minus
- * for Decline"): the check `M4.5 10.5 l3.5 3.5 7.5 −8` and the minus `M5 10 h10` on the 20-unit grid
- * (y down), stroke 2.2, round caps and joins. The reader draws the product's iconography, not a
- * second set.
+ * The shell's own status glyphs (src/ui/guestControls.ts, DESIGN.md "check for Accept, minus for
+ * Decline"): the check `M4.5 10.5 l3.5 3.5 7.5 −8` and the minus on the 20-unit grid (y down),
+ * stroke 2.2, round caps and joins. The reader draws the product's iconography, not a second set.
  *
  * Optical weight: one stroke weight for both, both centred on the grid by their boxes, as the shell
- * centres them. The minus keeps the shell's 10 units against the check's 11-unit span: one unbroken
- * lit bar reads longer and heavier than the two angled strokes of the check, so the shell's own
- * proportion is the balanced one (v1.5's first cut stretched it to 11 and it outweighed the check).
+ * centres them. The minus spans the check's 11 units (the shell's is 10, beside a word): on the
+ * reader it stands alone, and at phone size the shorter red bar read as "a red LED", lighter than the
+ * check (polish 2, the guest-experience judge on a 390 px phone).
  */
 export const STATUS_ICON = {
   grid: 20,
   stroke: 2.2,
   accept: [[4.5, 10.5], [8, 14], [15.5, 6]] as readonly (readonly [number, number])[],
-  decline: [[5, 10], [15, 10]] as readonly (readonly [number, number])[],
+  decline: [[4.5, 10], [15.5, 10]] as readonly (readonly [number, number])[],
 } as const;
 
 /** Diffusion of the status light (fractions of the icon's stroke width unless noted). */
@@ -114,13 +113,12 @@ export const STATUS_DIFFUSION = {
   far: { sigma: 1.4, weight: 0.1 },
   /**
    * The halos' weight per glyph (× near and far). The core cannot go brighter without washing
-   * towards white in the tone curve, so the halo carries the glyph's presence at small sizes; red
-   * has 0.37 of green's luminance and the minus 0.63 of the check's stroke, so the minus's diffuser
-   * glow is much the stronger. Lowering the cores for hue alone took 37 % of the minus's light; the
-   * halo gives most of it back (−13 % against the earlier build, lit area +2 %) as light that stays
-   * below the tone curve's shoulder and saturated: the "backlit" read.
+   * towards white in the tone curve, so the halo adds to the glyph's presence; red has 0.37 of
+   * green's luminance and the minus 0.69 of the check's stroke, so the minus's diffuser glow is the
+   * stronger: enough that the pair read alike, not so much that the red bloom reads wider than the
+   * green (3.0 did, by about 12 %, once the glyph grew 1.5× in polish 2).
    */
-  haloGain: { accept: 1.4, decline: 3.0 },
+  haloGain: { accept: 1.4, decline: 2.6 },
   /**
    * Hotspot: the LED sits behind the middle of the light guide, so the stroke is brightest there
    * and falls to `floor` at the glyph's ends (Gaussian over `radius` grid units).

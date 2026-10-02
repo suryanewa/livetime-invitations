@@ -340,16 +340,17 @@ describe('Business at the reader', () => {
     // Below the NFC mark's arcs (the icon quad is 0.6 R square; its arcs fill the middle half).
     expect(top + glow).toBeLessThan(FACE.icon.y - 0.15);
     // Inside the window: the glyph and its near glow clear the glass's edges.
-    expect(bottom - glow - FACE.glassY0).toBeGreaterThan(0.04);
+    expect(bottom - glow - FACE.glassY0).toBeGreaterThan(0.025);
     expect(FACE.glassHalfWidth - Math.max(...xs.map(Math.abs)) - half * unit - glow).toBeGreaterThan(0.2);
     // The light's carrying quad stays within the glass's width.
     expect(STATUS_PICTOGRAM_SIZE / 2).toBeLessThan(FACE.glassHalfWidth);
-    // Through the press and hold the card's lowest point stays above the glyph and its glow, with
-    // a margin for the camera's slant (the card sits a few mm proud of the glass).
+    // Through the press and hold the card's lowest point stays above the whole glyph, with a margin
+    // for the camera's slant (the card sits a few mm proud of the glass). Since the glyph grew 1.5×
+    // for phone legibility (polish 2), the upper edge of its near glow tucks under the card's edge.
     for (let t = OUTCOME_BEATS.contact; t <= OUTCOME_BEATS.depart; t += 0.01) {
       const f = at('accept', t);
       const low = Math.min(...cardBack().map((p) => faceUV(cardPoint(f, p)).v));
-      expect(low - (top + glow), `t=${t.toFixed(2)}`).toBeGreaterThan(0.02);
+      expect(low - top, `t=${t.toFixed(2)}`).toBeGreaterThan(0.02);
     }
   });
 
@@ -797,29 +798,33 @@ describe('Business physics and status', () => {
     expect(STATUS_ICON.stroke).toBe(w);
     const minus = /minus: '[^']*d="M([\d.]+) ([\d.]+)h([\d.]+)"[^']*stroke-width="([\d.]+)"/.exec(ui)!;
     const [mx, my, mh, mw] = minus.slice(1).map(Number) as [number, number, number, number];
-    expect(STATUS_ICON.decline).toEqual([[mx, my], [mx + mh, my]]);
     expect(mw).toBe(w);
-    // One envelope: the minus (the shell's 10 units) within 10 % of the check's span, on the grid's
-    // centre line; both are centred on the grid by their boxes.
+    // The shell's minus, on its own centre line, lengthened from its 10 units to the check's 11-unit
+    // span: on the reader it stands alone, and at phone size a shorter bar read as an LED.
+    expect(STATUS_ICON.decline[0]![1]).toBe(my);
+    expect((STATUS_ICON.decline[0]![0] + STATUS_ICON.decline[1]![0]) / 2).toBe(mx + mh / 2);
+    // One envelope: the minus spans the check's width, on the grid's centre line; both are centred
+    // on the grid by their boxes.
     const box = (pts: readonly (readonly [number, number])[]) => {
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
       return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
     };
     const a = box(STATUS_ICON.accept), d = box(STATUS_ICON.decline);
-    expect(Math.abs(d.x1 - d.x0 - (a.x1 - a.x0)) / (a.x1 - a.x0)).toBeLessThan(0.1);
+    expect([d.x0, d.x1]).toEqual([a.x0, a.x1]);
     expect((d.x0 + d.x1) / 2).toBe(STATUS_ICON.grid / 2);
     expect((a.x0 + a.x1) / 2).toBe(STATUS_ICON.grid / 2);
     expect((a.y0 + a.y1) / 2).toBe(STATUS_ICON.grid / 2);
     expect(d.y0).toBe(STATUS_ICON.grid / 2);
     // Shape without colour: the check stands several times the minus's height (stroke included).
     expect(a.y1 - a.y0 + STATUS_ICON.stroke).toBeGreaterThan(4 * (d.y1 - d.y0 + STATUS_ICON.stroke));
-    // On the glass: 1.8 mm strokes at the card's real scale, a hair under the NFC mark's printed
-    // 0.0236 (one stroke weight on the face; a lit stroke reads a little bolder).
+    // On the glass (polish 2): 2.6 mm strokes at the card's real scale, about 1.5× the printed NFC
+    // mark's 0.0236: sized to read at phone size (the check 19 CSS px wide, the minus 18 × 5 on a
+    // 390 px phone), as a lit status mark bolder than the print.
     const stroke = (STATUS_ICON.stroke * STATUS_PICTOGRAM.grid) / STATUS_ICON.grid;
-    expect(stroke * MM_PER_UNIT).toBeGreaterThan(1.6);
-    expect(stroke * MM_PER_UNIT).toBeLessThan(2);
-    expect(stroke).toBeLessThan(0.0236);
-    expect(stroke).toBeGreaterThan(0.0236 * 0.95);
+    expect(stroke * MM_PER_UNIT).toBeGreaterThan(2.4);
+    expect(stroke * MM_PER_UNIT).toBeLessThan(2.9);
+    expect(stroke / 0.0236).toBeGreaterThan(1.3);
+    expect(stroke / 0.0236).toBeLessThan(1.6);
   });
 
   it('the glyph field is crisp, soft-edged and deterministic, and fades to nothing at its quad’s edge', () => {
