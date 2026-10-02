@@ -15,6 +15,15 @@ describe('PlaybackClock', () => {
     expect(clock.seconds).toBeCloseTo(0.016 + MAX_FRAME_DELTA);
   });
 
+  it('ticks on the frame’s own timestamp when the loop passes one (v1.5)', () => {
+    let now = 0;
+    const clock = new PlaybackClock(() => now);
+    clock.tick(1000);
+    now = 1030; // the callback started 13 ms late; the frame is still 16.7 ms after the last
+    expect(clock.tick(1016.7)).toBeCloseTo(0.0167, 9);
+    expect(clock.seconds).toBeCloseTo(0.0167, 9);
+  });
+
   it('pauses while hidden and resumes without accumulated debt', () => {
     let now = 0;
     const clock = new PlaybackClock(() => now);
@@ -34,17 +43,33 @@ describe('PlaybackClock', () => {
 });
 
 describe('FixedStepper', () => {
-  it('steps at 1/120 s, at most four steps per frame, and discards excess debt', () => {
+  it('steps at most 1/120 s, at most four steps per frame, and discards a stall beyond 1/30 s', () => {
     const stepper = new FixedStepper();
-    let steps = 0;
-    expect(stepper.advance(1 / 60, () => steps++)).toBe(2);
-    steps = 0;
-    const taken = stepper.advance(1, () => steps++);
-    expect(taken).toBe(MAX_STEPS_PER_FRAME);
-    // Debt was capped at MAX_DEBT and trimmed: the next tiny frame cannot run a burst.
-    expect(stepper.advance(0, () => steps++)).toBeLessThanOrEqual(1);
+    const sizes: number[] = [];
+    expect(stepper.advance(1 / 60, (h) => sizes.push(h))).toBe(2);
+    expect(sizes).toEqual([1 / 120, 1 / 120]);
+    sizes.length = 0;
+    expect(stepper.advance(1, (h) => sizes.push(h))).toBe(MAX_STEPS_PER_FRAME);
+    expect(sizes.reduce((a, b) => a + b, 0)).toBeCloseTo(MAX_DEBT, 12);
+    // Nothing carries over: the next frame of zero length runs no step.
+    expect(stepper.advance(0, () => sizes.push(0))).toBe(0);
     expect(MAX_DEBT).toBeCloseTo(1 / 30);
     expect(FIXED_STEP).toBeCloseTo(1 / 120);
+  });
+
+  it('simulated time is the frame’s clock delta exactly (v1.5: no 0/1/2-step judder at 60, 120 or 144 Hz)', () => {
+    const stepper = new FixedStepper();
+    for (const hz of [60, 75, 90, 120, 144, 240]) {
+      for (const jitter of [-0.0004, 0, 0.0003]) {
+        const dt = 1 / hz + jitter;
+        let sum = 0;
+        stepper.advance(dt, (h) => {
+          expect(h).toBeLessThanOrEqual(FIXED_STEP + 1e-12);
+          sum += h;
+        });
+        expect(sum).toBeCloseTo(dt, 12);
+      }
+    }
   });
 
   it('is frame-rate invariant for a spring over the same simulated time', () => {

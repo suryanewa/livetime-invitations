@@ -73,23 +73,52 @@ test('Place record plays the host sequence and ends at guest-ready', async ({ pa
   await expect(page.getByRole('button', { name: 'Place record again' })).toBeVisible();
 });
 
-test('Accept plays to a still display pose (no idle spin); Decline closes the lid; one request each', async ({ page }) => {
+/**
+ * Mean absolute RGB difference over the record's label in two 512 px stills: the record turning.
+ * The label's box in the square still is (202–267, 294–314); its ink marks are small, so a turning
+ * record measures ≈ 0.8 here and a still one exactly 0.
+ */
+async function labelTurned(page: Page, waitMs = 450): Promise<number> {
+  const grab = async () => {
+    const url = await page.evaluate(() => (window as any).__showcase.controller.captureStill(512, 1) as string);
+    return page.evaluate(async (u) => {
+      const img = new Image();
+      img.src = u;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = c.height = 512;
+      const x = c.getContext('2d')!;
+      x.drawImage(img, 0, 0);
+      return Array.from(x.getImageData(202, 294, 66, 21).data);
+    }, url);
+  };
+  const a = await grab();
+  await page.waitForTimeout(waitMs);
+  const b = await grab();
+  let sum = 0;
+  for (let i = 0; i < a.length; i += 4) sum += Math.abs(a[i]! - b[i]!) + Math.abs(a[i + 1]! - b[i + 1]!) + Math.abs(a[i + 2]! - b[i + 2]!);
+  return sum / ((a.length / 4) * 3);
+}
+
+test('Accept plays the record on (v1.5): the label keeps turning after the clip; Decline closes the lid; one request each', async ({ page }) => {
   await ready(page);
   await page.getByRole('button', { name: 'Guest', exact: true }).click();
   await page.getByRole('button', { name: 'Accept' }).click();
   await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('accepted-pose');
   await expect(page.getByRole('status')).toHaveText('Accepted');
-  // The record stops: no frames are scheduled once the pose is reached.
+  // The record plays on: the loop keeps drawing and the label is somewhere else a moment later.
+  await page.waitForTimeout(1000);
+  expect(await labelTurned(page)).toBeGreaterThan(0.25);
   const frames = await page.evaluate(async () => {
     let n = 0;
-    const count = () => { n++; };
     const orig = window.requestAnimationFrame;
-    (window as any).requestAnimationFrame = (cb: FrameRequestCallback) => { count(); return orig(cb); };
+    (window as any).requestAnimationFrame = (cb: FrameRequestCallback) => { n++; return orig(cb); };
     await new Promise((r) => setTimeout(r, 800));
     (window as any).requestAnimationFrame = orig;
     return n;
   });
-  expect(frames).toBeLessThanOrEqual(2);
+  expect(frames).toBeGreaterThan(30);
+  // A change of mind while it plays: the platter coasts, the arm goes home, the cover closes.
   await page.getByRole('button', { name: 'Decline' }).click();
   await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('declined-pose');
   await expect.poll(() => requests(page)).toBe(2);
@@ -104,17 +133,25 @@ test('Rapid reversals end in the latest choice with no accumulated motion', asyn
     await page.waitForTimeout(120);
   }
   await expect.poll(async () => (await state(page)).visual, { timeout: 5000 }).toBe('accepted-pose');
+  // Playing on, as after any acceptance.
+  expect(await labelTurned(page)).toBeGreaterThan(0.25);
+  // Snapped to the canonical pose (reduced motion settles the record at its display angle), the
+  // frame must match a fresh page that opens directly on the accepted pose (same quality tier):
+  // no leftover spin, arm offset, lid angle or status state.
+  await page.evaluate(() => (window as any).__showcase.controller.setReducedMotion(true));
+  await page.waitForTimeout(100);
+  expect(await labelTurned(page, 300)).toBe(0);
   const settled = await still(page);
   const tier = await page.evaluate(() => (window as any).__showcase.state.tier as string);
-  // The settled frame must match a fresh page that opens directly on the accepted pose
-  // (same quality tier): no leftover spin, arm offset, lid angle or status state.
   const fresh = await context.newPage();
   await ready(fresh, '/?scene=party&saved=accept');
   expect((await state(fresh)).visual).toBe('accepted-pose');
   await fresh.evaluate((t) => {
     const s = (window as any).__showcase;
     if (s.state.tier !== t) s.controller.setQualityTier(t);
+    s.controller.setReducedMotion(true);
   }, tier);
+  await fresh.waitForTimeout(100);
   const canonical = await still(fresh);
   await fresh.close();
   expect(await stillDiff(page, settled, canonical)).toBeLessThan(0.5);

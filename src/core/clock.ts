@@ -13,9 +13,14 @@ export class PlaybackClock {
 
   constructor(private readonly now: () => number = () => performance.now()) {}
 
-  /** Advance to the current time; returns the clamped frame delta in seconds. */
-  tick(): number {
-    const t = this.now();
+  /**
+   * Advance to the current time; returns the clamped frame delta in seconds. `at` (ms, the
+   * performance.now() timeline) is the frame's own timestamp: the render loop passes the one
+   * requestAnimationFrame hands its callback (v1.5), the time the frame is presented for, so a
+   * callback that starts late (a long task before it) still samples its frame's time.
+   */
+  tick(at?: number): number {
+    const t = at ?? this.now();
     if (this.paused || this.last === null) {
       this.last = t;
       return 0;
