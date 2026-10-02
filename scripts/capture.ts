@@ -135,7 +135,8 @@ const SCENE_CAPTURE = {
     presets: [['coral', '{ category: "party", songId: "sample-track-a", label: "coral" }'], ['cobalt', '{ category: "party", songId: "sample-track-a", label: "cobalt" }']],
     // The closed lid hides the record, so both labels share one declined poster.
     sharedDeclined: true,
-    clips: { host: 1.5, accept: 1.9, decline: 1.7, change: 2.6 },
+    // v1.5: the accept clip runs on past the sequence to show the record playing on.
+    clips: { host: 1.5, accept: 3.6, decline: 1.7, change: 2.6 },
   },
   birthday: {
     presets: [['vanilla', '{ category: "birthday", cake: "vanilla" }'], ['cocoa', '{ category: "birthday", cake: "cocoa" }']],

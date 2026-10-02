@@ -34,8 +34,9 @@ export const REFERENCE_CM = {
    */
   cakeOnStand: 35,
   /**
-   * Sports: a mini (size 3) basketball, 18 cm. The hoop master is a wall-mount mini hoop; its rim's
-   * inner diameter stays 1.6 × the ball (28.8 cm), its board comes out 58.6 cm wide.
+   * Sports: a mini (size 3) basketball, 18 cm. Since v1.5 the hoop is a mini hoop system of the
+   * SKLZ Pro Mini Hoop System class (models/sportsContract.ts HOOP_PRODUCT_CM): a 14.5" (36.8 cm)
+   * rim at 4 ft; the master's board comes out 74.9 cm wide.
    */
   miniBall: 18,
   /** Dinner: a 27 cm dinner plate; the cloche keeps its real size against it (21.9 cm dome). */

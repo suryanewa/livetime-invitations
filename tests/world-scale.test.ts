@@ -31,12 +31,12 @@ describe('World scale (v1.4): every object at its real size', () => {
     expect(CAKE_RADIUS).toBeLessThan(BIN.opening);
   });
 
-  it('Sports: an 18 cm mini ball, the rim 1.6 × its diameter, a 58.6 cm mini board', () => {
+  it('Sports (v1.5): an 18 cm mini ball, a 14.5" (36.8 cm) rim at 4 ft, a 74.9 cm mini board', () => {
     expect(SPORTS_WORLD_SCALE).toBeCloseTo(1.8, 10);
     near(toCm(2 * BALL_R, SPORTS_WORLD_SCALE), REFERENCE_CM.miniBall, 1e-9);
-    expect(RIM.innerRadius / BALL_R).toBeCloseTo(1.6, 10);
-    near(toCm(BOARD.width, SPORTS_WORLD_SCALE), 58.6, 0.005);
-    near(toCm(RIM_CENTER.y, SPORTS_WORLD_SCALE), 61.9, 0.005);
+    near(toCm(2 * RIM.innerRadius, SPORTS_WORLD_SCALE), 36.83, 1e-9);
+    near(toCm(BOARD.width, SPORTS_WORLD_SCALE), 74.9, 0.005);
+    near(toCm(RIM_CENTER.y + RIM.tube, SPORTS_WORLD_SCALE), 121.92, 1e-6);
   });
 
   it('Dinner: a 27 cm plate under a 21.9 cm cloche; the real bin keeps its size here', () => {

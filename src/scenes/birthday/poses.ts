@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
-import { BIN_POS, BIN_START, CANDLE_COUNT, CANDLE_HOVER, CARRY_HEIGHT, IN_BIN, LEAN_MAX, RIM_CLEARANCE, STAND_TOP } from '../../../models/birthdayContract.ts';
+import { BIN_POS, BIN_START, CANDLE, CANDLE_COUNT, CANDLE_HOVER, CARRY_HEIGHT, IN_BIN, LEAN_MAX, RIM_CLEARANCE, STAND_TOP } from '../../../models/birthdayContract.ts';
 import { BIN, GRAVITY } from '../../../models/disposalBin.ts';
+import { mulberry32 } from '../../motion/random.ts';
 
 /**
  * Birthday canonical poses and path keys (Birthday sub-spec, v1.2 on the cake master). Cake
@@ -20,48 +21,57 @@ export const PRESENT_YAW = -0.14;
 const each = (f: (i: number) => number) => Array.from({ length: CANDLE_COUNT }, (_, i) => f(i));
 
 /**
- * Candle placement (0.18–0.94 s): six candles in a cascade, 55 ms apart, left to right. Each
- * lowers for CANDLE_DESCENT on a weighted ease (from rest, accelerating, landing at
- * CANDLE_LAND_SPEED), then presses into the buttercream and settles on a damped spring.
+ * Candle placement (0.18–0.89 s; v1.5, edit #5 "candles must actually interact with the cake as
+ * they would in real life as they're placed"): six candles in a cascade, 55 ms apart, left to
+ * right. Each is brought down for CANDLE_DESCENT (from rest; the hand slows as it nears the cake)
+ * and meets the buttercream at CANDLE_CONTACT_SPEED, its base CANDLE.insert above the seat. Then
+ * it is pushed in: buttercream is a soft plastic solid (it yields, it does not spring back), and
+ * its resistance grows with depth as more of the candle's side is in contact, so the candle
+ * decelerates (deceleration rising linearly from 0) and stops exactly at the seat after
+ * CANDLE_PRESS. The plug it pushes aside rises as a collar round the socket (models/cakeShaders.ts)
+ * and the cake takes the push as a sub-millimetre dip and tilt (CAKE_LOAD).
  */
 export const CANDLE_START = each((i) => 0.18 + 0.055 * i);
 export const CANDLE_DESCENT = 0.3;
-/** Landing speed (units/s) the descent hands to the settle: C1 at contact. */
-export const CANDLE_LAND_SPEED = 0.35;
-/** Settle spring: 6 Hz, ζ 0.5 (≈5 mm press, ≈1 mm rebound), faded to exact rest by CANDLE_SETTLE. */
-export const CANDLE_SETTLE = { hz: 6, zeta: 0.5, length: 0.18 } as const;
+/** Speed (units/s) at which the base meets the frosting: 4.4 cm/s, a careful hand. C1 at contact. */
+export const CANDLE_CONTACT_SPEED = 0.22;
+/**
+ * Push-in time: velocity v(u) = −v₀(1 − u²) over the insertion depth (u = s / CANDLE_PRESS), so
+ * depth = ⅔ v₀ T: T = 1.5 · CANDLE.insert / v₀ (3.7 mm in 0.128 s; peak deceleration 3.5 units/s²).
+ */
+export const CANDLE_PRESS = (1.5 * CANDLE.insert) / CANDLE_CONTACT_SPEED;
 /** End of each candle's placement: seated exactly at its socket from here on. */
-export const CANDLE_SEATED = CANDLE_START.map((s) => s + CANDLE_DESCENT + CANDLE_SETTLE.length);
-
-/** Flames rise once their candle has settled (0.84–1.06 s), 20 ms apart, no overshoot. */
-export const FLAME_START = each((i) => 0.84 + 0.02 * i);
-export const FLAME_RISE = 0.12;
+export const CANDLE_SEATED = CANDLE_START.map((s) => s + CANDLE_DESCENT + CANDLE_PRESS);
 
 /**
- * Breath: flames lean away from the camera and to the right; wicks follow a little. The sideways
- * part (z, in the picture plane) is what reads from the 20°/15° camera: the away part is
- * foreshortened. ≈ 31° at full breath, up to ≈ 46° as each flame dies.
+ * The lean of a hand-placed candle: a fixed, seeded angle (0.6–1.8°, within the brief's 2°) and
+ * direction per candle (radians about y in the cake's space, atan2(z, x): the way its top leans and
+ * its low side faces). It develops as the candle seats (the push is never quite along its axis).
+ * Seed chosen so the six lean every which way, as six hands' worth of candles do, and four low
+ * sides (where the runs form, melt.ts) face the camera.
  */
-export const LEAN = { x: -0.45, z: -0.3 };
-export const WICK_LEAN = 0.3;
-/** The gust is not steady: each flame's lean flutters ±12 % at 7 Hz, out of phase with its neighbours. */
-export const FLAME_FLUTTER = { amount: 0.12, hz: 7 } as const;
-/** At full breath a flame is drawn out this much taller and this much thinner (scale per axis). */
-export const FLAME_STRETCH = { tall: 0.22, thin: 0.15 } as const;
+export const CANDLE_LEAN: readonly { angle: number; azimuth: number }[] = (() => {
+  const r = mulberry32(27 * 7919);
+  return Array.from({ length: CANDLE_COUNT }, () => ({ angle: ((0.6 + 1.2 * r()) * Math.PI) / 180, azimuth: r() * 2 * Math.PI }));
+})();
 
-/** Extinguish windows, left to right (0.25–0.595 s), and one wisp each (0.60–0.99 s). */
-export const OUT_START = each((i) => 0.25 + 0.044 * i);
-export const OUT_LEN = 0.125;
-export const WISP_START = each((i) => 0.6 + 0.018 * i);
-export const WISP_LEN = 0.3;
-export const WISP_OPACITY = 0.62;
 /**
- * A wisp leaves the wick: its foot stays on the wick tip while the curl unfurls upward (its
- * height grows from WISP_GROW_FROM to full), and it only lifts off (WISP_RISE, cubic ease-in) as
- * it dissolves, so the smoke never floats detached above a candle while it is visible.
+ * The cake takes each push: the stand is rigid ceramic, the cake on it a stiff spring (sponge
+ * and buttercream, ≈ 1.5 kg at ≈ 14 Hz, ζ 0.35). `dip` is the static settling under a full push
+ * (≈ 3 N: 0.24 mm; the overlapping cascade peaks at ≈ 0.5 mm), `tilt` the rock about its underside
+ * centre per unit push at the socket radius (0.07°: a 25 cm cake on a flat plate barely rocks; the
+ * give is mostly the sponge under the candle).
  */
-export const WISP_RISE = 0.07;
-export const WISP_GROW_FROM = 0.4;
+export const CAKE_LOAD = { hz: 14, zeta: 0.35, dip: 0.0012, tilt: 0.0012, release: 0.035 } as const;
+
+/**
+ * Flames (v1.5): ignition, the breath, extinction and smoke are physics in fire.ts (IGNITE_START,
+ * BREATH, SMOKE), sampled as pure functions of time. Each wick catches once its candle has seated
+ * (0.84 s on, 20 ms apart) and its flame grows for IGNITE; the guest's breath arrives 0.06 s into
+ * accept and the flames go out nearest the mouth first, the last by ≈0.55 s; the smoke rises for
+ * a few seconds after the sequence, on the scene's live clock.
+ */
+export { IGNITE, IGNITE_START } from './fire.ts';
 
 /** Decline path keys. */
 export const BIN_AT = BIN_POS;

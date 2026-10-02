@@ -11,7 +11,9 @@ import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/se
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import type { MaterialLibrary } from '../../render/materials.ts';
 import { ARM, DURATIONS, STATUS_COLOUR } from './poses.ts';
-import { blendLift, cueLever, cueRise, frameFor, newFrame, recordHeight, sampleSequence, type PartyFrame } from './sequences.ts';
+import {
+  ACCEPT_PLATTER, blendLift, type Change, cueLever, cueRise, frameFor, newFrame, type Platter, platterAt, platterFor, playingFrame, recordHeight, sampleSequence, type PartyFrame,
+} from './sequences.ts';
 
 /**
  * Silhouette samples of every Party path for the camera fit: the plinth, the dust cover open and
@@ -63,9 +65,23 @@ export class PartyScene implements SceneInstance {
   readonly framePoints = partyFramePoints();
 
   private readonly frame = newFrame();
+  private readonly scratch = newFrame();
   private label: RecordLabel;
   private lit: boolean | null = null;
   private readonly lever = new Quaternion();
+  /** What is showing: the sequence last sampled and its time (null once a pose is set). */
+  private sequence: SequenceName | null = null;
+  private t = 0;
+  /** The change of mind the current sequence starts from (sequences.ts `Change`), if any. */
+  private change: Change | null = null;
+  /** Planned by `interruptCut`, kept through the director's cut (settle, pose guest-ready) until the next sample. */
+  private pendingChange: Change | null = null;
+  /**
+   * The record playing on after acceptance (v1.5): the acceptance's platter model and the time
+   * since the clip's end, advanced by `simulate`. The angle is the closed form at DURATIONS.accept +
+   * `since`, so the clip hands over with no step in angle, speed or acceleration.
+   */
+  private playing: { platter: Platter; since: number } | null = null;
 
   constructor(readonly rig: RecordPlayerRig, config: Extract<SceneConfig, { category: 'party' }>, _library?: MaterialLibrary) {
     this.root = rig.root;
@@ -83,12 +99,93 @@ export class PartyScene implements SceneInstance {
     this.rig.setLabel(config.label);
   }
 
+  /**
+   * A canonical pose. `accepted` is the record playing at its display angle (it keeps turning in
+   * `simulate`). Reached from a played acceptance (the director's end of the clip), the record
+   * plays on from where the clip left it instead: the clip's own platter model, `since` the clip's
+   * end counted from the last sampled time, so the next simulate steps land exactly on the clock.
+   * Every snap (reduced motion, a late load, a reset) calls `settle()` next, which re-bases it on
+   * the display angle.
+   */
   pose(pose: CanonicalPose): void {
-    this.apply(frameFor(pose, this.frame));
+    const pending = pose === 'guest-ready' ? this.pendingChange : null;
+    this.playing = pose !== 'accepted' ? null
+      : this.sequence === 'accept' ? { platter: platterFor('accept', this.change), since: this.t - DURATIONS.accept }
+      : { platter: ACCEPT_PLATTER, since: 0 };
+    this.sequence = null;
+    this.change = null;
+    this.pendingChange = pending;
+    this.apply(this.playing ? playingFrame(this.playing.platter, DURATIONS.accept + Math.max(0, this.playing.since), this.frame) : frameFor(pose, this.frame));
   }
 
   sample(sequence: SequenceName, t: number): void {
-    this.apply(sampleSequence(sequence, t, this.frame));
+    // The director's cut after `interruptCut` lands here at t = 0: the change takes over.
+    if (this.pendingChange && this.sequence === null && t === 0 && sequence !== 'host') this.change = this.pendingChange;
+    else if (this.sequence !== sequence) this.change = null;
+    this.pendingChange = null;
+    this.playing = null;
+    this.sequence = sequence;
+    this.t = t;
+    this.apply(sampleSequence(sequence, t, this.frame, this.change));
+  }
+
+  /** The record plays on: only the time since the clip's end advances (fixed steps sum to the frame's clock delta). */
+  simulate(dt: number): void {
+    if (this.playing) this.playing.since += dt;
+  }
+
+  /** True while the record plays: the loop keeps drawing it (the controller pauses it off-screen). */
+  settling(): boolean {
+    return this.playing !== null;
+  }
+
+  /** Snap: a playing record re-bases on the display angle (the canonical accepted pose); nothing else is secondary. */
+  settle(): void {
+    if (!this.playing) return;
+    this.playing = { platter: ACCEPT_PLATTER, since: 0 };
+    this.apply(playingFrame(ACCEPT_PLATTER, DURATIONS.accept, this.frame));
+  }
+
+  beforeRender(): void {
+    if (this.playing) this.apply(playingFrame(this.playing.platter, DURATIONS.accept + this.playing.since, this.frame));
+  }
+
+  /**
+   * A change of mind: the scene always draws the hand-over itself (sequences.ts `changed`) and asks
+   * the director for its 0 ms cut. It records the pose on screen with its velocities; the new
+   * outcome's clip starts from it. The director's straight 150 ms blend would spin a playing record
+   * backwards by up to half a turn, whip the arm home and step every velocity.
+   */
+  interruptCut(): boolean {
+    if (this.sequence === 'host') return false;
+    this.pendingChange = this.captureChange();
+    return true;
+  }
+
+  /** The pose on screen and its velocities (pure: from the composed frame at t and just before). */
+  private captureChange(): Change {
+    const f = this.frame;
+    if (this.playing) {
+      const p = platterAt(this.playing.platter, DURATIONS.accept + this.playing.since);
+      return { armYaw: f.armYaw, armYawRate: 0, armPitch: f.armPitch, armPitchRate: 0, lid: f.lid, lidRate: 0, angle: p.angle, speed: p.speed };
+    }
+    const seq = this.sequence;
+    if (!seq) {
+      // A canonical pose (declined, or accepted under reduced motion): at rest, the record where the pose shows it.
+      return { armYaw: f.armYaw, armYawRate: 0, armPitch: f.armPitch, armPitchRate: 0, lid: f.lid, lidRate: 0, angle: -f.spin, speed: 0 };
+    }
+    const h = 1 / 240;
+    const now = sampleSequence(seq, this.t, this.scratch, this.change);
+    const [yaw, pitch, lid] = [now.armYaw, now.armPitch, now.lid];
+    const before = sampleSequence(seq, Math.max(0, this.t - h), this.scratch, this.change);
+    const dt = this.t >= h ? h : Math.max(this.t, 1e-9);
+    const p = platterAt(platterFor(seq, this.change), this.t);
+    return {
+      armYaw: yaw, armYawRate: this.t > 0 ? (yaw - before.armYaw) / dt : 0,
+      armPitch: pitch, armPitchRate: this.t > 0 ? (pitch - before.armPitch) / dt : 0,
+      lid, lidRate: this.t > 0 ? (lid - before.lid) / dt : 0,
+      angle: p.angle, speed: p.speed,
+    };
   }
 
   /**

@@ -113,7 +113,11 @@ the plate and cloche in Dinner): below the rim a point sees the room only throug
 light is the mouth's cosine-weighted share of the sky, R² / (R² + d²) at depth d (0.96 at 3 cm, 0.69 at 10 cm, 0.13
 on the floor); its indirect specular reflects the room only when the reflected ray leaves through the mouth (an exact
 per-pixel test against the rim's plane), else the grey bucket wall (an eighth of the room). The direct light needs nothing: the shadow map has the walls. It applies inside the mouth's cylinder
-only and fades in over the last 2 cm above the rim, so switching it on over the opening changes no pixel.
+only and fades in over the last 2 cm above the rim, so switching it on over the opening changes no pixel. In Birthday
+it is the last link on every cake material (frosting of both presets, piping, pearls, each candle's own melting wax):
+after the cake's own patches (`models/cakeShaders.ts`: subsurface, press, ridges, melt) and the flames' light
+(`models/birthdayFire.ts patchFlameLight`), each chaining the one before; the cake's v1.2.1 darkening ramp
+(`binShadePatch`) is gone from that chain, `BIN_SHADE.above` and the `binShade.on` gate stay.
 
 ## The decline, re-timed for the deeper bin
 
@@ -142,8 +146,12 @@ real 44.5 cm rim needs more height than the frame had:
 
 | Hero fill (1:1) | v1.4 | v1.5 |
 | --- | --- | --- |
-| Birthday (height) | 0.600 (not path-limited) | 0.563 (path-limited, −6 %) |
+| Birthday (height) | 0.600 (not path-limited) | 0.563 (path-limited, −6 %); 0.524 (−13 %) merged with the v1.5 fire |
 | Dinner (width) | 0.496 | 0.354 (−29 %) |
+
+Merged with the v1.5 fire (`v1.5/integration`), the Birthday hero lost the padding of the v1.2 drawn flames (4.5 cm, now
+the real 1.4 cm): the hero is shorter while the carried cake (flames out) still sets the frame, so the same camera
+shows it at 0.524 of the height, at every aspect and centred across. Every Birthday fill below scales by the same 0.93.
 
 Every remedy the brief named was measured (scratch exploration with the real silhouettes and the production fit):
 

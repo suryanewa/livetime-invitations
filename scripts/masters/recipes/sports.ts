@@ -24,25 +24,27 @@ import type { Quat, RawImage, SceneRecipe } from '../types.ts';
  *   side separates from the peach stage by hue instead of merging with it. The orange albedo is
  *   kept exactly as authored and renders as authored (v1.2's load-time LEATHER_GRADE multiply,
  *   fitted to the v1.1 peach stage, was removed in the studio pass v1.3).
- * - Hoop: `basketball-hoop.glb` at HOOP_SCALE (rim inner radius 0.451 → 0.4 = 1.6 × BALL_R),
+ * - Hoop: `basketball-hoop.glb` at HOOP_SCALE (v1.5: rim inner radius 0.451 → 0.5115 su, the
+ *   14.5" rim of the mini hoop system the scene depicts, models/sportsContract.ts HOOP_PRODUCT_CM),
  *   no rotation (+z already faces the player), aligned so the rim-ring centre lands on RIM_LOCAL
- *   (the v1.1 rim centre, so every authored arc is unchanged).
+ *   (the 4 ft setting on the code-authored stand).
  *   `board` → `backboard` (pivot: centre of its flat back, where the arm's plate meets it),
  *   `rim` (pivot: the bracket plate's back-bottom edge, the ring's recoil hinge on the board face:
  *   tipping about the edge the plate bears on lifts the plate off the board instead of into it),
- *   `net` (pivot: the rim-ring centre = RIM_LOCAL, the net space the rig deforms in).
+ *   `net` (pivot: the rim-ring centre = RIM_LOCAL, the net space the rig simulates in).
  * - Joins: the board's four parts → 3 meshes (frame, face+back, target); the rim's ring, bracket,
  *   hooks, bolts, nuts and washers → 2 (paint, steel). The net keeps its three meshes (strands,
- *   loops, knots) as children of `net`, which the rig deforms.
+ *   loops, knots) as children of `net`: the rig reads its cord lattice back from their components
+ *   and skins the strands and knots to the simulation (models/sportsNet.ts).
  * - Decimation: only the net's knots (128,544 → 71,994 triangles: the 0.1 % error bound stops the
- *   simplifier before the 0.4 target): the knots are a few pixels across on stage, and the rig
- *   rewrites every net vertex on each deformed frame.
+ *   simplifier before the 0.4 target): the knots are a few pixels across on stage.
  * - `ball_mesh` leaves the importer as an empty transform at the ball centre; the master mesh rides
  *   on its `ball_mesh_mesh` child (the importer's rule for every mapped node, README §1 4.6).
  * - Textures: four 2048×1365 ball maps (ORM, orange albedo, normal, cream albedo), the hoop's
  *   twelve small maps at source size. Normal maps exact lossless WebP, colour/ORM lossy q90.
- * - Stand: the v1.1 pole, weighted base, clamp and arm, plus the chrome trim ring and a back plate
- *   on the master board's back (sportsPremium.ts `parts: 'stand'`). The v1.1 ink backer frame,
+ * - Stand (v1.5): a portable system's: a weighted base behind the board, a leaning telescoping
+ *   pole, a sleeve and two arms to a back plate on the master board's back (sportsPremium.ts
+ *   `parts: 'stand'`, contract STAND and POLE). The v1.1 ink backer frame,
  *   channel liner and cap screws are NOT kept: the master board has its own wood frame, so a
  *   second frame round it would double the outline.
  * - Materials keep the master's look (red powder-coat rim, grey laminate face, white target, dark

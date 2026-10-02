@@ -69,8 +69,17 @@ test('Pointer drags and rapid taps on the stage never change the outcome or send
   await expect.poll(async () => (await state(page)).visual, { timeout: 5000 }).toBe('accepted-pose');
   expect((await state(page)).response.intent).toBe('accept');
   expect(await requests(page)).toBe(1);
-  // Same trajectory as a clean replay: the settled frame matches the canonical made pose.
-  const settled = await page.evaluate(() => (window as any).__showcase.controller.captureStill(256, 1) as string);
+  // Same trajectory as a clean replay: once the ball's bounces (the tail after the 1.7 s beat) and
+  // the net have come to rest, the frame matches the canonical made pose.
+  const still = () => page.evaluate(() => (window as any).__showcase.controller.captureStill(256, 1) as string);
+  let settled = await still();
+  await expect.poll(async () => {
+    await page.waitForTimeout(400);
+    const next = await still();
+    const diff = await stillDiff(page, settled, next);
+    settled = next;
+    return diff;
+  }, { timeout: 15_000 }).toBeLessThan(0.01);
   const canonical = await page.evaluate(async () => {
     const c = (window as any).__showcase.controller;
     c.setReducedMotion(true);
