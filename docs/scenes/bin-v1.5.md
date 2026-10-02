@@ -152,6 +152,7 @@ real 44.5 cm rim needs more height than the frame had:
 Merged with the v1.5 fire (`v1.5/integration`), the Birthday hero lost the padding of the v1.2 drawn flames (4.5 cm, now
 the real 1.4 cm): the hero is shorter while the carried cake (flames out) still sets the frame, so the same camera
 shows it at 0.524 of the height, at every aspect and centred across. Every Birthday fill below scales by the same 0.93.
+Frames on the merged code: `evidence/v1.5/bin/merged/` (guest-ready, declined, the decline beats, the 60 fps strip).
 
 Every remedy the brief named was measured (scratch exploration with the real silhouettes and the production fit):
 
