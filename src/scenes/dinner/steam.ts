@@ -1,595 +1,547 @@
-import { Euler, Vector3 } from 'three';
-import { COVER, COVER_PROFILE, plateTop } from '../../../models/dinnerContract.ts';
+import { Euler, Vector2, Vector3 } from 'three';
+import { COVER, COVER_SEATED, PLATE, plateTop } from '../../../models/dinnerContract.ts';
 import { newFrame, REVEAL_DIR, sampleSequence } from './sequences.ts';
 
 /**
- * Dinner v1.5: the steam under the cloche (Surya: "steam under the cloche after unveiling it").
+ * Dinner v1.6: the steam under the cloche, as a volume (Surya: "it needs to realistically
+ * accumulate under the cloche and somewhat match its shape when it's lifted (as it would be in real
+ * life)"). Research notes and decisions: docs/scenes/dinner-v1.6-steam.md.
  *
- * A pure plan, deterministic in steam time τ (seconds since the reveal began, the accept's own
- * clock), seeded: every puff of vapour is decided here from the reveal's choreography, and its
- * whole life is a closed-form function of its age (`puffAt`, mirrored exactly by the vertex
- * shader in models/dinnerSteam.ts). Nothing integrates, so replay, rewind and frame rate cannot
- * accumulate anything.
+ * One density field in steam time τ (seconds since the reveal began, the accept's own clock), a
+ * pure function of τ: replay, rewind and frame rate cannot accumulate anything. The shader in
+ * models/dinnerSteam.ts raymarches it; this module is its plan and its CPU mirror (the smooth
+ * envelope, without the noise), used by the tests and for the volume's bounds.
  *
- * What it models (research notes in docs/scenes/dinner-v1.5.md). Visible steam is not the vapour
- * itself but droplets that condense where warm saturated air meets the cooler room, and that
- * evaporate again as it mixes in: it appears a little off its source, is densest at the moment of
- * release and only thins from there, shears into filaments as it rises and is gone within about
- * 10–20 cm. The air under a cloche on a hot dish is ≈ 40–50 K warmer than the room, and the dome
- * itself is hot, so it rises briskly (15–25 cm/s at first) and slows as it mixes in.
- *  1. Spill. A tipped dome is a doorway at its raised rim: the warm layer leaves under the rim
- *     edge and is caught at once by the warm boundary layer rising up the hot dome's outer wall:
- *     an uneven sheet of lobes that rolls over, shears and climbs past the raised side's skirt,
- *     gone within half a second. It starts on the raised (guest, camera) side, strongest where the
- *     gap is widest.
- *  2. Release. As the rim leaves the plate (0.20–0.36 s) room air rushes in under it and the
- *     bottom of the pocket lifts off with the dome as a mist (never a layer lying on the plate).
- *  3. Pocket. The warm air the dome held sits at its crown and goes up with it, but the dome is
- *     then carried off sideways (≈ 1 m/s) and the pocket, buoyant, is left behind: a cloud the
- *     shape of the dome's inside that comes into view as the shell slides clear of it, drawn a
- *     little after the dome by its wake, rising fast and fraying.
- *  4. Trail. What warm air the dome still holds is shed from its trailing rim (the guest side) as
- *     it is carried off: thin wisps streaming back off the edge and rising, across the dome's dark
- *     lower reflections.
- *  5. Landing. When the dome is set down, its trailing side comes down last and squeezes the air
- *     still under it out across the table: a small, low puff at the rim that spreads and fades.
- *  6. Column. The uncovered plate's hot, moist boundary layer rises from the well from the moment
- *     the rim clears it, strongest then and thinning from the bottom up (`plumeSource`): a broad,
- *     soft sheet about 70 % of the well's width that breaks into irregular wisps as it rises, then
- *     a thin tail as the plate goes on steaming (visible to ≈ 4 s), gone by STEAM_END.
- *  7. A change of mind. The cover going back on stops the release (the column's source dies away
- *     over `PLUME.cut` and its base detaches and rises off); what is already out rises on and
- *     disperses over its own life (`steamEndAfter`), beside any steam a new reveal releases.
+ *  1. The cloud. Under the hot cloche the vapour has accumulated into a saturated cloud that fills
+ *     the dome: its initial density is the dome's cavity (a superellipse fitted to the cloche's
+ *     profile, inside its shell, down to the porcelain), soft at the wall, clear just above the hot
+ *     plate, densest under the crown. It is a material: every point of it is carried by an analytic
+ *     flow, and the shader finds where the air at a point came from by undoing that flow (the
+ *     inverse map, `cloudMaterial`), then reads the cloud's noise there, so its structure is
+ *     carried, sheared and rolled up with it rather than scrolling.
+ *  2. The dome is a moving boundary. While it is still over the plate, its lift drags the top of
+ *     the cloud up after it and a little along its path (`dragAt`: the dome's own motion, weighted
+ *     by how much of it is still over the cloud), so the cloud is never outside the shell while the
+ *     shell is there; the scene's depth hides what is still inside it.
+ *  3. The release. Once the dome is clear, the cloud keeps the dome's shape for a beat (a buoyant
+ *     bubble starts from rest: ≈ 0.3 s to get going), then rises as a thermal: its top climbs at up
+ *     to ≈ 22 cm/s and slows as it entrains room air (Scorer's thermal, radius growing ≈ 0.25 per
+ *     unit of rise), the base following at a fifth of that (it lifts off the plate, never a layer
+ *     lying on it); its cap mushrooms out while the stem narrows; the cap's edge rolls outward and
+ *     down round a vortex ring; the outer base slumps outward over the plate's rim and down; the
+ *     room's air shears it and it tears into wisps (turbulent warp growing with age, erosion of
+ *     its thin parts first), and it evaporates as it mixes in and rises, gone within ≈ 3 s.
+ *  4. The veil. The uncovered plate goes on breathing: a thin, wispy column off the well, strongest
+ *     as the dome clears it and thinning to a long tail (visible to ≈ 4.5 s), gone by STEAM_END.
+ *  5. A change of mind. The release stops (the veil's source dies away over VEIL.cut); what is out
+ *     rises on and disperses on its own clock; what the returning cover closes over stays under
+ *     it (`capture`); a reveal resumed part-way releases only the plate's veil (its cloud is the one
+ *     left behind).
  *
- * Units: Dinner scene units (1 su = 16.9 cm, DINNER_WORLD_SCALE); the plate is at the origin
- * (the reveal never moves it). Physical speeds are noted in cm/s where they were chosen.
+ * Units: Dinner scene units (1 su = 16.875 cm); the plate at the origin (the reveal never moves it).
  */
 
-export type PuffKind = 'spill' | 'release' | 'pocket' | 'trail' | 'landing';
-export const PUFF_KINDS: readonly PuffKind[] = ['spill', 'release', 'pocket', 'trail', 'landing'];
-
-export interface Puff {
-  kind: PuffKind;
-  /** Spawn time (τ) and lifetime (s). */
-  t0: number;
-  life: number;
-  /** Spawn position and emission velocity (su, su/s). */
-  pos: Vector3;
-  vel: Vector3;
-  /** Buoyant rise scale W (su/s; peak rise speed ≈ 0.74 W). */
-  rise: number;
-  /** Share of filaments in its look from birth (0: a soft billow that frays as it ages; 1: a sheet). */
-  wisp: number;
-  /** Radius at birth (su) and growth by entrainment (su/s); drawn `stretch`× taller (drawn out by the rise). */
-  size: number;
-  grow: number;
-  stretch: number;
-  /** Peak opacity (before the dilution and the evaporation fade). */
-  peak: number;
-  /** Seed: offsets the puff's noise and its meander phases. */
-  seed: number;
-  /** Meander amplitude per su of rise. */
-  sway: number;
-  /** Curl: outward direction (plan), radius (su) and turn rate (rad/s). */
-  out: Vector3;
-  curl: number;
-  curlRate: number;
-}
-
-/** Trajectory constants shared with the shader (seconds). */
-export const STEAM_TIME = {
-  /** Emission momentum decays in air (a small jet stalls within ~0.2 s). */
-  drag: 0.18,
-  /** Buoyant acceleration from rest. */
-  accel: 0.2,
-  /** Deceleration by entrainment (a thermal slows as it mixes in room air). */
-  mix: 1.6,
-  /** The spill's roll-up decays over this time. */
-  curl: 0.35,
-  /**
-   * Condensation forms this quickly once the vapour meets room air (0.06 s popped a puff in within
-   * one 64 ms frame step).
-   */
-  fadeIn: 0.11,
-} as const;
+const frame = newFrame();
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
+const dsmooth = (a: number, b: number, x: number) => {
+  if (x <= a || x >= b) return 0;
+  const t = (x - a) / (b - a);
+  return (6 * t * (1 - t)) / (b - a);
+};
 
-// ── Deterministic sampling ───────────────────────────────────────────────────────
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+/** The cloud, its release and its flow (shared with the shader: models/dinnerSteam.ts inlines these). */
+export const CLOUD = {
+  /** The dome's rim plane at the seat (its cavity starts here; below it, the coupe). */
+  rim: COVER_SEATED.y,
+  /** The cavity: a superellipse (r/R)^p + (y/H)^p = 1 fitted to COVER_PROFILE (within 1.5 %), inside the 1.5 mm shell. */
+  radius: 0.63,
+  height: 0.62,
+  power: 2.2,
+  /** The cloud's soft edge inside the wall (su): it holds the dome's shape, with no hard surface. */
+  wall: 0.075,
+  /** The clear layer over the hot porcelain at the seat, and how much deeper it gets as the plate re-heats the air (su). */
+  floor: 0.035,
+  floorGrow: 0.1,
+  /** Densest under the crown (warm saturated air rises; the dome's cool wall condenses it): the base keeps this share. */
+  baseDensity: 0.55,
+  /** τ (s) at which the thermal clock starts: the rim ≈ 5 cm up and moving off. */
+  release: 0.3,
+  /** The dome's drag: the crown's air follows its lift by this share, and its path by `side`, while it is over the cloud. */
+  dragUp: 0.32,
+  dragSide: 0.1,
+  /** The dome's horizontal offset (su) over which it stops dragging: still over the cloud → clear of it. */
+  overlap: [0.15, 0.7] as const,
+  /** The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s. */
+  riseW: 1.15,
+  riseStart: 0.3,
+  riseMix: 1.6,
+  /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
+  base: 0,
+  /** The cap's radius grows by this per su of rise (a thermal's entrainment, α ≈ 0.25, over R ≈ 0.63); the stem narrows by up to `stem`. */
+  capGrow: 0.32,
+  stem: 0.3,
+  /** The cap flattens by up to this share of its height as it rises. */
+  squash: 0.12,
+  /** The updraft's fall-off from the axis to the cap's edge (share of the rise the edge loses). */
+  centre: 0.38,
+  /** The stem and base evaporate (up to this share) as the uncovered plate re-heats them. */
+  stemFade: 0.9,
+  /** The vortex ring's core in the cloud at the seat: (share of the radius, height su). */
+  ringAt: [0.78, 0.34] as const,
+  /** The vortex ring: its roll (rad) and time constant (s), its core's reach (su). */
+  roll: 2.8,
+  rollTime: 1.0,
+  ringCore: 0.22,
+  /** The base's outward slump over the plate's rim (su) and its time constant (s). */
+  skirt: 0.42,
+  skirtTime: 0.45,
+  /** Turbulent warp (su): at the seat (the slowly turning cloud) and grown, and its time constant (s). */
+  turb: [0.012, 0.075] as const,
+  turbTime: 1.3,
+  /** The room's draught leans the rising cloud (su of lean per su of height). */
+  lean: 0.14,
+  /** Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). */
+  erode: [0.45, 2.5] as const,
+  /** The cloud is gone by this age (s), faded out over the last `fadeOut`. */
+  life: 2.9,
+  fadeOut: 0.8,
+  /** Visible steam evaporates as it rises: e^(−(y − evapFrom)/evaporate) above evapFrom (su). */
+  evapFrom: 0.9,
+  evaporate: 1.3,
+} as const;
+
+/** The room's draught: away from the cloche set down behind-left, across the view. */
+export const LEAN_DIR = new Vector2(0.86, -0.51);
+
+/**
+ * The spill. A tipped dome is a doorway at its raised rim: the saturated layer flows out of the top
+ * of the gap and is caught at once by the warm boundary layer rising up the hot dome's outer wall:
+ * a thin sheet climbing the raised side (over the silver's dark reflections, the first steam the
+ * guest sees), strongest where the gap is widest, until the dome lifts off and carries it away.
+ */
+export const SPILL = {
+  /** It climbs the wall at this speed (su/s, ≈ 25 cm/s: the exchange outflow caught by the hot wall, drawn up by the lifting dome). */
+  rise: 1.5,
+  /** Spread round the raised rim (rad, Gaussian width). */
+  spread: 0.75,
+  /** Its source: the raised rim's gap (su) at which it is full. */
+  fullGap: 0.09,
+  /** It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). */
+  stop: [0.24, 0.3] as const,
+  fade: [0.3, 0.46] as const,
+  /** The shader samples its source at this many past times, this far apart (s). */
+  samples: 8,
+  dt: 0.075,
+} as const;
+
+/** The raised rim's direction in the cover's frame (opposite the reveal's path). */
+export const RAISED_DIR = new Vector2(-REVEAL_DIR.x, -REVEAL_DIR.z).normalize();
+
+const SPILL_DT = 0.002;
+const SPILL_GAP = (() => {
+  const n = Math.ceil(0.5 / SPILL_DT);
+  const gap = new Float64Array(n + 1);
+  const e = new Euler(), v = new Vector3();
+  for (let i = 0; i <= n; i++) {
+    sampleSequence('accept', i * SPILL_DT, frame);
+    v.set(RAISED_DIR.x * COVER.lipRadius, 0, RAISED_DIR.y * COVER.lipRadius).applyEuler(e.set(frame.coverTiltX, 0, frame.coverTilt)).add(frame.coverPos);
+    gap[i] = Math.max(0, v.y - plateTop(Math.hypot(v.x, v.z)));
+  }
+  return gap;
+})();
+
+/** The spill's source at emission time t (0..1): the raised gap's opening, until the dome lifts off; within a release window. */
+export function spillSource(t: number, emitStart = -Infinity, emitEnd = Infinity): number {
+  if (t <= 0 || t <= emitStart || t >= Math.min(emitEnd, SPILL.stop[1])) return 0;
+  const f = Math.min(t, 0.5) / SPILL_DT, i = Math.min(Math.floor(f), SPILL_GAP.length - 2);
+  const gap = SPILL_GAP[i]! + (SPILL_GAP[i + 1]! - SPILL_GAP[i]!) * (f - i);
+  return Math.min(1, gap / SPILL.fullGap) * (1 - smooth(SPILL.stop[0], SPILL.stop[1], t));
+}
+
+/** The spill's light left at τ (carried off and mixed in once the dome lifts off). */
+export const spillFade = (tau: number) => 1 - smooth(SPILL.fade[0], SPILL.fade[1], tau);
+
+/** The plate's thin veil after the release (a rising column off the well). */
+export const VEIL = {
+  /** The source starts as the rim clears the well (τ, s), rises to full over `ramp`. */
+  t0: 0.3,
+  ramp: 0.3,
+  /** The first rush decays over `decay`; a `tail` share decays over `tailDecay` (s). */
+  decay: 0.7,
+  tail: 0.45,
+  tailDecay: 1.25,
+  /** A change of mind: the source dies away over this (s). */
+  cut: 0.15,
+  /** It rises at this speed (su/s, ≈ 19 cm/s) and forms this far off the porcelain (su). */
+  rise: 1.15,
+  base: 0.12,
+  /** Column length (su) and its faded top. */
+  length: 1.6,
+  top: 0.4,
+  /** Its radius at the well and growth per su of height. */
+  radius: 0.36,
+  spread: 0.32,
+  /** Evaporation with height (su). */
+  evaporate: 0.85,
+  /** Mean density of the veil at its source (the cloud's is 1). */
+  strength: 1.8,
+} as const;
+
+/** One of the steam's clocks, as the shader takes it. */
+export interface SteamClock {
+  tau: number | null;
+  emitStart?: number;
+  emitEnd?: number;
+  capture?: number;
+  fade?: number;
+}
+
+
+/**
+ * The dome's drag on the cloud by accept time t: its rim centre's rise and travel, integrated while
+ * it is over the cloud (`CLOUD.overlap` by horizontal offset), as a table (2 ms, to 1.5 s).
+ */
+const DRAG_DT = 0.002;
+const DRAG = (() => {
+  const n = Math.ceil(1.5 / DRAG_DT);
+  const up = new Float64Array(n + 1), x = new Float64Array(n + 1), z = new Float64Array(n + 1);
+  sampleSequence('accept', 0, frame);
+  let py = frame.coverPos.y, px = frame.coverPos.x, pz = frame.coverPos.z;
+  for (let i = 1; i <= n; i++) {
+    sampleSequence('accept', i * DRAG_DT, frame);
+    const c = frame.coverPos;
+    const over = 1 - smooth(CLOUD.overlap[0], CLOUD.overlap[1], Math.hypot(c.x, c.z));
+    up[i] = up[i - 1]! + Math.max(0, c.y - py) * over;
+    x[i] = x[i - 1]! + (c.x - px) * over;
+    z[i] = z[i - 1]! + (c.z - pz) * over;
+    py = c.y; px = c.x; pz = c.z;
+  }
+  return { up, x, z, n };
+})();
+
+/**
+ * The dome's drag at accept time t, already scaled by CLOUD.dragUp / dragSide: how far the crown's
+ * air has been drawn up (su, returned) and along the dome's path (`side`, plan x/z, su).
+ */
+export function dragAt(t: number, side: Vector2 = new Vector2()): number {
+  const f = Math.min(Math.max(t, 0), 1.5) / DRAG_DT;
+  const i = Math.min(Math.floor(f), DRAG.n - 1), k = f - i;
+  const lerp = (a: Float64Array) => a[i]! + (a[i + 1]! - a[i]!) * k;
+  side.set(lerp(DRAG.x) * CLOUD.dragSide, lerp(DRAG.z) * CLOUD.dragSide);
+  return lerp(DRAG.up) * CLOUD.dragUp;
+}
+
+/** The thermal's top rise (su) at age a (buoyant start, entraining deceleration). */
+export function riseAt(a: number): number {
+  if (a <= 0) return 0;
+  const { riseW: W, riseStart: TB, riseMix: TM } = CLOUD;
+  return (W / (1 - TB / TM)) * (TM * (1 - Math.exp(-a / TM)) - TB * (1 - Math.exp(-a / TB)));
+}
+
+/** Everything the shader needs of the cloud on one clock at τ (computed once per frame on the CPU). */
+export interface CloudState {
+  /** Whether this clock carries the cloud (a reveal resumed part-way does not: its cloud was left behind). */
+  present: boolean;
+  tau: number;
+  /** The thermal clock (s since the release). */
+  age: number;
+  /** The dome's drag: up (su) and along its path (plan x/z, su). */
+  dragUp: number;
+  dragSide: Vector2;
+  /** The top's rise, the cap's vertical squash (0..1), its radial scale and the stem's (factors), the base's slump (su). */
+  rise: number;
+  squash: number;
+  cap: number;
+  stem: number;
+  skirt: number;
+  /** The vortex ring: roll angle (rad), core (ρ, y) and reach (su). */
+  roll: number;
+  ringR: number;
+  ringY: number;
+  ringSigma: number;
+  /** Turbulent warp amplitude (su), the draught's lean (su per su of height, plan vector). */
+  turb: number;
+  lean: Vector2;
+  /** Erosion threshold 0..1 and the overall fade (gone at CLOUD.life). */
+  erode: number;
+  fade: number;
+  /** The clear layer over the porcelain (su). */
+  floor: number;
+  /** Share of the stem and base evaporated by the re-heating plate. */
+  stemFade: number;
+}
+
+export function newCloudState(): CloudState {
+  return {
+    present: false, tau: 0, age: 0, dragUp: 0, dragSide: new Vector2(), rise: 0, squash: 0, cap: 1, stem: 1, skirt: 0, roll: 0, ringR: 0.4, ringY: 0.5, ringSigma: CLOUD.ringCore,
+    turb: CLOUD.turb[0], lean: new Vector2(), erode: 0, fade: 1, floor: CLOUD.floor, stemFade: 0,
   };
 }
 
-/** Puff counts per kind (one instanced draw for all of them). */
-export const PUFF_COUNTS: Readonly<Record<PuffKind, number>> = { spill: 22, release: 10, pocket: 14, trail: 8, landing: 7 };
-
-const frame = newFrame();
-const euler = new Euler();
-/** The cover's rim point at plan angle `a` (cover space), posed at accept time t. */
-function rimAt(t: number, a: number, out: Vector3): Vector3 {
-  sampleSequence('accept', t, frame);
-  euler.set(frame.coverTiltX, 0, frame.coverTilt);
-  return out.set(Math.cos(a) * COVER.lipRadius, 0, Math.sin(a) * COVER.lipRadius).applyEuler(euler).add(frame.coverPos);
-}
-/** Cover velocity at accept time t (central difference; the reveal is pure in t). */
-function coverVelocity(t: number, out: Vector3): Vector3 {
-  const h = 0.004;
-  sampleSequence('accept', Math.max(0, t - h), frame);
-  const a = frame.coverPos.clone();
-  sampleSequence('accept', t + h, frame);
-  return out.copy(frame.coverPos).sub(a).divideScalar(t + h - Math.max(0, t - h));
-}
-
-/** The dome's outer radius at height y in cover space (COVER_PROFILE, linear). */
-function domeRadiusAt(y: number): number {
-  for (let i = 1; i < COVER_PROFILE.length; i++) {
-    const [r1, y1] = COVER_PROFILE[i]!;
-    if (y <= y1) {
-      const [r0, y0] = COVER_PROFILE[i - 1]!;
-      return y1 > y0 ? r0 + ((r1 - r0) * (y - y0)) / (y1 - y0) : r1;
-    }
-  }
-  return 0;
-}
-
-/** The pocket shows at least this long after its release (s), and only once the dome is clear of it. */
-export const POCKET_CLEAR = 0.06;
-
-/** How far a point is outside the dome's shell (su; negative inside) as the accept poses it at t. */
-export function domeClearance(p: Vector3, t: number): number {
-  sampleSequence('accept', t, frame);
-  euler.set(frame.coverTiltX, 0, frame.coverTilt);
-  const q = p.clone().sub(frame.coverPos).applyEuler(new Euler(-euler.x, -euler.y, -euler.z, 'ZYX'));
-  const r = Math.hypot(q.x, q.z);
-  // Under the dome (its footprint) counts as hidden: the shell is between it and the camera.
-  if (q.y < 0) return r <= COVER.radius ? r - COVER.radius : Math.hypot(r - COVER.radius, q.y);
-  if (q.y > COVER_PROFILE[COVER_PROFILE.length - 1]![1]) return q.y - COVER_PROFILE[COVER_PROFILE.length - 1]![1];
-  return r - domeRadiusAt(q.y);
-}
-
-/** Plan angle of the raised (guest-side) rim on the reveal: opposite the path. */
-const RAISED = Math.atan2(-REVEAL_DIR.z, -REVEAL_DIR.x);
-
-let cache: Puff[] | null = null;
-/** Every puff of the reveal, in spawn order (deterministic: one fixed seed; built once). */
-export function steamPuffs(): readonly Puff[] {
-  return (cache ??= buildPuffs());
-}
-
-/** The puff plan, built from scratch (steamPuffs caches it). */
-export function buildPuffs(): Puff[] {
-  const rnd = mulberry32(0x5eed_d1e);
-  const range = (a: number, b: number) => a + (b - a) * rnd();
-  const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 0.5;
-  const puffs: Puff[] = [];
-  const v = new Vector3(), rim = new Vector3(), cv = new Vector3();
-  const base = (kind: PuffKind): Puff => ({
-    kind, t0: 0, life: 1, pos: new Vector3(), vel: new Vector3(), rise: 0, wisp: 0, size: 0.1, grow: 0.2, stretch: 1, peak: 0.1,
-    seed: rnd() * 97, sway: 0, out: new Vector3(), curl: 0, curlRate: 0,
-  });
-
-  // 1. Spill: from under the raised rim while the far rim is still on the plate and on through the
-  // lift-off (0.05–0.30 s), more of it as the gap opens (stratified on a ramp), spread round the
-  // raised side by the local gap (∝ 1 + cos Δφ, the far rim being the pivot). An uneven sheet:
-  // lobes of very different sizes that roll over outward and shear sideways as they climb.
-  for (let i = 0, n = PUFF_COUNTS.spill; i < n; i++) {
-    const p = base('spill');
-    p.t0 = 0.05 + 0.25 * Math.sqrt((i + rnd()) / n);
-    let d = 0;
-    for (let k = 0; k < 8; k++) { d = gauss() * 0.8; if (Math.abs(d) < 1.2) break; }
-    const a = RAISED + d;
-    rimAt(p.t0, a, rim);
-    const gap = Math.max(0, rim.y - plateTop(Math.hypot(rim.x, rim.z)));
-    p.out.set(Math.cos(a), 0, Math.sin(a));
-    p.size = 0.04 + 0.1 * Math.pow(rnd(), 2) + 0.3 * gap;
-    // Out under the bead and up the outside of the skirt, clear of the silver by about its own
-    // radius (so no puff hugs the dome's outline).
-    p.pos.copy(rim).addScaledVector(p.out, 0.03 + 0.6 * p.size);
-    p.pos.y += 0.01;
-    // The exchange outflow (u ≈ 0.5 √(g′ g), 5–7 cm/s for a 1–2 cm gap, g′ ≈ 1.2 m/s²) is caught
-    // by the hot wall's rising boundary layer: up at 12–20 cm/s, drawn up too by the lifting dome,
-    // and sheared sideways along the rim.
-    const u = (0.5 * Math.sqrt(1.2 * Math.max(gap, 0.01) * 0.169)) / 0.169;
-    coverVelocity(p.t0, cv);
-    p.vel.copy(p.out).multiplyScalar(0.4 * u);
-    p.vel.addScaledVector(v.set(-p.out.z, 0, p.out.x), range(-0.3, 0.3));
-    p.vel.y += range(0.7, 1.2) + 0.35 * Math.max(0, cv.y);
-    p.rise = range(0.6, 0.8);
-    p.wisp = range(0.45, 0.7);
-    p.grow = range(0.18, 0.28);
-    p.stretch = range(1.0, 1.25);
-    p.life = range(0.35, 0.55);
-    p.peak = range(0.45, 0.6) * (0.4 + 0.6 * Math.min(1, gap / 0.1));
-    p.sway = range(0.04, 0.08);
-    p.curl = range(0.03, 0.06);
-    p.curlRate = range(5, 7);
-    puffs.push(p);
-  }
-
-  // 2. Release: as the rim leaves the plate (0.20–0.36 s) the bottom of the pocket lifts off with
-  // the dome as a mist, between the plate (never on it) and the rising rim, revealed through the
-  // opening under the rim.
-  for (let i = 0, n = PUFF_COUNTS.release; i < n; i++) {
-    const p = base('release');
-    p.t0 = 0.2 + 0.16 * ((i + rnd()) / n);
-    sampleSequence('accept', p.t0, frame);
-    const low = frame.coverPos.y - COVER.lipRadius * Math.abs(Math.sin(Math.hypot(frame.coverTilt, frame.coverTiltX)));
-    const r = 0.5 * Math.sqrt(rnd()), a = RAISED + gauss() * 1.4;
-    p.pos.set(Math.cos(a) * r, 0, Math.sin(a) * r);
-    const floor = plateTop(r);
-    p.pos.y = floor + 0.08 + Math.max(0, low - floor - 0.1) * rnd();
-    coverVelocity(p.t0, cv);
-    p.vel.set(cv.x * range(0.05, 0.15), Math.max(0, cv.y) * range(0.3, 0.5) + 0.3, cv.z * range(0.05, 0.15));
-    v.set(gauss(), 0, gauss()).multiplyScalar(0.05);
-    p.vel.add(v);
-    p.rise = range(0.8, 1.1);
-    p.wisp = range(0.3, 0.5);
-    p.size = 0.08 + 0.12 * Math.pow(rnd(), 1.5);
-    p.grow = range(0.24, 0.32);
-    p.stretch = range(1.0, 1.25);
-    p.life = range(0.5, 0.7);
-    p.peak = range(0.2, 0.28);
-    p.sway = range(0.06, 0.1);
-    puffs.push(p);
-  }
-
-  // 3. Pocket: the warm air the dome held, left behind as it is carried off sideways
-  // (0.30–0.50 s): born inside the dome (weighted to its crown, where the warm air sat), revealed
-  // as the shell slides off it, drawn after the dome by its wake, then rising fast and fraying.
-  for (let i = 0, n = PUFF_COUNTS.pocket; i < n; i++) {
-    const p = base('pocket');
-    // Released at tr, inside the dome; it shows only once the shell (carried off at ≈ 1 m/s) has
-    // slid clear of it by its own size, so no steam ever traces the dome's outline.
-    const tr = 0.3 + 0.2 * ((i + rnd()) / n);
-    sampleSequence('accept', tr, frame);
-    euler.set(frame.coverTiltX, 0, frame.coverTilt);
-    const yc = 0.06 + 0.46 * (1 - Math.pow(rnd(), 1.6));
-    const rc = domeRadiusAt(yc) * 0.8 * Math.sqrt(rnd()), a = rnd() * Math.PI * 2;
-    const released = new Vector3(Math.cos(a) * rc, yc, Math.sin(a) * rc).applyEuler(euler).add(frame.coverPos);
-    coverVelocity(tr, cv);
-    const drag = range(0.2, 0.35);
-    p.size = 0.08 + 0.16 * Math.pow(rnd(), 1.5);
-    let dt = POCKET_CLEAR;
-    for (; dt < 0.4; dt += 0.01) {
-      p.pos.copy(released).addScaledVector(cv, drag * dt);
-      if (domeClearance(p.pos, tr + dt) > 0.4 * p.size) break;
-    }
-    p.t0 = tr + dt;
-    // Drawn after the dome by its wake while it clears, then left behind.
-    p.vel.copy(cv).multiplyScalar(range(0.12, 0.25));
-    v.set(gauss(), gauss() * 0.5, gauss()).multiplyScalar(0.08);
-    p.vel.add(v);
-    p.vel.y += 0.2;
-    p.rise = range(0.9, 1.2);
-    // Mostly filament, and short-lived: it frays into the rising air within a few tenths of a
-    // second (longer-lived, the lobes stood above the dome as soft upright lozenges).
-    p.wisp = range(0.5, 0.75);
-    p.grow = range(0.3, 0.4);
-    p.stretch = range(1.2, 1.7);
-    p.life = range(0.32, 0.5);
-    p.peak = range(0.3, 0.4);
-    p.sway = range(0.08, 0.14);
-    puffs.push(p);
-  }
-
-  // 4. Trail: shed from the trailing rim (the guest side, facing the camera) as the dome is carried
-  // off (0.36–0.60 s): thin wisps that stream back off the edge, rise and are gone in a moment.
-  for (let i = 0, n = PUFF_COUNTS.trail; i < n; i++) {
-    const p = base('trail');
-    const u = (i + rnd()) / n;
-    p.t0 = 0.36 + 0.24 * u;
-    coverVelocity(p.t0, cv);
-    const back = Math.atan2(-cv.z, -cv.x) + gauss() * 0.5;
-    rimAt(p.t0, back, rim);
-    p.out.set(Math.cos(back), 0, Math.sin(back));
-    p.size = range(0.05, 0.09);
-    // Shed off the edge: left behind the moving rim (barely dragged after it), so it trails as a
-    // ragged tongue behind the dome rather than hugging its outline.
-    p.pos.copy(rim).addScaledVector(p.out, 0.06 + 1.5 * p.size);
-    p.pos.y -= range(0.0, 0.03);
-    p.vel.set(cv.x * range(0.08, 0.2), 0.4, cv.z * range(0.08, 0.2));
-    p.rise = range(0.8, 1.1);
-    p.wisp = range(0.6, 0.85);
-    p.grow = range(0.2, 0.28);
-    p.stretch = range(1.5, 1.9);
-    p.life = range(0.3, 0.45);
-    p.peak = range(0.3, 0.42) * (1 - 0.55 * u);
-    p.sway = range(0.04, 0.07);
-    puffs.push(p);
-  }
-
-  // 5. Landing: the trailing side (the guest side) comes down last (0.80–0.86 s) and squeezes the
-  // warm air left under the dome out under its rim: a small, low puff that spreads over the table
-  // and rises a little as it fades.
-  sampleSequence('accept', 0.86, frame);
-  const rest = frame.coverPos.clone();
-  for (let i = 0, n = PUFF_COUNTS.landing; i < n; i++) {
-    const p = base('landing');
-    p.t0 = 0.79 + 0.08 * ((i + rnd()) / n);
-    // The plate's edge is 1.4 cm off the trailing rim, so the air escapes to either side of it.
-    const a = RAISED + (i % 2 ? 1 : -1) * range(0.55, 1.3);
-    p.out.set(Math.cos(a), 0, Math.sin(a));
-    p.pos.copy(rest).addScaledVector(p.out, COVER.radius + range(0.02, 0.04));
-    p.pos.y = range(0.04, 0.06);
-    p.vel.copy(p.out).multiplyScalar(range(0.25, 0.4));
-    p.vel.y = 0.08;
-    p.rise = range(0.3, 0.45);
-    p.wisp = range(0.35, 0.55);
-    p.size = range(0.05, 0.08);
-    p.grow = range(0.18, 0.26);
-    p.stretch = range(0.65, 0.8);
-    p.life = range(0.35, 0.5);
-    p.peak = range(0.2, 0.3);
-    p.sway = range(0.03, 0.05);
-    puffs.push(p);
-  }
-  return puffs;
-}
-
-// ── The column: plumes off the uncovered plate ──────────────────────────────────
 /**
- * One plume of the column: a thin rising sheet of vapour from a point of the plate's well, drawn
- * as a camera-facing ribbon. The vapour climbs it at `rise` (su/s); the meander is frozen
- * turbulence carried up with it (travelling waves in h − rise·τ), laminar at the base and growing
- * with height; the sheet widens by entrainment. What shows at height h left the plate h/rise
- * earlier, so as the source weakens the column thins from the bottom up and its last wisp rises
- * away (`plumeDensity`).
+ * Rise weights by material height Y (su above the table): the bulk of the cloud (above the lowest
+ * ≈ 4 cm) rises as one thermal; the air at the base lags (CLOUD.base of the rise) and is drawn out
+ * into its stem.
  */
-export interface Plume {
-  base: Vector3;
-  /** The source starts (τ, as the rim clears it) at once at full strength and decays from t0 + PLUME.ramp. */
-  t0: number;
-  decay: number;
-  rise: number;
-  /** Peak opacity of the sheet near its base. */
-  strength: number;
-  /** Half-width at the base (su) and its growth per su of height. */
-  width: number;
-  spread: number;
-  /** Meander amplitude per su of height, along two horizontal directions. */
-  sway: number;
-  dir1: Vector3;
-  dir2: Vector3;
-  /** The plume flaps side to side (along `dir3`) as a whole, its phase from `seed`. */
-  dir3: Vector3;
-  seed: number;
-}
-
-export const PLUME = {
-  /**
-   * Ribbon length (su, 20 cm): visible steam is gone by this height; the last of it fades out over
-   * its top `top` su, so the ribbon never shows an end.
-   */
-  length: 1.6,
-  top: 0.4,
-  /**
-   * Visible steam forms a little off the hot surface: it fades in over the first `base` su (5 cm),
-   * so the column never starts as an edge along the plate's rim.
-   */
-  base: 0.3,
-  /**
-   * The source reaches full strength this quickly once the rim has cleared it (s): the column's
-   * starting front is a rounded, soft cap (≈ 4 cm of gradient at its rise), never an edge.
-   */
-  ramp: 0.22,
-  /**
-   * After the first rush (`decay`), the warm plate goes on steaming thinly for several seconds:
-   * this share of the source decays over `tailDecay` (s), visible to about 4 s.
-   */
-  tail: 0.32,
-  tailDecay: 1.4,
-  /**
-   * A change of mind: the source dies away over this (s) once the cover starts back down, so the
-   * detached column's base is a soft gradient (≈ 3 cm at its rise), never an edge.
-   */
-  cut: 0.15,
-  /** Visible steam evaporates as it rises: density e^(−h/evaporate) (≈ 14 cm). */
-  evaporate: 0.85,
-  /**
-   * Meander wavelengths (su) of the centreline, frozen into the rising vapour: the big lazy S and a
-   * smaller kink at `wave2Share` of its amplitude (the small curls are the strands' own, in the
-   * shader).
-   */
-  wave1: 0.9,
-  wave2: 0.4,
-  wave2Share: 0.35,
-  /** The whole plume sways side to side at this rate (Hz), by this much per su of height. */
-  flapHz: 0.6,
-  flap: 0.05,
-  /**
-   * The dome's wake: carried off towards the back-left at ≈ 1 m/s, the cloche drags the room's air
-   * after it, a slight drift that leans the young column along the reveal's path (su of lean per
-   * su of height) and dies away (s) as the room settles.
-   */
-  drift: 0,
-  driftDecay: 0.6,
-  /**
-   * The room's draught: the whole column leans slowly, more and less, across the view (su of lean
-   * per su of height, up to `lean`, at `leanHz`), so it never stands as a parallel-sided slab. It
-   * leans away from the cloche set down at the left (towards it, the steam crossed the dark silver
-   * as a milky flare, and read as leaking from under it).
-   */
-  lean: 0.12,
-  leanHz: 0.13,
-} as const;
-
-/** The draught's lean of the column at τ (su per su of height, along the camera's horizontal). */
-export function plumeLean(tau: number): number {
-  return PLUME.lean * (0.5 + 0.5 * Math.sin(2 * Math.PI * PLUME.leanHz * tau + 0.6));
-}
-/** The camera's horizontal in the scene (the neutral-room view; the ribbons' across direction is the live camera's). */
-export const VIEW_RIGHT = new Vector3(Math.cos((20 * Math.PI) / 180), 0, -Math.sin((20 * Math.PI) / 180));
-
-/** The wake's lean of the column at τ (su per su of height, along REVEAL_DIR). */
-export function plumeDrift(tau: number): number {
-  return PLUME.drift * Math.exp(-Math.max(0, tau - 0.5) / PLUME.driftDecay) * smooth(0.25, 0.5, tau);
-}
-
-export const PLUME_COUNT = 3;
-
-let plumeCache: Plume[] | null = null;
-/** The column's plumes (deterministic; built once). */
-export function steamPlumes(): readonly Plume[] {
-  return (plumeCache ??= buildPlumes());
-}
-
-/** The plume plan, built from scratch (steamPlumes caches it). */
-export function buildPlumes(): Plume[] {
-  const rnd = mulberry32(0xc01_5ea);
-  const range = (a: number, b: number) => a + (b - a) * rnd();
-  const plumes: Plume[] = [];
-  // A broad, soft sheet over the whole well, as steam leaves a warm plate (not a strand of
-  // incense): three overlapping sheets side by side across the camera's view, together about 70 %
-  // of the well's width at the base, that break into many irregular wisps as they rise (the
-  // wisps are the fragment shader's).
-  const right = VIEW_RIGHT;
-  const offsets = [-0.19, 0.0, 0.19];
-  for (let i = 0; i < PLUME_COUNT; i++) {
-    const base = right.clone().multiplyScalar(offsets[i]! + range(-0.03, 0.03)).add(new Vector3(0, 0, range(0.0, 0.08)));
-    base.y = plateTop(Math.hypot(base.x, base.z));
-    const d1 = range(0, Math.PI * 2), d2 = d1 + range(1.2, 1.9), d3 = range(0, Math.PI * 2);
-    plumes.push({
-      base,
-      // The rim clears the well between 0.22 and 0.34 s (it lifts off at ≈ 0.22 s).
-      t0: range(0.22, 0.3),
-      decay: range(0.45, 0.6),
-      // 21–24 cm/s: the first rush off a hot dish ≈ 45 K above the room (a thermal plume,
-      // w ≈ √(g·ΔT/T·L) ≈ 0.27 m/s over 5 cm), so it clears the plate's far rim as the dome leaves.
-      rise: range(1.25, 1.45),
-      strength: range(1.9, 2.3),
-      width: range(0.15, 0.19),
-      // Widening as it rises and mixes in (≈ 1.5× the source by 17 cm, as real steam fans out).
-      spread: range(0.18, 0.26),
-      sway: range(0.04, 0.06),
-      dir1: new Vector3(Math.cos(d1), 0, Math.sin(d1)),
-      dir2: new Vector3(Math.cos(d2), 0, Math.sin(d2)),
-      dir3: new Vector3(Math.cos(d3), 0, Math.sin(d3)),
-      seed: rnd() * 61,
-    });
-  }
-  return plumes;
-}
+export const RISE_BAND = [0.12, 0.36] as const;
+export const riseWeight = (Y: number) => CLOUD.base + (1 - CLOUD.base) * smooth(RISE_BAND[0], RISE_BAND[1], Y);
+const riseWeightD = (Y: number) => (1 - CLOUD.base) * dsmooth(RISE_BAND[0], RISE_BAND[1], Y);
+/** The cap's vertical compression (a rising thermal flattens into an oblate cap): ∫ capWeight. */
+export const CAP_BAND = [0.25, 0.62] as const;
+const capIntegral = (Y: number) => {
+  const [a, b] = CAP_BAND;
+  if (Y <= a) return 0;
+  if (Y >= b) return 0.5 * (b - a) + (Y - b);
+  const t = (Y - a) / (b - a);
+  return (b - a) * (t * t * t - 0.5 * t * t * t * t);
+};
+/** The dome drags the upper cloud (its crown most). */
+export const dragWeight = (Y: number) => smooth(0.2, 0.72, Y);
+const dragWeightD = (Y: number) => dsmooth(0.2, 0.72, Y);
+/** The cap/stem blend by material height. */
+const capWeight = (Y: number) => smooth(CAP_BAND[0], CAP_BAND[1], Y);
+/** The base's slump weight (low and outer material). */
+const skirtWeight = (Y: number, P: number) => (1 - smooth(0.06, 0.2, Y)) * smooth(0.3, 0.6, P);
+/** The stem narrows above the base (the base itself slumps outward instead). */
+export const STEM_BAND = [0.15, 0.28] as const;
+/** The radial scale by material height: 1 at the base, the stem's above it, the cap's at the top. */
+export const radialScale = (Y: number, s: CloudState) => 1 + (s.stem - 1) * smooth(STEM_BAND[0], STEM_BAND[1], Y) + (s.cap - s.stem) * capWeight(Y);
+/** The surface the slump follows: the plate's top, falling to the table over its rounded rim. */
+export const slumpSurface = (r: number) => plateTop(Math.min(r, PLATE.radius)) * (1 - smooth(0.79, 0.95, r));
 
 /**
- * Source strength of a plume at emission time τ (0 before it starts): full at once, then thinning
- * to a tail. A release window [emitStart, emitEnd] (a change of mind): nothing before emitStart,
- * ramped up from it like a first release (a reveal resumed part-way), dying away over PLUME.cut
- * after emitEnd (the cover going back on).
+ * The cloud on a clock at τ. `emitEnd` (a change of mind): the dome's drag stops there (it is
+ * coming back down); `emitStart` > the release (a reveal resumed part-way): no cloud on this clock.
  */
-export function plumeSource(p: Plume, tau: number, emitStart = -Infinity, emitEnd = Infinity): number {
-  const a = tau - p.t0;
-  if (a <= 0 || tau <= emitStart || tau >= emitEnd + PLUME.cut) return 0;
-  const k = Math.max(0, a - PLUME.ramp);
-  return smooth(0, PLUME.ramp, a) * ((1 - PLUME.tail) * Math.exp(-k / p.decay) + PLUME.tail * Math.exp(-k / PLUME.tailDecay))
-    * (emitStart > -Infinity ? smooth(emitStart, emitStart + PLUME.ramp, tau) : 1)
-    * (emitEnd < Infinity ? 1 - smooth(emitEnd, emitEnd + PLUME.cut, tau) : 1);
-}
-
-/**
- * Mean density of a plume's sheet at height h (su along it) at τ, before its wisp noise: the
- * source as it was h/rise ago, forming a little off the surface, thinned by evaporation and by
- * the sheet's widening, faded out at the ribbon's top. The shader computes the same.
- */
-export function plumeDensity(p: Plume, h: number, tau: number, emitStart = -Infinity, emitEnd = Infinity): number {
-  if (h < 0) return 0;
-  const w = p.width + p.spread * h;
-  return p.strength * plumeSource(p, tau - h / p.rise, emitStart, emitEnd) * smooth(0, PLUME.base, h) * Math.exp(-h / PLUME.evaporate) * Math.sqrt(p.width / w)
-    * (1 - smooth(PLUME.length - PLUME.top, PLUME.length, h));
-}
-
-/** A plume's centreline at height h and τ (CPU mirror of the ribbon vertex shader). */
-export function plumeCenter(p: Plume, h: number, tau: number, out: Vector3): Vector3 {
-  const amp = p.sway * Math.pow(h, 1.2);
-  const k1 = (2 * Math.PI) / PLUME.wave1, k2 = (2 * Math.PI) / PLUME.wave2;
-  const s = h - p.rise * tau;
-  out.copy(p.base);
-  out.y += h;
-  out.addScaledVector(REVEAL_DIR, plumeDrift(tau) * h);
-  out.addScaledVector(VIEW_RIGHT, plumeLean(tau) * h);
-  out.addScaledVector(p.dir1, amp * Math.sin(k1 * s + p.seed));
-  out.addScaledVector(p.dir2, PLUME.wave2Share * amp * Math.sin(k2 * s + 1.7 * p.seed));
-  out.addScaledVector(p.dir3, PLUME.flap * h * Math.sin(2 * Math.PI * PLUME.flapHz * tau + p.seed - 1.0 * h));
+export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinity, out: CloudState = newCloudState()): CloudState {
+  out.tau = tau;
+  out.present = emitStart < 0.05;
+  const a = Math.max(0, tau - CLOUD.release);
+  out.age = a;
+  out.dragUp = dragAt(Math.min(tau, emitEnd), out.dragSide);
+  const U = riseAt(a);
+  out.rise = U;
+  out.cap = 1 + CLOUD.capGrow * U;
+  out.squash = CLOUD.squash * smooth(0, 1.4, a);
+  out.stem = 1 - CLOUD.stem * smooth(0, 1.2, a);
+  out.skirt = CLOUD.skirt * (1 - Math.exp(-a / CLOUD.skirtTime)) * smooth(0, 0.35, a);
+  out.roll = CLOUD.roll * (1 - Math.exp(-a / CLOUD.rollTime)) * smooth(0, 0.4, a);
+  // The ring's core sits inside the cap's edge (where the dome's shoulder was), carried with it.
+  const Ys = CLOUD.ringAt[1], Ps = CLOUD.ringAt[0] * CLOUD.radius;
+  out.ringR = Ps * out.cap;
+  out.ringY = Ys + U * riseWeight(Ys) * centreWeight(Ps) + out.dragUp * dragWeight(Ys) - out.squash * capIntegral(Ys);
+  out.ringSigma = CLOUD.ringCore * (1 + 0.4 * (out.cap - 1));
+  out.turb = CLOUD.turb[0] + (CLOUD.turb[1] - CLOUD.turb[0]) * (1 - Math.exp(-a / CLOUD.turbTime)) * smooth(0, 0.3, a);
+  out.lean.copy(LEAN_DIR).multiplyScalar(CLOUD.lean * smooth(0.1, 1.6, a));
+  out.erode = 0.97 * Math.pow(smooth(CLOUD.erode[0], CLOUD.erode[1], a), 0.85);
+  out.fade = 1 - smooth(CLOUD.life - CLOUD.fadeOut, CLOUD.life, a);
+  out.floor = CLOUD.floor + CLOUD.floorGrow * smooth(0, 1.0, a);
+  out.stemFade = CLOUD.stemFade * smooth(0.15, 1.3, a);
   return out;
+}
+
+export interface CloudMaterial {
+  /** Where the air at the point was at the seat (plate-centred, su). */
+  X: Vector3;
+  /** The local dilution (the flow's expansion there: 1 at the seat). */
+  dilution: number;
+}
+
+/** The thermal's updraft is strongest on its axis: the rise by material radius P (the cap's edge lags and droops). */
+export const centreWeight = (P: number) => 1 - CLOUD.centre * Math.min(1, (P / CLOUD.radius) ** 2);
+/** The vertical map's forward form: material (P, Y) → height after the rise, the drag and the cap's squash. */
+export const verticalForward = (Y: number, P: number, s: CloudState) => Y + s.rise * riseWeight(Y) * centreWeight(P) + s.dragUp * dragWeight(Y) - s.squash * capIntegral(Y);
+const verticalSlope = (Y: number, P: number, s: CloudState) => 1 + s.rise * riseWeightD(Y) * centreWeight(P) + s.dragUp * dragWeightD(Y) - s.squash * capWeight(Y);
+/** The stem and base evaporate as the uncovered plate re-heats them (their share of the light left). */
+export const stemLeft = (Y: number, s: CloudState) => 1 - s.stemFade * (1 - smooth(0.12, 0.42, Y));
+/** Bisection steps of the vertical solve (the map is monotonic; ≈ 0.04 mm over its bracket). */
+export const VERTICAL_STEPS = 13;
+/** Bisection steps of the radial solve (each with a vertical solve inside). */
+export const OUTER_STEPS = 11;
+/** Bisection steps of the slump's solve. */
+export const SKIRT_STEPS = 10;
+
+/**
+ * The axisymmetric part of the inverse map (the shader tabulates exactly this per frame, in
+ * models/dinnerSteam.ts): from (ρ, y), a point's distance from the plate's axis and its height,
+ * after the lean and the side drag are undone, to the material's (P, Y) at the seat and the
+ * local dilution. Each step undoes one part of the flow, newest first.
+ */
+export function axisInverse(rho0: number, y0: number, s: CloudState, out: [number, number, number] = [0, 0, 0]): [number, number, number] {
+  // The vortex ring: a twirl about its core in the meridional plane (outward on top, down outside),
+  // undone exactly (the rotation keeps the distance to the core).
+  const ex = rho0 - s.ringR, ey = y0 - s.ringY;
+  const phi = s.roll * Math.exp(-(ex * ex + ey * ey) / (s.ringSigma * s.ringSigma));
+  const c = Math.cos(phi), sn = Math.sin(phi);
+  // Forward is clockwise in (ρ right, y up); undo it counter-clockwise.
+  const rho = Math.max(0, s.ringR + c * ex - sn * ey);
+  const y = s.ringY + sn * ex + c * ey;
+  // The rise (strongest on the axis), the dome's drag up and the cap's squash, and the radial scale
+  // (the cap spreads, the stem narrows, by material height). For a material radius P the vertical
+  // map is monotonic in the height (bisection gives Y*(P)), and P·S(Y*(P)) is monotonic in P (the
+  // axis rises fastest), so an outer bisection finds P.
+  const solveY = (Pm: number) => {
+    let lo = y - s.rise - s.dragUp - 0.05, hi = y + s.squash + 0.05;
+    for (let i = 0; i < VERTICAL_STEPS; i++) {
+      const mid = 0.5 * (lo + hi);
+      if (verticalForward(mid, Pm, s) < y) lo = mid; else hi = mid;
+    }
+    return 0.5 * (lo + hi);
+  };
+  const scale = (Ym: number) => radialScale(Ym, s);
+  let lo = 0, hi = rho / Math.min(s.stem, 1) + 0.01;
+  for (let k = 0; k < OUTER_STEPS; k++) {
+    const mid = 0.5 * (lo + hi);
+    if (mid * scale(solveY(mid)) < rho) lo = mid; else hi = mid;
+  }
+  let P = 0.5 * (lo + hi);
+  let Y = solveY(P);
+  const S = scale(Y);
+  const stretch = verticalSlope(Y, P, s);
+  // The base's slump outward over the rim, following the plate down to the table. For a material
+  // height the slump is monotonic in the radius (bisection gives P*(Y)); the height it keeps over
+  // the surface is then monotonic in Y (an outer bisection).
+  if (s.skirt > 0) {
+    const P1 = P, Y1 = Y;
+    const solveP = (Ym: number) => {
+      let a = Math.max(0, P1 - s.skirt - 0.01), b = P1;
+      for (let i = 0; i < SKIRT_STEPS; i++) {
+        const mid = 0.5 * (a + b);
+        if (mid + s.skirt * skirtWeight(Ym, mid) < P1) a = mid; else b = mid;
+      }
+      return 0.5 * (a + b);
+    };
+    let a = Y1 - 0.2, b = Y1 + 0.2;
+    for (let i = 0; i < SKIRT_STEPS; i++) {
+      const mid = 0.5 * (a + b);
+      if (mid + slumpSurface(P1) - slumpSurface(solveP(mid)) < Y1) a = mid; else b = mid;
+    }
+    Y = 0.5 * (a + b);
+    P = solveP(Y);
+  }
+  out[0] = P; out[1] = Y; out[2] = stemLeft(Y, s) / (stretch * S * S);
+  return out;
+}
+
+const ax: [number, number, number] = [0, 0, 0];
+/**
+ * The inverse map (the shader's, without its turbulence): where the air at p (scene units,
+ * plate-centred) was before the release. The draught's lean and the dome's side drag are plan
+ * shifts (the drag by the material height it finds first); the rest is `axisInverse`.
+ */
+export function cloudMaterial(p: Vector3, s: CloudState, out: CloudMaterial = { X: new Vector3(), dilution: 1 }): CloudMaterial {
+  const h = Math.max(0, p.y - 0.15);
+  let qx = p.x - s.lean.x * h, qz = p.z - s.lean.y * h;
+  axisInverse(Math.hypot(qx, qz), p.y, s, ax);
+  const w = dragWeight(ax[1]);
+  qx -= s.dragSide.x * w;
+  qz -= s.dragSide.y * w;
+  const rho = Math.hypot(qx, qz);
+  axisInverse(rho, p.y, s, ax);
+  const dx = rho > 1e-6 ? qx / rho : 1, dz = rho > 1e-6 ? qz / rho : 0;
+  out.X.set(dx * ax[0], ax[1], dz * ax[0]);
+  out.dilution = ax[2];
+  return out;
+}
+
+/** The cloud at the seat: the dome's cavity, soft at the wall, clear over the porcelain (0..1, no noise). */
+export function cloudSeat(X: Vector3, floor: number = CLOUD.floor): number {
+  const r = Math.hypot(X.x, X.z);
+  const q = X.y - CLOUD.rim;
+  const { radius: R, height: H, power: pw } = CLOUD;
+  // A normalised distance to the cavity's wall (≈ su near it): the superellipse's p-norm radius.
+  const k = q > 0 ? Math.pow(Math.pow(r / R, pw) + Math.pow(q / H, pw), 1 / pw) : r / R;
+  const d = (1 - k) * Math.min(R, H);
+  const inside = smooth(0, CLOUD.wall, d);
+  const above = smooth(0, floor, X.y - plateTop(Math.min(r, PLATE.radius)));
+  const grade = CLOUD.baseDensity + (1 - CLOUD.baseDensity) * smooth(0.05, 0.6, X.y);
+  return inside * above * grade;
+}
+
+/** Visible steam evaporates as it rises. */
+export const evaporation = (y: number) => Math.exp(-Math.max(0, y - CLOUD.evapFrom) / CLOUD.evaporate);
+
+const mat: CloudMaterial = { X: new Vector3(), dilution: 1 };
+/** The cloud's mean density at p on a clock (CPU mirror of the shader, without noise and erosion). */
+export function cloudDensity(p: Vector3, s: CloudState): number {
+  if (!s.present || s.fade <= 0) return 0;
+  if (p.y < 0) return 0;
+  cloudMaterial(p, s, mat);
+  return cloudSeat(mat.X, s.floor) * Math.min(1, mat.dilution) * evaporation(p.y) * s.fade;
+}
+
+// ── The veil: the plate's thin column ─────────────────────────────────────────
+/**
+ * The veil's source at emission time τ: full over VEIL.ramp from VEIL.t0, a first rush and a long
+ * thin tail. A release window [emitStart, emitEnd] (a change of mind): nothing before emitStart,
+ * ramped up from it like a first release; dying away over VEIL.cut after emitEnd.
+ */
+export function veilSource(tau: number, emitStart = -Infinity, emitEnd = Infinity): number {
+  const a = tau - VEIL.t0;
+  if (a <= 0 || tau <= emitStart || tau >= emitEnd + VEIL.cut) return 0;
+  const k = Math.max(0, a - VEIL.ramp);
+  return smooth(0, VEIL.ramp, a) * ((1 - VEIL.tail) * Math.exp(-k / VEIL.decay) + VEIL.tail * Math.exp(-k / VEIL.tailDecay))
+    * (emitStart > -Infinity ? smooth(emitStart, emitStart + VEIL.ramp, tau) : 1)
+    * (emitEnd < Infinity ? 1 - smooth(emitEnd, emitEnd + VEIL.cut, tau) : 1);
+}
+
+/** The veil's mean density at height h over the well (on its axis) at τ: the source as it was h/rise ago. */
+export function veilDensity(h: number, tau: number, emitStart = -Infinity, emitEnd = Infinity): number {
+  if (h < 0) return 0;
+  const w = VEIL.radius + VEIL.spread * h;
+  return VEIL.strength * veilSource(tau - h / VEIL.rise, emitStart, emitEnd) * smooth(0, VEIL.base, h) * Math.exp(-h / VEIL.evaporate)
+    * (VEIL.radius / w) * (VEIL.radius / w) * (1 - smooth(VEIL.length - VEIL.top, VEIL.length, h));
 }
 
 /**
  * The accepted still (posters, reduced motion, a saved accept): the steam at rest. null shows the
- * clean plate with no steam; { tau, fade } freezes the column at τ, scaled by `fade`.
+ * clean plate (steam is carried by its motion: a frozen wisp reads as a smudge, v1.5).
  */
 export const STEAM_REST: { tau: number; fade: number } | null = null;
 
-/**
- * Density below which the column has gone: measured, its last wisps then lift the greige cove by
- * at most a level or two over a few pixels (`evidence/v1.5/dinner/polish/steam-visibility-curve.txt`),
- * so ending there shows no step.
- */
+/** Density below which the steam has gone (its last wisps lift the cove by a level or two at most). */
 export const STEAM_GONE = 0.006;
-/**
- * When the steam has gone (s of τ): the last puff, and the column once every plume's density has
- * fallen below STEAM_GONE everywhere along it.
- */
-export const STEAM_END = (() => {
-  let end = Math.max(...steamPuffs().map((p) => p.t0 + p.life));
-  for (const p of steamPlumes()) {
-    let t = p.t0;
-    for (; t < 10; t += 0.01) {
-      let max = 0;
-      for (let h = 0; h <= PLUME.length; h += 0.02) max = Math.max(max, plumeDensity(p, h, t));
-      if (t > p.t0 + PLUME.ramp && max < STEAM_GONE) break;
-    }
-    end = Math.max(end, t);
+
+/** The veil's last visible τ for a release window (coarse: a few thousand evaluations). */
+function veilEnd(from: number, emitStart = -Infinity, emitEnd = Infinity, step = 0.01): number {
+  let t = from;
+  for (; t < 12; t += step) {
+    let max = 0;
+    for (let h = 0; h <= VEIL.length && max < STEAM_GONE; h += 0.02) max = Math.max(max, veilDensity(h, t, emitStart, emitEnd));
+    if (t > VEIL.t0 + VEIL.ramp && max < STEAM_GONE) break;
   }
-  return Math.ceil(end * 100) / 100;
-})();
+  return t;
+}
+
+/** When the reveal's steam has gone (s of τ): the cloud's life, and the veil below STEAM_GONE everywhere. */
+export const STEAM_END = Math.ceil(Math.max(CLOUD.release + CLOUD.life, veilEnd(VEIL.t0)) * 100) / 100;
 
 /**
  * When steam whose release stopped at `emitEnd` (a change of mind) has gone (s of τ, ≤ STEAM_END):
- * its last puff, and the column once its density is below STEAM_GONE everywhere (as STEAM_END; coarse
- * steps, a few thousand evaluations, so it costs nothing at the cut).
+ * its cloud's life (if it carries one) and its veil.
  */
 export function steamEndAfter(emitEnd: number, emitStart = -Infinity): number {
   let end = emitEnd;
-  for (const p of steamPuffs()) if (p.t0 >= emitStart && p.t0 <= emitEnd) end = Math.max(end, p.t0 + p.life);
-  for (const p of steamPlumes()) {
-    let t = emitEnd + PLUME.cut;
-    for (; t < STEAM_END; t += 0.05) {
-      let max = 0;
-      for (let h = 0; h <= PLUME.length && max < STEAM_GONE; h += 0.04) max = Math.max(max, plumeDensity(p, h, t, emitStart, emitEnd));
-      if (max < STEAM_GONE) break;
-    }
-    end = Math.max(end, t);
-  }
+  if (emitStart < 0.05) end = Math.max(end, CLOUD.release + CLOUD.life);
+  end = Math.max(end, veilEnd(Math.max(VEIL.t0, emitEnd), emitStart, emitEnd, 0.05));
   return Math.min(STEAM_END, Math.ceil(end * 100) / 100);
 }
 
 /**
- * Steam a change of mind leaves behind is stirred: the cover comes back down through it and the
- * dish is carried off, so it mixes into the room faster than a column rising in still air, and its
- * droplets evaporate sooner. Its light falls with this time scale (s) from the cut, from a smooth
- * start (`stirFade`). Without it, the column's upper half lingered in front of the bin as the
- * camera came round to it, reading as smoke from the bin.
+ * Steam a change of mind leaves behind is stirred: the cover comes back down through it and the dish
+ * is carried off, so it mixes in faster than in still air (v1.5, kept). Its light falls with this
+ * time scale (s) from the cut, from a smooth start.
  */
 export const STEAM_STIR = 0.4;
 export function stirFade(age: number): number {
   const e = Math.max(0, age);
   return Math.exp(-(e * e) / (STEAM_STIR * (e + 0.2)));
 }
-/**
- * Once the cover is back on, the decline lifts the dish straight up through what is left of the
- * column and carries it off: its wake breaks the steam up and mixes it in within a few tenths of a
- * second (`wakeFade`, from a smooth start at `capture`). Without it the leftover kept rising in front
- * of the bin as the camera came round to it, reading as smoke from the bin.
- */
+/** Once the cover is back on, the decline lifts the dish through what is left: its wake breaks it up. */
 export const STEAM_WAKE = 0.16;
 export function wakeFade(sinceCapture: number): number {
   const e = Math.max(0, sinceCapture);
@@ -608,50 +560,112 @@ export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infin
   return until;
 }
 
-export interface PuffState {
-  center: Vector3;
-  radius: number;
-  opacity: number;
-  /** Erosion threshold: the puff breaks into wisps as it ages (0 solid → 1 gone). */
-  erode: number;
-}
-
-const { drag: TD, accel: TB, mix: TM, curl: TCURL, fadeIn: TIN } = STEAM_TIME;
-/** Vertical rise of a puff of scale W at age a: buoyant start, entraining deceleration. */
-export function riseAt(W: number, a: number): number {
-  return (W / (1 - TB / TM)) * (TM * (1 - Math.exp(-a / TM)) - TB * (1 - Math.exp(-a / TB)));
-}
-/** Meander phases from the seed (the shader derives the same). */
-const fract = (x: number) => x - Math.floor(x);
 /**
- * A puff at steam time τ (null when not alive). This is the CPU mirror of the vertex shader in
- * models/dinnerSteam.ts, used by the tests and for bounds; keep both in step.
+ * The cloud's look at its thermal age (the shader's per-clock uniforms): how far the turbulence
+ * moves its mixture, the threshold above which air keeps its droplets (raised by evaporation), the
+ * turbulence's own warp, the finer octave's share, the fog inside and its soft width, and the
+ * mixing sheet's width and strength. Young (just out of the dome) it is fog with a soft edge; then
+ * the room's air folds its edge into thin, bright sheets and empties the inside.
  */
-export function puffAt(p: Puff, tau: number, out: PuffState): PuffState | null {
-  const a = tau - p.t0;
-  if (a < 0 || a > p.life) return null;
-  const c = out.center.copy(p.pos).addScaledVector(p.vel, TD * (1 - Math.exp(-a / TD)));
-  const rise = riseAt(p.rise, a);
-  c.y += rise;
-  // Curl: the outflow rolls up round the lip, outward, up and back over.
-  if (p.curl > 0) {
-    const th = p.curlRate * TCURL * (1 - Math.exp(-a / TCURL));
-    c.addScaledVector(p.out, p.curl * Math.sin(th));
-    c.y += p.curl * (1 - Math.cos(th));
-  }
-  // Meander: grows with height (laminar near the source, turbulent above).
-  const amp = p.sway * rise;
-  const h1 = fract(p.seed * 0.137), h2 = fract(p.seed * 0.291), h3 = fract(p.seed * 0.533);
-  c.x += amp * (Math.sin((2.1 + 1.6 * h1) * a + 6.283 * h2) + 0.5 * Math.sin((4.3 + 2.0 * h3) * a + 6.283 * h1));
-  c.z += amp * (Math.sin((1.9 + 1.4 * h3) * a + 6.283 * h1) + 0.5 * Math.sin((3.7 + 2.2 * h2) * a + 6.283 * h3));
-  out.radius = p.size + p.grow * a;
-  // Condensation forms within TIN; densest at release, thinning from then on (dilution as it
-  // entrains, evaporation through its life).
-  out.opacity = p.peak * smooth(0, TIN, a) * (1 - smooth(0.2 * p.life, p.life, a)) * Math.pow(p.size / out.radius, 0.8);
-  out.erode = smooth(0, p.life, a);
+export interface CloudLook { amp: number; threshold: number; warp: number; fine: number; core: number; coreWidth: number; sheetWidth: number; sheet: number }
+export function cloudLook(age: number, erode: number, out: CloudLook = { amp: 0, threshold: 0, warp: 0, fine: 0, core: 0, coreWidth: 0, sheetWidth: 0, sheet: 0 }): CloudLook {
+  const young = 1 - smooth(0.1, 1.2, age);
+  out.amp = 0.5 + 0.35 * smooth(0, 1.4, age);
+  out.threshold = 0.3 + 0.32 * erode;
+  out.warp = 1 + 1.4 * smooth(0, 1.2, age) - 0.6 * smooth(1.2, 2.4, age);
+  out.fine = 0.1 + 0.15 * erode;
+  out.core = 0.8 + (0.1 - 0.8) * smooth(0.15, 1.8, age);
+  out.coreWidth = 0.18 + 0.14 * young;
+  out.sheetWidth = 0.09 + 0.06 * young;
+  out.sheet = 0.75 - 0.4 * young;
   return out;
 }
 
-export function newPuffState(): PuffState {
-  return { center: new Vector3(), radius: 0, opacity: 0, erode: 0 };
+/**
+ * The forward map (the inverse of `axisInverse`, for bounds and tests): where the air at material
+ * (P, Y) at the seat is now, as (ρ, y) about the plate's axis, before the lean and the side drag.
+ */
+export function axisForward(P: number, Y: number, s: CloudState, out: [number, number] = [0, 0]): [number, number] {
+  // The base's slump.
+  let P1 = P, Y1 = Y;
+  if (s.skirt > 0) {
+    P1 = P + s.skirt * skirtWeight(Y, P);
+    Y1 = Y + (slumpSurface(P1) - slumpSurface(P));
+  }
+  // The radial scale and the rise.
+  const S = radialScale(Y1, s);
+  const rho = P1 * S, y = verticalForward(Y1, P1, s);
+  // The vortex ring's roll (clockwise in (ρ right, y up)).
+  const ex = rho - s.ringR, ey = y - s.ringY;
+  const phi = s.roll * Math.exp(-(ex * ex + ey * ey) / (s.ringSigma * s.ringSigma));
+  const c = Math.cos(phi), sn = Math.sin(phi);
+  out[0] = Math.max(0, s.ringR + c * ex + sn * ey);
+  out[1] = s.ringY - sn * ex + c * ey;
+  return out;
 }
+
+/** The cavity's outline at the seat (material (P, Y) on the cloud's wall and floor), sampled. */
+const OUTLINE: readonly [number, number][] = (() => {
+  const pts: [number, number][] = [];
+  const { radius: R, height: H, power: pw, rim } = CLOUD;
+  for (let i = 0; i <= 16; i++) {
+    const q = (i / 16) * H;
+    pts.push([R * Math.pow(Math.max(0, 1 - Math.pow(q / H, pw)), 1 / pw), rim + q]);
+  }
+  for (let i = 0; i <= 8; i++) {
+    const P = (i / 8) * R;
+    pts.push([P, plateTop(P)]);
+    pts.push([P, rim + 0.5 * H * (i / 8)]);
+  }
+  return pts;
+})();
+
+const fw: [number, number] = [0, 0];
+const TMP_V = new Vector3();
+/**
+ * The volume's bounds on a clock (plate-centred su, conservative): the cloud's outline carried by
+ * the flow (plus the turbulence, the noise's reach and the lean), and the veil as far as it has
+ * risen. The shader marches only inside them.
+ */
+export function steamBounds(s: CloudState, veil: { tau: number; emitStart: number; emitEnd: number } | null, cloudMin: Vector3, cloudMax: Vector3, veilMin: Vector3, veilMax: Vector3): void {
+  cloudMin.set(Infinity, Infinity, Infinity);
+  cloudMax.set(-Infinity, -Infinity, -Infinity);
+  veilMin.copy(cloudMin);
+  veilMax.copy(cloudMax);
+  if (s.present && s.fade > 0) {
+    let rMax = 0, yMin = Infinity, yMax = -Infinity;
+    for (const [P, Y] of OUTLINE) {
+      axisForward(P, Y, s, fw);
+      rMax = Math.max(rMax, fw[0]);
+      yMin = Math.min(yMin, fw[1]);
+      yMax = Math.max(yMax, fw[1]);
+    }
+    const m = 0.1 + 1.6 * s.turb;
+    const lean = s.lean.length() * Math.max(0, yMax - 0.15);
+    const r = rMax + m + lean + s.dragSide.length();
+    cloudMin.set(-r, Math.max(0, yMin - m), -r);
+    cloudMax.set(r, Math.min(CLOUD_Y_MAX, yMax + m), r);
+  }
+  // The spill climbs the dome's outer wall, wherever the dome is while it shows.
+  if (veil && spillFade(veil.tau) > 0 && veil.tau < SPILL.fade[1]) {
+    sampleSequence('accept', Math.min(veil.tau, veil.emitEnd), frame);
+    const c = frame.coverPos, r = COVER.radius + 0.12;
+    cloudMin.min(TMP_V.set(c.x - r, Math.max(0, c.y - 0.12), c.z - r));
+    cloudMax.max(TMP_V.set(c.x + r, c.y + COVER.domeHeight + 0.1, c.z + r));
+  }
+  if (veil) {
+    // From where its source stopped (or the porcelain) to as high as its first vapour has risen.
+    const { tau, emitStart, emitEnd } = veil;
+    const top = Math.min(VEIL.length, Math.max(0, (tau - Math.max(VEIL.t0, emitStart)) * VEIL.rise) + 0.1);
+    const stop = emitEnd + VEIL.cut;
+    const bottom = tau > stop ? Math.max(0, (tau - stop) * VEIL.rise - 0.1) : 0;
+    if (top > bottom) {
+      const r = VEIL.radius + VEIL.spread * top + 0.6 * s.lean.length() * top + 0.08;
+      veilMin.set(-r, bottom, -r);
+      veilMax.set(r, top + 0.03, r);
+    }
+  }
+}
+
+/** The flow map's height (su): nothing of the cloud is drawn above it. */
+export const CLOUD_Y_MAX = 2.6;

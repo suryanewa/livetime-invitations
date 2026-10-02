@@ -9,6 +9,7 @@ import { releaseShadowTextureGpu } from './contactShadow.ts';
 import { STUDY_RIG } from './lighting.ts';
 import type { Rig, RigBuild } from './rig.ts';
 import { resolveRig } from './rigRegistry.ts';
+import { SceneDepth } from './sceneDepth.ts';
 import { smoothPcf } from './studio.ts';
 import { releaseCachedTextureGpu } from './textures.ts';
 import { shadowProxyMaterial } from '../../models/shadowProxy.ts';
@@ -95,6 +96,8 @@ export class Stage {
   private cssWidth = 1;
   private cssHeight = 1;
   private dprCap = 2;
+  /** v1.6: the opaque scene's depth for effects that ask for it (src/render/sceneDepth.ts); idle otherwise. */
+  readonly sceneDepth = new SceneDepth();
 
   static create(options: StageOptions = {}): Stage | null {
     const result = createRenderer(options);
@@ -390,6 +393,7 @@ export class Stage {
   }
 
   render(): void {
+    this.sceneDepth.render(this.renderer, this.scene, this.camera);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -445,6 +449,7 @@ export class Stage {
   dispose(): void {
     // Before the content and studio (whose materials lead to the shared LUT) leave the scene.
     releaseDfgLUT(this.renderer, this.scene);
+    this.sceneDepth.dispose();
     this.setContent(null);
     if (this.studio.objects.length) this.scene.remove(...this.studio.objects);
     this.scene.remove(this.aim);
