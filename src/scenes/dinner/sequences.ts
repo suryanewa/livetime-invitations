@@ -222,7 +222,7 @@ const FLAP_OPEN = cubicBezier(0.3, 0, 0.2, 1);
  */
 const TRANSFER = cubicBezier(0.33, 0, 0.6, 1);
 /**
- * v1.5 (the real 45 cm bin): the dish is carried up and across to rest over the opening by
+ * v1.5 (the real 47 cm bin): the dish is carried up and across to rest over the opening by
  * RELEASE, then let go: it falls into the bin under gravity (9.81 m/s² in Dinner's units).
  */
 export const RELEASE = 0.74;
@@ -361,7 +361,7 @@ const FRAME = 1 / 60;
 /**
  * Rewind bounds (s) by the outcome that follows, and its largest 60 fps step relative to the
  * rewound outcome's own largest step. v1.5: 0.6 s before an accept too (was 0.45): out of the real
- * 45 cm bin the covered dish has 6 scene units to come back (up out of the bucket, across, down
+ * 47 cm bin the covered dish has 6 scene units to come back (up out of the bucket, across, down
  * onto the table), which 0.45 s could only cover by whipping it at twice the decline's own pace;
  * the accept that follows plays up to 1.46× faster instead.
  */

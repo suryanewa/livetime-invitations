@@ -8,28 +8,28 @@ import { prepareImported } from './imported.ts';
 import type { ModelContext } from './types.ts';
 
 /**
- * Shared disposal bin (Birthday and Dinner decline), v1.5: a real 45 cm butterfly pedal bin.
+ * Shared disposal bin (Birthday and Dinner decline), v1.5: a real 47 cm butterfly pedal bin.
  *
  * Product reference (research, 2026-10-02): the round premium pedal bins (Brabantia NewIcon 20 L:
  * Ø 29 × 46.7 cm; Vipp 15: Ø 29 × 52.5 cm; Vipp 14: Ø 30 × 37 cm) and simplehuman's butterfly
  * step cans (a lid split down the middle, each half hinged at its outer edge, so the open bin
- * needs half the headroom of a single lid). This one is sized to swallow the 27.7 cm cake and
- * the 27 cm plate: Ø 33.8 cm over the base, a 31 cm mouth, 45 cm tall closed (h/d 1.33, between
- * the Vipp 14 and the Brabantia 20 L).
+ * needs half the headroom of a single lid; the pedal at the front, under the split). This one
+ * swallows the 27.7 cm cake and the 27 cm plate: a 29.6 cm mouth, Ø 32.4 cm over the base, 47 cm
+ * tall closed (h/d 1.45, between the Vipp 14 and the Brabantia 20 L).
  *
  * Construction, as the real product is built:
- * - body: a rolled steel shell, charcoal powder coat, a rolled bead at the top edge;
- * - base: a satin black PP cup the shell stands in, 4 mm proud of it, on an inset rubber foot
- *   ring (a shadow gap at the floor);
+ * - body: a rolled steel shell, warm graphite powder coat, a rolled bead at the top edge;
+ * - base: a satin black PP cup the shell stands in, 4 mm proud of it, on a 4 mm rubber foot ring;
  * - lid ring: satin black PP clipped over the bead (a 1 mm shadow seam under its overhang); it
- *   carries the two hinge housings and holds the inner bucket's lip;
- * - inner bucket: dark grey PP, a rolled lip just inside the ring, a 36 cm deep well;
- * - butterfly lid: two pressed brushed-stainless half-shells (a gentle dome, 2.5 cm crown, a
- *   rolled 7 mm edge, a hemmed underside closed by a satin PP panel), 1.5 mm apart at the split,
- *   each on a stainless pin through a knuckle between two lugs;
- * - pedal: a brushed-stainless lever on a pin hinge at the front of a PP pedal housing, with a
- *   coral elastomer tread (the bin's one coloured insert). It is linked to the lid: it goes down
- *   as the flaps open (`attachBin`).
+ *   carries the hinges' middle knuckles and holds the inner bucket's lip;
+ * - inner bucket: mid-grey PP, a rolled lip just inside the ring, a 38.6 cm deep well;
+ * - butterfly lid: two halves pressed from brushed stainless coil (a gentle dome, 2.5 cm crown, a
+ *   rolled 5.5 mm edge, a hemmed, recessed underside), 2 mm apart at the split, each hinged on a
+ *   straight chord at its outer edge: three-knuckle hinges (two PP leaves on the lid, the ring's
+ *   moulded knuckle between them, a black-oxide pin) inside the lid ring's silhouette;
+ * - pedal: under the split, a brushed-stainless lever with a curved tip on a pin hinge at the
+ *   front of a PP housing moulded round the base, with a coral elastomer tread (the bin's one
+ *   coloured insert). It is linked to the lid: it goes down as the flaps open (`attachBin`).
  *
  * Every edge that catches light is filleted (0.1–1 cm radii); every surface is a named PBR
  * material whose textures (micro-normal, roughness, baked occlusion) are generated at export by
@@ -73,7 +73,7 @@ export const BIN_CM = {
   lidDepth: 0.55,
   /** Hinge pin axis: distance from the axis (along local x; the knuckles' outer edge is the ring's flat top edge) and height above the ring top. */
   hingeX: MOUTH + 0.58,
-  hingeY: 0.32,
+  hingeY: 0.26,
 } as const;
 
 export const BIN = {
@@ -337,13 +337,13 @@ function linkPedal(binRoot: Object3D): void {
  */
 export const BIN_MATERIALS = {
   bin_powder: { color: '#4A4846', roughness: 0.29, uv1: true },
-  bin_base: { color: '#1C1D1F', roughness: 0.56, uv1: true },
-  bin_ring: { color: '#1C1D1F', roughness: 0.52, uv1: true },
-  bin_liner: { color: '#6E7175', roughness: 0.45, uv1: true },
-  bin_plastic: { color: '#1C1D1F', roughness: 0.54 },
+  bin_base: { color: '#1D1D1D', roughness: 0.56, uv1: true },
+  bin_ring: { color: '#1D1D1D', roughness: 0.52, uv1: true },
+  bin_liner: { color: '#7C7C7B', roughness: 0.45, uv1: true },
+  bin_plastic: { color: '#1D1D1D', roughness: 0.54 },
   bin_rubber: { color: '#0D0D0E', roughness: 0.8 },
   bin_slot: { color: '#060607', roughness: 0.9 },
-  bin_steel: { color: '#CBC9C4', roughness: 0.3, metalness: 1, anisotropy: 0.55 },
+  bin_steel: { color: '#CBC9C4', roughness: 0.17, metalness: 1, anisotropy: 0.6 },
   bin_pin: { color: '#2E2F31', roughness: 0.42, metalness: 1 },
   bin_tread: { color: '#FF714A', roughness: 0.64 },
 } as const;
@@ -735,8 +735,9 @@ function lidHalf(): { shell: BufferGeometry; under: BufferGeometry; knuckle: Buf
     return [k * x, 1, k * z];
   };
   // Dome: K rings from the centroid out to the band's inner edge. Brushed finish: the halves are
-  // pressed from brushed coil, the grain running front to back, parallel to the split (u along z).
-  const brushUV = (x: number, z: number): [number, number] => [z / brush, x / brush];
+  // pressed from brushed coil, the grain running side to side, across the split (u along x), so
+  // the brushed highlight stretches front to back over the lid as on a pressed stainless lid.
+  const brushUV = (x: number, z: number): [number, number] => [x / brush, z / brush];
   const K = 24;
   const domeStart = positions.length / 3;
   const centre = vtx(c.x, lidTop(c.x, c.z), c.z, ...domeNormal(c.x, c.z), ...brushUV(c.x, c.z));
@@ -791,7 +792,7 @@ function lidHalf(): { shell: BufferGeometry; under: BufferGeometry; knuckle: Buf
     up.push(x * U, y * U, z * U);
     const l = Math.hypot(...n);
     un.push(n[0] / l, n[1] / l, n[2] / l);
-    uu.push(z / brush, x / brush);
+    uu.push(x / brush, z / brush);
     return up.length / 3 - 1;
   };
   const inset = hem + 0.02;
@@ -835,7 +836,7 @@ function lidHalf(): { shell: BufferGeometry; under: BufferGeometry; knuckle: Buf
   const hx = -BIN_CM.hingeX, hy = BIN_CM.hingeY;
   const parts: BufferGeometry[] = [];
   for (const [z0, z1] of HINGE_KNUCKLES) {
-    const barrel = turned([[0, z0], [0.32, z0, 0.08], [0.32, z1, 0.08], [0, z1]], 28, 2);
+    const barrel = turned([[0, z0], [0.26, z0, 0.07], [0.26, z1, 0.07], [0, z1]], 28, 2);
     barrel.rotateX(Math.PI / 2);
     barrel.translate(hx * U, hy * U, 0);
     parts.push(barrel, roundedBlock(1.0, 0.36, z1 - z0, 0.1, [hx + 0.55, hy - 0.04, (z0 + z1) / 2], 2));
@@ -855,7 +856,7 @@ function hingeHousing(side: -1 | 1): BufferGeometry[] {
   const x = side * BIN_CM.hingeX;
   const top = BIN_CM.rimTop;
   const block = roundedBlock(0.62, 0.5, 2.1, 0.12, [x, top + BIN_CM.hingeY - 0.22, 0], 3);
-  const boss = turned([[0, -1.05], [0.33, -1.05, 0.1], [0.33, 1.05, 0.1], [0, 1.05]], 28, 3);
+  const boss = turned([[0, -1.05], [0.26, -1.05, 0.08], [0.26, 1.05, 0.08], [0, 1.05]], 28, 3);
   boss.rotateX(Math.PI / 2);
   boss.translate(x * U, (top + BIN_CM.hingeY) * U, 0);
   return [block, boss];

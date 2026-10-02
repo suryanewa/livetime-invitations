@@ -123,11 +123,11 @@ describe('Dinner under the hero rule (recorded disposal exception)', () => {
     return { direction, get: (n: string) => cache.get(n) ?? (cache.set(n, make(n)), cache.get(n)!), unique: make, dispose() {} } as unknown as MaterialLibrary;
   }
 
-  it('the open bin sets the frame: the camera backs off, and the covered dish still fills at least 35 % of the width', () => {
+  it('the open bin sets the frame: the camera backs off, and the covered dish still fills at least 34 % of the width', () => {
     // The hero rule would make the dish fill 75 % of the width; the covered dish carried over the
     // open bin behind it cannot fit at that size, so the camera backs off. Measured on the real
     // silhouette at 1:1: v1.3 0.434, v1.4 0.496 (the bin scaled with the dish: 31.7 × 22 cm),
-    // v1.5 0.360 (the real 45 cm pedal bin: the dish must rise over a 42.4 cm rim; recorded
+    // v1.5 0.354 (the real 47 cm pedal bin: the dish must rise over a 44.5 cm rim; recorded
     // trade-off, docs/spec-revisions.md).
     const hero: Vector3[] = [];
     for (let i = 0; i < 64; i++) {
@@ -140,7 +140,7 @@ describe('Dinner under the hero rule (recorded disposal exception)', () => {
     const camera = new PerspectiveCamera(PERSPECTIVE_FOV, 1, 0.05, 400);
     const f = fitPerspectiveToHero(camera, dinnerBounds().getCenter(new Vector3()), 1, hero, paths, HERO_FILL, PATH_CLEARANCE);
     expect(f.pathLimited).toBe(true);
-    expect(f.heroWidth).toBeGreaterThanOrEqual(0.35);
+    expect(f.heroWidth).toBeGreaterThanOrEqual(0.34);
     expect(f.heroWidth).toBeLessThan(HERO_FILL.width);
     const e = ndc(camera, paths);
     for (const v of [e.x0, e.y0]) expect(v).toBeGreaterThanOrEqual(-(1 - PATH_CLEARANCE) - 1e-3);

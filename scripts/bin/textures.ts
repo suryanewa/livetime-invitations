@@ -186,12 +186,13 @@ export function brushedNormal(size: number, tile: number): Image {
 }
 
 /**
- * Brushed stainless roughness (ORM on UV0, metal 1): 0.27 with streaks along the grain at three
+ * Brushed stainless roughness (ORM on UV0, metal 1): 0.17 along the grain (the anisotropy widens it
+ * across), with streaks along the grain at three
  * widths (0.4 mm, 1 mm, 2.5 mm), each a few centimetres long: the belt's uneven passes, which is
  * what makes a brushed sheet read as brushed from a metre away.
  */
 export function brushedOrm(size: number): Image {
-  const r = field(size, size, (u, v) => 0.27 + 0.03 * fbm(u, v, 2, 160, 2, 0.5, 53) + 0.045 * fbm(u, v, 2, 60, 2, 0.5, 57) + 0.025 * fbm(u, v, 4, 24, 2, 0.5, 59));
+  const r = field(size, size, (u, v) => 0.17 + 0.02 * fbm(u, v, 2, 160, 2, 0.5, 53) + 0.035 * fbm(u, v, 2, 60, 2, 0.5, 57) + 0.02 * fbm(u, v, 4, 24, 2, 0.5, 59));
   return orm(size, size, 1, r, 1);
 }
 

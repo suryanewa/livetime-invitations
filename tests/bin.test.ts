@@ -12,7 +12,7 @@ import { COVER, DINNER_BIN, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_WORLD_SCALE
 import { createIO, findNode } from '../scripts/masters/compose.ts';
 
 /**
- * v1.5: the shared bin is a real 45 cm butterfly pedal bin (models/disposalBin.ts), at its real size
+ * v1.5: the shared bin is a real 47 cm butterfly pedal bin (models/disposalBin.ts), at its real size
  * in both scenes, with PBR textures generated at export (scripts/bin/).
  */
 
@@ -31,7 +31,7 @@ describe('Shared bin: model', () => {
     bin.updateMatrixWorld(true);
     const box = new Box3().setFromObject(bin);
     expect(BIN_BOUNDS.containsBox(box)).toBe(true);
-    // The open flaps stand about 59 cm high, the rim at 42.4 cm, the crown at 44.9 cm.
+    // The open flaps stand about 60 cm high, the rim at 44.5 cm, the crown at 47 cm.
     expect(box.max.y * 20).toBeGreaterThan(57);
   });
 
