@@ -135,6 +135,21 @@ function domeRadiusAt(y: number): number {
   return 0;
 }
 
+/** The pocket shows at least this long after its release (s), and only once the dome is clear of it. */
+export const POCKET_CLEAR = 0.1;
+
+/** How far a point is outside the dome's shell (su; negative inside) as the accept poses it at t. */
+export function domeClearance(p: Vector3, t: number): number {
+  sampleSequence('accept', t, frame);
+  euler.set(frame.coverTiltX, 0, frame.coverTilt);
+  const q = p.clone().sub(frame.coverPos).applyEuler(new Euler(-euler.x, -euler.y, -euler.z, 'ZYX'));
+  const r = Math.hypot(q.x, q.z);
+  // Under the dome (its footprint) counts as hidden: the shell is between it and the camera.
+  if (q.y < 0) return r <= COVER.radius ? r - COVER.radius : Math.hypot(r - COVER.radius, q.y);
+  if (q.y > COVER_PROFILE[COVER_PROFILE.length - 1]![1]) return q.y - COVER_PROFILE[COVER_PROFILE.length - 1]![1];
+  return r - domeRadiusAt(q.y);
+}
+
 /** Plan angle of the raised (guest-side) rim on the reveal: opposite the path. */
 const RAISED = Math.atan2(-REVEAL_DIR.z, -REVEAL_DIR.x);
 
@@ -185,9 +200,9 @@ export function buildPuffs(): Puff[] {
     p.rise = range(0.6, 0.8);
     p.wisp = range(0.45, 0.7);
     p.grow = range(0.18, 0.28);
-    p.stretch = range(1.1, 1.5);
+    p.stretch = range(1.0, 1.25);
     p.life = range(0.35, 0.55);
-    p.peak = range(0.45, 0.6) * (0.65 + 0.35 * Math.min(1, gap / 0.08));
+    p.peak = range(0.45, 0.6) * (0.4 + 0.6 * Math.min(1, gap / 0.1));
     p.sway = range(0.04, 0.08);
     p.curl = range(0.03, 0.06);
     p.curlRate = range(5, 7);
@@ -216,7 +231,7 @@ export function buildPuffs(): Puff[] {
     p.grow = range(0.24, 0.32);
     p.stretch = range(1.0, 1.25);
     p.life = range(0.4, 0.6);
-    p.peak = range(0.28, 0.4);
+    p.peak = range(0.2, 0.28);
     p.sway = range(0.06, 0.1);
     puffs.push(p);
   }
@@ -226,20 +241,30 @@ export function buildPuffs(): Puff[] {
   // as the shell slides off it, drawn after the dome by its wake, then rising fast and fraying.
   for (let i = 0, n = PUFF_COUNTS.pocket; i < n; i++) {
     const p = base('pocket');
-    p.t0 = 0.3 + 0.2 * ((i + rnd()) / n);
-    sampleSequence('accept', p.t0, frame);
+    // Released at tr, inside the dome; it shows only once the shell (carried off at ≈ 1 m/s) has
+    // slid clear of it by its own size, so no steam ever traces the dome's outline.
+    const tr = 0.3 + 0.2 * ((i + rnd()) / n);
+    sampleSequence('accept', tr, frame);
     euler.set(frame.coverTiltX, 0, frame.coverTilt);
     const yc = 0.06 + 0.46 * (1 - Math.pow(rnd(), 1.6));
     const rc = domeRadiusAt(yc) * 0.8 * Math.sqrt(rnd()), a = rnd() * Math.PI * 2;
-    p.pos.set(Math.cos(a) * rc, yc, Math.sin(a) * rc).applyEuler(euler).add(frame.coverPos);
-    coverVelocity(p.t0, cv);
-    p.vel.copy(cv).multiplyScalar(range(0.2, 0.35));
+    const released = new Vector3(Math.cos(a) * rc, yc, Math.sin(a) * rc).applyEuler(euler).add(frame.coverPos);
+    coverVelocity(tr, cv);
+    const drag = range(0.2, 0.35);
+    p.size = 0.08 + 0.16 * Math.pow(rnd(), 1.5);
+    let dt = POCKET_CLEAR;
+    for (; dt < 0.4; dt += 0.01) {
+      p.pos.copy(released).addScaledVector(cv, drag * dt);
+      if (domeClearance(p.pos, tr + dt) > 0.5 * p.size) break;
+    }
+    p.t0 = tr + dt;
+    // Drawn after the dome by its wake while it clears, then left behind.
+    p.vel.copy(cv).multiplyScalar(range(0.12, 0.25));
     v.set(gauss(), gauss() * 0.5, gauss()).multiplyScalar(0.08);
     p.vel.add(v);
     p.vel.y += 0.2;
     p.rise = range(0.9, 1.2);
     p.wisp = range(0.35, 0.6);
-    p.size = 0.08 + 0.16 * Math.pow(rnd(), 1.5);
     p.grow = range(0.3, 0.4);
     p.stretch = range(1.2, 1.7);
     p.life = range(0.45, 0.7);
@@ -261,7 +286,7 @@ export function buildPuffs(): Puff[] {
     p.size = range(0.05, 0.09);
     // Shed off the edge: left behind the moving rim (barely dragged after it), so it trails as a
     // ragged tongue behind the dome rather than hugging its outline.
-    p.pos.copy(rim).addScaledVector(p.out, 0.04 + 1.2 * p.size);
+    p.pos.copy(rim).addScaledVector(p.out, 0.06 + 1.5 * p.size);
     p.pos.y -= range(0.0, 0.03);
     p.vel.set(cv.x * range(0.08, 0.2), 0.4, cv.z * range(0.08, 0.2));
     p.rise = range(0.8, 1.1);
@@ -286,7 +311,7 @@ export function buildPuffs(): Puff[] {
     const a = RAISED + (i % 2 ? 1 : -1) * range(0.55, 1.3);
     p.out.set(Math.cos(a), 0, Math.sin(a));
     p.pos.copy(rest).addScaledVector(p.out, COVER.radius + range(0.02, 0.04));
-    p.pos.y = range(0.02, 0.04);
+    p.pos.y = range(0.04, 0.06);
     p.vel.copy(p.out).multiplyScalar(range(0.25, 0.4));
     p.vel.y = 0.08;
     p.rise = range(0.3, 0.45);
@@ -338,10 +363,16 @@ export const PLUME = {
    */
   length: 1.6,
   top: 0.4,
-  /** Visible steam forms a little off the hot surface: it fades in over the first `base` su. */
-  base: 0.15,
-  /** The source is at full strength this quickly once the rim has cleared it (s). */
-  ramp: 0.08,
+  /**
+   * Visible steam forms a little off the hot surface: it fades in over the first `base` su (5 cm),
+   * so the column never starts as an edge along the plate's rim.
+   */
+  base: 0.3,
+  /**
+   * The source reaches full strength this quickly once the rim has cleared it (s): the column's
+   * starting front is a rounded, soft cap (≈ 4 cm of gradient at its rise), never an edge.
+   */
+  ramp: 0.22,
   /** Visible steam evaporates as it rises: density e^(−h/evaporate) (≈ 14 cm). */
   evaporate: 0.85,
   /**
@@ -387,17 +418,22 @@ export function buildPlumes(): Plume[] {
   // of the cloche set down behind-left).
   // The dominant plume carries dense, nearly white filaments (steam reads by its filament edges);
   // the others are fainter veils beside it.
-  const shares = [2.6, 0.5, 0.3, 0.2];
+  const shares = [2.2, 0.5, 0.3, 0.2];
   const widths = [0.06, 0.05, 0.04, 0.035];
+  // The dominant plume stands right of the well's middle on screen (away from the cloche set down
+  // to the left); the others scatter round it.
+  const right = new Vector3(Math.cos((20 * Math.PI) / 180), 0, -Math.sin((20 * Math.PI) / 180));
   for (let i = 0; i < PLUME_COUNT; i++) {
     const r = range(0.04, 0.24), a = RAISED + range(-1.1, 1.1);
-    const base = new Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
-    base.y = plateTop(r);
+    const base = i === 0 ? right.clone().multiplyScalar(range(0.14, 0.18)).add(new Vector3(0, 0, range(0.02, 0.06)))
+      : new Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
+    const rb = Math.hypot(base.x, base.z);
+    base.y = plateTop(rb);
     const d1 = range(0, Math.PI * 2), d2 = d1 + range(1.2, 1.9), d3 = range(0, Math.PI * 2);
     plumes.push({
       base,
       // The rim clears the well between 0.24 and 0.34 s (it lifts off at ≈ 0.22 s).
-      t0: range(0.26, 0.34),
+      t0: range(0.22, 0.3),
       decay: range(0.45, 0.6),
       // 17–21 cm/s: the first rush off a hot dish (a thermal plume, w ≈ 0.1–0.3 m/s).
       rise: range(1.0, 1.25),

@@ -58,7 +58,7 @@ export const STEAM_LOOK = {
    */
   ambient: 0.77,
   /** Soft contact distances (su): the plate and table, the cloche's shell. */
-  softFloor: 0.03,
+  softFloor: 0.07,
   softCover: 0.02,
 } as const;
 
@@ -206,7 +206,9 @@ ${glslProfile('domeRadius', DOME_BY_HEIGHT)}
 float contact(vec3 p) {
   vec3 pp = p - uPlate;
   float rp = length(pp.xz);
-  float surface = rp < 0.8 && pp.y < 0.2 ? plateTop(rp) : 0.0;
+  // The plate's top, its rounded outer edge falling to the table over 5 mm (a step here printed a
+  // line across the steam just behind the gilt rim).
+  float surface = pp.y < 0.3 && rp < 0.83 ? plateTop(min(rp, 0.8)) * (1.0 - smoothstep(0.8, 0.83, rp)) : 0.0;
   float k = smoothstep(0.0, ${STEAM_LOOK.softFloor.toFixed(3)}, pp.y - surface) * smoothstep(0.0, ${STEAM_LOOK.softFloor.toFixed(3)}, p.y);
   vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
   float rc = length(cv.xz);
@@ -240,7 +242,10 @@ vec3 steamLight(vec3 p, float up) {
   vec3 kd = normalize(mat3(uCoverInv) * uKeyDir * sc);
   float along = -dot(o, kd);
   vec3 near = o + kd * along;
-  float lit = along > 0.0 && near.y > -0.05 ? smoothstep(0.82, 1.12, length(near)) : 1.0;
+  // Every condition blends smoothly (a branch here printed a hard line across the steam where the
+  // closest approach crossed the rim plane).
+  float shade = (1.0 - smoothstep(0.82, 1.12, length(near))) * smoothstep(0.0, 0.15, along) * smoothstep(-0.25, 0.0, near.y);
+  float lit = 1.0 - shade;
   float top = 1.0 - uTopLight + 2.0 * uTopLight * clamp(0.5 + 0.5 * up, 0.0, 1.0);
   return uColor * top * (uAmbient + (1.0 - uAmbient) * lit);
 }
@@ -384,16 +389,21 @@ void main() {
   // into wisps as the vapour evaporates. Units across are the sheet's half-width; the ribbon is
   // ROOM× wider so the wandering strands never meet its edges.
   float s = h - vRise * uTime;
-  float free = smoothstep(0.0, 0.25, h);
+  float free = smoothstep(0.0, 0.12, h);
   // Eddies a couple of centimetres across reshape in a fraction of a second (the z of the noise
   // runs with τ), so the strands are not a pattern sliding up.
   float c1 = (0.85 * snoise(vec3(s * 2.6, vSeed, 1.25 * uTime)) + (uLow ? 0.0 : 0.35 * snoise(vec3(s * 8.0, vSeed + 3.0, 2.0 * uTime)))) * free * (1.0 + 0.6 * h);
-  float c2 = c1 + 0.9 * snoise(vec3(s * 2.0, vSeed + 5.0, 1.1 * uTime)) * free;
+  // A second strand peels off the first and merges back: its offset, width and density all vary
+  // along the sheet (never a matched pair of rails). Continuous in the offset (a sign() here
+  // jumped the strand across a horizontal line).
+  float off = snoise(vec3(s * 2.0, vSeed + 5.0, 1.1 * uTime));
+  float c2 = c1 + 1.7 * off * free;
+  float w2 = 0.5 + 0.5 * snoise(vec3(s * 1.7, vSeed + 13.0, 0.9 * uTime));
   // Laminar and soft at the base (a broad sheet, never bars over the plate), thin bright strands
   // once it turns turbulent, widening slowly by diffusion.
-  float sig = mix(0.9, 0.17, smoothstep(0.05, 0.45, h)) + 0.22 * h;
-  float a1 = (u - c1) / sig, a2 = (u - c2) / (1.25 * sig);
-  float strands = max(exp(-a1 * a1), 0.7 * exp(-a2 * a2));
+  float sig = mix(0.9, 0.24, smoothstep(0.05, 0.45, h)) + 0.22 * h;
+  float a1 = (u - c1) / sig, a2 = (u - c2) / ((1.2 + 0.9 * w2) * sig);
+  float strands = max(exp(-a1 * a1), (0.25 + 0.55 * w2) * exp(-a2 * a2));
   float breakup = 0.5 + 0.5 * snoise(vec3(u * 1.2, s * 4.0, vSeed + 9.0 + 1.1 * uTime));
   // Gaps open along the strands as they rise (wisps), but the cores stay dense: steam reads by
   // its bright filament edges.
@@ -401,7 +411,8 @@ void main() {
   d *= smoothstep(ROOM, 0.8 * ROOM, abs(u));
   float k = contact(vPos);
   if (k < 0.0) discard;
-  float a = min(d * k * vDensity * uFade, 0.85);
+  // Dense cores saturate softly (a hard clamp would print a flat edge where it bites).
+  float a = 0.85 * (1.0 - exp(-d * k * vDensity * uFade / 0.85));
   if (a < 0.002) discard;
   gl_FragColor = vec4(steamLight(vPos, 0.3), 1.0);
   // Tone mapped and encoded like the scene, then premultiplied by the coverage.

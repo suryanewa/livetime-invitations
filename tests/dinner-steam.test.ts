@@ -8,7 +8,7 @@ import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { DinnerScene } from '../src/scenes/dinner/index.ts';
 import { ACCEPT, DURATIONS, newFrame, REVEAL_DIR, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  buildPlumes, buildPuffs, newPuffState, PLUME, plumeCenter, plumeDensity, PUFF_COUNTS, PUFF_KINDS, puffAt, riseAt, STEAM_CHANGE_FADE, STEAM_END, STEAM_REST,
+  buildPlumes, buildPuffs, domeClearance, newPuffState, PLUME, plumeCenter, plumeDensity, POCKET_CLEAR, PUFF_COUNTS, PUFF_KINDS, puffAt, riseAt, STEAM_CHANGE_FADE, STEAM_END, STEAM_REST,
   steamPlumes, steamPuffs,
 } from '../src/scenes/dinner/steam.ts';
 
@@ -71,11 +71,21 @@ describe('Dinner steam plan (v1.5)', () => {
     expect(-(mx * REVEAL_DIR.x + mz * REVEAL_DIR.z) / Math.hypot(mx, mz)).toBeGreaterThan(Math.cos(Math.PI / 6));
   });
 
-  it('the pocket is the air the dome held: born inside it as it is carried off, never earlier', () => {
-    for (const p of steamPuffs().filter((p) => p.kind === 'pocket')) {
-      expect(p.t0).toBeGreaterThanOrEqual(0.3);
-      expect(p.t0).toBeLessThanOrEqual(0.55);
-      expect(insideDome(p.pos, p.t0)).toBe(true);
+  it('the pocket is the air the dome held: released inside it as it is carried off, shown once the shell is clear', () => {
+    const toCover = (t: number) => {
+      const f = sampleSequence('accept', t, newFrame());
+      return new Matrix4().makeRotationFromEuler(new Euler(f.coverTiltX, 0, f.coverTilt)).setPosition(f.coverPos).invert();
+    };
+    for (const p of steamPuffs().filter((q) => q.kind === 'pocket')) {
+      // Released as the dome is carried off (0.30–0.50 s), shown at least POCKET_CLEAR later.
+      expect(p.t0).toBeGreaterThanOrEqual(0.3 + POCKET_CLEAR);
+      expect(p.t0).toBeLessThanOrEqual(0.9);
+      // Where it came from: the dome, just before it shows (within its plan circle, near its height).
+      const q = p.pos.clone().applyMatrix4(toCover(p.t0 - POCKET_CLEAR));
+      expect(Math.hypot(q.x, q.z)).toBeLessThan(COVER.radius + 0.35);
+      // When it shows: clear of the dome by half its own size (no steam traces the dome's outline).
+      expect(insideDome(p.pos, p.t0)).toBe(false);
+      expect(domeClearance(p.pos, p.t0), `pocket t0 ${p.t0.toFixed(3)}`).toBeGreaterThan(p.size * 0.5);
     }
   });
 
@@ -92,7 +102,7 @@ describe('Dinner steam plan (v1.5)', () => {
       expect(p.t0).toBeGreaterThan(ACCEPT.touch - 0.02);
       expect(p.t0).toBeLessThan(ACCEPT.flat + 0.02);
       expect(Math.hypot(p.pos.x - rest.x, p.pos.z - rest.z)).toBeGreaterThan(COVER.radius);
-      expect(p.pos.y).toBeLessThan(0.05);
+      expect(p.pos.y).toBeLessThan(0.07);
     }
   });
 
