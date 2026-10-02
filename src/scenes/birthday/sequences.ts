@@ -3,10 +3,11 @@ import { cubicBezier, EASE, lerp, seg, smoothstep } from '../../motion/curves.ts
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 import { CANDLE, CANDLE_SOCKETS } from '../../../models/birthdayContract.ts';
 import {
-  BIN_AT, BIN_FROM, CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_COUNT, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_PRESS, CANDLE_START, CARRY, CARRY_FROM, CARRY_LEAN, CARRY_TO,
-  DROP_TO, DROPPED, DURATIONS, HOVER_OVER_BIN, LEAN_FADE, LEAN_MAX, LIFT_TO, ON_STAND, PRESENT_YAW,
+  ACROSS_FROM, BIN_AT, BIN_DROP_G, BIN_FROM, CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_COUNT, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_PRESS, CANDLE_START, CARRY, CARRY_FROM,
+  CARRY_LEAN, CARRY_TO, DROPPED, DURATIONS, FLAPS_CLOSE, HOVER_OVER_BIN, LEAN_FADE, LEAN_MAX, LIFT_TO, ON_STAND, PRESENT_YAW,
 } from './poses.ts';
 import { burnRate, flameState, type FlameState, litFlame, newFlameState, noFlame } from './fire.ts';
+import { BIN_CLOSE, dropHeight, flapsClosing } from '../../../models/disposalBin.ts';
 
 /**
  * Pure authored choreography for Birthday: every value is a function of time (the carry lean is
@@ -274,28 +275,24 @@ function accept(t: number, out: BirthdayFrame): void {
 
 // ── Decline: 1.5 s ────────────────────────────────────────────────────────────
 const FLAP_OPEN = cubicBezier(0.3, 0, 0.2, 1);
-const DESCEND = cubicBezier(0.55, 0, 0.5, 1);
 /**
- * Lift off the stand (CARRY_FROM–LIFT_TO, 0.21 s): a heavy take-off. It gathers speed over five
- * frames instead of two (v1.2 review: `EASE.lift` over 0.17 s reached its largest step at once;
- * peak step 128 mm a frame, was 153) and still clears the rim with the old margin as the carry
- * brings the cake over the bin. The bedded shell border rises before it moves across.
+ * Lift off the stand (CARRY_FROM–LIFT_TO, 0.36 s, 32 cm up to clear the real bin's rim): a heavy
+ * take-off on a smootherstep, gathering speed over several frames (v1.2 review: no two-frame
+ * launch; its peak step stays under 135 mm a frame) and leaving with zero velocity into the
+ * carry's settle to the hover height. The bedded shell border rises before it moves across.
  */
-const LIFT = cubicBezier(0.45, 0, 0.25, 1);
-/** Soft close: the flaps swing shut to the damper's last sliver, which it then takes up slowly. */
-const FLAP_GAP = 0.03;
-/** Flap speed (fraction/s) as the damper catches them: the handover between the two closing pieces. */
-const FLAP_CATCH = 0.25;
+const LIFT = (u: number) => u * u * u * (u * (6 * u - 15) + 10);
 
+/** Flaps: open as the bin arrives; from FLAPS_CLOSE (the cake is below the rim) the bin's soft close. */
+const FLAPS_GAP_AT = FLAPS_CLOSE + BIN_CLOSE.toGap;
 function flaps(t: number): number {
-  if (t < 0.95) return FLAP_OPEN(seg(t, 0.08, 0.25));
-  if (t < 1.2) return hermite(seg(t, 0.95, 1.2), 1, 0, FLAP_GAP, -FLAP_CATCH * 0.25);
-  return hermite(seg(t, 1.2, 1.4), FLAP_GAP, -FLAP_CATCH * 0.2, 0, 0);
+  if (t < FLAPS_CLOSE) return FLAP_OPEN(seg(t, 0.08, 0.25));
+  return flapsClosing(t - FLAPS_CLOSE);
 }
 
 /** Plan carry (fraction of the stand → bin distance): smootherstep, so it sets off and arrives with zero acceleration. */
 const carryAcross = (t: number) => {
-  const u = seg(t, CARRY_FROM, CARRY_TO);
+  const u = seg(t, ACROSS_FROM, CARRY_TO);
   return u * u * u * (u * (6 * u - 15) + 10);
 };
 /** Plan distance of the carry, stand axis to bin axis. */
@@ -306,22 +303,23 @@ export const LEAN_AXIS = new Vector3(0, 1, 0).cross(new Vector3(HOVER_OVER_BIN.x
 
 /**
  * Pendulum lean table: θ'' + 2ζωθ' + ω²θ = −a(t), a = the carry's plan acceleration (closed
- * form), RK4 at 0.25 ms from rest at CARRY_FROM to DROP_TO. Stored with θ' so the Hermite sample
- * is C1; scaled so the peak is exactly LEAN_MAX. Deterministic: the same table on every load.
+ * form), RK4 at 0.25 ms from rest at ACROSS_FROM to the end of LEAN_FADE. Stored with θ' so the
+ * Hermite sample is C1; scaled so the peak is exactly LEAN_MAX. Deterministic: the same table on
+ * every load.
  */
 const LEAN_DT = 1 / 4000;
 const LEAN_TABLE = (() => {
-  const w = 2 * Math.PI * CARRY_LEAN.hz, z = CARRY_LEAN.zeta, T = CARRY_TO - CARRY_FROM;
+  const w = 2 * Math.PI * CARRY_LEAN.hz, z = CARRY_LEAN.zeta, T = CARRY_TO - ACROSS_FROM;
   const accel = (t: number) => {
-    if (t <= CARRY_FROM || t >= CARRY_TO) return 0;
-    const u = (t - CARRY_FROM) / T;
+    if (t <= ACROSS_FROM || t >= CARRY_TO) return 0;
+    const u = (t - ACROSS_FROM) / T;
     return (CARRY_DISTANCE / (T * T)) * (60 * u - 180 * u * u + 120 * u * u * u);
   };
   const f = (t: number, th: number, v: number): [number, number] => [v, -2 * z * w * v - w * w * th - accel(t)];
-  const n = Math.round((DROP_TO - CARRY_FROM) / LEAN_DT);
+  const n = Math.round((LEAN_FADE[1] - ACROSS_FROM) / LEAN_DT);
   const th = new Float64Array(n + 1), dth = new Float64Array(n + 1);
   for (let k = 0; k < n; k++) {
-    const t = CARRY_FROM + k * LEAN_DT, h = LEAN_DT;
+    const t = ACROSS_FROM + k * LEAN_DT, h = LEAN_DT;
     const a = f(t, th[k]!, dth[k]!);
     const b = f(t + h / 2, th[k]! + (h / 2) * a[0], dth[k]! + (h / 2) * a[1]);
     const c = f(t + h / 2, th[k]! + (h / 2) * b[0], dth[k]! + (h / 2) * b[1]);
@@ -331,7 +329,7 @@ const LEAN_TABLE = (() => {
   }
   // Peak of the faded lean, so the scaled result never exceeds LEAN_MAX.
   let peak = 0;
-  for (let k = 0; k <= n; k++) peak = Math.max(peak, Math.abs(th[k]!) * leanFade(CARRY_FROM + k * LEAN_DT));
+  for (let k = 0; k <= n; k++) peak = Math.max(peak, Math.abs(th[k]!) * leanFade(ACROSS_FROM + k * LEAN_DT));
   const gain = LEAN_MAX / peak;
   for (let k = 0; k <= n; k++) { th[k] = th[k]! * gain; dth[k] = dth[k]! * gain; }
   return { th, dth, n };
@@ -343,8 +341,8 @@ function leanFade(t: number): number {
 
 /** The carried cake's lean at time t (radians about LEAN_AXIS). */
 export function carryLean(t: number): number {
-  if (t <= CARRY_FROM || t >= LEAN_FADE[1]) return 0;
-  const x = (t - CARRY_FROM) / LEAN_DT;
+  if (t <= ACROSS_FROM || t >= LEAN_FADE[1]) return 0;
+  const x = (t - ACROSS_FROM) / LEAN_DT;
   const k = Math.min(Math.floor(x), LEAN_TABLE.n - 1);
   const u = x - k;
   const th = hermite(u, LEAN_TABLE.th[k]!, LEAN_TABLE.dth[k]! * LEAN_DT, LEAN_TABLE.th[k + 1]!, LEAN_TABLE.dth[k + 1]! * LEAN_DT);
@@ -361,19 +359,19 @@ function decline(t: number, out: BirthdayFrame): void {
     out.litTime[i] = litTime('decline', i, t);
   }
   out.flaps = flaps(t);
-  // 0.25–0.72: cake and candles are lifted off the stand (by 0.46), carried across and held over the
-  // opening; the cake sways on its plate. 0.72–0.95: straight down through the opening (steadied);
-  // the bin's front wall hides it.
+  // 0.22–0.76: cake and candles are lifted off the stand (by 0.58), carried across from 0.39 and
+  // brought to rest over the opening, steadied on its plate. 0.76: let go, it falls into the bin
+  // (gravity) and the bin's front wall hides it; it is below the rim by 0.99 s.
   if (t < CARRY_FROM) out.cakePos.copy(ON_STAND);
   else if (t < CARRY_TO) {
     const u = carryAcross(t);
     out.cakePos.set(lerp(ON_STAND.x, HOVER_OVER_BIN.x, u), 0, lerp(ON_STAND.z, HOVER_OVER_BIN.z, u));
     out.cakePos.y = t < LIFT_TO ? lerp(ON_STAND.y, CARRY, LIFT(seg(t, CARRY_FROM, LIFT_TO))) : lerp(CARRY, HOVER_OVER_BIN.y, smoothstep(seg(t, LIFT_TO, CARRY_TO)));
-  } else out.cakePos.lerpVectors(HOVER_OVER_BIN, DROPPED, DESCEND(seg(t, CARRY_TO, DROP_TO)));
+  } else out.cakePos.set(HOVER_OVER_BIN.x, dropHeight(HOVER_OVER_BIN.y, DROPPED.y, t - CARRY_TO, BIN_DROP_G), HOVER_OVER_BIN.z);
   out.cakeLean = carryLean(t);
   out.cakeInBin = t >= CARRY_TO;
   // Once the flaps have closed over it, the hidden cake stops rendering.
-  out.cakeVisible = t < 1.2;
+  out.cakeVisible = t < FLAPS_GAP_AT;
 }
 
 export function sampleSequence(sequence: SequenceName, t: number, out: BirthdayFrame): BirthdayFrame {

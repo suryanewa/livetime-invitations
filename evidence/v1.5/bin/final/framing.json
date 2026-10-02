@@ -1,0 +1,76 @@
+{
+  "birthday": {
+    "framing": [
+      {
+        "heroHeight": 0.563341317114498,
+        "heroWidth": 0.5486017030422966,
+        "binding": "height",
+        "pathLimited": true,
+        "heroCenter": [
+          0,
+          -0.38550647675454836
+        ],
+        "distance": 14.019191930430395
+      },
+      {
+        "heroHeight": 0.563341317114498,
+        "heroWidth": 0.4114512772817225,
+        "binding": "height",
+        "pathLimited": true,
+        "heroCenter": [
+          0,
+          -0.38550647675454836
+        ],
+        "distance": 14.019191930430395
+      },
+      {
+        "heroHeight": 0.563341317114498,
+        "heroWidth": 0.2743008515211483,
+        "binding": "height",
+        "pathLimited": true,
+        "heroCenter": [
+          0,
+          -0.38550647675454836
+        ],
+        "distance": 14.019191930430395
+      }
+    ]
+  },
+  "dinner": {
+    "framing": [
+      {
+        "heroHeight": 0.2518704592319357,
+        "heroWidth": 0.4717412634698349,
+        "binding": "width",
+        "pathLimited": true,
+        "heroCenter": [
+          0,
+          -0.6627797144423595
+        ],
+        "distance": 13.13889124045127
+      },
+      {
+        "heroHeight": 0.2518704592319357,
+        "heroWidth": 0.3538059476023762,
+        "binding": "width",
+        "pathLimited": true,
+        "heroCenter": [
+          0,
+          -0.6627797144423595
+        ],
+        "distance": 13.13889124045127
+      },
+      {
+        "heroHeight": 0.2518704592319357,
+        "heroWidth": 0.23587063173491746,
+        "binding": "height",
+        "pathLimited": true,
+        "heroCenter": [
+          0,
+          -0.6627797144423595
+        ],
+        "distance": 13.13889124045127
+      }
+    ]
+  }
+}

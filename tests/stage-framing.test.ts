@@ -6,7 +6,7 @@ import { BUSINESS_BOUNDS } from '../models/businessContract.ts';
 import { PARTY_BOUNDS } from '../models/recordContract.ts';
 import { birthdayBounds, BIN_POS, BIN_YAW } from '../models/birthdayContract.ts';
 import { SPORTS_BOUNDS } from '../models/sportsContract.ts';
-import { DINNER_BIN_POS, DINNER_BIN_YAW, dinnerBounds } from '../models/dinnerContract.ts';
+import { DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, dinnerBounds } from '../models/dinnerContract.ts';
 import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { partyFramePoints } from '../src/scenes/party/index.ts';
 import { sportsFramePoints } from '../src/scenes/sports/index.ts';
@@ -34,7 +34,7 @@ const SCENES: Record<string, { bounds: Box3; points?: Vector3[] }> = {
   party: { bounds: PARTY_BOUNDS, points: partyFramePoints() },
   birthday: { bounds: birthdayBounds(), points: [...birthdayFramePoints(), ...openBinFramePoints(buildDisposalBin({ lib }), BIN_POS, BIN_YAW)] },
   sports: { bounds: SPORTS_BOUNDS, points: sportsFramePoints() },
-  dinner: { bounds: dinnerBounds(), points: [...dinnerFramePoints(), ...openBinFramePoints(buildDisposalBin({ lib }), DINNER_BIN_POS, DINNER_BIN_YAW)] },
+  dinner: { bounds: dinnerBounds(), points: [...dinnerFramePoints(), ...openBinFramePoints(buildDisposalBin({ lib }), DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE)] },
 };
 const corners = (b: Box3) => Array.from({ length: 8 }, (_, i) => new Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
 const samplesOf = (s: { bounds: Box3; points?: Vector3[] }) => (s.points?.length ? s.points : corners(s.bounds));
