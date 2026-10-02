@@ -15,12 +15,16 @@
  *   decorations ride the surface they sit on: tiers drift ±1.4 % from round at low frequency
  *   (2θ, 3θ, 4θ and a slight barrel), each top is uneven by about ±0.7 mm (a tilt plus two soft
  *   bumps), and the side piping carries a hand wobble (≈ ±0.8 mm along, ±0.55 mm up and down).
- * - Piping beads, shells, dots, pearls and rosettes vary in size (±4–9 % about the point they
- *   touch the cake with) and the star rosettes in twist (±10°). Two rosettes are softened: their
- *   star ridges relaxed (Taubin smoothing) and the rosette slumped 8 % with a slight droop.
+ * - Piping beads, shells, dots, pearls and rosettes vary in size (shells ±10 %, rosettes ±9–10 %,
+ *   dots ±12 %, pearls ±7 %, about the point they touch the cake with) and the star rosettes in
+ *   twist (±15°). Two rosettes are softened: their star ridges relaxed (Taubin smoothing) and the
+ *   rosette slumped 8 % with a slight droop.
+ * - v1.5 polish (judged at laptop size): the bays are uneven (positions ±2.3 mm, columns leaning
+ *   ±2.5°, swags dropping ±4 mm), the top tier sits 2.4 mm off the lower one's centre, the swag
+ *   ropes are rebuilt as smooth 16-sided tubes with tucked tails, round pieces as fine spheres.
  * - Materials: the frosting loses the master's clearcoat (the "plastic" in the brief); the body
  *   gets a generated relief (normal map: bench-scraper streaks on the sides, offset-spatula
- *   strokes on the tops, sparse air pockets) and a roughness map 0.45–0.70 (scraped ridges a touch
+ *   strokes on the tops, sparse air pockets) and a roughness map 0.40–0.66 (scraped ridges a touch
  *   glossier than the troughs, pockets matt); piping and rosettes get a very slight sheen and a
  *   per-vertex convexity (`_RIDGE`) the runtime uses to make ridges glossier than grooves.
  * - Candles re-tessellated (30 → 128 segments, 2.2 → 0.39 mm rows) from the master's own twisted
@@ -31,7 +35,8 @@
  */
 import type { Accessor, Document, Material, Primitive } from '@gltf-transform/core';
 import { KHRMaterialsSheen } from '@gltf-transform/extensions';
-import { MASTER_CANDLES } from '../../../models/birthdayContract.ts';
+import { CAKE_SCALE, CANDLE_SINK, MASTER, MASTER_CANDLES } from '../../../models/birthdayContract.ts';
+import { BIN } from '../../../models/disposalBin.ts';
 import { loadSharp } from '../sharp.ts';
 
 type V3 = [number, number, number];
@@ -152,18 +157,44 @@ interface Field {
 }
 export const FIELDS: Record<TierId, Field> = {
   bottom: {
-    drift: [{ m: 2, a: 0.0058, phase: 0.7 }, { m: 3, a: 0.0042, phase: 2.9 }, { m: 4, a: 0.0018, phase: 4.4 }],
+    // m = 1 is the tier sitting 0.5 mm off the stand's axis (it is centred on the board; the
+    // stacked upper tier is the one visibly off, and the cake must still clear the bin's mouth).
+    drift: [{ m: 1, a: 0.004, phase: 1.9 }, { m: 2, a: 0.0075, phase: 0.7 }, { m: 3, a: 0.0042, phase: 2.9 }, { m: 4, a: 0.0018, phase: 4.4 }],
     barrel: 0.0022,
     tilt: { a: 0.0016, phase: 2.2 },
     bumps: [{ x: 0.5, z: 0.12, s: 0.07, a: 0.0018 }, { x: -0.36, z: 0.4, s: 0.08, a: -0.0016 }],
   },
   top: {
-    drift: [{ m: 2, a: 0.0052, phase: 3.6 }, { m: 3, a: 0.0044, phase: 1.1 }, { m: 4, a: 0.0021, phase: 5.3 }],
+    // The upper tier 2.4 mm off the lower's centre: stacked by hand.
+    drift: [{ m: 1, a: 0.025, phase: 4.1 }, { m: 2, a: 0.0065, phase: 3.6 }, { m: 3, a: 0.0044, phase: 1.1 }, { m: 4, a: 0.0021, phase: 5.3 }],
     barrel: 0.0018,
     tilt: { a: 0.0019, phase: 0.9 },
     bumps: [{ x: 0.12, z: -0.2, s: 0.11, a: 0.0017 }, { x: -0.2, z: 0.16, s: 0.1, a: -0.0014 }],
   },
 };
+
+/**
+ * The bays (v1.5 polish, judged at laptop size where 1 mm ≈ 1.45 px): a hand-piped cake's swag
+ * bays are not equal. Per tier, how many bays there are, the heights a swag hangs from, reaches
+ * at its lowest and where the columns' tassels start (scan units), and the amplitudes: bay
+ * positions ±2.3 mm along the side (neighbours differ by up to ±4 mm), columns leaning ±2.5° (a
+ * sideways shear of everything at that angle, so swags, rosettes and pearls stay attached), swag
+ * drops ±4 mm.
+ */
+export const BAYS: Record<TierId, { count: number; attach: number; low: number; fade: number; mid: number }> = {
+  bottom: { count: 14, attach: 0.14, low: -0.07, fade: -0.125, mid: -0.03 },
+  top: { count: 12, attach: 0.555, low: 0.385, fade: 0.3, mid: 0.39 },
+};
+export const BAY_AMPLITUDE = { shift: 0.0105, lean: 0.044, drop: 0.018 } as const;
+
+/** Smooth per-bay value noise around the tier (one random value per cell, `cells` around). */
+function bayNoise(theta: number, cells: number, seed: number): number {
+  const u = ((theta / (2 * Math.PI)) * cells + cells * 8) % cells;
+  const i = Math.floor(u), f = u - i;
+  const a = 2 * hash2(i % cells, 0, seed) - 1, b = 2 * hash2((i + 1) % cells, 0, seed) - 1;
+  const t = f * f * (3 - 2 * f);
+  return a + (b - a) * t;
+}
 
 /** Relative radius drift of a tier at angle θ and height y (fraction of R; peak ≈ ±1.4 %). */
 export function radialDrift(tier: TierId, theta: number, y: number): number {
@@ -195,7 +226,18 @@ function wobble(tier: TierId, theta: number, y: number): [number, number] {
   return [0.0035 * fbm(u, y / 0.14, seed, 2, cells), 0.0025 * fbm(u + 17.3, y / 0.14, seed + 9, 2, cells)];
 }
 
-type Kind = 'body' | 'side' | 'ledge' | 'crown';
+/**
+ * The cake's reach (scan units): it drops into the bin upright and must clear its mouth by 8 mm
+ * (tests/birthday.test.ts). A large bottom shell at a bulge of the side would reach ½ mm past it:
+ * the outermost 3.5 mm of reach are eased (tanh) to stop just short, so no decoration crosses it.
+ */
+const REACH = (BIN.opening - 0.04) / CAKE_SCALE - 0.0003;
+function reachLimit(r: number): number {
+  const w = 0.0035, r0 = REACH - w;
+  return r <= r0 ? r : r0 + w * Math.tanh((r - r0) / w);
+}
+
+type Kind = 'body' | 'side' | 'ledge' | 'crown' | 'column' | 'hang';
 /** The finish field: where a frosting point at `p` (scan units) goes. */
 export function finishPoint(p: V3, tier: TierId, kind: Kind, out: V3 = [0, 0, 0]): V3 {
   const T = TIERS[tier];
@@ -205,13 +247,24 @@ export function finishPoint(p: V3, tier: TierId, kind: Kind, out: V3 = [0, 0, 0]
   const dr = T.R * radialDrift(tier, theta, y) * smoothstep(0.75 * T.R, 0.92 * T.R, r);
   const dy = topUneven(tier, x, z) * smoothstep(T.y1 - 0.05, T.y1 - 0.004, y);
   let dt = 0, dw = 0;
-  if (kind === 'side' || kind === 'ledge') {
-    const w = wobble(tier, theta, y);
-    dt = w[0];
-    // Piping resting on a ledge (shell borders) only slides along it: no vertical wobble.
-    dw = kind === 'side' ? w[1] : 0;
+  if (kind !== 'body') {
+    // Uneven bays: each bay's decorations shifted along the side, leaning a little.
+    const B = BAYS[tier], seed = tier === 'top' ? 211 : 233;
+    dt += BAY_AMPLITUDE.shift * bayNoise(theta, B.count, seed);
+    dt += BAY_AMPLITUDE.lean * bayNoise(theta + 0.5 * ((2 * Math.PI) / B.count), B.count, seed + 1) * (y - B.mid);
+    if (kind === 'hang') {
+      // Swags (and the pearls and dots in them) hang lower or higher, bay by bay.
+      const w = y >= B.low ? smoothstep(B.attach, B.low, y) : smoothstep(B.fade, B.low, y);
+      dw += BAY_AMPLITUDE.drop * bayNoise(theta, B.count * 2, seed + 2) * w;
+    }
   }
-  const r2 = r + dr;
+  if (kind === 'side' || kind === 'ledge' || kind === 'column' || kind === 'hang') {
+    const w = wobble(tier, theta, y);
+    dt += w[0];
+    // Piping resting on a ledge (shell borders) only slides along it: no vertical wobble.
+    if (kind !== 'ledge') dw += w[1];
+  }
+  const r2 = kind === 'body' ? r + dr : reachLimit(r + dr);
   const th2 = r > 1e-6 ? theta + dt / Math.max(r, 0.05) : theta;
   out[0] = r2 * Math.cos(th2);
   out[1] = y + dy + dw;
@@ -392,7 +445,8 @@ function rebuildTier(prim: Primitive, tier: TierId): Mesh {
   // The top: polar rings from the edge ring inwards, planar UVs (u along +x, v along −z).
   const edge = rings[rings.length - 1]!;
   const ys = monotone([...cap].reverse().map((p) => p.r), [...cap].reverse().map((p) => p.y));
-  const band = tier === 'top' ? { lo: SOCKET_R - 0.04, hi: SOCKET_R + 0.04 } : null;
+  // v1.5 polish: the collar of a 10 mm insertion reaches ≈ 5 mm out from the candle: a wider band.
+  const band = tier === 'top' ? { lo: SOCKET_R - 0.058, hi: SOCKET_R + 0.058 } : null;
   const radii: number[] = [edge.r];
   for (let r = edge.r; r > 0.012;) {
     const inBand = band && r <= band.hi + 0.002 && r >= band.lo - 0.002;
@@ -413,7 +467,7 @@ function rebuildTier(prim: Primitive, tier: TierId): Mesh {
   let prevIdx: number[] = [], prevAng: number[] = [];
   radii.forEach((r, k) => {
     const inBand = band && r <= band.hi + 1e-9 && r >= band.lo - 1e-9;
-    const ang = k === 0 ? Array.from({ length: N }, (_, j) => (2 * Math.PI * j) / N) : ringAngles(r, r > 0.3 ? 0.008 : 0.012, inBand ? { step: 0.002, reach: 0.05 } : undefined);
+    const ang = k === 0 ? Array.from({ length: N }, (_, j) => (2 * Math.PI * j) / N) : ringAngles(r, r > 0.3 ? 0.008 : 0.012, inBand ? { step: 0.002, reach: 0.068 } : undefined);
     const ids = ang.map((th) => capVertex(r * Math.cos(th), r * Math.sin(th)));
     if (k > 0) zipper(m.idx, prevIdx, prevAng, ids, ang);
     prevIdx = ids;
@@ -576,6 +630,41 @@ function taubin(c: Component, iterations: number): void {
 }
 
 /**
+ * The master's columns, tassels, shells and rosettes are open shells against the cake; at grazing
+ * angles their open edges showed as slivers beside the swags. Every open-edge vertex is pushed
+ * `inward` (scan units) towards the cake's axis and `down`, its ring of neighbours half as far,
+ * so the edges sit well inside the frosting.
+ */
+function tuckOpenEdges(d: PrimData, inward: number, down: number): number {
+  const weld = weldIds(d);
+  const edges = new Map<string, number>();
+  for (let t = 0; t < d.idx.length; t += 3) for (let k = 0; k < 3; k++) {
+    const a = weld[d.idx[t + k]!]!, b = weld[d.idx[t + ((k + 1) % 3)]!]!;
+    const key = a < b ? `${a},${b}` : `${b},${a}`;
+    edges.set(key, (edges.get(key) ?? 0) + 1);
+  }
+  const edge = new Set<number>();
+  for (const [key, c] of edges) if (c === 1) for (const x of key.split(',')) edge.add(+x);
+  const near = new Set<number>();
+  for (let t = 0; t < d.idx.length; t += 3) {
+    const tri = [weld[d.idx[t]!]!, weld[d.idx[t + 1]!]!, weld[d.idx[t + 2]!]!];
+    if (tri.some((v) => edge.has(v))) for (const v of tri) if (!edge.has(v)) near.add(v);
+  }
+  for (let i = 0; i < d.pos.length / 3; i++) {
+    const w = weld[i]!;
+    const k = edge.has(w) ? 1 : near.has(w) ? 0.5 : 0;
+    if (!k) continue;
+    const x = d.pos[3 * i]!, z = d.pos[3 * i + 2]!, r = Math.hypot(x, z) || 1;
+    d.pos[3 * i] = x - (x / r) * inward * k;
+    // Never below the cake's lowest point (the bottom border already beds into the plate there).
+    const y = d.pos[3 * i + 1]!;
+    d.pos[3 * i + 1] = y < MASTER.cakeBottom ? y : Math.max(MASTER.cakeBottom, y - down * k);
+    d.pos[3 * i + 2] = z - (z / r) * inward * k;
+  }
+  return edge.size;
+}
+
+/**
  * Per-vertex convexity in [-1, 1] (tanh of the mean curvature, normalised per part): the runtime makes piping
  * ridges a touch glossier and its grooves a touch matter, as a scraped, settled piping line is.
  */
@@ -607,11 +696,189 @@ function convexity(d: PrimData): number[] {
   return raw.map((c) => Math.tanh(c / scale));
 }
 
+// ── Swag strands and round piping, re-tessellated (v1.5 polish) ───────────────────
+/** Catmull-Rom point on an open polyline at parameter t ∈ [0, n − 1] (centripetal enough here). */
+function crAt(pts: V3[], t: number): V3 {
+  const n = pts.length;
+  const i = Math.min(Math.floor(t), n - 2), u = t - i;
+  const p1 = pts[i]!, p2 = pts[i + 1]!;
+  const p0 = i > 0 ? pts[i - 1]! : [2 * p1[0] - p2[0], 2 * p1[1] - p2[1], 2 * p1[2] - p2[2]] as V3;
+  const p3 = i + 2 < n ? pts[i + 2]! : [2 * p2[0] - p1[0], 2 * p2[1] - p1[1], 2 * p2[2] - p1[2]] as V3;
+  const u2 = u * u, u3 = u2 * u;
+  const out: V3 = [0, 0, 0];
+  for (let k = 0; k < 3; k++) out[k] = 0.5 * (2 * p1[k]! + (-p0[k]! + p2[k]!) * u + (2 * p0[k]! - 5 * p1[k]! + 4 * p2[k]! - p3[k]!) * u2 + (-p0[k]! + 3 * p1[k]! - 3 * p2[k]! + p3[k]!) * u3);
+  return out;
+}
+
+/**
+ * The master's swag strands are open half-pipes of 8 sides × 20 segments (21 rings of 9), one end
+ * drawn to a point, the other cut square: faceted at laptop size, the cut ends showing as sliced
+ * stubs beside the columns. Rebuilt as a Catmull-Rom surface through the same points (16 sides ×
+ * 40 segments), and every end closed into a rounded tail sunk into the cake, as a piping
+ * bag lifted away leaves it.
+ */
+export const STRAND = { rings: 21, side: 9, around: 2, along: 2, tail: 0.18 } as const;
+
+function refineStrands(prim: Primitive, tierR: number): Mesh | null {
+  const pos = read(prim.getAttribute('POSITION')!);
+  const per = STRAND.rings * STRAND.side;
+  const n = pos.length / 3;
+  if (n % per) return null;
+  const m: Mesh = { pos: [], nrm: [], uv: [], idx: [] };
+  const A = (STRAND.side - 1) * STRAND.around + 1, L = (STRAND.rings - 1) * STRAND.along + 1;
+  // Closed cross-sections: the open half-pipe's arc plus a flatter back (the arc mirrored across
+  // its chord at 35 %), so where a strand lifts off the cake (over a column) no open edge shows.
+  const BACK = A - 2, RING = A + BACK;
+  for (let s = 0; s < n / per; s++) {
+    const base = s * per;
+    const P = (k: number, j: number): V3 => { const i = base + k * STRAND.side + j; return [pos[3 * i]!, pos[3 * i + 1]!, pos[3 * i + 2]!]; };
+    // Around first (each ring), then along (each refined column).
+    const rings: V3[][] = [];
+    for (let k = 0; k < STRAND.rings; k++) {
+      const ring = Array.from({ length: STRAND.side }, (_, j) => P(k, j));
+      rings.push(Array.from({ length: A }, (_, a) => crAt(ring, a / STRAND.around)));
+    }
+    const grid: V3[][] = Array.from({ length: L }, () => []);
+    for (let a = 0; a < A; a++) {
+      const col = rings.map((r) => r[a]!);
+      for (let l = 0; l < L; l++) grid[l]!.push(crAt(col, l / STRAND.along));
+    }
+    // The back of each refined ring (and its chord's midpoint, where the strand meets the cake).
+    const feet: V3[] = [];
+    for (let l = 0; l < L; l++) {
+      const arc = grid[l]!;
+      const q0 = arc[0]!, q1 = arc[A - 1]!;
+      const M: V3 = [(q0[0] + q1[0]) / 2, (q0[1] + q1[1]) / 2, (q0[2] + q1[2]) / 2];
+      feet.push(M);
+      const top = arc[(A - 1) / 2]!;
+      let o: V3 = [top[0] - M[0], top[1] - M[1], top[2] - M[2]];
+      const ol = Math.hypot(...o);
+      o = ol > 1e-12 ? [o[0] / ol, o[1] / ol, o[2] / ol] : [0, 0, 0];
+      for (let a = A - 2; a >= 1; a--) {
+        const q = arc[a]!;
+        const k = 1.35 * ((q[0] - M[0]) * o[0] + (q[1] - M[1]) * o[1] + (q[2] - M[2]) * o[2]);
+        arc.push([q[0] - k * o[0], q[1] - k * o[1], q[2] - k * o[2]]);
+      }
+    }
+    // Tails: the first and last `tail` of the length close as rounded caps.
+    const tail = (t: number) => {
+      let f = 1;
+      if (t > 1 - STRAND.tail) f = Math.min(f, Math.sqrt(Math.max(0, 1 - ((t - (1 - STRAND.tail)) / STRAND.tail) ** 2)));
+      if (t < STRAND.tail) f = Math.min(f, Math.sqrt(Math.max(0, 1 - ((STRAND.tail - t) / STRAND.tail) ** 2)));
+      return f;
+    };
+    for (let l = 0; l < L; l++) {
+      const t = l / (L - 1), f = tail(t);
+      if (f >= 1) continue;
+      // Flatten the cross-section onto its foot on the cake (a tail smeared down, not a point in the
+      // air) and sink it a little under the side, behind the column or rosette it ends at.
+      const c = feet[l]!;
+      const rr = Math.hypot(c[0], c[2]) || 1;
+      const sink = (1 - f) * (Math.max(0, rr - tierR) + 0.0015);
+      grid[l] = grid[l]!.map((q) => [c[0] + (q[0] - c[0]) * f - (c[0] / rr) * sink, c[1] + (q[1] - c[1]) * f, c[2] + (q[2] - c[2]) * f - (c[2] / rr) * sink] as V3);
+    }
+    const start = m.pos.length / 3;
+    for (let l = 0; l < L; l++) {
+      const c = centroid(grid[l]!);
+      for (let a = 0; a < RING; a++) {
+        const q = grid[l]![a]!;
+        const qa = grid[l]![(a + 1) % RING]!, qb = grid[l]![(a + RING - 1) % RING]!;
+        const qc = grid[Math.min(L - 1, l + 1)]![a]!, qd = grid[Math.max(0, l - 1)]![a]!;
+        const tu: V3 = [qa[0] - qb[0], qa[1] - qb[1], qa[2] - qb[2]], tv: V3 = [qc[0] - qd[0], qc[1] - qd[1], qc[2] - qd[2]];
+        let nn: V3 = [tu[1] * tv[2] - tu[2] * tv[1], tu[2] * tv[0] - tu[0] * tv[2], tu[0] * tv[1] - tu[1] * tv[0]];
+        // Outward from the ring's centre.
+        const out: V3 = [q[0] - c[0], q[1] - c[1], q[2] - c[2]];
+        let len = Math.hypot(...nn);
+        if (len < 1e-14) { nn = out; len = Math.hypot(...nn) || 1; }
+        if (nn[0] * out[0] + nn[1] * out[1] + nn[2] * out[2] < 0) nn = [-nn[0], -nn[1], -nn[2]];
+        m.pos.push(...q);
+        m.nrm.push(nn[0] / len, nn[1] / len, nn[2] / len);
+        m.uv.push(a / RING, l / (L - 1));
+      }
+    }
+    for (let l = 0; l < L - 1; l++) for (let a = 0; a < RING; a++) {
+      const i = start + l * RING + a, j = start + l * RING + ((a + 1) % RING);
+      m.idx.push(i, i + RING, j, j, i + RING, j + RING);
+    }
+  }
+  orient(m);
+  return m;
+}
+
+function centroid(pts: V3[]): V3 {
+  const c: V3 = [0, 0, 0];
+  for (const p of pts) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; }
+  return [c[0] / pts.length, c[1] / pts.length, c[2] / pts.length];
+}
+const dist = (a: V3, b: V3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+/** Least-squares sphere through points (algebraic fit: |p|² = 2c·p + k). */
+function fitSphere(pts: V3[]): { c: V3; r: number } {
+  const M = new Float64Array(16), v = new Float64Array(4);
+  for (const p of pts) {
+    const row = [2 * p[0], 2 * p[1], 2 * p[2], 1], b = p[0] * p[0] + p[1] * p[1] + p[2] * p[2];
+    for (let i = 0; i < 4; i++) { v[i] = v[i]! + row[i]! * b; for (let j = 0; j < 4; j++) M[i * 4 + j] = M[i * 4 + j]! + row[i]! * row[j]!; }
+  }
+  // Gaussian elimination.
+  const A = Array.from({ length: 4 }, (_, i) => [M[i * 4]!, M[i * 4 + 1]!, M[i * 4 + 2]!, M[i * 4 + 3]!, v[i]!]);
+  for (let i = 0; i < 4; i++) {
+    let piv = i;
+    for (let r = i + 1; r < 4; r++) if (Math.abs(A[r]![i]!) > Math.abs(A[piv]![i]!)) piv = r;
+    [A[i], A[piv]] = [A[piv]!, A[i]!];
+    for (let r = 0; r < 4; r++) {
+      if (r === i) continue;
+      const f = A[r]![i]! / A[i]![i]!;
+      for (let c = i; c < 5; c++) A[r]![c] = A[r]![c]! - f * A[i]![c]!;
+    }
+  }
+  const x = A.map((row, i) => row[4]! / row[i]!);
+  const c: V3 = [x[0]!, x[1]!, x[2]!];
+  return { c, r: Math.sqrt(Math.max(1e-12, x[3]! + c[0] * c[0] + c[1] * c[1] + c[2] * c[2])) };
+}
+
+/**
+ * Round piping (dots) and sugar pearls were 9–12-sided caps, polygonal up close: each becomes a
+ * fine sphere (24 × 16) of the same fitted centre and radius; the part inside the cake is hidden.
+ */
+function sphereComponents(d: PrimData): { mesh: Mesh; count: number } {
+  const m: Mesh = { pos: [], nrm: [], uv: [], idx: [] };
+  const comps = components(d);
+  const SEG = 24, RINGS = 16;
+  for (const c of comps) {
+    const pts = c.verts.map(({ i }) => [d.pos[3 * i]!, d.pos[3 * i + 1]!, d.pos[3 * i + 2]!] as V3);
+    let { c: ctr, r } = fitSphere(pts);
+    // A cap too flat to fit (or a fit far off) falls back to its box.
+    const box = (c.max[0] - c.min[0] + c.max[1] - c.min[1] + c.max[2] - c.min[2]) / 6;
+    if (!(r > 0.3 * box && r < 2.5 * box) || dist(ctr, c.centroid) > 2 * box) { ctr = c.centroid; r = box; }
+    const start = m.pos.length / 3;
+    for (let k = 0; k <= RINGS; k++) {
+      const v = k / RINGS, ph = v * Math.PI;
+      for (let j = 0; j <= SEG; j++) {
+        const u = j / SEG, th = u * 2 * Math.PI;
+        const nx = Math.sin(ph) * Math.cos(th), ny = Math.cos(ph), nz = Math.sin(ph) * Math.sin(th);
+        m.pos.push(ctr[0] + r * nx, ctr[1] + r * ny, ctr[2] + r * nz);
+        m.nrm.push(nx, ny, nz);
+        m.uv.push(u, v);
+      }
+    }
+    for (let k = 0; k < RINGS; k++) for (let j = 0; j < SEG; j++) {
+      const i = start + k * (SEG + 1) + j;
+      m.idx.push(i, i + SEG + 1, i + 1, i + 1, i + SEG + 1, i + SEG + 2);
+    }
+  }
+  orient(m);
+  return { mesh: m, count: comps.length };
+}
+
 // ── Relief and roughness maps for the tier bodies (generated, physical units) ─────
 /** Atlas size (px): the side relief at ≈ 0.1 mm a texel, the tops at ≈ 0.2 mm. */
 export const ATLAS = 2048;
 
-interface Pocket { x: number; y: number; rx: number; ry: number; depth: number }
+/**
+ * An air pocket (cm): position, radii and orientation, an irregular outline (two lobes), depth, and
+ * whether it is an open bubble (steep wall) or a soft dent.
+ */
+interface Pocket { x: number; y: number; rx: number; ry: number; cos: number; sin: number; l2: number; p2: number; l3: number; p3: number; depth: number; open: boolean }
 
 /** Sparse air pockets on a jittered grid (cm), looked up by cell; periodic in x when `period` > 0. */
 class Pockets {
@@ -623,8 +890,14 @@ class Pockets {
       for (let gx = period ? 0 : Math.floor(x0 / cell) - 1; gx <= (period ? pc - 1 : Math.ceil(x1 / cell) + 1); gx++) {
         if (hash2(gx, gy, seed) > density) continue;
         const r = mulberry32((gx * 73856093) ^ (gy * 19349663) ^ seed);
-        const rad = 0.018 + 0.05 * r() ** 2.2; // 0.36–1.4 mm across
-        this.cells.set(`${gx},${gy}`, { x: (gx + r()) * cell, y: (gy + r()) * cell, rx: rad * (1.2 + 0.8 * r()), ry: rad, depth: 0.004 + 0.01 * r() });
+        // Sizes on a steep power law: mostly pinholes (0.3 mm), now and then a 2 mm bubble.
+        const rad = 0.015 + 0.09 * r() ** 3.2;
+        const ang = r() * Math.PI;
+        this.cells.set(`${gx},${gy}`, {
+          x: (gx + r()) * cell, y: (gy + r()) * cell, rx: rad * (1 + 0.9 * r()), ry: rad, cos: Math.cos(ang), sin: Math.sin(ang),
+          l2: 0.25 * r(), p2: r() * 6.283, l3: 0.18 * r(), p3: r() * 6.283,
+          depth: rad * (0.06 + 0.22 * r()), open: r() < 0.5,
+        });
       }
     }
     this.count = this.cells.size;
@@ -644,6 +917,18 @@ class Pockets {
 }
 
 const scratch: Pocket[] = [];
+
+/** A pocket's depth at (dx, dy) from its centre (cm, ≤ 0) and its mask (0–1): irregular, no rim. */
+function pocketAt(p: Pocket, dx: number, dy: number): [number, number] {
+  const u = (dx * p.cos + dy * p.sin) / p.rx, v = (-dx * p.sin + dy * p.cos) / p.ry;
+  const d = Math.hypot(u, v);
+  if (d > 1.8) return [0, 0];
+  const phi = Math.atan2(v, u);
+  const q = d / (1 + p.l2 * Math.sin(2 * phi + p.p2) + p.l3 * Math.sin(3 * phi + p.p3));
+  // An open bubble has a steep wall; a dent is a soft hollow.
+  const h = p.open ? 1 - smoothstep(0.7, 1.0, q) : Math.exp(-2.2 * q * q);
+  return [-p.depth * h, 1 - smoothstep(0.6, 1.1, q)];
+}
 
 /**
  * Height field (cm) of the side finish at (x along the circumference, y up): bench-scraper streaks
@@ -674,55 +959,58 @@ function sideHeight(x: number, y: number, P: Pockets): { h: number; pocket: numb
   for (const p of P.near(x, y, scratch)) {
     let dx = x - p.x;
     dx -= period * Math.round(dx / period);
-    const q = (dx / p.rx) ** 2 + ((y - p.y) / p.ry) ** 2;
-    if (q > 2.6) continue;
-    // A rounded pit with the faint rim the scraper drags up beside it.
-    h += -p.depth * Math.exp(-q * 2.2) + 0.25 * p.depth * Math.exp(-((Math.sqrt(q) - 1.15) ** 2) * 18);
-    pocket = Math.max(pocket, Math.exp(-q * 1.6));
+    const [dh, m] = pocketAt(p, dx, y - p.y);
+    h += dh;
+    pocket = Math.max(pocket, m);
   }
   return { h, pocket };
 }
 
-interface Stroke { cx: number; cz: number; R: number; w: number; a0: number; a1: number; lift: number }
+interface Stroke { cx: number; cz: number; R: number; w: number; a0: number; a1: number; depth: number; lip: number }
 
-/** Offset-spatula strokes across a top (cm, centred): arcs laid one over another. */
+/**
+ * Palette-knife swooshes across a top (cm, centred): broad arcs 2.5–5 cm wide, each a shallow
+ * scoop (0.1–0.25 mm) with a soft lip of buttercream (3–5 mm wide, 0.1–0.2 mm) on its outer side
+ * where the knife pushed it, laid one over another. Millimetre-scale and low in frequency: no
+ * hairline edges (v1.5 polish: the thin lifted-edge lines read as cracks, in the bin as foil).
+ */
 function strokesFor(seed: number, radius: number): Stroke[] {
   const r = mulberry32(seed);
-  return Array.from({ length: 56 }, () => {
-    const R = 4 + 6 * r();
+  return Array.from({ length: 26 }, () => {
+    const R = 5 + 7 * r();
     const ang = r() * 2 * Math.PI, dist = radius * Math.sqrt(r()) * 1.05;
     const a0 = r() * 2 * Math.PI;
-    return { cx: dist * Math.cos(ang) - R * Math.cos(a0 + 0.6), cz: dist * Math.sin(ang) - R * Math.sin(a0 + 0.6), R, w: 1.2 + 1.8 * r(), a0, a1: a0 + 0.5 + 0.9 * r(), lift: 0.004 + 0.008 * r() };
+    return { cx: dist * Math.cos(ang) - R * Math.cos(a0 + 0.5), cz: dist * Math.sin(ang) - R * Math.sin(a0 + 0.5), R, w: 2.5 + 2.5 * r(), a0, a1: a0 + 0.6 + 0.8 * r(), depth: 0.01 + 0.015 * r(), lip: 0.01 + 0.01 * r() };
   });
 }
 
 function topHeight(x: number, z: number, S: Stroke[], P: Pockets): { h: number; pocket: number; edge: number } {
   let h = 0.016 * fbm(x * 0.35, z * 0.35, 23, 3);
   let edge = 0;
-  // Painter's order: each stroke levels what is under it to its own plateau (40–120 µm proud),
-  // leaving a ridge where its edge lifted (80 µm, 0.5 mm wide).
   for (const s of S) {
     const dx = x - s.cx, dz = z - s.cz;
     const rr = Math.hypot(dx, dz);
     let a = Math.atan2(dz, dx) - s.a0;
     a -= 2 * Math.PI * Math.floor(a / (2 * Math.PI));
     const span = s.a1 - s.a0;
-    if (a > span + 0.15) continue;
-    const along = smoothstep(0, 0.12, a) * (1 - smoothstep(span - 0.05, span + 0.15, a));
-    const across = Math.abs(rr - s.R) / (s.w / 2);
-    if (across > 1.4) continue;
-    const inside = (1 - smoothstep(0.85, 1.05, across)) * along;
-    h = h * (1 - inside) + s.lift * inside + 0.6 * inside * 0.002 * fbm(x * 3, z * 3, 29, 2);
-    const ridge = Math.exp(-(((rr - (s.R + s.w / 2)) / 0.03) ** 2)) * along;
-    h += 0.008 * ridge;
-    edge = Math.max(edge, ridge);
+    if (a > span + 0.3) continue;
+    const along = smoothstep(0, 0.25, a) * (1 - smoothstep(span - 0.1, span + 0.3, a));
+    const across = (rr - s.R) / (s.w / 2);
+    if (Math.abs(across) > 1.8) continue;
+    // Within the band the knife sets the surface: the scoop replaces what was under it.
+    const inside = (1 - smoothstep(0.75, 1.15, Math.abs(across))) * along;
+    const scoop = -s.depth * (1 - across * across) ** 2 * (Math.abs(across) < 1 ? 1 : 0);
+    h = h * (1 - inside) + scoop * inside;
+    // The lip: buttercream pushed out of the scoop, soft, on the outer side.
+    const lip = s.lip * Math.exp(-(((across - 1.1) / 0.28) ** 2)) * along;
+    h += lip;
+    edge = Math.max(edge, lip / 0.02);
   }
   let pocket = 0;
   for (const p of P.near(x, z, scratch)) {
-    const q = ((x - p.x) / p.rx) ** 2 + ((z - p.y) / p.ry) ** 2;
-    if (q > 2.6) continue;
-    h += -p.depth * Math.exp(-q * 2.2);
-    pocket = Math.max(pocket, Math.exp(-q * 1.6));
+    const [dh, m] = pocketAt(p, x - p.x, z - p.y);
+    h += dh;
+    pocket = Math.max(pocket, m);
   }
   return { h, pocket, edge };
 }
@@ -755,7 +1043,7 @@ function boxBlurRegions(src: Float32Array, size: number, half: number, r: number
 
 /**
  * Generates the body's normal map (glTF convention, tangent space along +u and −v) and its
- * metallic-roughness map (G = roughness 0.45–0.70, B = metalness 0) as RGBA8, ATLAS × ATLAS.
+ * metallic-roughness map (G = roughness 0.40–0.66, B = metalness 0) as RGBA8, ATLAS × ATLAS.
  */
 export function frostingMaps(size = ATLAS): { normal: Uint8Array; roughness: Uint8Array; albedo: Uint8Array; stats: { min: number; max: number; mean: number } } {
   const H = new Float32Array(size * size), pocketMask = new Float32Array(size * size), edgeMask = new Float32Array(size * size);
@@ -763,8 +1051,8 @@ export function frostingMaps(size = ATLAS): { normal: Uint8Array; roughness: Uin
   const sideCm = { x: 20, y: 20.4 };
   // Top region: the square u 0.27–0.73, v 0.52–0.98 ↔ the top tier's 18.9 cm across (UV unit 41 cm).
   const topCm = (2 * TIERS.top.mapR * 1.1 * 20) / 0.46;
-  const sideP = new Pockets(101, 0.6, 0.26, sideCm.x, 0, sideCm.x, -1, 0.5 * sideCm.y + 1);
-  const topP = new Pockets(202, 0.9, 0.25, 0, -topCm / 2, topCm / 2, -topCm / 2, topCm / 2);
+  const sideP = new Pockets(101, 0.6, 0.07, sideCm.x, 0, sideCm.x, -1, 0.5 * sideCm.y + 1);
+  const topP = new Pockets(202, 0.9, 0.08, 0, -topCm / 2, topCm / 2, -topCm / 2, topCm / 2);
   const S = strokesFor(303, (0.46 * topCm) / 2);
   for (let py = 0; py < size; py++) {
     const v = (py + 0.5) / size;
@@ -808,9 +1096,11 @@ export function frostingMaps(size = ATLAS): { normal: Uint8Array; roughness: Uin
       normal[4 * k + 2] = Math.round((1 / l * 0.5 + 0.5) * 255);
       normal[4 * k + 3] = 255;
       const hp = (H[k]! - blur[k]!) / hpStd;
-      const base = 0.585 + 0.04 * fbm((px / size) * 7, (py / size) * 7, 41, 3, top ? 0 : 7);
-      let rough = base - 0.03 * clamp(hp, -2.5, 2.5) + 0.12 * pocketMask[k]! - 0.04 * edgeMask[k]!;
-      rough = clamp(rough, 0.45, 0.7);
+      // v1.5 polish: satin, not clay. Buttercream is fat and sugar: a soft broad highlight on the
+      // smoothed highs (≈ 0.42), matt in the lows and pockets (≈ 0.62); mean ≈ 0.52.
+      const base = 0.52 + 0.035 * fbm((px / size) * 7, (py / size) * 7, 41, 3, top ? 0 : 7);
+      let rough = base - 0.04 * clamp(hp, -2.5, 2.5) + 0.12 * pocketMask[k]! - 0.04 * edgeMask[k]!;
+      rough = clamp(rough, 0.4, 0.66);
       min = Math.min(min, rough); max = Math.max(max, rough); sum += rough;
       roughness[4 * k] = 255;
       roughness[4 * k + 1] = Math.round(rough * 255);
@@ -952,15 +1242,15 @@ function nodeInfo(name: string): { tier: TierId; kind: Kind; mount?: 'side' | 'l
   const part = name.slice(m[0].length).replace(/^_/, '');
   switch (part) {
     case '': return { tier, kind: 'body' };
-    case 'shell_border': return { tier, kind: 'ledge', mount: 'ledge', jitter: 0.06 };
-    case 'border_pearls': return { tier, kind: 'ledge', mount: 'ledge', jitter: 0.05 };
-    case 'dots': return { tier, kind: 'side', mount: 'side', jitter: 0.09 };
-    case 'pearls': return { tier, kind: 'side', mount: 'side', jitter: 0.05 };
-    case 'tassels': return { tier, kind: 'side', mount: 'side', jitter: 0.04 };
-    case 'drops': return { tier, kind: 'side', mount: 'side', jitter: 0.02 };
-    case 'rosettes': return { tier, kind: 'crown', mount: 'ledge', jitter: 0.04, twist: (10 * Math.PI) / 180 };
-    case 'top_rosettes': return { tier, kind: 'crown', mount: 'crown', jitter: 0.05, twist: (12 * Math.PI) / 180 };
-    case 'swags': return { tier, kind: 'side' };
+    case 'shell_border': return { tier, kind: 'ledge', mount: 'ledge', jitter: 0.1 };
+    case 'border_pearls': return { tier, kind: 'ledge', mount: 'ledge', jitter: 0.07 };
+    case 'dots': return { tier, kind: 'hang', mount: 'side', jitter: 0.12 };
+    case 'pearls': return { tier, kind: 'hang', mount: 'side', jitter: 0.07 };
+    case 'tassels': return { tier, kind: 'column', mount: 'side', jitter: 0.07 };
+    case 'drops': return { tier, kind: 'column', mount: 'side', jitter: 0.03 };
+    case 'rosettes': return { tier, kind: 'crown', mount: 'ledge', jitter: 0.09, twist: (15 * Math.PI) / 180 };
+    case 'top_rosettes': return { tier, kind: 'crown', mount: 'crown', jitter: 0.1, twist: (15 * Math.PI) / 180 };
+    case 'swags': return { tier, kind: 'hang' };
     case 'rope_edge': return { tier, kind: 'side' };
     default: throw new Error(`birthday finish: unknown frosting node ${name}`);
   }
@@ -994,6 +1284,26 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
     log(`  finish ${node.getName()}: rebuilt ${before} → ${m.pos.length / 3} vertices (dense top annulus at the sockets)`);
   }
 
+  // 1b. Swag strands rebuilt smooth with tucked tails; dots and sugar pearls as fine spheres.
+  for (const node of nodes) {
+    const info = nodeInfo(node.getName());
+    if (!info || info.kind === 'body') continue;
+    for (const prim of node.getMesh()!.listPrimitives()) {
+      const mat = prim.getMaterial()?.getName() ?? '';
+      const before = prim.getAttribute('POSITION')!.getCount();
+      if (/_swags$/.test(node.getName())) {
+        const m = refineStrands(prim, TIERS[info.tier].R);
+        if (!m) throw new Error(`birthday finish: ${node.getName()} is not 21 × 9 strands`);
+        setGeometry(doc, prim, m);
+        log(`  finish ${node.getName()}: strands ${before} → ${m.pos.length / 3} vertices (16 sides × 40, tails tucked)`);
+      } else if (/_dots$/.test(node.getName()) || mat === 'cake_pearl') {
+        const { mesh, count } = sphereComponents(primData(prim));
+        setGeometry(doc, prim, mesh);
+        log(`  finish ${node.getName()} (${mat}): ${count} round pieces as fine spheres (${before} → ${mesh.pos.length / 3} vertices)`);
+      }
+    }
+  }
+
   // 2. Decorations: sizes, twists and the two softened rosettes (before the finish field, about
   //    the points where they touch the cake).
   let jittered = 0;
@@ -1002,6 +1312,9 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
     if (!info || info.kind === 'body') continue;
     const prims = node.getMesh()!.listPrimitives();
     const datas = prims.map((p) => { const d = primData(p); geometry.set(p, d); return d; });
+    if (/_(drops|tassels|shell_border|rosettes|top_rosettes)$/.test(node.getName())) {
+      for (const d of datas) if (d.prim.getMaterial()?.getName() !== 'cake_pearl') tuckOpenEdges(d, 0.006, /_shell_border$/.test(node.getName()) ? 0.003 : 0);
+    }
     if (/rope_edge$/.test(node.getName())) {
       // The master's twisted rope is coarse (its twists read as saw teeth up close): relax it into
       // rounded twists, as a rope piped from a star tip settles.
@@ -1080,7 +1393,7 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
       log(`  finish ${node.getName()}: softened the rosette at ${((Math.atan2(c.centroid[2], c.centroid[0]) * 180) / Math.PI).toFixed(0)}° (master)`);
     });
   }
-  log(`  finish: ${jittered} beads, shells, dots, pearls and rosettes varied in size (±2–9 %) and twist`);
+  log(`  finish: ${jittered} beads, shells, dots, pearls and rosettes varied in size (shells ±10 %, rosettes ±9–10 %, dots ±12 %, pearls ±7 %) and twist`);
 
   // 3. The finish field on every frosting part; then convexity on piping and rosettes.
   let maxR = 0, top = -Infinity;
@@ -1099,6 +1412,8 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
       for (let i = 0; i < d.pos.length; i += 3) { maxR = Math.max(maxR, Math.hypot(d.pos[i]!, d.pos[i + 2]!)); top = Math.max(top, d.pos[i + 1]!); }
       const mat = prim.getMaterial()?.getName() ?? '';
       if (mat === 'cake_piping' || mat === 'cake_rosette') prim.setAttribute('_RIDGE', accessor(doc, 'SCALAR', new Float32Array(convexity(d))));
+      // Piping, rosettes and pearls carry no texture: their UVs are dead weight (≈ 2 MiB).
+      if (info.kind !== 'body') prim.setAttribute('TEXCOORD_0', null);
     }
   }
   log(`  finish field: tiers ±1.4 % from round, tops ±0.7 mm; frosting now reaches r ${maxR.toFixed(5)}, top ${top.toFixed(5)} (scan)`);
@@ -1130,7 +1445,13 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
   const pearl = mat('cake_pearl');
   pearl.setExtras({ ...(pearl.getExtras() as object), frosting: 'pearl' });
 
-  // 5. Candles: one shared mesh, re-tessellated.
+  // 5. Candles: stood CANDLE_SINK deeper (a real candle needs ≈ 10 mm to stand), one shared mesh,
+  //    re-tessellated.
+  const sinkScan = CANDLE_SINK / CAKE_SCALE;
+  for (const n of nodes.filter((x) => /^candle_\d_/.test(x.getName()))) {
+    const t = n.getTranslation();
+    n.setTranslation([t[0], t[1] - sinkScan, t[2]]);
+  }
   const candleMeshes = new Set(nodes.filter((n) => /^candle_\d_/.test(n.getName())).map((n) => n.getMesh()!));
   for (const mesh of candleMeshes) {
     for (const prim of mesh.listPrimitives()) {

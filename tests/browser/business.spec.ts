@@ -140,7 +140,7 @@ test('The status pictogram is dead-front while idle, lights in its colour with a
   // v1.5: boxes as fractions of the square stage (fixed camera): the pictogram and its halo on the
   // lower glass (PICTO, inside the window: the steel lip starts at 0.735), and the lower glass round
   // it, below the NFC mark and clear of the window's edge highlights (GLASS: v1.4's point spill left a
-  // 255 glint at 0.606, 0.694). The check is about 18 × 14 px on this 540 px still, the minus 16 × 5.
+  // 255 glint at 0.606, 0.694). The check is about 26 × 19 px on this 540 px still, the minus 25 × 7.
   const measure = () => page.evaluate(async () => {
     const url = (window as any).__showcase.controller.captureStill(540, 1, 'image/png') as string;
     const img = new Image();
@@ -208,10 +208,11 @@ test('The status pictogram is dead-front while idle, lights in its colour with a
   const decline = await measure();
 
   for (const [label, m] of [['accept', accept], ['decline', decline]] as const) {
-    // The light reads at 540 px (v1.4's tile was 37 × 26 px of flat colour; the glyph and its halo
-    // are about 19 px across: 148 coloured pixels for the check, 110 for the minus).
-    expect(m.count, label).toBeGreaterThan(80);
-    expect(m.litWidth, label).toBeGreaterThan(15);
+    // The light reads at 540 px (v1.4's tile was 37 × 26 px of flat colour). Polish 2 grew the
+    // glyph 1.5× for phone legibility: it and its halo are about 29 px across, some 380 coloured
+    // pixels for either glyph (19 px and 110–150 before).
+    expect(m.count, label).toBeGreaterThan(250);
+    expect(m.litWidth, label).toBeGreaterThan(24);
     // HDR, hue held: the core is bright (its strongest channel near full) and a little lifted from
     // the token (its weakest at 95 / 82, the tokens' at 59 / 34), but it keeps its colour: v1.5's
     // first cuts washed it to (180, 255, 213) / (255, 195, 199) and then to a salmon (255, 154, 153).
