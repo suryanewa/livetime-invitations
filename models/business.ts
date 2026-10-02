@@ -1,5 +1,4 @@
 import {
-  AdditiveBlending,
   type Box3,
   BufferAttribute,
   BufferGeometry,
@@ -11,13 +10,15 @@ import {
   LinearMipmapLinearFilter,
   type Material,
   type Mesh,
-  MeshBasicMaterial,
+  Matrix3,
+  Matrix4,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
   type Object3D,
   OneFactor,
   OneMinusSrcAlphaFactor,
-  PlaneGeometry,
   RGBAFormat,
+  type Texture,
   SRGBColorSpace,
   UnsignedByteType,
   Vector3,
@@ -94,25 +95,25 @@ export interface BusinessRig {
 export const STATUS_COLOURS = { accept: '#3BE08A', decline: '#F12D22' } as const;
 export const GLOW = {
   /**
-   * Peak radiance of the pictogram's stroke core (× the status colour, linear, before exposure).
-   * Both cores pass the Neutral tone curve's shoulder (0.76 after the rig's 1.15 exposure) about
-   * threefold: bright and a little lifted towards white, never clipped flat (v1.5's first cut, 4.2
-   * and 5, pinned whole strokes at one near-white value and turned the red core pink). The minus
-   * carries 0.63 of the check's stroke and red 0.37 of green's luminance, so decline runs a little
-   * higher; a saturated red looks brighter than its luminance, and the pair reads balanced, the
-   * minus a shade quieter, as a decline that is not an alarm should.
+   * Radiance at the glyph's brightest point (× the status colour; linear, before exposure: the
+   * emission field is normalised to 1 there, where the stroke's core and its halo overlap). Set so
+   * each glyph's strongest channel renders at 1.7–1.9 after the rig's 1.15 exposure: two to two and
+   * a half times the Neutral tone curve's shoulder (0.76), so the core rolls off (a gentle HDR
+   * bloom) while the curve's path to white stays under an eighth and the hue holds. An LED's light
+   * is narrow-band: its core reads as its colour, not as a white filament. (v1.5's first cuts,
+   * 4.2 / 5 and then 2.6 / 2.7 on the stroke core, washed the red core to salmon and, over a bright
+   * reflection, to pink-white.) The red runs a shade hotter (1.63 against 1.45 in its strongest
+   * channel: it has 0.37 of the green's luminance); the glyph's presence at small sizes is carried
+   * by its halo (businessPrint.ts STATUS_DIFFUSION.haloGain).
    */
-  glyph: { accept: 2.6, decline: 2.7 },
+  glyph: { accept: 1.95, decline: 1.85 },
 } as const;
-/**
+/*
  * No spill light (v1.5). A 1.8 mm stroke behind smoked glass throws no light a viewer can see on the
  * card 5 mm above it (v1.5's first cut aimed a 0.18 spot at the pressed card's edge: the frames moved
  * by less than one level), and v1.2–v1.4's point light 0.16 out showed as a white glint on the glass
  * once the matte tile no longer covered its mirror image.
  */
-/** Idle LED lens (off): a neutral dark, not the master's green tint, so idle never reads as "accepted". */
-const LED_OFF = new Color(0.018, 0.02, 0.019);
-const LED_LENS_ROUGHNESS = 0.85;
 
 /**
  * The pictogram's fields and their texels, computed once per page (a pure function of constants,
@@ -144,13 +145,54 @@ function emissionTexture(field: EmissionField, texels: Uint8Array, name: string)
   return t;
 }
 
-/** Additive light through the glass: no lighting of its own, tone-mapped with the scene. */
-function lightMaterial(name: string, map: DataTexture): MeshBasicMaterial {
-  const m = new MeshBasicMaterial({ name, map, color: '#000000', transparent: true, blending: AdditiveBlending, depthWrite: false });
-  m.polygonOffset = true;
-  m.polygonOffsetFactor = -1;
-  m.polygonOffsetUnits = -4;
-  return m;
+/**
+ * The pictogram's light, added inside the cover glass's own shading: the glass's emission gains
+ * `statusColor × statusMap`, sampled in face space through `statusUvMatrix`, before the clearcoat
+ * and the tone curve. So the glass's reflection and the light behind it are summed as radiance and
+ * tone-mapped together, as a camera sees a lit icon under a reflection. (v1.5's first cut drew the
+ * light as an additive quad over the glass: blending happens after the tone curve and in the
+ * framebuffer's sRGB encoding, so over a bright reflection it washed the glyph's core towards
+ * white.) Off, `statusColor` is 0 and the glass shades exactly as the master's.
+ */
+function addStatusLight(glass: Mesh, toUv: Matrix4, map: DataTexture) {
+  const m = glass.material as MeshPhysicalMaterial;
+  const uniforms = { statusMap: { value: map as Texture }, statusColor: { value: new Color(0, 0, 0) }, statusUvMatrix: { value: toUv } };
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform mat4 statusUvMatrix;\nvarying vec2 vStatusUv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvStatusUv = ( statusUvMatrix * vec4( transformed, 1.0 ) ).xy;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D statusMap;\nuniform vec3 statusColor;\nvarying vec2 vStatusUv;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += statusColor * texture2D( statusMap, vStatusUv ).rgb;');
+  };
+  m.customProgramCacheKey = () => 'business-reader-status-light';
+  m.needsUpdate = true;
+  return uniforms;
+}
+
+/**
+ * The cover glass's edge round-over (0.2 mm, at the window's edge where the glass meets the
+ * gasket) is shaded as the face it belongs to. At stage scale it is a sub-pixel sliver turned to
+ * the bright floor at grazing angles, and the 4× MSAA resolved it into a row of evenly spaced light
+ * specks along the window's bottom edge (clearest on a phone). Its silhouette is unchanged.
+ */
+export function flattenGlassEdge(glass: Mesh, toFace: Matrix4): number {
+  const nor = glass.geometry.getAttribute('normal');
+  const n = new Vector3(), face = new Vector3(0, 0, 1), local = new Vector3();
+  const normalToFace = new Matrix3().getNormalMatrix(toFace);
+  const faceToLocal = normalToFace.clone().invert();
+  local.copy(face).applyMatrix3(faceToLocal).normalize();
+  let changed = 0;
+  for (let i = 0; i < nor.count; i++) {
+    n.fromBufferAttribute(nor, i).applyMatrix3(normalToFace).normalize();
+    if (n.z > 0.2 && n.z < 0.999) {
+      nor.setXYZ(i, local.x, local.y, local.z);
+      changed++;
+    }
+  }
+  nor.needsUpdate = true;
+  return changed;
 }
 
 /**
@@ -271,13 +313,24 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
   for (const m of meshesUnder(nodes.strap_material!)) m.geometry.dispose();
   nodes.strap_material!.removeFromParent();
   const tab = mesh('strap_tab', strapTabGeometry(), fabric, authored);
-  tab.castShadow = true;
+  // v1.5: the strap assembly (tab, its stitching, the D-ring) casts no shadow either: without the
+  // strands, its shadow sat alone on the cove right of the reader, a detached smudge.
+  tab.userData.noShadowCast = true;
+  const stitching = root.getObjectByName('strap_stitching');
+  for (const m of [...(stitching ? meshesUnder(stitching) : []), ...meshesUnder(nodes.d_ring!)]) m.userData.noShadowCast = true;
   const strandLength = LANYARD_TOP_Y - (HANG_PIVOT.y + STRAP_TAB_TOP - STRAP_TUCK) + 0.02;
   const strands: [LanyardStrand, LanyardStrand] = [
     new LanyardStrand(strandLength, STRAP.width, STRAP.thickness, STRAP.weaveTile),
     new LanyardStrand(strandLength, STRAP.width, STRAP.thickness, STRAP.weaveTile),
   ];
-  strands.forEach((s, i) => (mesh(`lanyard_strand_${i}`, s.geometry, fabric, nodes.lanyard_curve).frustumCulled = false));
+  strands.forEach((s, i) => {
+    const m = mesh(`lanyard_strand_${i}`, s.geometry, fabric, nodes.lanyard_curve);
+    m.frustumCulled = false;
+    // v1.5: the strands cast no shadow. They run up out of the frame to anchors above the stage,
+    // so the key light laid their shadow on the cove as two long grey stripes beside the badge with
+    // nothing visible to cast them (a ghost in every frame). The hook and the card still cast.
+    m.userData.noShadowCast = true;
+  });
   const facing = new Vector3(0, 0, 1);
   const top = new Vector3(), attach = new Vector3(), up = new Vector3();
   const updateLanyard = () => {
@@ -307,60 +360,51 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
     m.needsUpdate = true;
   });
 
-  // ── Status light: the dead-front pictogram; the LED pipe is the master's dark lens ──
-  const S = READER_SCALE;
+  // ── Status light: the dead-front pictogram, lit inside the glass's shading ──
+  // The master's LED pipe sits behind the dead-front glass with the pictogram: unlit, it is not seen
+  // (its bar, standing proud of the glass, read as a second minus over the decline). Its glow quad
+  // belongs to the lit pipe. The glass is whole under it.
   const ledMesh = meshesUnder(nodes.scanner_light!)[0]!;
-  const led = (ledMesh.material as MeshStandardMaterial).clone();
-  led.name = 'reader_led_lens';
-  led.color.copy(LED_OFF);
-  // A frosted lens, as a light pipe's is (it diffuses its LED): the master's 0.4 let the curved rim
-  // throw sub-pixel highlights that broke the unlit pill into a dotted dash at 1× (before v1.5 it
-  // was lit over them in every answer state).
-  led.roughness = LED_LENS_ROUGHNESS;
-  led.emissiveMap = null;
-  led.emissive.set('#000000');
-  led.emissiveIntensity = 0;
-  ledMesh.material = led;
+  ledMesh.visible = false;
   ledMesh.userData.noShadowCast = true;
-  // The master's glow quad belongs to the lit pipe: it stays hidden.
   const haloMesh = meshesUnder(nodes.scanner_glow!)[0]!;
   haloMesh.visible = false;
   haloMesh.userData.noShadowCast = true;
-  // The pictogram: one quad on the pad (it gives with the glass at the press), a field per glyph.
+  const pad = nodes.scanner_pad!;
+  const glass = meshesUnder(pad).find((m) => (m.material as Material).name === 'reader_glass')!;
+  // Glass mesh space → pad (face) space → the pictogram's texture space.
+  root.updateMatrixWorld(true);
+  const toFace = new Matrix4().copy(pad.matrixWorld).invert().multiply(glass.matrixWorld);
+  const toUv = new Matrix4()
+    .makeTranslation(0.5, 0.5 - STATUS_PICTOGRAM.v / STATUS_PICTOGRAM_SIZE, 0)
+    .multiply(new Matrix4().makeScale(1 / STATUS_PICTOGRAM_SIZE, 1 / STATUS_PICTOGRAM_SIZE, 1))
+    .multiply(toFace);
+  flattenGlassEdge(glass, toFace);
   const lights = { accept: glyphLight('accept'), decline: glyphLight('decline') };
   const fields = { accept: lights.accept.field, decline: lights.decline.field };
   const glyphTex = {
     accept: emissionTexture(fields.accept, lights.accept.texels, 'reader_status_check'),
     decline: emissionTexture(fields.decline, lights.decline.texels, 'reader_status_minus'),
   };
-  const pictogramMat = lightMaterial('reader_status_light', glyphTex.accept);
-  const pictogram = mesh('scanner_status_light', new PlaneGeometry(STATUS_PICTOGRAM_SIZE, STATUS_PICTOGRAM_SIZE), pictogramMat, nodes.scanner_pad);
-  pictogram.position.set(0, STATUS_PICTOGRAM.v, FACE.glass + 0.0004 * S);
-  pictogram.renderOrder = 1;
-  pictogram.castShadow = pictogram.receiveShadow = false;
-  pictogram.userData.noShadowCast = true;
-  pictogram.visible = false;
+  const light = addStatusLight(glass, toUv, glyphTex.accept);
   let lastStatus: StatusLit | null = null, lastLevel = -1;
   const setStatus = (lit: StatusLit, level: number) => {
     const k = lit === 'off' ? 0 : Math.min(1, Math.max(0, level));
     if (lit === lastStatus && k === lastLevel) return;
     lastStatus = lit;
     lastLevel = k;
-    const on = lit !== 'off' && k > 0;
-    // Dead front: nothing is drawn while the light is off, so the idle face is the master's glass.
-    pictogram.visible = on;
-    if (!on) {
-      pictogramMat.color.set('#000000');
+    // Dead front: off, the glass adds no light and shades exactly as the master's.
+    if (lit === 'off' || k === 0) {
+      light.statusColor.value.setRGB(0, 0, 0);
       return;
     }
-    const colour = STATUS_COLOURS[lit];
-    // Same program for either glyph: only the texture uniform changes.
-    pictogramMat.map = glyphTex[lit];
-    pictogramMat.color.set(colour).multiplyScalar(GLOW.glyph[lit] * fields[lit].peak * k);
+    // Same program for either glyph: only the uniforms change.
+    light.statusMap.value = glyphTex[lit];
+    light.statusColor.value.set(STATUS_COLOURS[lit]).multiplyScalar(GLOW.glyph[lit] * k);
   };
 
   // ── Gasket press: the glass and what is printed on it give; the gasket under it compresses ──
-  const pad = nodes.scanner_pad!, gasket = nodes.scanner_gasket!;
+  const gasket = nodes.scanner_gasket!;
   const padRest = pad.position.clone();
   const gasketDepth = FACE.gasketFront - FACE.gasketBack;
   const setPress = (depth: number) => {
@@ -412,11 +456,8 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
       tab.geometry.dispose();
       cardShadow.dispose();
       scannerShadow.dispose();
-      led.dispose();
       glyphTex.accept.dispose();
       glyphTex.decline.dispose();
-      pictogramMat.dispose();
-      pictogram.geometry.dispose();
     },
   };
 }

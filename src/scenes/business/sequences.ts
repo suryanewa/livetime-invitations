@@ -342,7 +342,7 @@ function outcome(t: number, out: BusinessFrame): void {
  *
  * The ramps are perceptual, as a product's LED driver fades with gamma-corrected PWM: brightness is
  * seen roughly as its cube root (CIE L*), and the pictogram's HDR core reaches the tone curve's
- * shoulder at a quarter of full level, so a ramp linear in level would look like a switch (v1.5's
+ * shoulder by half of full level, so a ramp linear in level would look like a switch (v1.5's
  * first cut, an ease-out, showed 59 % of the change in its first 16 ms frame). Every edge is a
  * smootherstep, which starts and ends as a cube (10u³): the glyph surfaces from black over the
  * first third and the halo fills in after.
