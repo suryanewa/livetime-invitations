@@ -1,7 +1,7 @@
 import { type Material, type Mesh, type Object3D, PlaneGeometry } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { BIN_POS, BIN_YAW, birthdayBounds, STAND } from './birthdayContract.ts';
-import { type FlameRig, rigCandleFire, SmokeRig } from './birthdayFire.ts';
+import { createFlameLights, type FlameLights, type FlameRig, patchFlameLight, rigCandleFire, SmokeRig } from './birthdayFire.ts';
 import { BIRTHDAY_GLB_NODES } from './birthdayParts.ts';
 import { buildCakeGeometry, type CakePreset } from './cake.ts';
 import { BIN, buildDisposalBin } from './disposalBin.ts';
@@ -37,6 +37,8 @@ export interface BirthdayRig {
   candles: CandleRig[];
   /** Every candle's smoke streaklines (v1.5). */
   smoke: SmokeRig;
+  /** The flames' light on the cake's own materials. */
+  flameLights: FlameLights;
   flapL: Object3D;
   flapR: Object3D;
   /** Shade uniforms shared by every cake material (frosting of both presets, candles). */
@@ -131,6 +133,9 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
   });
   for (const m of variants?.materials ?? []) if (isCake(m)) cakeMaterials.add(m);
   for (const m of cakeMaterials) patchBinShade(m, binShade);
+  // The candle flames light the cake's own materials (models/birthdayFire.ts).
+  const flameLights = createFlameLights();
+  for (const m of cakeMaterials) patchFlameLight(m, flameLights);
 
   // v1.5 fire (#4): each GLB lathe flame becomes a volumetric flame with its light; one ribbon
   // mesh carries every candle's smoke (models/birthdayFire.ts).
@@ -142,7 +147,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     nodes[`candle_${id}`] = candle;
     nodes[`flame_${id}`] = flame;
     const wick = candle.getObjectByName(`wick_${id}`) ?? candle.getObjectByName('wick')!;
-    const fire = rigCandleFire(candle, flame, wick, lib, flameQuad);
+    const fire = rigCandleFire(candle, flame, wick, lib, flameQuad, flameLights, ids.indexOf(id));
     return { candle, seatedY: candle.position.y, flame, fire, wick };
   });
   const smoke = new SmokeRig(nodes.cake_secondary!, candles.length);
@@ -170,6 +175,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     binShadow,
     candles,
     smoke,
+    flameLights,
     flapL,
     flapR,
     binShade,
@@ -183,8 +189,6 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
         c.fire.material.dispose();
         c.fire.wickMaterial.dispose();
         c.fire.quad.removeFromParent();
-        c.fire.light.removeFromParent();
-        c.fire.light.dispose();
       }
       flameQuad.dispose();
       smoke.dispose();

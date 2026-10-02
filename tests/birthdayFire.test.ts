@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { Color, Mesh, MeshStandardMaterial, PointLight, Vector3 } from 'three';
+import { Color, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { blackbodyAt, createFlameMaterial, sootRadiance } from '../src/render/flame.ts';
 import { rigBirthday } from '../models/birthday.ts';
@@ -28,7 +28,7 @@ describe('Birthday fire: the flame', () => {
     expect(FLAME_REST.base + FLAME_REST.widest * FLAME_REST.length).toBeCloseTo(WICK_TIP_Y, 9);
   });
 
-  it('flickers at 10–12 Hz with a few per cent of length, sways a degree or two, and is exactly still at gain 0', () => {
+  it('flickers at 10–12 Hz with a few per cent of length, sways a few degrees in the room\'s draft, and is exactly still at gain 0', () => {
     const fl = newFlicker();
     for (let i = 0; i < CANDLE_COUNT; i++) {
       // Dominant frequency from zero crossings of the length over 4 s at 1 kHz.
@@ -49,7 +49,7 @@ describe('Birthday fire: the flame', () => {
       expect(hz).toBeLessThan(12.5);
       expect(maxDh).toBeLessThanOrEqual(FLICKER.amplitude + 1e-9);
       expect(maxDh).toBeGreaterThan(0.01);
-      expect(maxSway).toBeLessThan((2.5 * Math.PI) / 180);
+      expect(maxSway).toBeLessThan((3.5 * Math.PI) / 180);
       flicker(i, 1.234, 0, fl);
       for (const [v, rest] of [[fl.height, 1], [fl.width, 1], [fl.intensity, 1], [fl.swayX, 0], [fl.swayZ, 0]] as const) expect(Math.abs(v - rest)).toBe(0);
     }
@@ -212,11 +212,10 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     return { rig, scene: new BirthdayScene(rig, { category: 'birthday', cake: 'vanilla' }) };
   };
 
-  it('replaces each lathe flame with the volumetric flame and a warm light; the hero holds the real flame', () => {
+  it('replaces each lathe flame with the volumetric flame; the hero holds the real flame', () => {
     const { rig, scene } = build();
     for (const c of rig.candles) {
       expect(c.flame.children.some((o) => (o as Mesh).isMesh && o.userData.fx)).toBe(true);
-      expect(c.flame.children.some((o) => o instanceof PointLight)).toBe(true);
       expect(c.flame.getObjectByName(`${c.flame.name}_mesh`)).toBeUndefined();
     }
     // Hero top: the steady flame's tip (the GLB's 1.5× lathe and the fire's quads are not counted).
@@ -232,7 +231,12 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     scene.beforeRender();
     const u = rig.candles[0]!.fire.material.uniforms;
     expect(u.uShape.value[0]).toBeCloseTo(FLAME_REST.length, 9);
-    expect(rig.candles[0]!.fire.light.intensity).toBeCloseTo(CANDLE_LIGHT, 9);
+    expect(rig.flameLights.intensity.value[0]).toBeCloseTo(CANDLE_LIGHT, 9);
+    // The light sits in the flame (world space), a few millimetres above the wick.
+    const wickWorld = rig.candles[0]!.fire.wickTip.clone().applyMatrix4(rig.candles[0]!.candle.matrixWorld);
+    const d = rig.flameLights.pos.value[0]!.distanceTo(wickWorld);
+    expect(d).toBeGreaterThan(MM);
+    expect(d).toBeLessThan(6 * MM);
     // Flicker after a moment of simulation.
     for (let k = 0; k < 120; k++) scene.simulate(1 / 120);
     const lengths = new Set<number>();
@@ -244,7 +248,8 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     scene.pose('accepted');
     expect(scene.settling()).toBe(false);
     scene.beforeRender();
-    expect(rig.candles.every((c) => !c.fire.quad.visible && c.fire.light.intensity === 0)).toBe(true);
+    expect(rig.candles.every((c) => !c.fire.quad.visible)).toBe(true);
+    expect(rig.flameLights.intensity.value.every((v) => v === 0)).toBe(true);
   });
 
   it('accept: the smoke outlives the 1.4 s sequence on the live clock, then the loop may idle; settle() clears it', () => {

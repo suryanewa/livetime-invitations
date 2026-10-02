@@ -30,8 +30,10 @@ for (const scene of SCENES) {
       else expect(f.heroWidth, label).toBeCloseTo(0.75, 2);
       expect(f.heroHeight, label).toBeLessThanOrEqual(0.6 + 1e-3);
       expect(f.heroWidth, label).toBeLessThanOrEqual(0.75 + 1e-3);
-      // Centred across unless a path needed the room (Birthday's bin slides it at 3:4).
-      expect(Math.abs(f.heroCenter[0]), label).toBeLessThan(0.15);
+      // Centred across unless a path needed the room (Birthday's bin slides it at 3:4: 0.19 since
+      // v1.5, whose real-size 1.4 cm flames no longer pad the hero's top, so the cake is framed
+      // larger and the bin's path takes more of the width).
+      expect(Math.abs(f.heroCenter[0]), label).toBeLessThan(scene === 'birthday' && i === 0 ? 0.21 : 0.15);
     }
     // At the square stage every scene but Dinner is held by its height.
     if (scene !== 'dinner') expect(fits[1]!.binding).toBe('height');

@@ -156,11 +156,10 @@ export const CANDLE_HOVER = 0.5;
 export const LEAN_MAX = (1.8 * Math.PI) / 180;
 
 /**
- * Drawn flame (the v1.1 view-dependent shader flame at each wick): this many times the master
- * flame's height and width. At the master's own size (0.15 tall) the six flames were a few pixels
- * at the bin-inclusive framing and the accept blow-out barely changed the frame (v1.2 review); at
- * 1.5× the teardrop is about the candle's own visible height above the crown, as a birthday
- * candle's flame is, and the breath has something to bend.
+ * The GLB's placeholder flame (the v1.1 lathe at each wick): this many times the master flame's
+ * height and width (v1.2.1). Since v1.5 the runtime drops it and draws the real flame instead
+ * (src/scenes/birthday/fire.ts FLAME_REST: 13 mm from base to tip, 5 mm wide; models/birthdayFire.ts),
+ * so FLAME/FLAME_TOP only size the exported placeholder and keep the motion bounds conservative.
  */
 export const FLAME_DRAW = { height: 1.5, width: 1.45 } as const;
 

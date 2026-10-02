@@ -191,6 +191,9 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
         return T < BB_T0 ? vec3(0.0) : c;
       }
 
+      // A growing flame makes soot (turns yellow) once it is a third of its size (fire.ts sootFormed).
+      float sootFormed(float lit) { return smoothstep(0.1, 0.5, lit); }
+
       float profile(float s) {
         if (s <= 0.0 || s >= 1.0) return 0.0;
         if (s < uWidest) { float u = (uWidest - s) / uWidest; return sqrt(max(0.0, 1.0 - u * u)); }
@@ -223,7 +226,7 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
         float rin = 0.78 * (1.0 - smoothstep(uWidest * 0.8, uWidest * 2.0, s));
         float soot = smoothstep(rin - 0.2, rin + 0.12, r) * edge;
         soot *= smoothstep(uWidest * 0.55, uWidest * 1.15, s) * (1.0 - 0.5 * smoothstep(0.72, 1.0, s));
-        soot *= smoothstep(0.3, 0.85, lit);
+        soot *= sootFormed(lit);
         // Temperature: hottest soot mid-flame; cooler at the tip and the outer mantle; the cut-off gas cools.
         float T = 1900.0 - 330.0 * smoothstep(0.45, 1.0, s) - 160.0 * smoothstep(0.55, 1.05, r);
         T -= 1250.0 * cool;
@@ -233,7 +236,7 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
         float shell = smoothstep(0.5, 0.88, r) * (1.0 - smoothstep(0.96, 1.12, r));
         float cup = shell * (1.0 - smoothstep(0.02, 0.24, s)) + 0.6 * exp(-pow(s / 0.06, 2.0)) * (1.0 - smoothstep(0.6, 1.0, r));
         // A fresh or starved flame is mostly blue; the cooling gas has no blue left.
-        col += cup * vec3(0.012, 0.03, 0.16) * (1.0 + 1.6 * (1.0 - lit)) * (1.0 - cool);
+        col += cup * vec3(0.008, 0.02, 0.105) * (1.0 + 2.2 * (1.0 - lit)) * (1.0 - cool);
         return col * alive;
       }
 
@@ -305,8 +308,11 @@ export interface SmokeUniforms {
   uTime: { value: number };
 }
 
-/** Smoke radiance (linear): a little under the lit cove's, so a thin thread reads grey. */
-export const SMOKE_COLOR = '#7d7a76';
+/**
+ * Smoke radiance: a little under the lit cove's, so a thin thread reads grey over the wall and
+ * lighter over shade (and over cocoa); faintly cool, as sub-micron droplets side-scatter blue.
+ */
+export const SMOKE_COLOR = '#7b7c80';
 
 export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniforms } {
   const uniforms: SmokeUniforms = {
@@ -423,7 +429,7 @@ export function createPuffMaterial(color: Color): ShaderMaterial & { uniforms: {
       void main() {
         float r2 = dot(vCorner, vCorner);
         float g = exp(-1.6 * r2);
-        float tex = 0.65 + 0.7 * n2(vCorner * 1.7 + vSeed) * n2(vCorner * 3.1 - vSeed);
+        float tex = 0.8 + 0.4 * n2(vCorner * 1.7 + vSeed) * n2(vCorner * 3.1 - vSeed);
         float a = clamp(vAlpha * g * tex * (1.0 - smoothstep(4.0, 4.84, r2)), 0.0, 1.0);
         gl_FragColor = vec4(uColor, a);
         #include <tonemapping_fragment>

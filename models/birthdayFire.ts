@@ -1,11 +1,11 @@
 import {
-  Box3, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, type Material, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, PointLight, Quaternion, type ShaderMaterial, Vector3,
+  Box3, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, type Material, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, Vector3,
   type WebGLRenderer,
 } from 'three';
 import type { MaterialLibrary } from '../src/render/materials.ts';
 import { blackbodyAt, createPuffMaterial, createSmokeMaterial, type FlameUniforms, sootRadiance } from '../src/render/flame.ts';
 import {
-  FLAME_REST, type FlameState, type Flicker, newSmokePuffs, newSmokeStrand, PUFF_COUNT, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokePuffs, type SmokePuffs, smokeStrand,
+  FLAME_REST, type FlameState, type Flicker, newSmokePuffs, sootFormed, newSmokeStrand, PUFF_COUNT, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokePuffs, type SmokePuffs, smokeStrand,
   type SmokeStrand,
 } from '../src/scenes/birthday/fire.ts';
 
@@ -34,6 +34,68 @@ export function flameLightColor(): Color {
   return new Color(r / m, g / m, b / m);
 }
 
+/** Flames lighting the cake (the master has six candles; the v1.1 tooling cake three). */
+export const FLAME_LIGHT_COUNT = 6;
+/**
+ * A flame is not a point: within a few millimetres the inverse square would blow up. Treated as a
+ * source of radius a, E = I/(d² + a²) (a = 3 mm, the luminous zone's half-width and then some).
+ */
+const FLAME_LIGHT_RADIUS = 0.015;
+
+/** World positions and intensities (candela-equivalent, CANDLE_LIGHT units) of the flames' light. */
+export interface FlameLights {
+  pos: { value: Vector3[] };
+  intensity: { value: number[] };
+  color: { value: Color };
+  radius2: { value: number };
+}
+
+export function createFlameLights(): FlameLights {
+  return {
+    pos: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => new Vector3()) },
+    intensity: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => 0) },
+    color: { value: flameLightColor() },
+    radius2: { value: FLAME_LIGHT_RADIUS ** 2 },
+  };
+}
+
+/**
+ * The candle flames' light, on the cake's own materials only (frosting, candles): six point
+ * PointLights would be evaluated by every lit fragment on stage (the cove fills the frame) for
+ * ≈1.3 ms a frame at 1170² on the M2 Pro, for a contribution the cove 80 cm away never shows
+ * (≈0.5 %). Added through three's own RE_Direct, so the frosting's sheen and the candles'
+ * clearcoat respond to it as to any light. Chains onto an existing onBeforeCompile (the bin shade).
+ */
+export function patchFlameLight(material: Material, lights: FlameLights): void {
+  if (material.userData.flameLight) return;
+  material.userData.flameLight = true;
+  const prev = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey;
+  material.onBeforeCompile = (shader, renderer) => {
+    prev.call(material, shader, renderer);
+    shader.uniforms.uFlamePos = lights.pos;
+    shader.uniforms.uFlameI = lights.intensity;
+    shader.uniforms.uFlameColor = lights.color;
+    shader.uniforms.uFlameR2 = lights.radius2;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\nuniform vec3 uFlamePos[${FLAME_LIGHT_COUNT}];\nuniform float uFlameI[${FLAME_LIGHT_COUNT}];\nuniform vec3 uFlameColor;\nuniform float uFlameR2;`)
+      .replace('#include <lights_fragment_end>', `
+  for (int fi = 0; fi < ${FLAME_LIGHT_COUNT}; fi++) {
+    if (uFlameI[fi] <= 0.0) continue;
+    vec3 flv = (viewMatrix * vec4(uFlamePos[fi], 1.0)).xyz - geometryPosition;
+    float fd2 = dot(flv, flv);
+    IncidentLight flameLight;
+    flameLight.direction = flv * inversesqrt(fd2);
+    flameLight.color = uFlameColor * (uFlameI[fi] / (fd2 + uFlameR2));
+    flameLight.visible = true;
+    RE_Direct(flameLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
+  }
+#include <lights_fragment_end>`);
+  };
+  material.customProgramCacheKey = () => `${prevKey.call(material)}+flame-light-v1`;
+  material.needsUpdate = true;
+}
+
 export interface FlameRig {
   /** flame_NN: the anchor (CANDLE.flameBase on the candle's axis). */
   node: Object3D;
@@ -41,17 +103,18 @@ export interface FlameRig {
   material: ShaderMaterial & { uniforms: FlameUniforms };
   /** Wick tip in candle_NN space. */
   wickTip: Vector3;
-  light: PointLight;
+  /** This flame's slot in the shared FlameLights. */
+  index: number;
+  lights: FlameLights;
   /** The wick's own material (charred, ember-lit tip). */
   wickMaterial: MeshStandardMaterial;
   wickEmber: { value: Color };
 }
 
 /**
- * The wick: charred cotton (albedo ≈3 %). Inside its flame it sees the flame at grazing angles and
- * shades itself, so the flame's light (a point source two millimetres away, which the inverse
- * square would blow up) reaches it at a fifth; the rest of the room's light is unchanged. Its top
- * 1.5 mm glows as the ember (emissive, Planck colour at the ember's temperature).
+ * The wick: charred cotton (albedo ≈3 %), dark inside its flame's fuel-rich core as in photographs
+ * (it takes no flame light). Its top 1.5 mm glows as the ember (emissive, Planck colour at the
+ * ember's temperature).
  */
 function wickMaterial(lib: MaterialLibrary, yTop: number): { material: MeshStandardMaterial; ember: { value: Color } } {
   const material = (lib.unique('mat_wick') as MeshStandardMaterial);
@@ -65,8 +128,7 @@ function wickMaterial(lib: MaterialLibrary, yTop: number): { material: MeshStand
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWickY = position.y;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vWickY;\nuniform vec3 uEmberColor;\nuniform float uWickTop;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += uEmberColor * smoothstep(uWickTop - 0.0075, uWickTop - 0.001, vWickY);')
-      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  reflectedLight.directDiffuse *= 0.2;\n  reflectedLight.directSpecular *= 0.2;');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += uEmberColor * smoothstep(uWickTop - 0.0075, uWickTop - 0.001, vWickY);');
   };
   material.customProgramCacheKey = () => 'birthday-wick-v15';
   return { material, ember };
@@ -80,7 +142,7 @@ const EMBER_GAIN = 260;
  * Replace a candle's authored flame mesh (the GLB's v1.1 lathe) with the volumetric flame and add
  * its light. `wick` is measured for its tip (the wick curls, so the tip is off the candle axis).
  */
-export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, lib: MaterialLibrary, quadGeometry: PlaneGeometry): FlameRig {
+export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, lib: MaterialLibrary, quadGeometry: PlaneGeometry, lights: FlameLights, index: number): FlameRig {
   // The GLB's lathe flame: dropped (its geometry freed here; nothing else references it).
   for (const child of [...node.children]) {
     const m = child as Mesh;
@@ -136,11 +198,6 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   };
   node.add(quad);
 
-  const light = new PointLight(flameLightColor(), 0, 0, 2);
-  light.name = `${node.name}_light`;
-  light.castShadow = false;
-  node.add(light);
-
   // The wick's mesh (its own space's top for the ember gradient).
   let wickMesh: Mesh | null = null;
   wick.traverse((o) => { if (!wickMesh && (o as Mesh).isMesh) wickMesh = o as Mesh; });
@@ -148,7 +205,7 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   wm?.geometry.computeBoundingBox();
   const w = wickMaterial(lib, wm?.geometry.boundingBox?.max.y ?? 0);
   if (wm) wm.material = w.material;
-  return { node, quad, material, wickTip: top, light, wickMaterial: w.material, wickEmber: w.ember };
+  return { node, quad, material, wickTip: top, index, lights, wickMaterial: w.material, wickEmber: w.ember };
 }
 
 const qInv = new Quaternion();
@@ -171,7 +228,8 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   // The ember on the wick itself: Planck colour at 900–1,320 K (EMBER_GAIN calibrated with the flame's).
   if (ember > 1e-3) blackbodyAt(900 + 420 * ember, r.wickEmber.value).multiplyScalar(EMBER_GAIN * ember);
   else r.wickEmber.value.setRGB(0, 0, 0);
-  r.light.intensity = CANDLE_LIGHT * Math.max(0, f.intensity * fl.intensity);
+  // The light is the flame's luminous (soot) output: a fresh blue bead lights almost nothing.
+  r.lights.intensity.value[r.index] = CANDLE_LIGHT * Math.max(0, f.intensity * fl.intensity) * sootFormed(f.lit);
   if (!visible) return;
   // World up and the cake-plan flow in the flame's frame (the flame node has no rotation of its own).
   r.node.updateWorldMatrix(true, false);
@@ -211,7 +269,7 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   u.uBoundR.value = 0.5 * tip.distanceTo(u.uBase.value) + 1.25 * R + 0.0008;
   // The quad covers the march sphere, the halo and the ember.
   u.uHalf.value = Math.max(u.uBoundR.value + 7 * R, u.uMid.value.distanceTo(u.uWick.value) + 0.005);
-  r.light.position.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.42 * L);
+  r.lights.pos.value[r.index]!.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.42 * L).applyMatrix4(r.node.matrixWorld);
 }
 
 /**
