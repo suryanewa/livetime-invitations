@@ -1,8 +1,8 @@
 import type { Object3D } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
-import { COVER, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
+import { COVER, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
 import { buildDinnerGeometry } from './dinnerPremium.ts';
-import { BIN, buildDisposalBin } from './disposalBin.ts';
+import { attachBin, BIN, buildDisposalBin } from './disposalBin.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
@@ -33,9 +33,7 @@ export type DinnerModel = DinnerRig & BuiltModel;
 
 export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['lib']): DinnerRig {
   const dir = lib.direction;
-  root.add(binRoot);
-  binRoot.position.copy(DINNER_BIN_POS);
-  binRoot.rotation.set(0, DINNER_BIN_YAW, 0);
+  attachBin(root, binRoot, lib, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE);
   applyShadowProxies(root);
   const nodes = collectNodes(root, DINNER_NODES);
   const replace = (name: string, shadow: ContactShadow) => {

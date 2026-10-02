@@ -4,7 +4,7 @@ import { ContactShadow } from '../src/render/contactShadow.ts';
 import { BIN_POS, BIN_YAW, birthdayBounds, STAND } from './birthdayContract.ts';
 import { BIRTHDAY_GLB_NODES } from './birthdayParts.ts';
 import { buildCakeGeometry, type CakePreset } from './cake.ts';
-import { BIN, buildDisposalBin } from './disposalBin.ts';
+import { attachBin, BIN, buildDisposalBin } from './disposalBin.ts';
 import type { MaterialVariants } from './imported.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
@@ -130,9 +130,7 @@ function candleIds(root: Object3D): string[] {
  */
 export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext['lib'], preset: CakePreset = 'vanilla', variants?: MaterialVariants): BirthdayRig {
   const dir = lib.direction;
-  root.add(binRoot);
-  binRoot.position.copy(BIN_POS);
-  binRoot.rotation.set(0, BIN_YAW, 0);
+  attachBin(root, binRoot, lib, BIN_POS, BIN_YAW);
   applyShadowProxies(root);
   const nodes = collectNodes(root, BIRTHDAY_NODES);
 

@@ -1,5 +1,5 @@
 import { Box3, Vector3 } from 'three';
-import { BIN, BIN_BOUNDS } from './disposalBin.ts';
+import { BIN_BOUNDS, binIn } from './disposalBin.ts';
 import { cm, REFERENCE_CM } from './worldScale.ts';
 
 /**
@@ -23,12 +23,19 @@ export const DISH_SCALE = 0.8 / 0.9525;
  * World units per Dinner scene unit (v1.4, models/worldScale.ts): the plate is a 27 cm dinner
  * plate, so PLATE.radius (0.8) is 13.5 cm = 0.675 world units: 0.84375. The cloche keeps its real
  * size against it (dome 21.9 cm across, 14.3 cm to the handle top). The scene root carries the
- * scale, and the whole scene scales together, the bin included: the shared bin is sized against
- * what it receives, and here that is the dish (31.7 cm across the rim, a 30 cm opening for the
- * 27 cm plate, 20.3 cm deep for the 15.9 cm covered dish), where Birthday's is sized against the
- * cake (37.6 cm, 24 cm deep). Every Dinner number stays in scene units and the beats hold.
+ * scale, and the whole scene scales together; every Dinner number stays in scene units.
  */
 export const DINNER_WORLD_SCALE = cm(REFERENCE_CM.plate / 2) / 0.8;
+
+/**
+ * v1.5: the shared bin keeps its real size here (a 45 cm pedal bin with a 31 cm mouth, the same
+ * object as in Birthday): `bin_root` carries the inverse of the scene's world scale
+ * (models/disposalBin.ts `attachBin`). Until v1.4 it scaled with the scene (31.7 × 22 cm here,
+ * 37.6 × 26 cm in Birthday).
+ */
+export const DINNER_BIN_SCALE = 1 / DINNER_WORLD_SCALE;
+/** The bin's dimensions in Dinner scene units (radius, rim, mouth, floor, hinge). */
+export const DINNER_BIN = binIn(DINNER_BIN_SCALE);
 
 /** Nodes the rig and the choreography look up (the GLB and the tooling stand-in both have them). */
 export const DINNER_NODES = [
@@ -121,19 +128,25 @@ export const COVER_POISED_TILT = 0.32;
 
 /**
  * Bin placement (same approved treatment as Birthday): behind-left of the dish, clear of the
- * plate by at least 5 cm, turned so the dish enters between the flaps. The tall open flaps, not
- * the dish, set the fixed frame (recorded exception in docs/spec-revisions.md).
+ * plate by at least 4 cm (plate 0.8 + bin 1.003 + 0.04 = 1.843; this is 1.921, so the plate is
+ * up at the carry height before its rim reaches over the bin's), turned so the
+ * dish enters between the flaps. The covered dish rising over the real bin's rim, not the dish,
+ * sets the fixed frame (recorded exception in docs/spec-revisions.md). v1.5: a placement search
+ * over the real bin (scratch framing exploration, every plan position from −3 to 3) found the
+ * hero fill flat within 1 % behind and beside the dish: the height of the carry over a 42.4 cm
+ * rim sets the frame, not where the bin stands.
  */
-export const DINNER_BIN_POS = new Vector3(-0.7, 0, -1.7);
+export const DINNER_BIN_POS = new Vector3(-0.77, 0, -1.76);
 export const DINNER_BIN_YAW = Math.atan2(-DINNER_BIN_POS.x, -DINNER_BIN_POS.z);
 /** Off-frame start: the bin slides in from the left margin. */
-export const DINNER_BIN_START = new Vector3(-4.3, 0, -1.7);
+export const DINNER_BIN_START = new Vector3(-4.3, 0, -1.76);
 export const DINNER_WALL_Z = -4.2;
 /** Underside clearance over the rim while the dish crosses it, and the carry height. */
 export const DINNER_RIM_CLEARANCE = 0.06;
-export const DINNER_CARRY = 1.58;
+/** v1.5: the plate's underside 1.5 cm over the real bin's rim (2.513 scene units). */
+export const DINNER_CARRY = 2.6;
 /** Plate underside when the dish rests on the liner floor. */
-export const DISH_IN_BIN = new Vector3(DINNER_BIN_POS.x, BIN.floor, DINNER_BIN_POS.z);
+export const DISH_IN_BIN = new Vector3(DINNER_BIN_POS.x, DINNER_BIN.floor, DINNER_BIN_POS.z);
 
 /** Complete motion bounds (box fallback; the scene also supplies silhouette frame points). */
 export function dinnerBounds(): Box3 {
@@ -144,9 +157,9 @@ export function dinnerBounds(): Box3 {
       b.expandByPoint(new Vector3(c.x + dx * (COVER.radius + 0.02), c.y + COVER_TOP + 0.1, c.z + dz * (COVER.radius + 0.02)));
     }
   }
-  const r = Math.hypot(BIN_BOUNDS.max.x, BIN_BOUNDS.max.z);
-  b.union(new Box3(new Vector3(DINNER_BIN_POS.x - r, 0, DINNER_BIN_POS.z - r), new Vector3(DINNER_BIN_POS.x + r, BIN_BOUNDS.max.y, DINNER_BIN_POS.z + r)));
-  b.expandByPoint(new Vector3(DINNER_BIN_POS.x, BIN.rimTop + DINNER_RIM_CLEARANCE + DISH_HEIGHT, DINNER_BIN_POS.z));
+  const r = Math.hypot(BIN_BOUNDS.max.x, BIN_BOUNDS.max.z) * DINNER_BIN_SCALE;
+  b.union(new Box3(new Vector3(DINNER_BIN_POS.x - r, 0, DINNER_BIN_POS.z - r), new Vector3(DINNER_BIN_POS.x + r, BIN_BOUNDS.max.y * DINNER_BIN_SCALE, DINNER_BIN_POS.z + r)));
+  b.expandByPoint(new Vector3(DINNER_BIN_POS.x, DINNER_CARRY + DISH_HEIGHT, DINNER_BIN_POS.z));
   b.expandByPoint(new Vector3(DINNER_BIN_POS.x * 0.2, DINNER_CARRY + DISH_HEIGHT, DINNER_BIN_POS.z * 0.2));
   return b;
 }

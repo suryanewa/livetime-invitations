@@ -47,10 +47,9 @@ export const REFERENCE_CM = {
    */
   cardShortSide: 5.4,
   /**
-   * The shared bin is one design sized against what it receives. Birthday: the cake (27.7 cm across
-   * its piping, 23.6 cm with its candles) needs the 37.6 cm bin (35.6 cm opening, 26 cm tall).
-   * Dinner: the covered dish (27 cm plate, 15.9 cm tall) takes it at Dinner's scale, 31.7 cm
-   * (30 cm opening, 21.9 cm tall, 20.3 cm deep). Both keep their approved choreography.
+   * v1.5: the shared bin is one real 45 cm butterfly pedal bin at its real size in both scenes
+   * (models/disposalBin.ts): 33.8 cm across its base, a 31 cm mouth for the 27.7 cm cake and the
+   * 27 cm plate, 36 cm of depth. (v1.4: 37.6 × 26 cm in Birthday, 31.7 × 22 cm in Dinner.)
    */
-  binDiameter: { birthday: 37.6, dinner: 31.7 },
+  binDiameter: { birthday: 33.84, dinner: 33.84 },
 } as const;

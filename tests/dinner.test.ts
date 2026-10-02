@@ -10,11 +10,11 @@ import { fitCameraToBounds } from '../src/render/camera.ts';
 import { DinnerScene, dinnerFramePoints } from '../src/scenes/dinner/index.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import {
-  COVER, COVER_BESIDE, COVER_SEATED, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_GLB_NODES, DINNER_NODES, DINNER_RIM_CLEARANCE, DISH_HEIGHT,
+  COVER, COVER_BESIDE, COVER_SEATED, COVER_TOP, DINNER_BIN, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_GLB_NODES, DINNER_NODES, DINNER_RIM_CLEARANCE, DISH_HEIGHT,
   DISH_SCALE, PLATE, plateTop, dinnerBounds,
 } from '../models/dinnerContract.ts';
 import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
-import { BIN, buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
+import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
 import {
   ACCEPT, type AnswerChange, BIN_CLEARANCE, binStep, changeTime, CONTENT_END, coverBlendSafe, coverLowering, dishStep, DURATIONS, outcomePace, planAnswerChange, REWIND,
@@ -230,23 +230,23 @@ describe('Dinner choreography', () => {
       const dx = p.x - DINNER_BIN_POS.x, dz = p.z - DINNER_BIN_POS.z;
       const d = Math.hypot(dx, dz), lx = dx * c + dz * s;
       // Over the rim (the plate reaches past the opening but not past the rim roll): clears it.
-      const overRim = d > BIN.opening - PLATE.radius - 0.01 && d < PLATE.radius + BIN.radius + 0.02;
-      if (overRim && p.y < BIN.rimTop + 0.3) expect(p.y).toBeGreaterThanOrEqual(BIN.rimTop + DINNER_RIM_CLEARANCE - 0.02);
-      if (d < BIN.opening && p.y > BIN.rimTop) expect(Math.abs(lx) + PLATE.radius).toBeLessThan(BIN.hingeX - 0.02);
+      const overRim = d > DINNER_BIN.opening - PLATE.radius - 0.01 && d < PLATE.radius + DINNER_BIN.radius + 0.02;
+      if (overRim && p.y < DINNER_BIN.rimTop + 0.3) expect(p.y).toBeGreaterThanOrEqual(DINNER_BIN.rimTop + DINNER_RIM_CLEARANCE - 0.02);
+      if (d < DINNER_BIN.opening && p.y > DINNER_BIN.rimTop) expect(Math.abs(lx) + PLATE.radius).toBeLessThan(DINNER_BIN.hingeX - 0.02);
       // Below the rim the plate is inside the opening, centred to within its clearance.
-      if (p.y < BIN.rimTop + 0.05 && d < BIN.radius + PLATE.radius) expect(d).toBeLessThan(BIN.opening - PLATE.radius - 0.01);
+      if (p.y < DINNER_BIN.rimTop + 0.05 && d < DINNER_BIN.radius + PLATE.radius) expect(d).toBeLessThan(DINNER_BIN.opening - PLATE.radius - 0.01);
       expect(f.coverPos.clone().sub(f.platePos).distanceTo(COVER_SEATED)).toBeLessThan(1e-9); // one unit
       if (i >= 300 && f.flaps < 1 - 1e-9 && closingAt === 2) closingAt = i / 1000;
     }
     const f = at('decline', closingAt);
-    expect(f.platePos.y + DISH_HEIGHT).toBeLessThan(BIN.rimTop - 0.012);
+    expect(f.platePos.y + DISH_HEIGHT).toBeLessThan(DINNER_BIN.rimTop - 0.012);
     expect(at('decline', 1.5).dishVisible).toBe(false);
   });
 
   it('the bin clears the plate and the dish fits its opening', () => {
-    expect(Math.hypot(DINNER_BIN_POS.x, DINNER_BIN_POS.z)).toBeGreaterThanOrEqual(PLATE.radius + BIN.radius + 0.04);
-    expect(PLATE.radius).toBeLessThan(BIN.opening - 0.04);
-    expect(BIN.floor + DISH_HEIGHT).toBeLessThan(BIN.rimTop - 0.012);
+    expect(Math.hypot(DINNER_BIN_POS.x, DINNER_BIN_POS.z)).toBeGreaterThanOrEqual(PLATE.radius + DINNER_BIN.radius + 0.04);
+    expect(PLATE.radius).toBeLessThan(DINNER_BIN.opening - 0.04);
+    expect(DINNER_BIN.floor + DISH_HEIGHT).toBeLessThan(DINNER_BIN.rimTop - 0.012);
   });
 });
 
@@ -355,8 +355,10 @@ describe('Dinner tooling stand-in', () => {
     const bin = buildDisposalBin({ lib: plainLibrary() });
     bin.position.copy(DINNER_BIN_POS);
     bin.rotation.y = DINNER_BIN_YAW;
-    bin.getObjectByName('bin_flap_l')!.rotation.z = BIN.flapOpen;
-    bin.getObjectByName('bin_flap_r')!.rotation.z = -BIN.flapOpen;
+    // v1.5: the bin keeps its real size in Dinner's units (attachBin scales it so).
+    bin.scale.setScalar(DINNER_BIN_SCALE);
+    bin.getObjectByName('bin_flap_l')!.rotation.z = DINNER_BIN.flapOpen;
+    bin.getObjectByName('bin_flap_r')!.rotation.z = -DINNER_BIN.flapOpen;
     const bounds = dinnerBounds().expandByScalar(1e-6);
     expect(bounds.containsBox(box(bin))).toBe(true);
     for (const d of [new Vector3(COVER.radius, 0, 0), new Vector3(-COVER.radius, 0, 0), new Vector3(0, 0, -COVER.radius)]) {
@@ -390,13 +392,15 @@ describe('Dinner settle', () => {
 });
 
 describe('Dinner framing (Master §5, recorded disposal exception)', () => {
-  it('the covered dish fills at least 42 % of the stage width in the ready pose; the open bin keeps 8 % clearance', () => {
-    // The open bin's flaps set the fixed frame; a placement search put the ceiling near 45 %.
+  it('the covered dish fills at least 30 % of the stage width in the ready pose; the open bin keeps 8 % clearance', () => {
+    // The study/lookdev bounds fit. The dish carried over the open bin sets the fixed frame; a
+    // placement search put the ceiling near 45 % for the v1.4 bin (31.7 × 22 cm in Dinner) and
+    // near 31 % for the real 45 cm bin (v1.5; recorded in docs/spec-revisions.md).
     const bin = buildDisposalBin({ lib: plainLibrary() });
-    const binPts = openBinFramePoints(bin, DINNER_BIN_POS, DINNER_BIN_YAW);
+    const binPts = openBinFramePoints(bin, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE);
     const camera = new OrthographicCamera();
     fitCameraToBounds(camera, dinnerBounds(), 1, undefined, [...dinnerFramePoints(), ...binPts]);
-    const top = Math.max(...binPts.map((p) => p.clone().applyMatrix4(camera.matrixWorldInverse).y));
+    const top = binPts.reduce((m, p) => Math.max(m, p.clone().applyMatrix4(camera.matrixWorldInverse).y), -Infinity);
     expect((camera.top - top) / (camera.top - camera.bottom)).toBeGreaterThanOrEqual(0.08 - 1e-6);
     const inv = camera.matrixWorldInverse;
     let min = Infinity, max = -Infinity;
@@ -407,7 +411,7 @@ describe('Dinner framing (Master §5, recorded disposal exception)', () => {
       max = Math.max(max, p.x);
     }
     const fill = (max - min) / (camera.right - camera.left);
-    expect(fill).toBeGreaterThanOrEqual(0.42);
+    expect(fill).toBeGreaterThanOrEqual(0.3);
     expect(fill).toBeLessThanOrEqual(0.75);
   });
 });
@@ -488,8 +492,9 @@ describe('Dinner change of mind (v1.2.1: rewind along the authored path, no cut)
         const [rd, rb] = fastest(c, 0, c.rewind);
         expect(rd, label).toBeLessThanOrEqual(REWIND.pace * ownDish + 1e-3);
         expect(rb, label).toBeLessThanOrEqual(REWIND.pace * Math.max(ownBin, nextBin) + 1e-3);
-        // The new outcome after it: its own path, sped up by at most k (≤ 1.25).
-        expect(c.k, label).toBeLessThanOrEqual(1.25);
+        // The new outcome after it: its own path, sped up by at most k (≤ 1.25; v1.5: ≤ 1.5 after
+        // bringing the dish back up out of the real-depth bin, a 0.6 s rewind).
+        expect(c.k, label).toBeLessThanOrEqual(from === 'decline' ? 1.5 : 1.25);
         const [nd, nb] = fastest(c, c.rewind, DURATIONS[next]);
         expect(nd, label).toBeLessThanOrEqual(Math.max(c.k * nextDish, REWIND.pace * ownDish) + 1e-3);
         expect(nb, label).toBeLessThanOrEqual(c.k * Math.max(nextBin, ownBin) + 1e-3);

@@ -14,8 +14,8 @@ import { BIRTHDAY_GLB_NODES, buildBirthdayGeometry, FLAME_SIZE } from '../models
 import { BIN, buildDisposalBin } from '../models/disposalBin.ts';
 import { BIN_SHADE } from '../models/birthday.ts';
 import {
-  CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LAND_SPEED, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAME_FLUTTER, FLAME_RISE, FLAME_START, LEAN, LEAN_FADE, LIFT_TO, OUT_LEN, OUT_START,
-  WISP_OPACITY,
+  CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LAND_SPEED, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAME_FLUTTER, FLAME_RISE, FLAME_START, FLAPS_CLOSE, LEAN, LEAN_FADE, LIFT_TO, OUT_LEN,
+  OUT_START, WISP_OPACITY,
 } from '../src/scenes/birthday/poses.ts';
 import { candleDrop, carryLean, frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from '../src/scenes/birthday/sequences.ts';
 import { birthdayFramePoints } from '../src/scenes/birthday/framing.ts';
@@ -274,7 +274,8 @@ describe('Birthday choreography', () => {
     })();
     const f = at('decline', closingStarts);
     expect(f.cakePos.y + CAKE_TOTAL_HEIGHT).toBeLessThan(BIN.rimTop - 0.012);
-    expect(at('decline', 1.2).flaps).toBeLessThan(0.05);
+    // v1.5: the flaps are nearly shut a quarter-second after they start (the damper's last gap).
+    expect(at('decline', FLAPS_CLOSE + 0.25).flaps).toBeLessThan(0.05);
     expect(at('decline', 1.5).cakeVisible).toBe(false);
     expect(at('decline', 0.2).flameOpacity.every((o) => o === 0)).toBe(true);
   });
