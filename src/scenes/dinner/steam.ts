@@ -100,8 +100,8 @@ export const CLOUD = {
   skirt: 0.42,
   skirtTime: 0.45,
   /** Turbulent warp (su): at the seat (the slowly turning cloud) and grown, and its time constant (s). */
-  turb: [0.012, 0.075] as const,
-  turbTime: 1.3,
+  turb: [0.015, 0.15] as const,
+  turbTime: 1.0,
   /** The room's draught leans the rising cloud (su of lean per su of height). */
   lean: 0.14,
   /** Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). */
@@ -574,7 +574,7 @@ export function cloudLook(age: number, erode: number, out: CloudLook = { amp: 0,
   out.threshold = 0.3 + 0.32 * erode;
   out.warp = 1 + 1.4 * smooth(0, 1.2, age) - 0.6 * smooth(1.2, 2.4, age);
   out.fine = 0.1 + 0.15 * erode;
-  out.core = 0.8 + (0.1 - 0.8) * smooth(0.15, 1.8, age);
+  out.core = 0.8 + (0.08 - 0.8) * smooth(0.1, 1.3, age);
   out.coreWidth = 0.18 + 0.14 * young;
   out.sheetWidth = 0.09 + 0.06 * young;
   out.sheet = 0.75 - 0.4 * young;
