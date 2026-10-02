@@ -30,7 +30,27 @@ export interface InvitationController {
   replay(): void;
   resetVisual(): void;
   setReducedMotion(enabled: boolean): void;
+  /**
+   * Fullscreen layout (v1.4): the stage area your overlays cover, in CSS px from each edge. The
+   * object is framed in the largest square left free; ignored by the square layout.
+   */
+  setFrameInsets(insets: Partial<FrameInsets>): void;
   dispose(): void;
+}
+
+/**
+ * `square` (default): the controller renders a 1:1 stage into the mount, as since v1.0.
+ * `fullscreen` (v1.4): the stage fills the mount at any aspect (size the mount yourself, e.g. the
+ * viewport) and your UI floats over it; pass `frameInsets` so the object stays clear of it.
+ */
+export type InvitationLayout = 'square' | 'fullscreen';
+
+/** Stage area covered by overlay UI, CSS px from each edge of the mount (fullscreen layout). */
+export interface FrameInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 }
 
 /** Independent state dimensions (Master §7). */
@@ -89,6 +109,10 @@ export interface CreateInvitationOptions extends InvitationCallbacks {
   reducedMotion?: boolean;
   /** Base URL for scene assets and posters. Defaults to the bundled asset path. */
   assetBase?: string;
+  /** Stage layout; defaults to `square` (existing embeds are unchanged). */
+  layout?: InvitationLayout;
+  /** Fullscreen layout: initial overlay insets (see `setFrameInsets`). Missing edges are 0. */
+  frameInsets?: Partial<FrameInsets>;
 }
 
 export const CATEGORIES: readonly Category[] = ['party', 'birthday', 'sports', 'dinner', 'business'];

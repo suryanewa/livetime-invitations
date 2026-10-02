@@ -104,6 +104,17 @@ body {
   isolation: isolate;
 }
 
+/*
+ * Fullscreen layout (v1.4): the stage fills its mount at any aspect (the host page sizes the
+ * mount). The controller publishes the frame square (--lt-frame-x/-y/-size); the square poster
+ * and the text fallback sit on it, where the canvas frames the object.
+ */
+.lt-stage--fullscreen {
+  aspect-ratio: auto;
+  height: 100%;
+  border-radius: 0;
+}
+
 .lt-stage > canvas,
 .lt-stage > img {
   position: absolute;
@@ -121,6 +132,45 @@ body {
   height: 100%;
   object-fit: cover;
   transition: opacity 180ms ease-out;
+}
+
+.lt-stage--fullscreen .lt-stage__poster,
+.lt-stage--fullscreen .lt-stage__fallback {
+  inset: auto;
+  left: var(--lt-frame-x, 0px);
+  top: var(--lt-frame-y, 0px);
+  width: var(--lt-frame-size, 100%);
+  height: var(--lt-frame-size, 100%);
+}
+
+/* The square poster melts into the backdrop still (the same studio, rendered bare and wider). */
+.lt-stage--fullscreen .lt-stage__poster {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent);
+  mask-composite: intersect;
+}
+
+/* Fullscreen backdrop still: BACKDROP_FIELD frame squares wide, centred on the frame square. */
+.lt-stage__backdrop {
+  display: none;
+}
+
+.lt-stage--fullscreen .lt-stage__backdrop {
+  display: block;
+  position: absolute;
+  left: calc(var(--lt-frame-x, 0px) - (var(--lt-backdrop-field) - 1) / 2 * var(--lt-frame-size, 100%));
+  top: calc(var(--lt-frame-y, 0px) - (var(--lt-backdrop-field) - 1) / 2 * var(--lt-frame-size, 100%));
+  width: calc(var(--lt-backdrop-field) * var(--lt-frame-size, 100%));
+  height: calc(var(--lt-backdrop-field) * var(--lt-frame-size, 100%));
+  background: no-repeat center / 100% 100%;
+  pointer-events: none;
+  transition: opacity 180ms ease-out;
+}
+
+.lt-stage__backdrop.is-hidden {
+  opacity: 0;
+  transition: opacity 0ms linear var(--lt-entrance, 240ms);
 }
 
 .lt-stage__poster.is-hidden {
@@ -319,6 +369,7 @@ body {
     border-top-color: var(--lt-text-2);
   }
   .lt-stage__poster,
+  .lt-stage__backdrop,
   .lt-stage__canvas {
     transition: none !important;
   }
@@ -330,6 +381,7 @@ body {
 }
 
 [data-motion='off'] .lt-stage__poster,
+[data-motion='off'] .lt-stage__backdrop,
 [data-motion='off'] .lt-stage__canvas {
   transition: none !important;
 }

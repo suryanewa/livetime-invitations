@@ -6,6 +6,7 @@
  *   pnpm capture rigs [baseUrl] [rig,…] [--ortho]   studio rigs × scenes → outputs/rigs/ (src/render/rigs/README.md)
  *   pnpm capture stagecolor [baseUrl] [rig,…]       a rig's measured backdrop colour (stage tokens)
  *   CAPTURE_STAGE_ONLY=1 pnpm capture <scene>       posters, stills and clips staged in outputs/<scene>/ only
+ *   pnpm capture backdrops [baseUrl]                fullscreen backdrop stills → assets/scenes/<scene>/backdrop.webp
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -321,23 +322,27 @@ async function captureThumbs() {
 
 /**
  * Showcase UI across the supported viewport matrix for every live scene (outputs named
- * `<scene>-<case>-…`), with overflow and target-size checks in host and guest modes.
+ * `<scene>-<case>-…`), with overflow and target-size checks in host and guest modes. Since v1.4
+ * the scene is fullscreen with overlays: each case shoots the host panel, the host sequence
+ * mid-play, the guest answer mid-play and the saved answer (viewport shots: nothing scrolls).
  */
 async function captureUi() {
   await mkdir(outDir, { recursive: true });
   const browser = await launch();
   const cases = [
-    { name: 'desktop-1440', width: 1440, height: 1000, dsf: 1 },
+    { name: 'desktop-1440x900', width: 1440, height: 900, dsf: 1 },
+    { name: 'desktop-1280x720', width: 1280, height: 720, dsf: 1 },
+    { name: 'tablet-768x1024', width: 768, height: 1024, dsf: 2 },
     { name: 'phone-390', width: 390, height: 844, dsf: 3 },
-    { name: 'phone-320', width: 320, height: 700, dsf: 2 },
+    { name: 'phone-320', width: 320, height: 568, dsf: 2 },
     { name: 'landscape-844x390', width: 844, height: 390, dsf: 3 },
-    { name: 'zoom200-1440', width: 720, height: 500, dsf: 2 },
+    { name: 'zoom200-1440', width: 720, height: 450, dsf: 2 },
   ];
   const audit = (page: Page) =>
     page.evaluate(() => {
-      const overflow = document.documentElement.scrollWidth > window.innerWidth + 1;
+      const overflow = document.documentElement.scrollWidth > window.innerWidth + 1 || document.documentElement.scrollHeight > window.innerHeight + 1;
       const small = [...document.querySelectorAll('button, summary, [role="button"]')]
-        .filter((el) => (el as HTMLElement).offsetParent !== null)
+        .filter((el) => el.checkVisibility())
         .map((el) => ({ el, r: el.getBoundingClientRect() }))
         .filter(({ r }) => r.width > 0 && (r.width < 44 || r.height < 44))
         .map(({ el, r }) => `${(el.textContent ?? '').trim().slice(0, 24)} ${Math.round(r.width)}×${Math.round(r.height)}`);
@@ -349,16 +354,25 @@ async function captureUi() {
       const page = await browser.newPage({ viewport: { width: c.width, height: c.height }, deviceScaleFactor: c.dsf });
       await page.goto(`${base}/?scene=${scene}`);
       await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
+      await page.waitForTimeout(300);
       const host = await audit(page);
       console.log(`${name} host: overflow=${host.overflow} small-targets=${JSON.stringify(host.small)}`);
-      await page.screenshot({ path: join(outDir, `${name}-host.png`), fullPage: true });
-      // Guest flow: accept → saved.
+      await page.screenshot({ path: join(outDir, `${name}-host.png`) });
+      // Host sequence mid-play.
+      await page.locator('[data-action="prepare"]').click();
+      await page.waitForTimeout(550);
+      await page.screenshot({ path: join(outDir, `${name}-host-mid.png`) });
+      await page.waitForTimeout(2600);
+      // Guest flow: accept → mid-play → saved.
       await page.getByRole('button', { name: 'Guest', exact: true }).click();
+      await page.waitForTimeout(600);
       await page.getByRole('button', { name: 'Accept' }).click();
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: join(outDir, `${name}-guest-mid.png`) });
       await page.waitForTimeout(2200);
       const guest = await audit(page);
       console.log(`${name} guest: overflow=${guest.overflow} small-targets=${JSON.stringify(guest.small)}`);
-      await page.screenshot({ path: join(outDir, `${name}-guest-accepted.png`), fullPage: true });
+      await page.screenshot({ path: join(outDir, `${name}-guest-accepted.png`) });
       await page.close();
     }
   }
@@ -371,8 +385,39 @@ async function captureUi() {
   await page.getByRole('button', { name: 'Guest', exact: true }).click();
   await page.getByRole('button', { name: 'Decline' }).click();
   await page.waitForTimeout(1400);
-  await page.screenshot({ path: join(outDir, 'business-phone-390-error-reduced.png'), fullPage: true });
+  await page.screenshot({ path: join(outDir, 'business-phone-390-error-reduced.png') });
+  // The sheet lowered: the scene takes the screen, the mode switch stays.
+  await page.getByRole('button', { name: 'Controls' }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: join(outDir, 'business-phone-390-sheet-lowered.png') });
   await browser.close();
+}
+
+/**
+ * Fullscreen backdrop stills (v1.4): per scene, the bare studio (content hidden) under the
+ * production rig at BACKDROP_FIELD (7) × the square frame, centred on the square framing, so the
+ * controller can extend a square poster to any viewport with the canvas's framing. Written to
+ * assets/scenes/<scene>/backdrop.webp. Re-run after any change to bounds, rig or framing.
+ */
+async function captureBackdrops() {
+  await mkdir(outDir, { recursive: true });
+  const browser = await launch();
+  const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 1 });
+  page.on('console', (m) => m.type() === 'error' && console.error('[page]', m.text()));
+  const { cp } = await import('node:fs/promises');
+  for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
+    await page.goto(`${base}/?scene=${scene}`);
+    await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
+    const url = await page.evaluate(() => (window as any).__showcase.controller.captureStill(2000, 1, 'image/webp', 0.92, { empty: true, field: 7 }));
+    const file = join(outDir, `${scene}.webp`);
+    await saveDataUrl(file, url as string);
+    console.log('backdrop', file);
+  }
+  await browser.close();
+  // Copied last: writing into assets/ makes a running dev server reload its pages.
+  for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
+    await cp(join(outDir, `${scene}.webp`), join(import.meta.dirname, '..', 'assets', 'scenes', scene, 'backdrop.webp'));
+  }
 }
 
 /**
@@ -775,6 +820,7 @@ else if (mode === 'network') await captureNetwork();
 else if (mode === 'timing') await captureTiming();
 else if (mode === 'ui') await captureUi();
 else if (mode === 'thumbs') await captureThumbs();
+else if (mode === 'backdrops') await captureBackdrops();
 else if (mode === 'business' || mode === 'party' || mode === 'birthday' || mode === 'sports' || mode === 'dinner') await captureScene(mode);
 else if (mode === 'skeleton') await captureSkeleton();
 else if (mode === 'motion') await captureMotion();

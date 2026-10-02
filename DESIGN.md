@@ -1,6 +1,6 @@
 ---
 name: Livetime Invitation Interactions
-description: A precise, warm-neutral instrument that sits beside a tactile 3D invitation object and never competes with it.
+description: A precise, warm-neutral instrument that floats beside a tactile 3D invitation object, filling the screen, and never competes with it.
 colors:
   ink: "#202320"
   ink-soft: "#3A3D39"
@@ -16,6 +16,7 @@ colors:
   hairline: "#E6E3DC"
   hover-wash: "#F7F6F2"
   perforation: "#CDC7BB"
+  glass: "rgba(251, 250, 247, 0.9)"
 typography:
   display:
     fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
@@ -72,6 +73,8 @@ rounded:
   row: "16px"
   panel: "18px"
   stage: "20px"
+  overlay: "22px"
+  sheet: "24px"
   card: "28px"
   pill: "999px"
 spacing:
@@ -166,28 +169,33 @@ components:
     rounded: "{rounded.control-sm}"
     padding: "0 12px"
     height: "44px"
-  card-invitation:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.card}"
-    padding: "20px"
+  overlay-header:
+    backgroundColor: "{colors.glass}"
+    rounded: "{rounded.overlay}"
+    padding: "6px 18px 18px"
+  overlay-dock:
+    backgroundColor: "{colors.glass}"
+    rounded: "{rounded.overlay}"
+    width: "380px"
+  bottom-sheet:
+    backgroundColor: "{colors.glass}"
+    rounded: "{rounded.sheet}"
   stage:
     backgroundColor: "{colors.stage}"
-    rounded: "{rounded.stage}"
   rail-item:
     backgroundColor: "transparent"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.row}"
-    padding: "6px 14px 6px 6px"
-    height: "72px"
+    textColor: "{colors.ink-secondary}"
+    rounded: "{rounded.control}"
+    padding: "4px 2px 6px"
   rail-item-selected:
-    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
   drawer-summary:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
     typography: "{typography.title}"
-    rounded: "{rounded.panel}"
-    padding: "0 18px"
-    height: "56px"
+    rounded: "{rounded.row}"
+    padding: "9px 16px"
+    height: "52px"
 ---
 
 # Design System: Livetime Invitation Interactions
@@ -196,14 +204,15 @@ components:
 
 **Creative North Star: "The Instrument Beside the Object"**
 
-The 3D invitation object is the hero; everything in HTML is a precise, quiet instrument placed next to it. The interface is built from warm neutrals, olive-black ink and one segmented-control grammar, so the eye lands on the stage square first and the controls second. Nothing in the chrome is decorative except a single perforation-dot rule under the top bar, borrowed from the objects' own family mark. The page is one lifted invitation card, a collection rail and a collapsed Developer drawer. It is deliberately not a dashboard of cards.
+The 3D invitation object is the hero; everything in HTML is a precise, quiet instrument placed next to it. Since v1.4 (2026-10-02, owner: "can we actually fullscreen the scenes and do overlays for all the UI stuff?") the scene fills the screen and the interface floats over it on two translucent surfaces: the **header** (brand, honest-state badge, Motion, the event) and the **dock** (Host/Guest, the active panel, the collection, Developer). The dock is a side column on landscape screens and a bottom sheet on portrait ones. The interface is built from warm neutrals, olive-black ink and one segmented-control grammar, so the eye lands on the object first and the controls second. Nothing in the chrome is decorative except a single perforation-dot rule in the header, borrowed from the objects' own family mark. It is deliberately not a dashboard of cards. (v1.0–v1.3: one phone-width white card holding the event, a square stage and the controls, a collection rail and a collapsed drawer beside it.)
 
 Density is compact but never cramped: a 12 to 16px type ramp carried mostly by weight, 44px minimum targets everywhere, and 52px targets for the decisions that matter (the host's primary action, Accept and Decline). Colour is almost absent from the interface. Ink is the only filled action colour. Pine green and garnet appear only to report a response the app has confirmed, and always alongside a glyph and words.
 
 The objects' look (satin bodies, enamel inserts, the perforation construction rule, lighting and shadows) is owned by `docs/style-reference.md` (direction L2 "Satin Enamel · premium", v1.1). This file covers the interface around the stage. It never restyles the objects.
 
 **Key Characteristics:**
-- One phone-width column holds the event, the square stage and the controls, in that order, inside one white card.
+- The scene fills the viewport at any aspect; the object is framed in the largest square the overlays leave free, exactly as on the square stage.
+- Two overlay surfaces only: the header (top) and the dock (right column, or bottom sheet in portrait).
 - A warm tonal stack (page, stage, track, hairline, white) instead of borders and shadows.
 - One segmented-control pattern for every finite choice.
 - Status colour is earned: solid fill only after a confirmed save.
@@ -223,14 +232,14 @@ A near-monochrome warm-neutral palette with olive-black ink; the only saturated 
 - **Focus Cobalt** (#2F54C9): the 3px focus outline on every focusable element, and (at 18% alpha) the text selection wash. 6.5:1 on white.
 
 ### Neutral
-- **Warm White** (#FBFAF7): the page ground and the root scrollbar track.
-- **Stage Greige** (#D5D2CD): the stage square behind the 3D object, and the fill behind collection thumbnails so posters and thumbs read as the same material. It is the rendered colour of the production studio's cove (the `neutral-room` rig, v1.3) measured from the empty stage, so the stage never shows a different colour while the poster, the fallback sentence or the canvas is up. (v1.1–v1.2: Stage Linen #F8E4C8, the peach plaster sweep; superseded by the studio pass, `docs/style-reference.md` v1.3.)
-- **Paper White** (#FFFFFF): lifted and interactive surfaces: the invitation card, buttons, selected segment thumbs, the selected rail row, the Developer drawer.
+- **Warm White** (#FBFAF7): the overlay ground and the root scrollbar track. As **Glass** (Warm White at 90 % over a 22px blur of the scene) it is the header and dock surface: over the darkest possible scene it still measures ≥ #E2E1DE, so Sage Graphite text stays ≥ 5.2:1 and ink ≥ 13:1. Without backdrop-filter it rises to 97 %; with reduced transparency or increased contrast it is solid Warm White.
+- **Stage Greige** (#D5D2CD): the stage behind the 3D object (the page background before the controller mounts), and the fill behind collection thumbnails so posters and thumbs read as the same material. It is the rendered colour of the production studio's cove (the `neutral-room` rig, v1.3) measured from the empty stage, so the stage never shows a different colour while the poster, the fallback sentence or the canvas is up. (v1.1–v1.2: Stage Linen #F8E4C8, the peach plaster sweep; superseded by the studio pass, `docs/style-reference.md` v1.3.)
+- **Paper White** (#FFFFFF): interactive surfaces on the glass: buttons, selected segment thumbs, the Motion toggle, the dock's collapse button, the Developer drawer.
 - **Track Stone** (#EEECE6): the recessed track of every segmented control, and the "Simulated saves" badge.
-- **Hairline Sand** (#E6E3DC): container rules only: the drawer border, the selected rail row border, the state list dividers.
+- **Hairline Sand** (#E6E3DC): container rules only: the drawer border, the rule above the collection, the state list dividers.
 - **Hover Wash** (#F7F6F2): hover fill on outlined white controls (choices, secondary button).
 - **Keyline Grey** (#6F736D): 1.5px outlines on white controls, the inset keyline of a selected segment, and the disabled primary fill. 4.8:1 on white, 4.1:1 on the track.
-- **Sage Graphite** (#585C57): secondary text: meta lines, lede, legends, notes, unselected segment labels, rail sublines and tags. 6.5:1 on the page, 5.8:1 on the track.
+- **Sage Graphite** (#585C57): secondary text: meta lines, legends, notes, unselected segment labels, collection names. 6.5:1 on Warm White, ≥5.2:1 on Glass over any scene, 5.8:1 on the track.
 - **Soft Ink** (#3A3D39): text on tinted fills (badge text, the graphics notice, the developer event log) and the primary button's hover fill.
 - **Perforation Taupe** (#CDC7BB): the dots of the perforation rule. Decorative and hidden from assistive tech; never used for text or boundaries.
 
@@ -250,18 +259,18 @@ A near-monochrome warm-neutral palette with olive-black ink; the only saturated 
 **Character:** Plain, native and exact. The face is pinned by the client specification (PRODUCT.md Brand Commitments), so the system does not rely on typeface personality. Character comes from weight steps (400, 500, 600, 650, 700), tight negative tracking on the two heading roles, and tabular numerals wherever dates, times or counts appear.
 
 ### Hierarchy
-- **Display** (650, 1.5rem, 1.15, -0.018em, balanced wrap): the event title inside the invitation card. It is the only size above 16px on the page.
-- **Title** (650, 1rem, 1.4, -0.01em): the collection heading, rail row names, the drawer summary. The "Livetime" wordmark uses the same size at 700.
+- **Display** (650, 1.5rem, 1.15, -0.018em, balanced wrap): the event title in the header. It is the only size above 16px on the page. It steps down where the header must stay low: 1.375rem on small landscape screens (≤1100px wide or ≤760px tall), 1.25rem in portrait, 1.125rem on short landscape (≤540px tall) and short portrait (≤700px tall) phones.
+- **Title** (650, 1rem, 1.4, -0.01em): the drawer summary. The "Livetime" wordmark uses the same size at 700.
 - **Control** (600, 1rem): labels on 52px decision buttons (primary, secondary, Accept, Decline).
 - **Body strong** (600, 0.9375rem): segmented-control labels, the "Will you attend?" question, the status line, quiet links.
-- **Body** (400, 0.9375rem, 1.4): the event meta line (tabular numerals; date, place and "Sample event" wrap as whole items, the date never breaks, and a " · " separator never starts or ends a line), the Party song title, the collection lede (max 44ch), the brand descriptor.
-- **Body small** (400, 0.875rem): rail object lines, the Motion toggle, the graphics notice.
-- **Label** (600, 0.8125rem): fieldset legends naming a control group, small segmented controls. The same size at 400 is used for notes, the drawer hint and the "Song" key of the Party song line.
-- **Caption** (600, 0.75rem): the status badge and the rail tag ("Showing"; "In production" for a scene not yet live).
+- **Body** (400, 0.9375rem, 1.4): the event meta line (tabular numerals; date, place and "Sample event" wrap as whole items, the date never breaks, and a " · " separator never starts or ends a line), the Party song title, the brand descriptor.
+- **Body small** (400, 0.875rem): the Motion toggle, the graphics notice, the meta line in portrait and short landscape.
+- **Label** (600, 0.8125rem): fieldset legends naming a control group, the collection heading, small segmented controls. The same size at 400 is used for notes, the drawer hint and the "Song" key of the Party song line.
+- **Caption** (600, 0.75rem): the status badge and the collection names under the thumbnails.
 - **Mono** (400, 0.8125rem; 0.75rem in the log): developer state values and the integration event log.
 
 ### Named Rules
-**The Weight Not Size Rule.** Below the event title the ramp moves in 1px steps from 12px to 16px, and hierarchy is carried by weight and ink tone. Exactly one role (the event title at 24px) jumps in size.
+**The Weight Not Size Rule.** Below the event title the ramp moves in 1px steps from 12px to 16px, and hierarchy is carried by weight and ink tone. Exactly one role (the event title, 24px on desktop, 18–22px on smaller screens) jumps in size.
 
 **The Plain Wordmark Rule.** "Livetime" is set as text (700) beside a 400 descriptor. There is no logo, monogram or brand graphic.
 
@@ -269,47 +278,47 @@ A near-monochrome warm-neutral palette with olive-black ink; the only saturated 
 
 ## Layout
 
-The page is a warm-white field with a side gutter of `max(16px, safe-area insets)` and a bottom pad of `max(40px, safe-area-bottom)`. The header block stacks a 64px top bar (wordmark left; badge and Motion toggle right), the perforation rule and the Host/Guest switch on one measure: 1040px (1120px at ≥1280px, the 480px column at ≤900px). The rule has a 28px bottom margin (16px at ≤420px, 8px on short portrait phones, 10px in short landscape); the switch sits 14px above the card (10px on short portrait phones).
+**Fullscreen scene, floating instruments (v1.4).** The scene is a full-viewport canvas (`createInvitation({ layout: 'fullscreen' })`, `position: fixed; inset: 0`) at any aspect. Every piece of UI floats over it on one of two Glass surfaces, inset by a gutter of 24px (16px on screens ≤1100px wide or ≤760px tall, 12px on short landscape and in portrait, 8px at ≤360px) plus the safe-area insets on every edge. Nothing scrolls the page: the dock scrolls inside itself when its content is taller than the screen.
 
-**Two columns on desktop.** The main grid is `minmax(0, 440px)` for the invitation and `minmax(0, 420px)` for the side column, pushed apart with `space-between` and gaps of 40px (rows) and 56px (columns). At ≥1280px the columns become 480px and 400px, still `space-between`, so at every desktop width the card starts at the wordmark's edge and the rail ends at the Motion toggle's. The side column is pulled up 6px so the collection heading's cap line meets the top edge of the invitation card.
+**The frame square.** The showcase measures the area the overlays cover (header to its bottom edge plus 8px; the dock to its inner edge plus 8px; 16px at the bottom in side layout) and passes it to the controller as `frameInsets`. The controller frames the object in the largest square left free, centred in it, exactly as the square stage frames it; the rest of the viewport extends the same view (more studio, never a different composition). The object never sits under the title or the controls. Collapsing the dock or switching between Host and Guest (panels of different heights) re-measures, and the object re-frames.
 
-**Inside the invitation column** the card stands alone under the mode switch. Inside the card, on a 16px rhythm: title and meta, then the square stage, then (Party only) the song line, then the active panel. The host panel reads preset control (Party: the Song control first, then Record label), then a two-column action pair (10px gap), then a note. The guest panel reads question, then an equal-width Accept/Decline pair (10px gap), then a 44px status row.
-
-**Responsive behaviour** (all observed in the review captures):
-- **≤900px:** one centred 480px column; the top bar, rule and switch share its measure; the collection rail and the Developer drawer follow the card.
-- **≤420px:** the card padding drops to 14px (the radius stays 28px); the host action pair stacks; the brand descriptor hides; the drawer hint wraps under its title.
-- **Short portrait** (portrait, height ≤740px, iPhone SE class): the rule's margin drops to 8px and the switch's to 10px, so more of the card reaches the first viewport. The answers may still need a scroll there, which the specification allows.
-- **Short landscape** (landscape, height ≤540px, width ≥600px, which also catches 200% zoom on a laptop): the Host/Guest switch joins the top bar in flow, between the wordmark and the actions. Wordmark and actions share the row equally, so the switch sits at the centre while there is room; the wider side takes what it needs, and when the three cannot fit (enlarged text) the actions wrap to a row of their own. Nothing is positioned over anything else. The brand descriptor hides, the header and card run full width, and the rail is capped at 480px. The card becomes two columns: the stage square sits on the left, sized `min(100svh − 112px − safe areas, 48vw)`; title, controls and status sit on the right. The whole answer stays above the fold.
-- **Landscape ≤720px wide:** the brand descriptor hides.
+**Regions per breakpoint** (all observed in the review captures):
+- **Desktop and landscape tablets** (landscape, >540px tall): the **header** floats top-left, at most 520px wide and never closer than one gutter to the dock: a 52px bar (wordmark and descriptor left; "Simulated saves" and Motion right), the perforation rule, the event title, the meta line and (Party) the song line. The **dock** is a right column 380px wide (400px at ≥1280px; 360px on smaller screens), from the top gutter down to at most the bottom gutter, content-height otherwise: a head row (Host/Guest switch, collapse button), then the active panel, the graphics notice, a hairline, the collection strip and the Developer drawer. The frame square sits left of the dock, below the header.
+- **Short landscape** (landscape, ≤540px tall: phones on their side, 200% zoom on a laptop): the same two regions, tighter. The header drops the brand descriptor and the rule, and runs as wide as the scene's side allows so the meta keeps to one line; the dock is 352px wide and its host action labels step down to 15px. Accept and Decline stay on screen without scrolling.
+- **Portrait phones** (portrait, or anything narrower than 600px): the header spans the top (title 20px). The dock becomes a **bottom sheet**, edge to edge, with a 24px top radius and its own upward shadow. Its resting height is the active panel plus a 40px peek of the collection (`--sc-primary-h`, measured), and never more than the screen below the header minus `max(30svh, 180px)`, which the scene keeps; past that the sheet's body scrolls (collection, Developer). The collapse button lowers the sheet to its head row (Host/Guest and the button), giving the object the screen; choosing Host or Guest raises it again.
+- **Portrait tablets** (portrait, ≥600px wide): the header and the sheet share one centred 560px measure; the sheet floats one gutter above the bottom with the overlay radius on every corner.
+- **≤420px:** the brand descriptor hides. **≤360px:** the gutter is 8px, the bar's gaps tighten so wordmark, badge and Motion keep one row at 320px, and the host action pair stacks. **Short portrait** (≤700px tall, iPhone SE class): the rule hides and the title is 18px.
 
 ### Named Rules
-**The Controls Under the Stage Rule.** Every control that acts on the object sits directly beneath the stage, inside the same card. In host mode the preset choice comes before the primary action, because the host picks and then acts.
+**The Instrument Beside the Object Rule.** Overlays never cover the object: the controller frames it in the square the overlays leave free. Controls that act on the object live in the dock, the host's preset choice before the primary action, because the host picks and then acts.
 
-**The Phone-Width Rule.** The invitation never grows beyond phone-to-small-tablet width (440–480px), even on a wide desktop. The object is shown at the size a guest will actually see it.
+**The Same Shot Rule.** Whatever the viewport, the object is framed exactly as on the square stage and in the square posters; a wider or taller screen only shows more of the studio around it.
+
+**The Answer Within Reach Rule.** At every supported size (320×568 to 1440×900, landscape 844×390, 200% zoom) Accept and Decline are on screen in guest mode without scrolling the page or the dock.
 
 ## Elevation & Depth
 
-The system is tonal first. Depth comes from the warm stack: the Warm White page, the Stage Greige square, the Track Stone recess and the Paper White surfaces. Only one surface floats. Shadows otherwise appear only as a selected state, and borders are hairlines or keylines rather than structure.
+The system is tonal first. Depth comes from the warm stack: the scene, the Glass overlays, the Track Stone recess and the Paper White controls. Only the two overlays float. Shadows otherwise appear only as a selected state, and borders are hairlines or keylines rather than structure.
 
 ### Shadow Vocabulary
-- **Card lift** (`box-shadow: 0 1px 2px rgba(32,35,32,0.05), 0 18px 48px -28px rgba(32,35,32,0.32)`, with a `1px solid rgba(32,35,32,0.07)` border): the invitation card only. A long, low, negative-spread shadow that reads as the card resting on the page.
+- **Overlay lift** (`box-shadow: 0 1px 2px rgba(32,35,32,0.06), 0 18px 48px -28px rgba(32,35,32,0.36)`, with a `1px solid rgba(32,35,32,0.08)` border): the header and the dock only. A long, low, negative-spread shadow that lifts the glass off the scene. The bottom sheet casts it upward (`0 -18px 48px -30px`).
 - **Selected segment** (`box-shadow: inset 0 0 0 1px #6F736D, 0 1px 2px rgba(32,35,32,0.12), 0 2px 8px -4px rgba(32,35,32,0.2)`): the white thumb of a pressed segment. The inset keyline carries the state at ≥3:1 against the track, and the lift is secondary.
-- **Selected row** (`box-shadow: 0 1px 2px rgba(32,35,32,0.05)` plus a Hairline Sand border): the current collection row.
+- **Selected thumbnail** (a 2px Olive Ink outline at a 2px offset): the current scene in the collection strip.
 - **Pending keyline** (`box-shadow: inset 0 0 0 1.5px <status colour>` over a 2px status border): a chosen but unsaved response.
 - **Emphasis keyline** (`box-shadow: inset 0 0 0 1px #202320` over an ink border): "Preview as guest" after the host has prepared the card.
 
 ### Named Rules
-**The One Lifted Card Rule.** The invitation card is the only element with an ambient drop shadow. The rail, the drawer and the notices sit flat on the page.
+**The Two Overlays Rule.** The header and the dock are the only elements with an ambient drop shadow. The collection, the drawer and the notices sit flat on the glass. (v1.0–v1.3: the One Lifted Card Rule, the invitation card.)
 
 ## Shapes
 
-The corners are soft and nested, stepping up with the size of the container: 10px segment thumbs inside a 13px track (a 3px inset, so the curves stay concentric), 12px for 44px utility controls, quiet links and 60px rail thumbnails, 14px for 52px decision buttons and the graphics notice, 16px rail rows, 18px for the drawer, 20px for the stage square and 28px for the invitation card at every width. Pills (999px) are reserved for the status badge.
+The corners are soft and nested, stepping up with the size of the container: 10px segment thumbs inside a 13px track (a 3px inset, so the curves stay concentric), 12px for 44px utility controls, quiet links, the collapse button and the collection thumbnails, 14px for 52px decision buttons, the graphics notice and the collection buttons, 16px for the drawer, 22px for the header and the dock, 24px for the top corners of the phone bottom sheet. Pills (999px) are reserved for the status badge.
 
-Outlines are 1.5px Keyline Grey on white controls, rising to 2px in the status colour for a pending choice. The stage is always a 1:1 square that clips its contents (`overflow: hidden`, isolated stacking), so the canvas, the poster and the text fallback share one silhouette.
+Outlines are 1.5px Keyline Grey on white controls, rising to 2px in the status colour for a pending choice. The fullscreen stage has no corners; it clips its contents (`overflow: hidden`, isolated stacking). The square poster and the text fallback sit on the frame square; the poster's edges fade (a 9% mask on each side) into the backdrop still, the bare studio rendered at 7× the frame field around the same framing, so poster and canvas show the same object in the same place at any aspect. (Square embeds keep the 1:1 stage with its radius.)
 
-**The Perforation Rule.** The one ornament is a single row of whole dots under the top bar: 1.35px dots on a 12px pitch in a 6px band, in Perforation Taupe, spanning the top-bar measure. It echoes the objects' inset perforation band. It appears once per page and never as a divider between sections.
+**The Perforation Rule.** The one ornament is a single row of whole dots in the header, between the bar and the event: 1.35px dots on a 12px pitch in a 6px band, in Perforation Taupe, spanning the header. It hides on short screens. It echoes the objects' inset perforation band. It appears once per page and never as a divider between sections.
 
-The stage keeps the showcase's 20px radius; the shared component default (`--lt-radius-stage`, 22px) applies only on the visual-study page.
+A square embed's stage takes the shared component default radius (`--lt-radius-stage`, 22px); the fullscreen stage has none.
 
 ## Components
 
@@ -321,6 +330,7 @@ Firm, calm and exactly sized; nothing bounces.
 - **Secondary:** white with a 1.5px Keyline Grey outline and an ink label. After the host prepares the card it gains emphasis (ink border plus a 1px inset ink keyline), pointing to the next step without competing with the primary.
 - **Pairing:** primary and secondary share a two-column grid with a 10px gap, at equal widths. They stack at ≤420px.
 - **Utility:** white, 44px, 12px radius, 14px/600 label ("Try 3D again" in the graphics notice; "Reset demo", "Simulate graphics loss" and "Restore 3D (dev)" in the drawer, so no two visible buttons share a name). This tier is reserved for the drawer and the graphics notice.
+- **Collapse:** a white 44×44 button with a 1px Keyline Grey border and a 20px chevron at the end of the dock's head row, named "Controls" with `aria-expanded` (controls the dock body). Side column: the chevron points up to fold the panel away, down to open it. Sheet: down to lower the sheet, up to raise it. The chevron turns over 160ms (none with reduced motion). Focus stays on it.
 
 ### Response Choices (signature)
 - **Style:** Accept and Decline are always an equal-width pair: 52px tall, white, 1.5px Keyline Grey outline, a 16px/600 label led by an 18px stroked glyph (check for Accept, minus for Decline). They carry `aria-pressed`.
@@ -331,7 +341,7 @@ Firm, calm and exactly sized; nothing bounces.
 - **States:** "Saving response…" with a 14px ring spinner (pale muted ring, ink arc, 800ms linear). "Accepted" or "Declined" in the status colour, with an 18px check or minus that draws itself in 360ms `cubic-bezier(0.16, 1, 0.3, 1)`; this is the shell's one authored motion moment. "Couldn't save your response." in ink with a circled alert glyph, plus a bordered "Try again".
 
 ### Song Line (Party)
-- **Style:** a one-line paragraph between the stage and the panel, shown in host and guest modes whenever the Party scene is up: a 13px Sage Graphite "Song" key, then the title in 15px ink, baseline-aligned with an 8px gap.
+- **Style:** a one-line paragraph under the event meta in the header, shown in host and guest modes whenever the Party scene is up: a 13px Sage Graphite "Song" key, then the title in 15px ink, baseline-aligned with an 8px gap.
 - **Why:** the record label art is decorative, so the chosen song is always named in HTML. Unknown or missing metadata reads "Selected track".
 
 ### Quiet Links
@@ -349,25 +359,27 @@ Firm, calm and exactly sized; nothing bounces.
 - **Badge:** a Track Stone pill, 28px tall, 12px/600 Soft Ink ("Simulated saves"). It is an honest-state label, not a button.
 - **Motion toggle:** a labelled toggle button ("Motion" in Sage Graphite 400, value "On"/"Off" in ink 700), 44px tall with a 12px radius. It follows the OS reduced-motion setting live until the viewer overrides it.
 
-### Cards / Containers
-- **Invitation card:** Paper White, 28px radius at every width, 20px padding (14px at ≤420px, 16px in short landscape), 16px internal gap, card-lift shadow and a 7% ink hairline border. There is exactly one per page.
-- **Stage:** a Stage Greige 1:1 square, 20px radius, full card width. A poster image cross-fades to the live canvas (180ms ease-out); if graphics fail, a centred 15px Sage Graphite sentence replaces it. No CSS layer sits over poster or canvas (v1.3, revision #33; the v1.1 warm vignette and film grain were removed); what the renderer draws is what shows. The response never waits on the stage.
-- **Graphics notice:** a 14px-radius warm strip under the panel, holding 14px Soft Ink text and a "Try 3D again" utility button. It is shown only when graphics are degraded. The text says what the stage shows ("Showing a still image." when a poster is up, "The 3D scene isn't available right now." when only the text description is, "The 3D scene is taking a while." during a slow load) and what still works for this viewer ("Your response still works." for a guest, "Presets and preview still work." for a host).
+### Overlays / Containers
+- **Header:** Glass, 22px radius, overlay lift, 6px 18px 18px padding (tighter on smaller screens). The bar, the perforation rule, the event title, the meta line, the song line. There is exactly one.
+- **Dock:** Glass, 22px radius (24px top corners as a phone sheet), overlay lift. A head row (12px padding: Host/Guest switch at least 84px per option, collapse button), then a scrolling body (14px side padding, stable scrollbar gutter, contained overscroll): the active panel and the graphics notice on a 14px stack, a Hairline Sand rule, the collection strip, the Developer drawer. There is exactly one.
+- **Stage:** the full viewport in Stage Greige. A poster image cross-fades to the live canvas (180ms ease-out), with the backdrop still around it; if graphics fail, a centred 15px Sage Graphite sentence replaces the poster on the frame square. No CSS layer sits over poster or canvas (v1.3, revision #33); what the renderer draws is what shows. The response never waits on the stage.
+- **Graphics notice:** a 14px-radius warm strip (#F1EEE7) under the panel, holding 14px Soft Ink text and a "Try 3D again" utility button. It is shown only when graphics are degraded. The text says what the stage shows ("Showing a still image." when a poster is up, "The 3D scene isn't available right now." when only the text description is, "The 3D scene is taking a while." during a slow load) and what still works for this viewer ("Your response still works." for a guest, "Presets and preview still work." for a host).
 
-### Collection Rail
-- **Style:** a list of full-width row buttons (72px minimum, 16px radius, 6px 14px 6px 6px padding, 6px apart; at most 480px wide). Each row has a 60px Stage Greige thumbnail (12px radius) and a name (16px/650) over an object line (14px Sage Graphite). Only the current row carries a right-aligned 12px/600 tag. Each button is named "Party, record player" and so on; `aria-pressed` carries the selection.
-- **States:** hover takes a faint warm fill. The current row is Paper White with a Hairline Sand border, a 1px shadow and the tag "Showing" in ink. Scenes not yet live are `aria-disabled`, with a desaturated thumbnail (saturation 0.55, opacity 0.8), no hover and the tag "In production".
-- **Choosing a scene** opens a new invitation: a fresh controller and adapter with no response, so an answer never carries from one event to the next (presets and songs change within one event and keep it). If less than half the stage is on screen (phones, where the rail follows the card), the card scrolls into view, smoothly only with Motion on. A visually hidden polite live region announces the event ("Showing Party: Rooftop listening party"), and focus stays on the pressed row so keyboard users can keep browsing.
+### Collection Strip
+- **Style:** a "The collection" Label heading over a five-column grid of buttons (6px gap). Each holds a Stage Greige thumbnail (up to 56px, 12px radius) over its name in Caption. Each button is named "Party, record player" and so on (the visible name is hidden from assistive tech so it is not read twice); `aria-pressed` carries the selection.
+- **States:** hover takes a 5% ink wash and darkens the name. The current scene's thumbnail carries a 2px Olive Ink outline at a 2px offset, and its name is ink. Scenes not yet live are `aria-disabled`, with a desaturated thumbnail (saturation 0.55, opacity 0.8) and no hover.
+- **Choosing a scene** opens a new invitation: a fresh controller and adapter with no response, so an answer never carries from one event to the next (presets and songs change within one event and keep it). The scene is always on screen, so nothing scrolls. A visually hidden polite live region announces the event ("Showing Party: Rooftop listening party"), and focus stays on the pressed button so keyboard users can keep browsing.
 
 ### Developer Drawer
-- **Style:** a native `details` panel: Paper White, 18px radius, Hairline Sand border. The 56px summary carries "Developer" in the Title role, a 13px Sage Graphite hint and a CSS-drawn chevron that rotates over 160ms. It is collapsed by default.
-- **Body:** 18px padding, 18px stack. Small segmented controls, then a two-column definition list with hairline rules (12px labels, mono 13px values), then utility buttons, then the mono 12px event log (tabular time, bold kind, wrapping detail, newest first, 10 entries).
+- **Style:** a native `details` panel at the end of the dock: Paper White, 16px radius, Hairline Sand border. The 52px summary carries "Developer" in the Title role with a CSS-drawn chevron that rotates over 160ms, and the 13px Sage Graphite hint on a line under it. It is collapsed by default; opened, the dock scrolls to it.
+- **Body:** 16px padding, 18px stack. Small segmented controls, then a two-column definition list with hairline rules (12px labels, mono 13px values), then utility buttons, then the mono 12px event log (tabular time, bold kind, wrapping detail, newest first, 10 entries).
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep the object the largest thing in the first viewport: a full-width square stage inside a phone-width column (440px; 480px at ≥1280px and in the single-column layout).
-- **Do** place every control that acts on the object directly under the stage, inside the invitation card, with the host's preset choice before the primary action.
+- **Do** keep the object the hero of the whole screen: frame it in the square the overlays leave free, and keep at least 30% of a phone's height for it.
+- **Do** place every control that acts on the object in the dock, with the host's preset choice before the primary action.
+- **Do** put overlay text on the Glass surfaces only, never straight on the scene.
 - **Do** use the segmented control (Track Stone recess, 3px inset, white thumb with a Keyline Grey keyline) for every finite choice.
 - **Do** fill a response choice with Saved Pine or Garnet only after the save is confirmed; show pending and failed choices as a 2px status border plus a 1.5px inset keyline.
 - **Do** pair every status colour with a glyph and words: check for Accept, minus for Decline, circled alert for an error.
@@ -378,8 +390,9 @@ Firm, calm and exactly sized; nothing bounces.
 
 ### Don't:
 - **Don't** use the coral enamel #FF714A anywhere in the interface: not for text, fills, outlines or focus rings. It belongs to the objects.
-- **Don't** add a second lifted card or a grid of cards; the invitation card is the only surface with the ambient shadow.
-- **Don't** add ornament beyond the single perforation rule under the top bar, and don't repeat that rule as a section divider.
+- **Don't** add a third floating surface or a grid of cards; the header and the dock are the only surfaces with the ambient shadow.
+- **Don't** let an overlay cover the object; pass the overlays' extent to the controller as `frameInsets`.
+- **Don't** add ornament beyond the single perforation rule in the header, and don't repeat that rule as a section divider.
 - **Don't** draw a Livetime logo, monogram or brand graphic; the wordmark is plain text.
 - **Don't** outline a control (button, toggle, choice) in a grey lighter than Keyline Grey (#6F736D); Hairline Sand is for containers and rules, where text carries the affordance.
 - **Don't** set monospace outside the Developer drawer.

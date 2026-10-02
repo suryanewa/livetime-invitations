@@ -22,7 +22,7 @@ pnpm preview        # serve dist/ at http://127.0.0.1:5198/ (add --host for a ph
 pnpm test           # unit tests (Vitest)
 pnpm test:browser   # behaviour tests in the installed Google Chrome (Playwright)
 pnpm models         # re-export scene models to assets/ (GLB, quantised)
-pnpm capture <mode> # evidence: business | party | birthday | sports | dinner | ui | perf | lookdev
+pnpm capture <mode> # evidence: business | party | birthday | sports | dinner | ui | perf | lookdev | backdrops
 ```
 
 ## Embedding
@@ -33,7 +33,7 @@ import type { ResponseResult } from './src/core/types.ts';
 import { posterUrl } from './src/demo/posters.ts';
 
 const invitation = createInvitation({
-  mount: document.querySelector('#invitation')!,   // the controller renders a square stage into it
+  mount: document.querySelector('#invitation')!,   // the controller renders a square stage into it (see Layout)
   config: { category: 'birthday', cake: 'vanilla' },
   mode: 'guest',
   initialResponse: savedResponseFromYourApp,       // 'accept' | 'decline' | undefined
@@ -57,6 +57,33 @@ const invitation = createInvitation({
 
 Defaults: the approved look (direction `L2`; since v1.3 the production studio rig `neutral-room` through the perspective lens, with the stage token `--lt-stage` `#D5D2CD`), the user's `prefers-reduced-motion`, and the Normal quality tier with automatic step-down. Pass `reducedMotion` to override the OS setting, `direction` or `stage` (an options object, `stage: { rig, projection, fov }`: `rig` a rig name from `src/render/rigs/` or a `Rig`, `projection` `'perspective'` (default) or `'orthographic'`; `src/core/controller.ts`) only for tooling: the posters and the `--lt-stage` token belong to the production rig.
 
+### Layout: square (default) or fullscreen (v1.4)
+
+`layout` picks how the stage fills its mount. Existing embeds need no change.
+
+- **`'square'`** (default): the controller renders a 1:1 stage, full width of the mount, with the stage radius. Everything else on the page is yours to lay out around it.
+- **`'fullscreen'`**: the stage fills the mount at any aspect (size the mount yourself, e.g. `position: fixed; inset: 0`, or any box) and your UI floats over it. Tell the controller what your overlays cover so the object stays clear of them:
+
+```ts
+const invitation = createInvitation({
+  mount: document.querySelector('#scene')!,       // sized by your CSS, any aspect
+  layout: 'fullscreen',
+  frameInsets: { top: 180, right: 0, bottom: 320, left: 0 }, // CSS px of the mount your UI covers
+  backdropFor: backdropUrl,                        // optional, see below
+  // …the same options as above
+});
+// Whenever your overlays move or resize (a sheet collapses, the viewport rotates):
+invitation.setFrameInsets({ top: header.bottom + 8, bottom: innerHeight - sheet.top + 8 });
+```
+
+The controller frames the object in the **frame square**, the largest square left free by the insets, centred in that area, *exactly as the square stage frames it* (same camera position and lens over the square); the rest of the mount extends the same view, so a wide or tall screen shows more studio, never a different composition. Missing edges count as 0; with no insets the frame square is the centred square of the mount. Insets that would leave less than a quarter of the mount's shorter side are scaled back. `getFrame()` returns the current frame square (`{ x, y, size, width, height }`, mount CSS px), for example to place your own UI relative to the object. `setFrameInsets` is ignored by the square layout.
+
+**Posters in fullscreen.** Posters stay the square stills they always were (the square framing). The controller lays the poster (and the text fallback) on the frame square, so it shows the object exactly where the canvas will, and fades its edges into the **backdrop still**: the bare studio rendered at 7× the frame field (`BACKDROP_FIELD`) around the same framing, centred on the frame square, which covers the rest of the mount. Pass `backdropFor(category)` (the showcase's `backdropUrl` in `src/demo/posters.ts` resolves `assets/scenes/<category>/backdrop.webp`, 15–20 KiB each); without it the poster sits on the stage colour. Regenerate the backdrops with `pnpm capture backdrops [baseUrl]` whenever a scene's bounds, the rig or the framing change (and the posters with `pnpm capture <scene>`, as before).
+
+The mount gets `lt-stage lt-stage--fullscreen` and three CSS variables, `--lt-frame-x`, `--lt-frame-y` and `--lt-frame-size`. The standalone showcase (`src/demo/main.ts`, `syncOverlay`) is the reference: it measures its header and dock with a `ResizeObserver` and passes the result on every change.
+
+Accessibility over the scene is the host page's job: put overlay text on a surface or scrim that keeps 4.5:1 over any scene (the showcase's Glass is Warm White at 90 % over a blur; see `DESIGN.md`), keep 44px targets and safe-area insets.
+
 ### Configuration (finite presets)
 
 | Category | Config | Host action label |
@@ -67,7 +94,7 @@ Defaults: the approved look (direction `L2`; since v1.3 the production studio ri
 | Dinner | `{ category: 'dinner', dish: 'pasta' \| 'vegetables' }` (accepted; selects nothing since v1.2, see below) | Cover dish |
 | Business | `{ category: 'business', template: 'light' \| 'dark' }` | Attach card |
 
-**Dinner's `dish` is inert since v1.2.** The scene is the silver cloche and the clean plate, with no food (Surya, 2026-10-01; revision #22). `dish` is still accepted and defaulted (`DEFAULT_CONFIGS.dinner` is `{ category: 'dinner', dish: 'pasta' }`), so existing integrations keep compiling and running. Either value gives the same scene and the same shared posters (`shared-<pose>.webp`): the scene's `setConfig` ignores it. The showcase offers no Dinner preset control. Nothing else in the public API changed in v1.2: `src/core/types.ts` and the `createInvitation` options are unchanged from v1.1 (same categories, configs, callbacks, states and options). The only core change is internal to the scene contract: `src/core/sequence.ts` gained an optional `setLowDetail` hook, which the controller calls on tier changes so imported master materials follow the Low tier. The new models change only what the scenes load (larger GLBs; see `docs/qualification.md`, v1.2).
+**Dinner's `dish` is inert since v1.2.** The scene is the silver cloche and the clean plate, with no food (Surya, 2026-10-01; revision #22). `dish` is still accepted and defaulted (`DEFAULT_CONFIGS.dinner` is `{ category: 'dinner', dish: 'pasta' }`), so existing integrations keep compiling and running. Either value gives the same scene and the same shared posters (`shared-<pose>.webp`): the scene's `setConfig` ignores it. The showcase offers no Dinner preset control. Nothing else in the public API changed in v1.2 (v1.4 adds the optional `layout`, `frameInsets`, `setFrameInsets`, `getFrame` and `backdropFor`, above): `src/core/types.ts` and the `createInvitation` options are unchanged from v1.1 (same categories, configs, callbacks, states and options). The only core change is internal to the scene contract: `src/core/sequence.ts` gained an optional `setLowDetail` hook, which the controller calls on tier changes so imported master materials follow the Low tier. The new models change only what the scenes load (larger GLBs; see `docs/qualification.md`, v1.2).
 
 `setConfig(config)` switches preset or category. A category change loads the new scene and frees the old one's GPU resources; a preset change swaps materials at a canonical pose. Party's `songId` is carried through for your UI; the scene never fetches song data, and the showcase shows "Selected track" when metadata is missing.
 

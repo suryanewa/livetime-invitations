@@ -5,9 +5,10 @@
  * OWN-WORLD: warm white page, #D5D2CD stage (the production rig's measured backdrop), ink type, segmented controls on a #EEECE6 track,
  *   one perforation-dot rule echoing the objects' signature. System sans (pinned by spec).
  * STORY: host prepares the card → previews as guest → guest answers → simulated save status.
- * FIRST VIEWPORT: phone-width invitation (event, stage, controls) left; the collection rail
- *   and a collapsed Developer drawer right. Controls sit directly under the stage; in host
- *   mode the preset choice precedes the primary action because the host picks, then acts.
+ * FIRST VIEWPORT (v1.4): the scene fills the screen; the header (brand, badge, Motion, the
+ *   event) floats top-left and the dock (mode, panel, collection, Developer) floats right, or as
+ *   a bottom sheet in portrait. The object is framed in the square the overlays leave free. In
+ *   host mode the preset choice precedes the primary action because the host picks, then acts.
  * FORM: shaped directly from a precisely specified brief. Concept roll waived by user,
  *   2026-09-28 (checkpoint 2: "keep the shell"), so no seed key exists.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review,
@@ -17,13 +18,13 @@ import '../ui/shell.css';
 import './showcase.css';
 import { createInvitation, type InvitationHandle, type InvitationState, type SceneRegistry } from '../core/controller.ts';
 import { presetOf } from '../core/config.ts';
-import type { Category, Mode, ResponseRequest, SceneConfig } from '../core/types.ts';
+import type { Category, FrameInsets, Mode, ResponseRequest, SceneConfig } from '../core/types.ts';
 import { DEFAULT_CONFIGS } from '../core/types.ts';
 import { createGuestControls, ICONS } from '../ui/guestControls.ts';
 import type { Tier } from '../render/quality.ts';
 import { MockResponseAdapter, type MockMode, MOCK_DELAYS } from './mockAdapter.ts';
 import { CATEGORY_LABEL, EVENTS, HOST_ACTION, LIVE_CATEGORIES, OBJECT_LABEL, POSE_TEXT, PRESET_LEGEND, PRESETS, SONGS, songTitle } from './fixtures.ts';
-import { posterUrl } from './posters.ts';
+import { backdropUrl, posterUrl } from './posters.ts';
 import { collectionThumb } from './collection.ts';
 import { DEFAULT_RIG, RIGS, rigNames } from '../render/rigRegistry.ts';
 
@@ -38,8 +39,9 @@ const scenes: SceneRegistry = {
 const app = document.getElementById('app')!;
 app.innerHTML = `
   <div class="sc">
-    <header class="sc-head">
-      <div class="sc-top">
+    <div class="sc-stage" data-bind="stage"></div>
+    <header class="sc-top sc-surface" data-bind="top">
+      <div class="sc-bar">
         <p class="sc-brand"><strong>Livetime</strong><span>Invitation interactions</span></p>
         <div class="sc-top-actions">
           <span class="sc-badge" title="This demo never contacts a real RSVP service">Simulated saves</span>
@@ -49,20 +51,24 @@ app.innerHTML = `
         </div>
       </div>
       <div class="sc-rule" aria-hidden="true"></div>
-      <div class="sc-seg sc-mode" role="group" aria-label="Preview as">
-        <button type="button" data-mode="host" aria-pressed="true">Host</button>
-        <button type="button" data-mode="guest" aria-pressed="false">Guest</button>
+      <div class="sc-event">
+        <h1 class="sc-event__title" data-bind="title"></h1>
+        <p class="sc-event__meta"><span class="sc-meta"><span data-bind="when"></span><span data-bind="where"></span><span class="sc-sample">Sample event</span></span></p>
+        <p class="sc-track" data-bind="track" hidden><span class="sc-track__k">Song</span> <span data-bind="track-title"></span></p>
       </div>
     </header>
-    <main class="sc-main">
-      <section class="sc-preview" aria-label="Invitation preview">
-        <article class="sc-card">
-          <header class="sc-event">
-            <h1 class="sc-event__title" data-bind="title"></h1>
-            <p class="sc-event__meta"><span class="sc-meta"><span data-bind="when"></span><span data-bind="where"></span><span class="sc-sample">Sample event</span></span></p>
-          </header>
-          <div class="sc-stage" data-bind="stage"></div>
-          <p class="sc-track" data-bind="track" hidden><span class="sc-track__k">Song</span> <span data-bind="track-title"></span></p>
+    <section class="sc-dock sc-surface" aria-label="Invitation controls" data-bind="dock" data-collapsed="false">
+      <div class="sc-dock__head">
+        <div class="sc-seg sc-mode" role="group" aria-label="Preview as">
+          <button type="button" data-mode="host" aria-pressed="true">Host</button>
+          <button type="button" data-mode="guest" aria-pressed="false">Guest</button>
+        </div>
+        <button class="sc-collapse" type="button" aria-expanded="true" aria-controls="sc-dock-body" aria-label="Controls" data-action="collapse">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5.5 8l4.5 4.5L14.5 8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="sc-dock__body" id="sc-dock-body" data-bind="dock-body">
+        <div class="sc-dock__primary" data-bind="primary">
           <div class="sc-panel" data-panel="host">
             <fieldset class="sc-field" data-bind="songs-field" hidden>
               <legend>Song</legend>
@@ -83,13 +89,10 @@ app.innerHTML = `
             <p data-bind="graphics-text"></p>
             <button class="sc-quiet-btn" type="button" data-action="retry-3d">Try 3D again</button>
           </div>
-        </article>
-      </section>
+        </div>
 
-      <aside class="sc-side">
         <section class="sc-collection" aria-labelledby="sc-collection-h">
           <h2 id="sc-collection-h">The collection</h2>
-          <p class="sc-lede">Five invitation scenes built as one family of small objects. Guests choose first; the object acts out their answer.</p>
           <ul class="sc-rail" data-bind="rail"></ul>
           <p class="visually-hidden" aria-live="polite" data-bind="announce"></p>
         </section>
@@ -124,14 +127,59 @@ app.innerHTML = `
             <ol class="sc-log" data-bind="log" aria-live="off"></ol>
           </div>
         </details>
-      </aside>
-    </main>
+      </div>
+    </section>
   </div>`;
 
 const $ = <T extends Element = HTMLElement>(sel: string) => app.querySelector<T>(sel)!;
 const $$ = <T extends Element = HTMLElement>(sel: string) => [...app.querySelectorAll<T>(sel)];
 /** Polite, visually hidden: names the event a rail choice just opened. */
 const announce = $('[data-bind="announce"]');
+
+// ── Overlay layout (v1.4: fullscreen scene, floating UI) ───────────────────
+const stageEl = $('[data-bind="stage"]');
+const topEl = $('[data-bind="top"]');
+const dock = $('[data-bind="dock"]');
+const primary = $('[data-bind="primary"]');
+const collapseBtn = $<HTMLButtonElement>('[data-action="collapse"]');
+/** CSS owns the breakpoints: the dock says whether it is a bottom sheet or a side column. */
+const sheetLayout = () => getComputedStyle(dock).getPropertyValue('--sc-layout').trim() === 'sheet';
+/** Breathing room between an overlay and the object's frame square. */
+const FRAME_GAP = 8;
+
+/**
+ * The stage area the overlays cover. The controller frames the object in the largest square left
+ * free, so the title and the controls never sit on it: the header strip above, and the dock to
+ * the right (side column) or below (bottom sheet).
+ */
+function overlayInsets(): FrameInsets {
+  const s = stageEl.getBoundingClientRect();
+  const t = topEl.getBoundingClientRect();
+  const d = dock.getBoundingClientRect();
+  const top = Math.max(0, t.bottom - s.top + FRAME_GAP);
+  if (sheetLayout()) return { top, right: 0, bottom: Math.max(0, s.bottom - d.top + FRAME_GAP), left: 0 };
+  return { top, right: Math.max(0, s.right - d.left + FRAME_GAP), bottom: 16, left: 0 };
+}
+
+/**
+ * The sheet's resting height is the active panel plus a peek of the collection, so the scene keeps
+ * most of the phone; the rest of the sheet (collection, Developer) scrolls inside it.
+ */
+function syncOverlay() {
+  document.documentElement.style.setProperty('--sc-top-h', `${Math.round(topEl.getBoundingClientRect().bottom)}px`);
+  dock.style.setProperty('--sc-primary-h', `${Math.ceil(primary.getBoundingClientRect().height)}px`);
+  controller?.setFrameInsets(overlayInsets());
+}
+const overlayObserver = new ResizeObserver(() => syncOverlay());
+for (const el of [topEl, dock, primary]) overlayObserver.observe(el);
+addEventListener('resize', syncOverlay);
+
+function setCollapsed(collapsed: boolean) {
+  dock.dataset.collapsed = String(collapsed);
+  collapseBtn.setAttribute('aria-expanded', String(!collapsed));
+  syncOverlay();
+}
+collapseBtn.addEventListener('click', () => setCollapsed(dock.dataset.collapsed !== 'true'));
 
 /** ?scene=party opens a live scene directly (links, tests, captures). */
 const sceneParam = new URLSearchParams(location.search).get('scene') as Category | null;
@@ -203,6 +251,8 @@ function mount() {
   if (initialResponse) adapter.stored = initialResponse;
   controller = createInvitation({
     mount: stage,
+    layout: 'fullscreen',
+    frameInsets: overlayInsets(),
     config,
     mode,
     initialResponse,
@@ -211,6 +261,7 @@ function mount() {
     reducedMotion: motionOverridden ? !motionOn : undefined,
     scenes,
     posterFor: comparisonRig ? undefined : posterUrl,
+    backdropFor: comparisonRig ? undefined : backdropUrl,
     describePose: (c, pose) => POSE_TEXT[c][pose],
     onResponseRequested: (req) => {
       requests.push(req);
@@ -297,21 +348,16 @@ function renderStatic() {
     ...(['party', 'birthday', 'sports', 'dinner', 'business'] as Category[]).map((c) => {
       const li = document.createElement('li');
       const live = LIVE_CATEGORIES.includes(c);
-      const tag = !live ? 'In production' : c === category ? 'Showing' : '';
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'sc-rail__item';
       b.setAttribute('aria-pressed', String(c === category));
-      // aria-pressed carries "Showing"; the name stays the scene and its object.
+      // aria-pressed carries "showing"; the name stays the scene and its object.
       b.setAttribute('aria-label', `${CATEGORY_LABEL[c]}, ${OBJECT_LABEL[c].toLowerCase()}${live ? '' : ', in production'}`);
       if (!live) b.setAttribute('aria-disabled', 'true');
       b.innerHTML = `
         <img src="${collectionThumb(c)}" alt="" width="96" height="96" loading="lazy" decoding="async" />
-        <span class="sc-rail__text">
-          <span class="sc-rail__name">${CATEGORY_LABEL[c]}</span>
-          <span class="sc-rail__obj">${OBJECT_LABEL[c]}</span>
-        </span>
-        ${tag ? `<span class="sc-rail__tag">${tag}</span>` : ''}`;
+        <span class="sc-rail__name" aria-hidden="true">${CATEGORY_LABEL[c]}</span>`;
       b.addEventListener('click', () => {
         if (!live || c === category) return;
         // Each category is its own invitation: dispose and mount a fresh controller and adapter
@@ -323,22 +369,12 @@ function renderStatic() {
         renderStatic();
         log('demo', `new invitation · ${c}`);
         announce.textContent = `Showing ${CATEGORY_LABEL[c]}: ${EVENTS[c].title}`;
-        revealStage();
       });
       li.append(b);
       return li;
     }),
   );
   if (railFocused) rail.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
-}
-
-/** A rail choice whose stage is mostly off-screen (phones: the rail follows the card) scrolls it in. */
-function revealStage() {
-  const r = $('[data-bind="stage"]').getBoundingClientRect();
-  const shown = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
-  if (shown >= r.height / 2) return;
-  // Focus stays on the pressed rail item so keyboard users can keep browsing the collection.
-  $('.sc-card').scrollIntoView({ block: 'start', behavior: motionOn ? 'smooth' : 'auto' });
 }
 
 function syncPresets() {
@@ -396,7 +432,11 @@ function render(state: InvitationState) {
 
 // ── Wiring ─────────────────────────────────────────────────────────────────
 $$<HTMLButtonElement>('.sc-mode button').forEach((b) =>
-  b.addEventListener('click', () => controller?.setMode(b.dataset.mode as Mode)),
+  b.addEventListener('click', () => {
+    // Choosing a mode means using its panel: a collapsed dock opens again.
+    if (dock.dataset.collapsed === 'true') setCollapsed(false);
+    controller?.setMode(b.dataset.mode as Mode);
+  }),
 );
 $('[data-action="prepare"]').addEventListener('click', () => {
   // Ignored while the host sequence plays (the button is aria-disabled then).
