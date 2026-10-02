@@ -18,7 +18,7 @@ import {
   type AnswerChange, changeTime, CONTENT_END, coverBlendSafe, DURATIONS, frameFor, newFrame, planAnswerChange, sampleAnswerChange, sampleSequence,
   type DinnerFrame,
 } from './sequences.ts';
-import { leftSteamEnd, STEAM_END, STEAM_REST, steamPlumes, steamPuffs, stirFade } from './steam.ts';
+import { leftSteamEnd, leftSteamFade, STEAM_END, STEAM_REST, steamPlumes, steamPuffs } from './steam.ts';
 import { dinnerPull } from './pull.ts';
 
 /**
@@ -230,7 +230,9 @@ export class DinnerScene implements SceneInstance {
     // before then never closes it.
     const closes = plan.from === 'accept' && plan.next === 'decline' && plan.rewind > 0;
     for (const g of this.leftSteam) {
-      if (g.t !== null && g.capture > g.t) g.capture = closes ? g.t + plan.rewind + 0.5 / 60 : Infinity;
+      if (g.t === null || g.capture <= g.t) continue;
+      g.capture = closes ? g.t + plan.rewind + 0.5 / 60 : Infinity;
+      g.until = leftSteamEnd(g.end, g.start, g.capture);
     }
     this.steamT = null;
     this.steamFree = false;
@@ -313,7 +315,7 @@ export class DinnerScene implements SceneInstance {
   private syncSteam(): void {
     this.steam.update(0, { tau: this.steamT, emitStart: this.steamEmitStart, fade: this.steamFade });
     this.leftSteam.forEach((g, i) => this.steam.update(i + 1, {
-      tau: g.t, emitStart: g.start, emitEnd: g.end, capture: g.capture, fade: g.t === null ? 1 : stirFade(g.t - g.end),
+      tau: g.t, emitStart: g.start, emitEnd: g.end, capture: g.capture, fade: g.t === null ? 1 : leftSteamFade(g.t, g.end, g.capture),
     }));
   }
 

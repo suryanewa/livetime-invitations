@@ -86,8 +86,11 @@ export const STEAM_TIME = {
   mix: 1.6,
   /** The spill's roll-up decays over this time. */
   curl: 0.35,
-  /** Condensation forms this quickly once the vapour meets room air. */
-  fadeIn: 0.06,
+  /**
+   * Condensation forms this quickly once the vapour meets room air (0.06 s popped a puff in within
+   * one 64 ms frame step).
+   */
+  fadeIn: 0.11,
 } as const;
 
 const smooth = (a: number, b: number, x: number) => {
@@ -268,10 +271,12 @@ export function buildPuffs(): Puff[] {
     p.vel.add(v);
     p.vel.y += 0.2;
     p.rise = range(0.9, 1.2);
-    p.wisp = range(0.35, 0.6);
+    // Mostly filament, and short-lived: it frays into the rising air within a few tenths of a
+    // second (longer-lived, the lobes stood above the dome as soft upright lozenges).
+    p.wisp = range(0.5, 0.75);
     p.grow = range(0.3, 0.4);
     p.stretch = range(1.2, 1.7);
-    p.life = range(0.45, 0.7);
+    p.life = range(0.32, 0.5);
     p.peak = range(0.3, 0.4);
     p.sway = range(0.08, 0.14);
     puffs.push(p);
@@ -409,8 +414,10 @@ export const PLUME = {
   drift: 0,
   driftDecay: 0.6,
   /**
-   * The room's draught: the whole column leans slowly from side to side across the view (su of
-   * lean per su of height, at `leanHz`), so it never stands as a parallel-sided slab.
+   * The room's draught: the whole column leans slowly, more and less, across the view (su of lean
+   * per su of height, up to `lean`, at `leanHz`), so it never stands as a parallel-sided slab. It
+   * leans away from the cloche set down at the left (towards it, the steam crossed the dark silver
+   * as a milky flare, and read as leaking from under it).
    */
   lean: 0.12,
   leanHz: 0.13,
@@ -418,7 +425,7 @@ export const PLUME = {
 
 /** The draught's lean of the column at τ (su per su of height, along the camera's horizontal). */
 export function plumeLean(tau: number): number {
-  return PLUME.lean * Math.sin(2 * Math.PI * PLUME.leanHz * tau + 0.6);
+  return PLUME.lean * (0.5 + 0.5 * Math.sin(2 * Math.PI * PLUME.leanHz * tau + 0.6));
 }
 /** The camera's horizontal in the scene (the neutral-room view; the ribbons' across direction is the live camera's). */
 export const VIEW_RIGHT = new Vector3(Math.cos((20 * Math.PI) / 180), 0, -Math.sin((20 * Math.PI) / 180));
@@ -511,7 +518,7 @@ export function plumeCenter(p: Plume, h: number, tau: number, out: Vector3): Vec
   out.addScaledVector(VIEW_RIGHT, plumeLean(tau) * h);
   out.addScaledVector(p.dir1, amp * Math.sin(k1 * s + p.seed));
   out.addScaledVector(p.dir2, PLUME.wave2Share * amp * Math.sin(k2 * s + 1.7 * p.seed));
-  out.addScaledVector(p.dir3, PLUME.flap * h * Math.sin(2 * Math.PI * PLUME.flapHz * tau + p.seed + 1.5 * h));
+  out.addScaledVector(p.dir3, PLUME.flap * h * Math.sin(2 * Math.PI * PLUME.flapHz * tau + p.seed - 1.0 * h));
   return out;
 }
 
@@ -577,11 +584,26 @@ export function stirFade(age: number): number {
   const e = Math.max(0, age);
   return Math.exp(-(e * e) / (STEAM_STIR * (e + 0.2)));
 }
-/** When steam left behind at `cut` has gone: its own life, or stirred below 1 % (≤ STEAM_END). */
-export function leftSteamEnd(cut: number, emitStart = -Infinity): number {
+/**
+ * Once the cover is back on, the decline lifts the dish straight up through what is left of the
+ * column and carries it off: its wake breaks the steam up and mixes it in within a few tenths of a
+ * second (`wakeFade`, from a smooth start at `capture`). Without it the leftover kept rising in front
+ * of the bin as the camera came round to it, reading as smoke from the bin.
+ */
+export const STEAM_WAKE = 0.16;
+export function wakeFade(sinceCapture: number): number {
+  const e = Math.max(0, sinceCapture);
+  return Math.exp(-(e * e) / (STEAM_WAKE * (e + 0.1)));
+}
+/** The light left in steam left behind at `cut` (`capture`: when the cover closed, if it has). */
+export function leftSteamFade(tau: number, cut: number, capture = Infinity): number {
+  return stirFade(tau - cut) * wakeFade(tau - capture);
+}
+/** When steam left behind at `cut` has gone: its own life, or below 1 % of its light (≤ STEAM_END). */
+export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infinity): number {
   let until = steamEndAfter(cut, emitStart);
-  for (let e = 0; e < until - cut; e += 0.02) {
-    if (stirFade(e) < 0.01) { until = Math.min(until, Math.ceil((cut + e) * 100) / 100); break; }
+  for (let t = cut; t < until; t += 0.02) {
+    if (leftSteamFade(t, cut, capture) < 0.01) { until = Math.min(until, Math.ceil(t * 100) / 100); break; }
   }
   return until;
 }

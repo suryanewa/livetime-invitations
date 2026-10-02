@@ -244,10 +244,11 @@ float captured(vec3 pc) {
   if (uTime < uCapture) return 1.0;
   vec3 cv = pc - uSeated;
   float d = max(length(cv.xz) - domeRadius(clamp(cv.y, 0.0, DOME_TOP)), cv.y - DOME_TOP);
-  // One-sided (only steam inside the shell is touched, so nothing visible when it closes changes),
-  // soft over 4 cm and ragged: the cover stirred it as it came down (a crisp edge here printed the
-  // dome's outline across the steam left behind).
-  return smoothstep(-0.25, 0.0, d + 0.12 * (0.5 + 0.5 * snoise(pc * 5.0 + 17.0)));
+  // Inside the shell: gone with the dish. Just outside it, the cover coming down stirred the steam
+  // away: a ragged band of 3 cm (a crisp edge here printed the dome's outline across the steam left
+  // behind) that clears over 0.3 s from when it closes, so nothing visible then changes at once.
+  float band = smoothstep(0.0, 0.2, d + 0.08 * snoise(pc * 5.0 + 17.0));
+  return smoothstep(-0.03, 0.0, d) * mix(1.0, band, smoothstep(0.0, 0.3, uTime - uCapture));
 }
 
 /**
@@ -336,8 +337,11 @@ void main() {
   float env = exp(-dot(rw, rw) * (2.6 + 2.6 * vErode)) * (1.0 - smoothstep(0.6, 1.0, sqrt(r2)));
   // (Low tier: one octave and no filaments, half the lookups.)
   float n = 0.5 + 0.5 * (uLow ? 0.85 * snoise(ROT * qw) : 0.7 * snoise(ROT * qw) + 0.3 * snoise(ROT * (ROT * qw) * 2.3 + 5.3));
-  // Lobes and gaps, not a featureless billow: the field is thresholded (softly) more as it ages.
-  float body = mix(0.35 + 0.65 * n, 1.5 * smoothstep(0.35, 0.8, n), 0.55 + 0.45 * vErode);
+  // Lobes and gaps, not a featureless billow: a field drawn out along the rise and sheared with
+  // height is thresholded (softly) more as it ages (an isotropic one drew closed rings).
+  vec3 qs = qw * vec3(1.3, 0.35, 1.3) + vec3(1.2 * vLocal.y, 0.0, 0.0);
+  float ns = uLow ? n : 0.5 + 0.5 * snoise(ROT * qs + 2.7);
+  float body = mix(0.35 + 0.65 * n, 1.5 * smoothstep(0.3, 0.8, ns), 0.45 + 0.45 * vErode);
   // Filaments: thin sheets drawn out along the rise, in world space so they run on from puff to
   // puff, drifting up and bent by the same warp. A sheet (the spill) is mostly filament from
   // birth; a billow has some from the start and frays into them as it evaporates. Where a sheet
@@ -405,11 +409,13 @@ vec3 centre(float h, float seed) {
   float drift = ${PLUME.drift.toFixed(4)} * exp(-max(0.0, uTime - 0.5) / ${PLUME.driftDecay.toFixed(4)}) * smoothstep(0.25, 0.5, uTime);
   c.xz += vec2(${REVEAL_DIR.x.toFixed(5)}, ${REVEAL_DIR.z.toFixed(5)}) * drift * h;
   // The room's draught leans the whole column slowly from side to side (plumeLean).
-  c.xz += vec2(${VIEW_RIGHT.x.toFixed(5)}, ${VIEW_RIGHT.z.toFixed(5)}) * ${PLUME.lean.toFixed(4)} * sin(${(2 * Math.PI).toFixed(5)} * ${PLUME.leanHz.toFixed(4)} * uTime + 0.6) * h;
+  c.xz += vec2(${VIEW_RIGHT.x.toFixed(5)}, ${VIEW_RIGHT.z.toFixed(5)}) * ${PLUME.lean.toFixed(4)} * (0.5 + 0.5 * sin(${(2 * Math.PI).toFixed(5)} * ${PLUME.leanHz.toFixed(4)} * uTime + 0.6)) * h;
   c.xz += iDirs.xy * amp * sin(K1 * s + seed);
   c.xz += iDirs.zw * ${PLUME.wave2Share.toFixed(3)} * amp * sin(K2 * s + 1.7 * seed);
   // The whole plume flaps side to side (not carried up: the draught moves it, not the vapour).
-  c.xz += vec2(cos(iWidth.w), sin(iWidth.w)) * FLAP * h * sin(FLAP_W * uTime + seed + 1.5 * h);
+  // (Its bend travels up the column, as a disturbance carried up by the flow; a phase of +h sent it
+  // down, against the rise.)
+  c.xz += vec2(cos(iWidth.w), sin(iWidth.w)) * FLAP * h * sin(FLAP_W * uTime + seed - 1.0 * h);
   return c;
 }
 
@@ -463,7 +469,8 @@ void main() {
   // split and fade; none is drawn.
   float s = h - vRise * uTime;
   float x = u * vWidth;
-  float free = smoothstep(0.0, 0.2, h);
+  // Warped from the start (a little at the base, so it never stands as an even comb of stripes).
+  float free = 0.35 + 0.65 * smoothstep(0.0, 0.2, h);
   vec2 wq = vec2(x * 3.0, s * 2.2);
   float wx = snoise(vec3(wq, vSeed + 1.1 * uTime));
   float wy = uLow ? 0.0 : snoise(vec3(wq + 7.3, vSeed + 3.1 + 1.1 * uTime));
@@ -472,33 +479,57 @@ void main() {
   float ue = u + 0.45 * wx * free;
   float across = clamp(1.0 - ue * ue, 0.0, 1.0);
   across = across * sqrt(across);
-  // A swirl that grows with height: the wisps lean and shear as they rise.
-  float swirl = 0.12 * h * sin(1.7 * uTime + 3.0 * h + vSeed);
+  // A swirl that grows with height and is carried up with the vapour (in s): the wisps lean and
+  // shear as they rise (a swirl fixed in h made the pattern sway in place).
+  float swirl = 0.12 * h * sin(0.9 * uTime + 3.0 * s + vSeed);
   vec3 q = vec3((x + swirl) * 7.0 + 1.3 * wx * free, s * 5.0 + 1.3 * wy * free, vSeed + 2.4 * uTime);
   float n = uLow ? snoise(q) : 0.65 * snoise(q) + 0.35 * snoise(q * 2.1 + 4.0);
-  // Thin steam (the tail, the top of the column) breaks into fewer, distinct wisps rather than
-  // dimming as a veil: a ridge of the same field (bright along its zero line, soft either side,
-  // never a flat plateau with a cut-out edge), which keeps its light as the density falls (until
-  // the last of it, which fades out as it is: the column ends clear, with no step).
-  // The ridge's field is drawn out along the rise (filaments, not a network of veins).
+  // Thin steam (the tail, the top of the column) breaks into fewer, distinct filaments rather than
+  // dimming as a veil, and they keep their light (until the last of it, which fades out as it is:
+  // the column ends clear, with no step). One family of them: the level lines of a phase that only
+  // grows across the sheet, so they never cross (thresholded noise drew a network of veins), unevenly
+  // spaced, curling with the warp, soft-cored (no aliased hairlines) and broken along their length.
   float thin = 1.0 - smoothstep(0.06, 0.5, vDensity);
-  vec3 rq = vec3((x + swirl) * 8.0 + 1.6 * wx * free, s * 1.8 + 0.6 * wy * free, vSeed + 7.0 + 1.6 * uTime);
-  // (Softened at its core: a bare |n| creased the filaments into lightning-like kinks.)
-  float rn = thin > 0.0 ? snoise(rq) : 1.0;
-  float ridge = max(0.0, 1.0 - sqrt(rn * rn + 0.015));
-  float wisps = mix(smoothstep(-0.25, 0.45, n), 1.45 * ridge * ridge * ridge, thin);
+  float fil = 0.0;
+  if (thin > 0.0) {
+    // (The slow part of the phase is a few sines, not the noise texture: a lattice cell that large
+    // shows the texture filter's 8-bit weights as fine horizontal steps.)
+    // Neighbours wave out of step (the waves vary fast across), the spacing varies about 2:1, and
+    // each filament has its own width and light, carried up with the vapour (breaks and
+    // brightness are in s, which rises with it), so they read as rising, not swaying in place.
+    float ph = (x + swirl) * 4.0 + 0.25 * wx * free
+      + 0.3 * sin(7.5 * x + 1.4 * s + vSeed + 0.5 * uTime) + 0.35 * sin(-2.1 * x + 2.3 * s + 2.0 * vSeed - 0.3 * uTime)
+      + 0.2 * sin(3.1 * x - 0.9 * s + 3.0 * vSeed);
+    float c = 0.5 + 0.5 * cos(6.2832 * ph);
+    // (Each filament's lane is centred on it, so its own width and light change only where c is 0.)
+    float lane = floor(ph + 0.5);
+    // Its width and light also vary along it, carried up with the vapour (in s).
+    float own = clamp(0.5 + 0.6 * snoise(vec3(lane * 1.73 + vSeed, s * 1.4, 31.0)), 0.0, 1.0);
+    float own2 = clamp(0.5 + 0.6 * snoise(vec3(lane * 2.31 + vSeed, s * 1.1, 47.0)), 0.0, 1.0);
+    float c2 = c * c;
+    c = mix(c2 * c2, c, own);
+    float along = uLow ? 1.0 : smoothstep(-0.05, 0.55, snoise(vec3(x * 2.4, s * 3.2, vSeed + 13.0 + 0.3 * uTime)));
+    fil = 3.0 * c * (0.3 + 0.7 * own2) * (0.05 + 0.95 * along);
+  }
+  float wisps = mix(smoothstep(-0.25, 0.45, n), fil, thin);
   // Fold lines: where a sheet turns edge-on it shows as a thin brighter line.
   float fold = uLow ? 0.0 : smoothstep(0.8, 0.97, 1.0 - abs(snoise(q * vec3(0.6, 1.4, 1.0) + 11.0)));
-  float d = across * mix(1.0, 0.2 + wisps * (1.0 + 0.4 * fold), smoothstep(0.03, 0.4, h))
+  float d = across * mix(1.0, 0.2 + wisps * (1.0 + 0.4 * fold * (1.0 - thin)), smoothstep(0.03, 0.4, h))
     * (1.0 + 2.2 * thin * smoothstep(0.008, 0.04, vDensity));
   d *= smoothstep(ROOM, 0.85 * ROOM, abs(u));
+  // Its top is uneven: where the column is last seen varies across it by about a quarter (a level
+  // ceiling read as the ribbon's end), some filaments overshooting.
+  float top = ${(PLUME.length - 0.02).toFixed(3)} - 0.55 * (0.5 + 0.5 * snoise(vec3(x * 3.0 + vSeed, 0.4 * uTime, vSeed + 21.0)));
+  d *= 1.0 - smoothstep(top - 0.25, top, h);
   float k = contact(vPos);
   if (k < 0.0) discard;
   // The vapour here rose straight up from where it was when the cover was set back on.
   k *= captured(vPos - vec3(0.0, vRise * max(0.0, uTime - uCapture), 0.0));
   // Dense parts saturate softly (a hard clamp would print a flat edge where it bites), short of
   // opaque: dense steam over the gilt rim or the dark silver stays a veil.
-  float a = AMAX * (1.0 - exp(-d * k * vDensity * uFade / AMAX));
+  // (Lower near the source, where the dense base stands in front of the plate's gilt rim.)
+  float amax = AMAX * mix(0.55, 1.0, smoothstep(0.4, 0.9, h));
+  float a = amax * (1.0 - exp(-d * k * vDensity * uFade / amax));
   if (a < 0.002) discard;
   gl_FragColor = vec4(steamLight(vPos, 0.3), 1.0);
   // Tone mapped and encoded like the scene, then scaled by the coverage for the screen blend.
@@ -623,7 +654,9 @@ export class DinnerSteam {
     this.puffGeometry = instanced(quad, { iSpawn: spawn, iVel: vel, iShape: shape, iLook: look, iCurl: curl }, n);
     quad.dispose();
 
-    const strip = stripGeometry(48);
+    // Fine rows: the density and the thin-steam terms are per-vertex, and at 48 rows their linear
+    // interpolation printed a faint ladder (a 13 px period) along the filaments.
+    const strip = stripGeometry(192);
     const m = plumes.length;
     const base = new Float32Array(m * 4), flow = new Float32Array(m * 4), width = new Float32Array(m * 4), dirs = new Float32Array(m * 4);
     plumes.forEach((p, i) => {

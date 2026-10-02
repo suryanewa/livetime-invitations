@@ -8,7 +8,7 @@ import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { DinnerScene } from '../src/scenes/dinner/index.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  buildPlumes, buildPuffs, domeClearance, newPuffState, PLUME, plumeCenter, plumeDensity, POCKET_CLEAR, PUFF_COUNTS, PUFF_KINDS, leftSteamEnd, plumeSource, puffAt, riseAt, STEAM_END, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade,
+  buildPlumes, buildPuffs, domeClearance, newPuffState, PLUME, plumeCenter, plumeDensity, POCKET_CLEAR, PUFF_COUNTS, PUFF_KINDS, leftSteamEnd, plumeSource, wakeFade, puffAt, riseAt, STEAM_END, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade,
   steamPlumes, steamPuffs, VIEW_RIGHT,
 } from '../src/scenes/dinner/steam.ts';
 
@@ -335,8 +335,10 @@ describe('Dinner steam on stage (v1.5)', () => {
     expect(after.visible).toBe(true);
     expect(after.tau).toBeNull();
     expect(after.left).toHaveLength(1);
-    expect(after.left[0]).toMatchObject({ tau: cut, emitEnd: cut, until: leftSteamEnd(cut) });
-    expect(leftSteamEnd(cut)).toBeLessThanOrEqual(steamEndAfter(cut));
+    expect(after.left[0]).toMatchObject({ tau: cut, emitEnd: cut });
+    const capture = after.left[0]!.capture;
+    expect(after.left[0]!.until).toBe(leftSteamEnd(cut, -Infinity, capture));
+    expect(after.left[0]!.until).toBeLessThanOrEqual(steamEndAfter(cut));
     // Stirred by the returning cover, it thins smoothly from the cut (no step), to 1 % within ≈ 2.5 s.
     expect(stirFade(0)).toBe(1);
     expect(1 - stirFade(1 / 60)).toBeLessThan(0.01);
@@ -344,8 +346,11 @@ describe('Dinner steam on stage (v1.5)', () => {
     expect(stirFade(2.5)).toBeLessThan(0.01);
     expect(after.fade).toBe(1);
     // The rewind sets the cover back on the plate: what it closes over then stays under it (the
-    // first frame that counts has it seated, or barely lifted with the plate).
-    const capture = after.left[0]!.capture;
+    // first frame that counts has it seated, or barely lifted with the plate); the dish's wake
+    // then breaks up the rest, smoothly.
+    expect(wakeFade(0)).toBe(1);
+    expect(1 - wakeFade(1 / 60)).toBeLessThan(0.02);
+    expect(wakeFade(1.5)).toBeLessThan(0.01);
     expect(capture - cut).toBeGreaterThanOrEqual(REWIND.min);
     expect(capture - cut).toBeLessThanOrEqual(REWIND.max.decline + 1 / 60);
     const seated = frameFor('guest-ready', newFrame()).coverPos;
@@ -396,7 +401,7 @@ describe('Dinner steam on stage (v1.5)', () => {
     const st = s.scene.steamState;
     // What was left behind carries on untouched (no jump back, no pop); the cover never closed
     // over it.
-    expect(st.left).toEqual([{ ...left, capture: Infinity }]);
+    expect(st.left).toEqual([{ ...left, capture: Infinity, until: leftSteamEnd(left!.emitEnd) }]);
     expect(left!.capture).toBeGreaterThan(left!.tau);
     // The reveal resumes part-way down its rewind and releases only from there (ramped up).
     expect(st.tau).not.toBeNull();

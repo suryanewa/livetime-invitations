@@ -25,7 +25,7 @@ through the opening gap (in the dome's shadow), the dome's outer silver, and the
   and that evaporate again as the cloud mixes in. So steam appears a short way off its source and is gone within a
   second or two, about 10–25 cm up ([UK SciWorks, *Why does it happen?*](https://www.pa.uky.edu/sciworks/THE/heat/fog.htm)).
   In the model: no density at the surface (the column forms ≈ 1.3 cm off the porcelain), condensation that forms
-  within 0.06 s, densest at release and only thinning from then on, and evaporation with age and height.
+  within 0.11 s (0.06 s until the polish round, which popped a puff in within one 64 ms frame step), densest at release and only thinning from then on, and evaporation with age and height.
 - **How it reads under light.** Steam is a transparent scatterer. Front light goes through it, and it pops only
   under a 3/4 backlight ([Pixel Valley Studio, *Capturing steam on video*](https://pixelvalleystudio.com/pmf-articles/capturing-steam-on-video-other-lighting-tips)),
   best against a dark ground.
@@ -60,7 +60,7 @@ the CPU sets a handful of uniforms per frame.
 | Pocket | 14 | released 0.30–0.50 s, shown 0.40–0.67 s (once the dome is clear of it) | inside the dome as it is carried off (weighted to its crown, where the warm air sat), lobes 1.4–4 cm | drawn after the dome by its wake while it clears, then 12–25 % of its velocity and a fast buoyant rise, fraying | 0.45–0.7 s |
 | Trail | 8 | 0.39–0.58 s | shed off the trailing (guest-side) rim of the travelling dome, beyond the rim by more than its own size | left behind (8–20 % of the dome's velocity), rising; thinning | 0.3–0.45 s |
 | Landing | 7 | 0.79–0.86 s, as the trailing side comes down | the landed dome's trailing rim, either side of the plate's edge (1.4 cm away), 2–4 cm up | squeezed out across the table at 4–7 cm/s, rising a little | 0.35–0.5 s |
-| Column (polish round) | 3 broad sheets side by side across the camera's view, overlapping: together ≈ 70 % of the well's width at the base, fanning out to ≈ 1.5× by 17 cm | 0.22–0.30 s, as the rim clears the well: up to full strength over 0.22 s (a soft rounded front), then a first rush that thins from the bottom (decay 0.45–0.6 s) and a thin tail (32 % of the source, decaying over 1.4 s) as the plate goes on steaming | over the well, ±3 cm about its middle | rises at 21–24 cm/s (clear of the plate's far rim as the dome leaves); forms only 5 cm off the porcelain; a meander frozen into the rising vapour, a slow sway at 0.6 Hz and a draught that leans the whole column from side to side (0.13 Hz); smooth for its first few centimetres, then breaking into irregular wisps with ragged, peeling edges and thin fold lines, churning and swirling in time; where it is thin (the top, the tail) it breaks into rising filaments; evaporates gently (e^(−h/14 cm)) | tail visible to ≈ 4.5 s; gone by STEAM_END, 6.61 s |
+| Column (polish round) | 3 broad sheets side by side across the camera's view, overlapping: together ≈ 70 % of the well's width at the base, fanning out to ≈ 1.5× by 17 cm | 0.22–0.30 s, as the rim clears the well: up to full strength over 0.22 s (a soft rounded front), then a first rush that thins from the bottom (decay 0.45–0.6 s) and a thin tail (32 % of the source, decaying over 1.4 s) as the plate goes on steaming | over the well, ±3 cm about its middle | rises at 21–24 cm/s (clear of the plate's far rim as the dome leaves); forms only 5 cm off the porcelain; a meander frozen into the rising vapour, a slow sway at 0.6 Hz and a draught that leans the whole column, more and less, away from the cloche (0.13 Hz); smooth for its first few centimetres, then breaking into irregular wisps with ragged, peeling edges and thin fold lines, churning and swirling in time; where it is thin (the top, the tail) it breaks into soft rising filaments that never cross; an uneven top; evaporates gently (e^(−h/14 cm)) | tail visible to ≈ 4.5 s; gone by STEAM_END, 6.61 s |
 
 - **Puffs** are camera-facing soft billboards. A pocket puff shows only once the dome, carried off at ≈ 1 m/s,
   is clear of it by 40 % of its size (checked against the dome's live pose, at least 0.06 s after release), so no
@@ -76,16 +76,23 @@ the CPU sets a handful of uniforms per frame.
   never twist or fold. Their density at height h is the source as it was h/rise ago. So the column grows up off the
   plate at its strongest, then thins from the bottom as the source weakens, while its first vapour keeps rising out
   of view. It fades in over its first 5 cm and out over the top 7 cm of its 27 cm, so no ribbon end shows and
-  nothing lies on the plate. Dense cores saturate softly (no clamp edge), short of opaque (0.7). The fragment shader draws a broad, soft
-  sheet (its half-width is the plume's width; the ribbon is 1.7× wider so the sheet's soft edge never meets the
-  ribbon's) that is smooth for its first few centimetres and breaks into irregular wisps above: a domain-warped
-  value-noise field in centimetres across and along the rising vapour, churning and swirling in time rather than
-  sliding up. The sheet's edges are taken on the same warp, so they waver and peel. Where a sheet turns edge-on a
-  ridge of the field draws a thin, brighter fold line. Where the steam is thin (its top, the tail) it breaks into
-  rising filaments (a ridge of a field drawn out along the rise) that keep their light, instead of dimming as a veil.
-  (Before the polish round it drew one or two strands, which the judge read as incense.)
-- **Puffs** (polish round): the field through each puff is thresholded into lobes and gaps as it ages, with the same
-  fold lines, its outline warped harder, and it churns faster, so no puff reads as a featureless blob.
+  nothing lies on the plate. Dense cores saturate softly (no clamp edge), short of opaque (0.7, and 0.39 near the source, where the dense
+  base stands in front of the gilt rim). The fragment shader draws a broad, soft sheet (its half-width is the
+  plume's width; the ribbon is 1.7× wider so the sheet's soft edge never meets the ribbon's) that is smooth for its
+  first few centimetres and breaks into irregular wisps above: a domain-warped value-noise field in centimetres
+  across and along the rising vapour, churning and swirling in time rather than sliding up, warped a little even at
+  its base (no even comb). The sheet's edges are taken on the same warp, so they waver and peel. Where a sheet turns
+  edge-on a ridge of the field draws a thin, brighter fold line. Where the steam is thin (its top, the tail) it
+  breaks into soft filaments that keep their light instead of dimming as a veil: one family of them, the level lines
+  of a phase that only grows across the sheet (so they never cross: a thresholded field drew a network of veins),
+  spaced about 2:1 unevenly, waving out of step with their neighbours, each with its own width and light varying
+  along it, curling with the warp and broken along their length; the breaks, the light, the swirl and the flap's
+  bend all travel up with the vapour (a swirl fixed in height made the column sway in place). Where the column is last seen varies
+  across it (no level ceiling). The ribbon has 192 rows: at 48, the per-vertex density printed a faint ladder along
+  the filaments. (Before the polish round it drew one or two strands, which the judge read as incense.)
+- **Puffs** (polish round): a field drawn out along the rise and sheared with height is thresholded into lobes and
+  gaps as the puff ages (an isotropic one drew hollow rings), with fold lines, its outline warped harder, churning
+  faster, so no puff reads as a featureless blob.
 - **Shading** (`STEAM_LOOK`): a near-white in-scatter (linear 0.94–0.97) through the rig's exposure and tone mapping,
   composited with a **screen blend** (out = c + dst·(1 − c)): steam only ever adds light, so it can never darken what
   is behind it. The window key is shaded by the dome, an analytic ellipsoid shadow with a soft penumbra, so steam
@@ -202,7 +209,9 @@ The visible-steam curve (`steam-visibility-curve.txt`, summed brightening over t
   leftover closest to gone (the faintest), which can then end a little early.
 - **Captured steam is judged at the cover's seat.** What the returning cover closes over is decided by where the
   steam was when it sat back on the plate (half a frame after; the decline lifts the dish at once, so it may be up to
-  a centimetre higher by then). A wisp straddling the rim keeps its outside part.
+  a centimetre higher by then).
+- **The leftover's dispersal is a fit, not a simulation.** The stir (0.4 s) and the dish's wake (0.16 s) are light
+  scales on the whole leftover, not a flow: steam far from the dish's path thins as fast as steam in it.
 - **Reviewer's cosmetic notes left as they are.** A faint lift (+26 levels) on the landed dome's lower band at
   0.90–1.02 s: invisible at normal size. The young column's curl can read as a fairly regular arc for a moment.
 - **Steam over the white plate is nearly invisible.** Under the screen blend, steam over the lit porcelain adds at
@@ -255,19 +264,22 @@ conflicts. The judge's five defects and what changed:
    (`polish/closeup-column.png`, `polish/column-nosteam-vs-steam-stretched.png`).
 3. **"Gone by ≈ 2 s."** A hot plate goes on steaming as it cools, more thinly. The source keeps a 32 % share decaying
    over 1.4 s after the first rush, and thin steam breaks into filaments that keep their light. Steam-only
-   brightening at 720 px (p99.9 / max, 8-bit levels): 44 / 87 at 1.9 s, 40 / 75 at 2.5 s, 25 / 51 at 3.1 s,
-   20 / 45 at 3.5 s, 11 / 22 at 4.0 s, 7 / 14 at 4.4 s, 4 / 7 at 4.8 s, 1–2 to 6.5 s, then 0
+   brightening at 720 px (p99.9 / max, 8-bit levels): 31 / 67 at 1.9 s, 46 / 61 at 2.5 s, 13 / 14 at 3.1 s,
+   17 / 33 at 3.5 s, 9 / 19 at 4.0 s, 4 / 8 at 4.4 s, 4 / 9 at 4.8 s, 2 / 4 at 5.2 s, ≤ 1 / 2 from 5.9 s, then 0
    (`polish/tail-normal-2.5-4.5s.png` at normal contrast, `polish/tail-stretched-2.5-4.5s.png` stretched).
    `STEAM_END` is 6.61 s, where the density is below `STEAM_GONE` (0.6 %): it ends with no step.
 4. **A change of mind faded the steam in 0.25 s.** The steam already out is now **left behind** on its own clock (up
    to two lots, `STEAM_LAYERS`), drawn by the same two instanced draws again with their own clock uniforms (same
    shader source, so no new program). It rises on and disperses over its own life. The column's source dies away
    over 0.15 s (`PLUME.cut`), so its base detaches and rises off as a soft gradient. The cover coming back down
-   through it and the dish carried off stir it, so it mixes in and evaporates sooner than a column in still air
-   (`STEAM_STIR`, 0.4 s, from a smooth start). What the cover closes over when the rewind sets it back on the plate
-   stays under it and leaves with the dish (`uCapture`): steam is judged by where it was at that moment, over a
-   ragged 4 cm band inside the shell. At that moment all of it is inside the shell and already hidden, so nothing
-   pops. A reveal resumed part-way (changed back mid-rewind) releases only from where it resumes, ramped up like a
+   through it stirs it, so it mixes in and evaporates sooner than a column in still air (`STEAM_STIR`, 0.4 s, from a
+   smooth start at the cut). What the cover closes over when the rewind sets it back on the plate stays under it and
+   leaves with the dish (`uCapture`: steam is judged by where it was at that moment; all of it is then inside the
+   shell and already hidden, so nothing pops); a ragged 3 cm band just outside it, stirred away by the cover, clears
+   over the next 0.3 s. The decline then lifts the dish straight up through what is left of the column, and its wake
+   breaks the rest up within a few tenths of a second (`STEAM_WAKE`, 0.16 s, from a smooth start when the cover
+   closes): without it the leftover kept rising in front of the bin as the camera came round, reading as smoke from
+   the bin. A reveal resumed part-way (changed back mid-rewind) releases only from where it resumes, ramped up like a
    first release, beside the steam left behind. Fixed with it: the plate's soft contact hid every bit of steam below
    a carried plate's height (steam popped back when the dish dropped into the bin), and steam showed through the
    bin's body. Evidence: `polish/change-sheet.png` (cut at 0.5 s), `polish/change-late-sheet.png` and
@@ -289,12 +301,29 @@ the base of the left-behind column, over the bin ("smoke leaking out of the bin"
 blobs; the column arriving ≈ 0.3 s after the plate is uncovered; everything soft, with no fold lines; the field
 scrolling rather than evolving; the dense base washing the gilt rim. All of these were acted on (the items above,
 plus: a faster first rush, 21–24 cm/s, so the column clears the far rim as the dome leaves; coverage capped at
-0.7). The reviewer's references agree with the result's main reads: a source ≈ 80 % of the opening that fans out
+0.7). Second pass, 7/10: the grey stain, the incense column and the tail fixed; still steam on the bin in both
+cuts (the soft band revealing captured steam, and the leftover column rising in front of the bin), filaments that
+looked drawn (a zipper along them), a tail like marble veins, hollow rings in the pocket puffs, a level ceiling, a
+milky flare on the dome as the column leaned onto it, the gilt rim still washed. All acted on (the dish's wake,
+the staged band, 192 ribbon rows, the non-crossing filament family, vertically drawn puff lobes, the uneven top,
+the one-sided lean, the lower cover at the source). Third pass, 7.5/10, no Must left: the grey stain, the
+incense column and the tail fixed, the change of mind almost (a faint trace on the bin for ≈ 0.1 s in the late
+cut); the column now too regular (parallel ribbons waving in step, swaying in place rather than rising), a level
+ceiling, candle-flame lobes in the pocket puffs, the gilt rim, a puff popping in within one 64 ms step. Acted on:
+a quicker wake (0.16 s), filaments out of step with their own widths and light and rising breaks, an uneven top
+across the column, puff lobes drawn out and sheared harder, a lower cover at the source, a 0.11 s condensation
+fade-in. Fourth pass, 8/10, no Must: all five original defects fixed (the bin clean at normal contrast, the
+comb gone); left as Shoulds: the column read as nearly still from 2.2 to 2.75 s, and the pocket lobes above the
+dome as soft upright ovals. Acted on: the swirl, the flap's bend and each filament's light and breaks now travel
+up with the vapour (measured away from the plate's rim, the fine structure now matches best shifted up 34–44 px
+per 128 ms at 720 px, ≈ 1–1.3 su/s, where before it matched in place; at the rim and the dome the steam-only
+image keeps their static edges, which is what dominated the reviewer's measure), and the pocket puffs are mostly
+filament and live 0.32–0.5 s (were 0.45–0.7 s). Not re-reviewed after this last change. The reviewer's references agree with the result's main reads: a source ≈ 80 % of the opening that fans out
 to ≈ 1.4×, curtain-like sheets with brighter fold lines, filaments with feathered edges, visible only over darker
 ground.
 
-Frame cost after the round (A/B, medians, M2 Pro; `polish/perf-bench.txt`): 0.18–0.52 ms at 1400², 0.22–0.35 ms
-at 2000², and 0.52 / 0.70 ms for the worst overlap (the reveal's steam at 1.0 s beside a whole left-behind lot at
+Frame cost after the round (A/B, medians, M2 Pro; `polish/perf-bench.txt`): 0.18–0.48 ms at 1400², 0.24–0.59 ms
+at 2000², and 0.44 / 0.49 ms for the worst overlap (the reveal's steam at 1.0 s beside a whole left-behind lot at
 1.0 s). `steamEndAfter` costs ≈ 0.1–0.5 ms once, at the cut.
 
 ## Evidence and tests
