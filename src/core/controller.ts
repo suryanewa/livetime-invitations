@@ -21,8 +21,7 @@ import { hasWebGL2, resetWebGL2Probe } from '../render/createRenderer.ts';
 import { type DirectionId, LOCKED_DIRECTION, MaterialLibrary } from '../render/materials.ts';
 import { QualityMonitor, TIER_DPR, type Tier } from '../render/quality.ts';
 import { DEFAULT_RIG } from '../render/rigRegistry.ts';
-import { Stage, type StageOptions } from '../render/stage.ts';
-import type { HeroFraming } from '../render/camera.ts';
+import { type FramingReport, Stage, type StageOptions } from '../render/stage.ts';
 import { type FrameRect, frameSquare, NO_INSETS } from '../render/camera.ts';
 
 /**
@@ -48,8 +47,11 @@ export interface InvitationOptions extends CreateInvitationOptions {
    * Fullscreen layout: a still of the bare studio at BACKDROP_FIELD × the frame field, centred on
    * the same framing (`pnpm capture backdrops`). It extends the square poster to the whole stage,
    * so a poster covers any aspect with the canvas's framing. Omitted, the stage colour does.
+   * v1.5: asked for the pose of the poster it surrounds, since a scene that pulls back for its
+   * decline (Birthday, Dinner) shows its declined poster at a wider framing and needs that
+   * framing's backdrop (`backdrop-declined.webp`).
    */
-  backdropFor?: (category: Category) => string | null;
+  backdropFor?: (category: Category, pose: CanonicalPose) => string | null;
   /** Human-readable description of each pose for the text fallback when a poster fails. */
   describePose?: (category: Category, pose: CanonicalPose) => string;
   onStateChange?: (state: InvitationState) => void;
@@ -82,8 +84,13 @@ export interface InvitationHandle extends InvitationController {
   captureStill(size: number, dpr?: number, type?: string, quality?: number, options?: { empty?: boolean; field?: number }): string | null;
   /** Tooling only (resource checks): live GPU object counts, or null without a stage. */
   renderInfo(): { geometries: number; textures: number; programs: number } | null;
-  /** Tooling only (framing checks): the hero fit at `aspect` (width / height), or null. */
-  framing(aspect?: number): HeroFraming | null;
+  /**
+   * Tooling only (framing checks): the hero fits at `aspect` (width / height), or null: `rest`
+   * (pull 0: host-ready, guest-ready, accepted) and `decline` (pull 1: the declined pose), the same
+   * fit for a scene that does not pull back; the live `pull`; and the fit's cost guards (`solves`
+   * so far, the reduced `points`).
+   */
+  framing(aspect?: number): FramingReport | null;
 }
 
 export const LOAD_TIMEOUT_MS = 6000;
@@ -276,7 +283,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     }
     if (!showPoster) posterText.hidden = true;
     if (fullscreen) {
-      const bg = options.backdropFor?.(config.category) ?? null;
+      const bg = options.backdropFor?.(config.category, pose) ?? null;
       const css = bg ? `url("${bg}")` : 'none';
       if (backdrop.style.backgroundImage !== css) backdrop.style.backgroundImage = css;
       backdrop.classList.toggle('is-hidden', !showPoster);
@@ -365,7 +372,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       scene = instance;
       // A preset chosen while the asset was loading wins over the one the load started with.
       instance.setConfig(config);
-      s.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints, instance.heroPoints);
+      s.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints, instance.heroPoints, instance.restFramePoints);
       resize();
       applyTierDetail(quality.tier);
       let shaderError = false;
@@ -403,7 +410,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       // shadow pass's depth program nor uploads textures, so without it the first frame after
       // 'ready' (guest input live) would link and upload synchronously. Hidden tabs never draw.
       if (!document.hidden) {
-        instance.beforeRender?.();
+        prepareFrame(s, instance);
         s.render();
       }
       if (loadTimer) clearTimeout(loadTimer);
@@ -497,6 +504,18 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     raf = requestAnimationFrame(frame);
   }
 
+  /**
+   * Everything a frame needs after sampling and simulation, before drawing: the scene's own
+   * per-frame work, then the camera's place between the rest and decline fits (v1.5 decline
+   * pull-back: `framePull`, 0 for a scene without one). Every draw goes through it (the loop, the
+   * resize redraw, the warm frame, stills), so the pointer's projection and the grab target, which
+   * read the stage's one camera after the draw, see the camera that was drawn.
+   */
+  function prepareFrame(s: Stage, instance: SceneInstance) {
+    instance.beforeRender?.();
+    s.setPull(instance.framePull?.() ?? 0);
+  }
+
   let simulate: ((dt: number) => void) | null = null;
   function frame(now: number) {
     raf = 0;
@@ -515,7 +534,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       stepper.advance(dt, simulate);
       settling = scene.settling?.() ?? false;
     }
-    scene.beforeRender?.();
+    prepareFrame(stage, scene);
     stage.render();
     if (!drawnSinceReady) {
       drawnSinceReady = true;
@@ -596,7 +615,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   /** A resize clears the drawing buffer; draw the current pose at once so no blank frame shows. */
   function redraw() {
     if (!stage || !scene || resource !== 'ready' || document.hidden) return;
-    scene.beforeRender?.();
+    prepareFrame(stage, scene);
     stage.render();
   }
 
@@ -904,12 +923,14 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
 
     framing(aspect = 1) {
       if (!stage || !scene || resource !== 'ready') return null;
-      return stage.measureFraming(aspect);
+      const pair = stage.measureFraming(aspect);
+      return pair && { ...pair, pull: stage.currentPull, solves: stage.fitSolves, points: stage.framingPointCounts };
     },
 
     captureStill(size: number, dpr = 2, type = 'image/png', quality?: number, captureOptions?: { empty?: boolean; field?: number }) {
       if (!stage || !scene || resource !== 'ready') return null;
-      scene.beforeRender?.();
+      // At the pose's own framing (v1.5): the declined pose at the decline fit, the others at rest.
+      prepareFrame(stage, scene);
       const url = stage.snapshot(size, size, dpr, type, quality, captureOptions?.empty, captureOptions?.field);
       resize();
       requestFrame();

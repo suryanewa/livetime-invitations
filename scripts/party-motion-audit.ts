@@ -8,7 +8,7 @@
  *   node --experimental-transform-types --no-warnings scripts/party-motion-audit.ts [host|accept|decline] [hz]
  */
 import { CONTACT_AT, newFrame, RELEASE_AT, sampleSequence, SETTLE, STYLUS_DOWN } from '../src/scenes/party/sequences.ts';
-import { DURATIONS, PLACE, PLAY_AT, SPIN } from '../src/scenes/party/poses.ts';
+import { ACCEPT_ARM, DURATIONS, PLACE, PLAY_AT } from '../src/scenes/party/poses.ts';
 import { PLATTER_TOP } from '../models/recordContract.ts';
 import type { SequenceName } from '../src/core/types.ts';
 
@@ -40,7 +40,7 @@ function deriv(xs: number[]): number[] {
 
 const BEATS: Record<SequenceName, [number, string][]> = {
   host: [[0, 'start'], [PLACE.reach.alignFrom, 'move back from'], [PLACE.reach.levelAt, 'level'], [PLACE.reach.alignAt, 'over the spindle'], [RELEASE_AT - PLACE.release.lead, 'tilt from'], [RELEASE_AT, 'release'], [SETTLE.peakAt, 'tilt peak'], [CONTACT_AT, 'low rim touches'], [SETTLE.end, 'still'], [1.2, 'clip end']],
-  accept: [[0, 'start'], [0.04, 'swing from'], [0.08, 'lift end'], [0.25, 'cue'], [SPIN.start, 'motor'], [STYLUS_DOWN, 'stylus down'], [PLAY_AT, 'status'], [1.6, 'clip end (plays on)']],
+  accept: [[0, 'start'], [PLAY_AT, 'key and motor'], [ACCEPT_ARM.reach, 'lift from'], [ACCEPT_ARM.reach + ACCEPT_ARM.lift, 'swing from'], [ACCEPT_ARM.cueAt, 'cue descent'], [STYLUS_DOWN, 'stylus down'], [DURATIONS.accept, 'clip end (plays on)']],
   decline: [[0, 'start'], [0.2, 'lid from'], [1.3, 'lid shut'], [1.4, 'clip end']],
 };
 

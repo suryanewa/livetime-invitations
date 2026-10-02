@@ -7,6 +7,7 @@
  *   pnpm capture stagecolor [baseUrl] [rig,…]       a rig's measured backdrop colour (stage tokens)
  *   CAPTURE_STAGE_ONLY=1 pnpm capture <scene>       posters, stills and clips staged in outputs/<scene>/ only
  *   pnpm capture backdrops [baseUrl]                fullscreen backdrop stills → assets/scenes/<scene>/backdrop.webp
+ *                                                   (+ backdrop-declined.webp where the decline pulls back, v1.5)
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -142,7 +143,8 @@ const SCENE_CAPTURE = {
     presets: [['vanilla', '{ category: "birthday", cake: "vanilla" }'], ['cocoa', '{ category: "birthday", cake: "cocoa" }']],
     // Declined shows the empty stand and the closed bin: identical for both frostings.
     sharedDeclined: true,
-    clips: { host: 1.6, accept: 1.7, decline: 1.8, change: 2.6 },
+    // v1.5 polish: the careful candle placement makes the host beat ≈ 2.45 s.
+    clips: { host: 2.8, accept: 1.7, decline: 1.8, change: 2.6 },
   },
   sports: {
     presets: [['orange', '{ category: "sports", ball: "orange" }'], ['cream', '{ category: "sports", ball: "cream" }']],
@@ -400,25 +402,51 @@ async function captureUi() {
  * production rig at BACKDROP_FIELD (7) × the square frame, centred on the square framing, so the
  * controller can extend a square poster to any viewport with the canvas's framing. Written to
  * assets/scenes/<scene>/backdrop.webp. Re-run after any change to bounds, rig or framing.
+ * v1.5 decline pull-back: a scene whose decline fit differs from its rest fit (Birthday, Dinner)
+ * shows its declined poster at the wider framing, so it also gets backdrop-declined.webp, the bare
+ * studio at the declined pose (pull 1); posters.ts serves it for that pose only.
  */
 async function captureBackdrops() {
   await mkdir(outDir, { recursive: true });
   const browser = await launch();
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 1 });
   page.on('console', (m) => m.type() === 'error' && console.error('[page]', m.text()));
-  const { cp } = await import('node:fs/promises');
+  const { cp, rm } = await import('node:fs/promises');
+  const pulled = new Set<string>();
+  const still = () => page.evaluate(() => (window as any).__showcase.controller.captureStill(2000, 1, 'image/webp', 0.92, { empty: true, field: 7 })) as Promise<string>;
   for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
     await page.goto(`${base}/?scene=${scene}`);
     await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
-    const url = await page.evaluate(() => (window as any).__showcase.controller.captureStill(2000, 1, 'image/webp', 0.92, { empty: true, field: 7 }));
-    const file = join(outDir, `${scene}.webp`);
-    await saveDataUrl(file, url as string);
-    console.log('backdrop', file);
+    // The rest framing (the page opens at host-ready, pull 0).
+    const rest = await page.evaluate(() => (window as any).__showcase.controller.framing().pull);
+    if (rest !== 0) throw new Error(`${scene}: the backdrop must be taken at rest (pull ${rest})`);
+    await saveDataUrl(join(outDir, `${scene}.webp`), await still());
+    console.log('backdrop', scene);
+    const fit = await page.evaluate(() => (window as any).__showcase.controller.framing());
+    if (Math.abs(fit.rest.distance - fit.decline.distance) > 1e-9) {
+      // The declined pose, snapped (reduced motion): the stage at pull 1.
+      await page.evaluate(() => {
+        const c = (window as any).__showcase.controller;
+        c.setReducedMotion(true);
+        c.setMode('guest');
+        c.chooseResponse('decline');
+      });
+      await page.waitForFunction(() => (window as any).__showcase.state.visual === 'declined-pose');
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      const pull = await page.evaluate(() => (window as any).__showcase.controller.framing().pull);
+      if (pull !== 1) throw new Error(`${scene}: the declined backdrop must be taken at pull 1 (got ${pull})`);
+      await saveDataUrl(join(outDir, `${scene}-declined.webp`), await still());
+      pulled.add(scene);
+      console.log('backdrop', scene, 'declined');
+    }
   }
   await browser.close();
   // Copied last: writing into assets/ makes a running dev server reload its pages.
   for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
-    await cp(join(outDir, `${scene}.webp`), join(import.meta.dirname, '..', 'assets', 'scenes', scene, 'backdrop.webp'));
+    const dir = join(import.meta.dirname, '..', 'assets', 'scenes', scene);
+    await cp(join(outDir, `${scene}.webp`), join(dir, 'backdrop.webp'));
+    if (pulled.has(scene)) await cp(join(outDir, `${scene}-declined.webp`), join(dir, 'backdrop-declined.webp'));
+    else await rm(join(dir, 'backdrop-declined.webp'), { force: true });
   }
 }
 

@@ -13,6 +13,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium, type Page } from 'playwright-core';
+import { DURATIONS } from '../src/scenes/party/poses.ts';
 
 const job = process.argv[2] ?? 'host';
 const base = process.argv[3]?.startsWith('http') ? process.argv[3] : 'http://127.0.0.1:5501';
@@ -107,7 +108,7 @@ if (job === 'host') {
   const page = await lab();
   const fps = Number(process.env.FPS ?? 60);
   // The clip, then the scene's own continuous channel (simulate) for 3.2 s more.
-  const clipFrames = Array.from({ length: Math.round(1.6 * fps) }, (_, i) => ({ seq: 'accept' as const, t: i / fps }));
+  const clipFrames = Array.from({ length: Math.round(DURATIONS.accept * fps) }, (_, i) => ({ seq: 'accept' as const, t: i / fps }));
   const files = await frames(page, join(out, 'frames'), clipFrames);
   const more = await page.evaluate(([n, f, s]) => {
     const lab = (window as any).__lab;
@@ -127,6 +128,11 @@ if (job === 'host') {
   }
   const labels = files.map((_, i) => `${(i / fps).toFixed(3)} s`);
   sheet(files, labels, join(out, 'accept-strip.jpg'), '270x270', undefined, Math.max(1, Math.round(fps / 10)));
+  // The label every 0.1 s (the platter starting with the key, then playing) and the arm every
+  // 50 ms through the clip (lift, swing at a hand's pace, the damper's descent).
+  sheet(files, labels, join(out, 'label-zoom.jpg'), '240x', '240x130+375+575', Math.max(1, Math.round(fps / 10)));
+  const armFiles = files.slice(0, Math.round(DURATIONS.accept * fps) + 1);
+  sheet(armFiles, labels, join(out, 'arm-zoom.jpg'), '320x', '560x300+430+470', Math.max(1, Math.round(fps / 20)), 6);
   clip(join(out, 'frames'), fps, join(out, `accept-${fps}fps.mp4`));
   clip(join(out, 'frames'), fps, join(out, `accept-${fps}fps-zoom.mp4`), RECORD_CROP_FF);
   console.log('accept strip:', out);
@@ -156,7 +162,8 @@ if (job === 'loop') {
   const runs: [string, number, [number, string][]][] = [
     ['accept-play', 5.0, [[0, 'accept']]],
     ['change-while-playing', 4.4, [[0, 'accept'], [3.0, 'decline']]],
-    ['change-mid-clip', 2.4, [[0, 'accept'], [0.7, 'decline']]],
+    ['change-mid-clip', 2.4, [[0, 'accept'], [0.6, 'decline']]],
+    ['change-lead-in', 2.6, [[0, 'accept'], [1.75, 'decline']]],
     ['change-back', 3.0, [[0, 'decline'], [0.6, 'accept']]],
     ['reversals', 3.4, [[0, 'accept'], [0.12, 'decline'], [0.24, 'accept'], [0.36, 'decline'], [0.48, 'accept']]],
   ];
@@ -182,6 +189,10 @@ if (job === 'loop') {
     }
     const labels = files.map((_, i) => `${((i * FRAME_MS) / 1000).toFixed(3)} s`);
     sheet(files, labels, join(out, `${name}-strip.jpg`), '270x270', undefined, 6);
+    // The arm, every other frame over the first 1.6 s of the run (or around the change).
+    const from = Math.max(0, Math.round(((script[script.length - 1]![0] - 0.2) * 1000) / FRAME_MS));
+    const armSlice = files.slice(from, from + Math.round(1600 / FRAME_MS));
+    sheet(armSlice, labels.slice(from, from + armSlice.length), join(out, `${name}-arm-zoom.jpg`), '320x', '560x300+430+470', 2, 6);
     clip(dir, 1000 / FRAME_MS, join(out, `${name}.mp4`));
     clip(dir, 1000 / FRAME_MS, join(out, `${name}-zoom.mp4`), '640:360:220:420');
     console.log('loop', name);

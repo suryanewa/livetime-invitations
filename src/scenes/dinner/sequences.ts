@@ -234,6 +234,23 @@ const FLAP_GAP_AT = FLAP_CLOSE_AT + BIN_CLOSE.toGap;
 const FLAPS_SHUT = FLAP_GAP_AT + BIN_CLOSE.last;
 /** Bin entrance: eases in from off-frame and decelerates into place (no full-speed first frame). */
 const BIN_ENTER = cubicBezier(0.25, 0.25, 0.2, 1);
+/**
+ * v1.5 decline pull-back (src/render/framing.ts DECLINE_PULL): the camera starts easing back on the
+ * tap, and the bin's entrance (its slide and its flaps, shape and length unchanged) waits this long
+ * for it. At the rest framing (the dish at 70 % of the width) the 47 cm bin is three times the
+ * dish: entering at once it swept a giant, top-cropped black mass across the first 0.3 s. Waiting
+ * 0.16 s, it glides into the room the camera has made, and it is settled at 0.50 s, before the dish
+ * sets off across (0.53 s) and reaches it (0.575 s).
+ */
+export const BIN_DELAY = 0.16;
+/**
+ * The flaps open over this part of the bin's entrance (its clock: BIN_DELAY after the decline's):
+ * as the bin settles, done at 0.56 s, as the dish turns across towards it (it reaches the bin's
+ * footprint at 0.575 s). v1.4–v1.5 opened them 0.04 s earlier in the entrance; this late, their
+ * tips touch the frame's top edge for 0.12 s (4 % of the bin's height) rather than 0.18 s (8 %)
+ * while the camera finishes easing back.
+ */
+const FLAPS_OPEN = [0.18, 0.4] as const;
 
 /**
  * The approved transfer path in the vertical plane from the plate to the bin: straight up and
@@ -308,14 +325,16 @@ const dish = new Vector3();
  */
 function decline(t: number, out: DinnerFrame, tBin = t): void {
   frameFor('guest-ready', out);
-  // 0–0.25: the bin slides into the margin and opens.
-  out.binVisible = tBin > 0;
+  // 0–0.16: the camera starts easing back (framing.ts DECLINE_PULL); 0.16–0.56: the bin slides into
+  // the room it has made and opens (BIN_DELAY, FLAPS_OPEN).
+  // Drawn from when it starts in (off-frame until then; a rewind of the still first 0.16 s is exact).
+  out.binVisible = tBin > BIN_DELAY;
   // Its speed peaks off-screen and it decelerates across the visible part (no dark mass
   // slamming across the frame in a few frames).
-  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tBin, 0, 0.34)));
+  out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tBin - BIN_DELAY, 0, 0.34)));
   // Flaps open as it arrives, and start closing as soon as the dish is out of sight (no frozen
   // frames): the bin's soft close, nearly shut by 1.27 s, the last gap taken up by 1.42 s.
-  if (t < FLAP_CLOSE_AT) out.flaps = FLAP_OPEN(seg(tBin, 0.14, 0.36));
+  if (t < FLAP_CLOSE_AT) out.flaps = FLAP_OPEN(seg(tBin - BIN_DELAY, FLAPS_OPEN[0], FLAPS_OPEN[1]));
   else out.flaps = flapsClosing(t - FLAP_CLOSE_AT);
   // 0.25–0.74: the covered dish, as one unit, rises clear and crosses over the rim between the
   // open flaps to rest over the opening, in one continuous move; then it is let go and falls in.
@@ -356,7 +375,7 @@ const DECLINE_LEAD = 0.25;
 /** Plan clearance between the returning cover and the bin coming in (bin rim + bead + margin). */
 export const BIN_CLEARANCE = DINNER_BIN.radius + COVER.radius + 0.05;
 /** Bin position on the decline's clock (its entrance). */
-const binAt = (tb: number, out: Vector3) => out.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tb, 0, 0.34)));
+const binAt = (tb: number, out: Vector3) => out.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tb - BIN_DELAY, 0, 0.34)));
 const FRAME = 1 / 60;
 /**
  * Rewind bounds (s) by the outcome that follows, and its largest 60 fps step relative to the
@@ -574,9 +593,9 @@ export function sampleAnswerChange(c: AnswerChange, t: number, out: DinnerFrame)
   sampleSequence(seq, s, out);
   if (toBin) {
     // Rewinding the reveal: the bin may already be on its way in.
-    out.binVisible = binClock > 0;
+    out.binVisible = binClock > BIN_DELAY;
     binAt(Math.max(binClock, 0), out.binPos);
-    out.flaps = FLAP_OPEN(seg(binClock, 0.14, 0.36));
+    out.flaps = FLAP_OPEN(seg(binClock - BIN_DELAY, FLAPS_OPEN[0], FLAPS_OPEN[1]));
   }
   return out;
 }

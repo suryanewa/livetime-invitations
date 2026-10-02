@@ -12,7 +12,7 @@ import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.
 import type { MaterialLibrary } from '../../render/materials.ts';
 import { ARM, DURATIONS, STATUS_COLOUR } from './poses.ts';
 import {
-  ACCEPT_PLATTER, blendLift, type Change, cueLever, cueRise, frameFor, newFrame, type Platter, platterAt, platterFor, playingFrame, recordHeight, sampleSequence, type PartyFrame,
+  ACCEPT_PLATTER, ACCEPTED_AT, blendLift, type Change, cueLever, cueRise, frameFor, newFrame, type Platter, platterAt, platterFor, playingFrame, recordHeight, sampleSequence, type PartyFrame,
 } from './sequences.ts';
 
 /**
@@ -100,18 +100,19 @@ export class PartyScene implements SceneInstance {
   }
 
   /**
-   * A canonical pose. `accepted` is the record playing at its display angle (it keeps turning in
-   * `simulate`). Reached from a played acceptance (the director's end of the clip), the record
-   * plays on from where the clip left it instead: the clip's own platter model, `since` the clip's
-   * end counted from the last sampled time, so the next simulate steps land exactly on the clock.
+   * A canonical pose. `accepted` is the record playing at its display angle with the lead-in done
+   * (ACCEPTED_AT into acceptance; it keeps turning in `simulate`). Reached from a played acceptance
+   * (the director's end of the clip), the record plays on from where the clip left it instead (the
+   * lead-in still carrying the arm in): the clip's own platter model, `since` the clip's end
+   * counted from the last sampled time, so the next simulate steps land exactly on the clock.
    * Every snap (reduced motion, a late load, a reset) calls `settle()` next, which re-bases it on
-   * the display angle.
+   * the canonical pose.
    */
   pose(pose: CanonicalPose): void {
     const pending = pose === 'guest-ready' ? this.pendingChange : null;
     this.playing = pose !== 'accepted' ? null
       : this.sequence === 'accept' ? { platter: platterFor('accept', this.change), since: this.t - DURATIONS.accept }
-      : { platter: ACCEPT_PLATTER, since: 0 };
+      : { platter: ACCEPT_PLATTER, since: ACCEPTED_AT - DURATIONS.accept };
     this.sequence = null;
     this.change = null;
     this.pendingChange = pending;
@@ -139,11 +140,14 @@ export class PartyScene implements SceneInstance {
     return this.playing !== null;
   }
 
-  /** Snap: a playing record re-bases on the display angle (the canonical accepted pose); nothing else is secondary. */
+  /**
+   * Snap: a playing record re-bases on the canonical accepted pose (the record at its display angle,
+   * the lead-in done, ACCEPTED_AT into acceptance) and plays on from there; nothing else is secondary.
+   */
   settle(): void {
     if (!this.playing) return;
-    this.playing = { platter: ACCEPT_PLATTER, since: 0 };
-    this.apply(playingFrame(ACCEPT_PLATTER, DURATIONS.accept, this.frame));
+    this.playing = { platter: ACCEPT_PLATTER, since: ACCEPTED_AT - DURATIONS.accept };
+    this.apply(playingFrame(ACCEPT_PLATTER, ACCEPTED_AT, this.frame));
   }
 
   beforeRender(): void {

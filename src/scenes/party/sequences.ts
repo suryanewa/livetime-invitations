@@ -1,8 +1,8 @@
 import { Vector3 } from 'three';
-import { cubicBezier, EASE, lerp, seg, smoothstep } from '../../motion/curves.ts';
+import { lerp, seg, smoothstep } from '../../motion/curves.ts';
 import { PLATTER_TOP, RECORD } from '../../../models/recordContract.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
-import { ARM, CHANGE, COAST, CUEING, DURATIONS, HOVER, LEVEL_BY, LID_CLOSED, LID_OPEN, PLACE, PLAY_AT, RPM_33, SEATED, SPIN } from './poses.ts';
+import { ACCEPT_ARM, ARM, CHANGE, COAST, CUEING, DURATIONS, HOVER, LEVEL_BY, LID_CLOSED, LID_OPEN, PLACE, PLAY_AT, RPM_33, SEATED, SPIN } from './poses.ts';
 
 /**
  * Pure authored choreography for Party: every function maps time → transforms, so replay,
@@ -241,40 +241,164 @@ export function platterAt(p: Platter, t: number, out: PlatterState = { angle: 0,
   return drive(_coasted, t - p.motorAt, out);
 }
 
-/** Acceptance from guest-ready: the platter at rest, the motor started at SPIN.start. */
+/** Acceptance from guest-ready: the platter at rest, the motor started with the key (SPIN.start). */
 export const ACCEPT_PLATTER: Readonly<Platter> = { at: 0, angle: 0, speed: 0, motorAt: SPIN.start };
-/** The display angle: where the record is at the end of the acceptance clip (the accepted pose). */
-export const DISPLAY_ANGLE = platterAt(ACCEPT_PLATTER, DURATIONS.accept).angle;
 /** Steady platter speed (rad/s) and its multiple of 33⅓ rpm (1: the real speed). */
 export const STEADY = { omega: SPIN.steady, beatScale: SPIN.steady / RPM_33 };
 
-// ── Accept: 1.6 s ─────────────────────────────────────────────────────────────
-/** Cue: lift off the rest, swing, then the damped cue descent (zero speed at both ends). */
-const CUE_DOWN = cubicBezier(0.35, 0, 0.4, 1);
-/** The stylus lands on the lead-in groove. */
-export const STYLUS_DOWN = 0.4;
+// ── The arm, at a hand's pace ─────────────────────────────────────────────────
+/** The arm's yaw and pitch with their rates. */
+export interface ArmState {
+  yaw: number;
+  yawRate: number;
+  pitch: number;
+  pitchRate: number;
+}
+/** On its rest and still (guest-ready). */
+export const ARM_AT_REST: Readonly<ArmState> = { yaw: ARM.parked, yawRate: 0, pitch: 0, pitchRate: 0 };
+/** The mechanism's range: yaw from the lead-in's end (`played`) to the rest, pitch from the cue lift's top to the vinyl. */
+const YAW_IN = Math.min(ARM.played, ARM.parked), YAW_OUT = Math.max(ARM.played, ARM.parked);
+const clampYaw = (y: number) => Math.min(YAW_OUT, Math.max(YAW_IN, y));
+const clampPitch = (p: number) => Math.min(ARM.contact, Math.max(ARM.lifted, p));
+const FULL_SWING = Math.abs(ARM.parked - ARM.cue);
+/**
+ * A swing that starts moving may carry its speed into the quintic only while v0·T ≤ R_MAX·d: up
+ * to 2.55 the quintic from (0, v0) to (d, 0) never reverses (measured); beyond, it would
+ * overshoot and come back (the wobble the v1.5 judge saw).
+ */
+const R_MAX = 2.4;
+const swingTime = (d: number) => ACCEPT_ARM.swing * Math.sqrt(Math.min(1, d / FULL_SWING));
+
+/**
+ * The arm's way from a state to a target, as a real arm moves (v1.5 polish): with the stylus in
+ * the groove, on the rest or more than half lowered, the cue lever first lifts it (`lift`) while
+ * the yaw holds; an arm already in the air keeps its velocity. Moving away from the target, the
+ * hand brakes it to rest (quartic, deceleration ≤ `brake`, never past the mechanism's ends) and
+ * swings it back; moving towards it, it swings on with its speed (time ∝ √distance) when that
+ * cannot overshoot, or else is braked to rest exactly on the target. So the yaw turns round at
+ * most once per hand-over. At the cue the damper lowers the stylus (from `cueAt` at the earliest); at
+ * the rest it is lowered into the cradle. Yaw stays within [played, parked] and pitch within
+ * [lifted, contact] throughout, and nothing ever oscillates.
+ */
+export interface ArmPlan {
+  target: 'cue' | 'rest';
+  from: ArmState;
+  start: number;
+  liftEnd: number;
+  lift: Quintic | null;
+  yawFrom: number;
+  yawStart: number;
+  brake: Quintic | null;
+  swingStart: number;
+  swing: Quintic | null;
+  yawTo: number;
+  arrive: number;
+  lowerStart: number;
+  lower: Quintic | null;
+  pitchTo: number;
+}
+export function planArm(from: ArmState, target: 'cue' | 'rest', start: number): ArmPlan {
+  const yaw0 = clampYaw(from.yaw), pitch0 = clampPitch(from.pitch);
+  const down = pitch0 > ARM.lifted * 0.5;
+  const yawTo = target === 'cue' ? ARM.cue : ARM.parked;
+  const pitchTo = target === 'cue' ? ARM.contact : 0;
+  // Already home and resting: settle onto the rest from wherever the pitch is.
+  if (target === 'rest' && Math.abs(yaw0 - yawTo) < 1e-4 && down && Math.abs(from.yawRate) < 1e-6) {
+    const T = 0.15;
+    return {
+      target, from, start, liftEnd: start, lift: null, yawFrom: yaw0, yawStart: start, brake: null, swingStart: start, swing: null, yawTo, arrive: start,
+      lowerStart: start, lower: new Quintic(pitch0, from.pitchRate, 0, pitchTo, 0, 0, T), pitchTo,
+    };
+  }
+  // Lift: the whole travel takes `lift`; a partly lifted arm finishes its share (from its own rate).
+  const share = Math.min(1.1, (pitch0 - ARM.lifted) / -ARM.lifted);
+  const needsLift = share > 1e-6 || Math.abs(from.pitchRate) > 1e-6;
+  const liftTime = needsLift ? Math.max(0.08, ACCEPT_ARM.lift * share) : 0;
+  const lift = needsLift ? new Quintic(pitch0, from.pitchRate, 0, ARM.lifted, 0, 0, liftTime) : null;
+  const liftEnd = start + liftTime;
+  // Yaw: held while the stylus (or the tube on the rest) is down, until the lift is done.
+  const yawStart = down ? liftEnd : start;
+  const v0 = down ? 0 : from.yawRate;
+  let y = yaw0, t = yawStart, brake: Quintic | null = null;
+  const d0 = yawTo - y;
+  const toward = Math.sign(v0) === Math.sign(d0);
+  if (Math.abs(v0) > 1e-6 && (!toward || Math.abs(v0) * swingTime(Math.abs(d0)) > R_MAX * Math.abs(d0))) {
+    // Moving away: the hand brakes it to rest (within the mechanism's range), then swings it back.
+    // Moving towards the target too fast to swing on: it brakes to rest exactly on the target.
+    let Tb = toward ? (2 * Math.abs(d0)) / Math.abs(v0) : Math.max(0.06, (1.5 * Math.abs(v0)) / ACCEPT_ARM.brake);
+    let turn = toward ? yawTo : y + 0.5 * v0 * Tb;
+    if (turn < YAW_IN || turn > YAW_OUT) {
+      turn = clampYaw(turn);
+      Tb = Math.max(1e-3, (2 * (turn - y)) / v0);
+    }
+    brake = new Quintic(y, v0, 0, turn, 0, 0, Tb);
+    y = turn;
+    t += Tb;
+  }
+  const d = yawTo - y, vs = brake ? 0 : v0;
+  let swing: Quintic | null = null;
+  if (Math.abs(d) > 1e-6) {
+    let Ts = Math.max(0.2, swingTime(Math.abs(d)));
+    if (Math.abs(vs) > 1e-6) Ts = Math.min(Ts, (R_MAX * Math.abs(d)) / Math.abs(vs));
+    swing = new Quintic(y, vs, 0, yawTo, 0, 0, Ts);
+  }
+  const swingStart = t;
+  const arrive = t + (swing?.T ?? 0);
+  const lowerStart = Math.max(arrive, liftEnd, target === 'cue' ? ACCEPT_ARM.cueAt : 0);
+  const lower = new Quintic(ARM.lifted, 0, 0, pitchTo, 0, 0, target === 'cue' ? ACCEPT_ARM.cue : ACCEPT_ARM.lower);
+  return { target, from, start, liftEnd, lift, yawFrom: yaw0, yawStart, brake, swingStart, swing, yawTo, arrive, lowerStart, lower, pitchTo };
+}
+
+/** The arm's yaw and pitch at time t of its plan (before `start` it holds where it was). */
+function armAt(p: ArmPlan, t: number, out: { armYaw: number; armPitch: number }): void {
+  let yaw: number;
+  if (t <= p.yawStart) yaw = p.yawFrom;
+  else if (p.brake && t < p.swingStart) yaw = p.brake.at(t - p.yawStart);
+  else if (p.swing && t < p.arrive) yaw = p.swing.at(t - p.swingStart);
+  else yaw = p.yawTo;
+  let pitch: number;
+  if (t <= p.start) pitch = clampPitch(p.from.pitch);
+  else if (t >= p.lowerStart && p.lower) pitch = p.lower.at(t - p.lowerStart);
+  else if (p.lift && t < p.liftEnd) pitch = p.lift.at(t - p.start);
+  else pitch = ARM.lifted;
+  out.armYaw = clampYaw(yaw);
+  out.armPitch = clampPitch(pitch);
+}
+
+// ── Accept: 1.85 s ────────────────────────────────────────────────────────────
+/** The authored arm: the hand presses the key, reaches the cue lever, lifts, swings, cues. */
+const ACCEPT_ARM_PLAN = planArm(ARM_AT_REST, 'cue', ACCEPT_ARM.reach);
+/** The stylus lands on the lead-in groove (the damper's descent from `cueAt`). */
+export const STYLUS_DOWN = ACCEPT_ARM.cueAt + ACCEPT_ARM.cue;
 const _p0: PlatterState = { angle: 0, speed: 0, accel: 0 };
 const _p1: PlatterState = { angle: 0, speed: 0, accel: 0 };
 /**
- * Lead-in: the groove carries the stylus inward as the record turns, from the cue (the lead-in
- * groove) to `played` by the end of the clip, eased so the arm arrives at rest there (the music
- * groove's pitch moves it 0.05 mm a second, which no frame shows).
+ * Lead-in: the groove carries the stylus inward as the record turns, from the cue to `played`
+ * over ACCEPT_ARM.leadIn of the record's turning (1.5 turns), eased so the arm comes to rest there
+ * (the music groove's pitch then moves it 0.05 mm a second, which no frame shows). It goes on after
+ * the clip, while the record plays.
  */
-function leadIn(platter: Platter, t: number): number {
-  if (t <= STYLUS_DOWN) return 0;
-  const a0 = platterAt(platter, STYLUS_DOWN, _p0).angle;
-  const span = platterAt(platter, DURATIONS.accept, _p1).angle - a0;
-  const p = Math.min(1, Math.max(0, (platterAt(platter, t, _p1).angle - a0) / span));
-  return 1 - (1 - p) * (1 - p);
+function leadInYaw(platter: Platter, t: number): number {
+  if (t <= STYLUS_DOWN) return ARM.cue;
+  const turned = platterAt(platter, t, _p1).angle - platterAt(platter, STYLUS_DOWN, _p0).angle;
+  const p = Math.min(1, Math.max(0, turned / ACCEPT_ARM.leadIn));
+  return lerp(ARM.cue, ARM.played, 1 - (1 - p) * (1 - p));
 }
+/** When the lead-in ends for an acceptance from guest-ready: the canonical accepted pose's time. */
+export const ACCEPTED_AT = bisect((t) => platterAt(ACCEPT_PLATTER, t).angle - platterAt(ACCEPT_PLATTER, STYLUS_DOWN).angle - ACCEPT_ARM.leadIn, STYLUS_DOWN, STYLUS_DOWN + 20);
+/**
+ * The display angle (rad, within one turn): the record where the canonical accepted pose shows it,
+ * playing, with the stylus at the end of the lead-in (posters, reduced motion, snaps).
+ */
+export const DISPLAY_ANGLE = platterAt(ACCEPT_PLATTER, ACCEPTED_AT).angle % (2 * Math.PI);
 const _spin: PlatterState = { angle: 0, speed: 0, accel: 0 };
-function accept(t: number, out: PartyFrame, platter: Platter): void {
+function accept(t: number, out: PartyFrame, platter: Platter, arm: ArmPlan = ACCEPT_ARM_PLAN): void {
   frameFor('guest-ready', out);
-  // 0–0.08: lift off the rest. 0.04–0.25: swing over the lead-in groove. 0.25–0.40: the cue
-  // damper lowers the stylus onto the (already turning) record.
-  if (t < 0.25) out.armPitch = ARM.lifted * EASE.lift(seg(t, 0, 0.08));
-  else out.armPitch = lerp(ARM.lifted, ARM.contact, CUE_DOWN(seg(t, 0.25, STYLUS_DOWN)));
-  out.armYaw = t < 0.25 ? lerp(ARM.parked, ARM.cue, EASE.travel(seg(t, 0.04, 0.25))) : lerp(ARM.cue, ARM.played, leadIn(platter, t));
+  // 0.05: the key is pressed: it lights and the motor starts. 0.15–0.35: the cue lever lifts the
+  // arm. 0.35–0.9: the hand swings it to the lead-in. 0.9–1.65: the damper lowers the stylus onto
+  // the record, now at 99 % of speed. From 1.65 the groove draws the arm in.
+  armAt(arm, t, out);
+  if (t > STYLUS_DOWN) out.armYaw = leadInYaw(platter, t);
   out.spin = -platterAt(platter, t, _spin).angle;
   out.status = t >= PLAY_AT ? 'lit' : 'off';
 }
@@ -282,6 +406,7 @@ function accept(t: number, out: PartyFrame, platter: Platter): void {
 /** The accepted pose while the record plays on, `t` seconds into acceptance (t ≥ the clip's end). */
 export function playingFrame(platter: Platter, t: number, out: PartyFrame): PartyFrame {
   frameFor('accepted', out);
+  out.armYaw = leadInYaw(platter, t);
   // Wrapped: the angle grows without bound while the record plays; the view is periodic.
   out.spin = -(platterAt(platter, t, _spin).angle % (2 * Math.PI));
   return out;
@@ -326,13 +451,27 @@ export function platterFor(sequence: SequenceName, change: Change | null): Platt
   return { at: 0, angle: change?.angle ?? 0, speed: change?.speed ?? 0, motorAt: null };
 }
 
+/** The arm's plan for a change (cached per change: the clip samples it every frame). */
+const plans = new WeakMap<Change, Partial<Record<SequenceName, ArmPlan>>>();
+export function armPlanFor(sequence: 'accept' | 'decline', change: Change | null): ArmPlan {
+  if (!change) return sequence === 'accept' ? ACCEPT_ARM_PLAN : planArm(ARM_AT_REST, 'rest', 0);
+  const cached = plans.get(change) ?? {};
+  const plan = cached[sequence] ?? planArm({ yaw: change.armYaw, yawRate: change.armYawRate, pitch: change.armPitch, pitchRate: change.armPitchRate }, sequence === 'accept' ? 'cue' : 'rest', 0);
+  cached[sequence] = plan;
+  plans.set(change, cached);
+  return plan;
+}
+
 /** An offset that starts at (value, rate) and eases to nothing by T (quintic, C² at its end). */
 function fade(value: number, rate: number, T: number, t: number): number {
   if (t >= T) return 0;
   return new Quintic(value, rate, 0, 0, 0, 0, T).at(t);
 }
 
-/** The arm's pitch ceiling for a yaw: on the vinyl at `played`, on the rest at `parked`, lifted between. */
+/**
+ * The arm's pitch ceiling for a yaw during the director's straight blend (`refresh`, which Party no
+ * longer asks for): on the vinyl at `played`, on the rest at `parked`, lifted between.
+ */
 export function blendLift(yaw: number): number {
   const u = (yaw - ARM.played) / (ARM.parked - ARM.played);
   const base = ARM.contact * (1 - Math.min(1, Math.max(0, u)));
@@ -340,47 +479,14 @@ export function blendLift(yaw: number): number {
   return base + ARM.lifted * Math.min(1, 4 * u * (1 - u) * 1.6);
 }
 
-/**
- * Decline after acceptance: the arm goes home. With the stylus down the cue lever first lifts it
- * clear (CHANGE.lift) while the arm holds its yaw; an arm already in the air turns back at once,
- * from its own velocity. It swings to the rest (time ∝ distance, CHANGE.swing for the whole swing)
- * and is lowered onto it (CHANGE.lower) as it arrives. Quintics throughout (C² inside; the start is
- * C¹ from the pose on screen).
- */
-function armHome(c: Change, t: number, out: PartyFrame): void {
-  const down = c.armPitch > ARM.lifted * 0.5;
-  const yawStart = down ? CHANGE.lift * 0.6 : 0;
-  const dist = Math.abs(c.armYaw - ARM.parked) / Math.abs(ARM.played - ARM.parked);
-  const swing = dist < 1e-6 ? 0 : Math.max(0.2, CHANGE.swing * Math.sqrt(dist));
-  const home = yawStart + swing;
-  out.armYaw = swing === 0 || t >= home ? ARM.parked
-    : t <= yawStart ? c.armYaw
-    : new Quintic(c.armYaw, down ? 0 : c.armYawRate, 0, ARM.parked, 0, 0, swing).at(t - yawStart);
-  // Pitch: up to lifted (from its own rate), held, then lowered onto the rest as the yaw arrives.
-  const liftTime = down ? CHANGE.lift : Math.max(0.06, CHANGE.lift * (1 - Math.min(1, c.armPitch / ARM.lifted)));
-  const lowerAt = Math.max(liftTime, home - CHANGE.lower * 0.6);
-  let pitch: number;
-  if (t < liftTime) pitch = new Quintic(c.armPitch, c.armPitchRate, 0, ARM.lifted, 0, 0, liftTime).at(t);
-  else if (t < lowerAt) pitch = ARM.lifted;
-  else pitch = new Quintic(ARM.lifted, 0, 0, 0, 0, 0, CHANGE.lower).at(t - lowerAt);
-  // Never lower than the ceiling for the yaw it is at (no drag across the vinyl or the rest's prongs).
-  out.armPitch = Math.min(pitch, blendLift(out.armYaw));
-}
-
-/** The end of the authored swing to the cue: the hand-over's pitch guard holds until then. */
-const SWING_END = 0.25;
-
 function changed(sequence: SequenceName, t: number, c: Change, out: PartyFrame): void {
   // The platter keeps its momentum: it coasts (decline) or is picked up by the belt (accept).
-  out.spin = -platterAt(platterFor(sequence, c), t, _spin).angle;
-  if (sequence === 'decline') {
-    armHome(c, t, out);
-  } else {
-    // The arm hands over to the authored lift and swing (which start from the rest at rest) before
-    // the cue descends; until then it is never lower than its yaw's ceiling.
-    out.armYaw += fade(c.armYaw - ARM.parked, c.armYawRate, CHANGE.arm, t);
-    const pitch = out.armPitch + fade(c.armPitch, c.armPitchRate, CHANGE.arm, t);
-    out.armPitch = t < SWING_END ? Math.min(pitch, blendLift(out.armYaw)) : pitch;
+  const platter = platterFor(sequence, c);
+  out.spin = -platterAt(platter, t, _spin).angle;
+  if (sequence === 'decline') armAt(armPlanFor('decline', c), t, out);
+  else if (sequence === 'accept') {
+    armAt(armPlanFor('accept', c), t, out);
+    if (t > STYLUS_DOWN) out.armYaw = leadInYaw(platter, t);
   }
   // The cover hands over from wherever it was (lifted back open on accept; on decline it closes as
   // authored once the hand-over has run out), never past its open stop or its closed seat.
@@ -390,7 +496,7 @@ function changed(sequence: SequenceName, t: number, c: Change, out: PartyFrame):
 export function sampleSequence(sequence: SequenceName, t: number, out: PartyFrame, change: Change | null = null): PartyFrame {
   const tc = Math.min(Math.max(t, 0), DURATIONS[sequence]);
   if (sequence === 'host') host(tc, out);
-  else if (sequence === 'accept') accept(tc, out, platterFor('accept', change));
+  else if (sequence === 'accept') accept(tc, out, platterFor('accept', change), armPlanFor('accept', change));
   else decline(tc, out);
   if (change && sequence !== 'host') changed(sequence, tc, change, out);
   return out;

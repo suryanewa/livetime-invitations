@@ -40,36 +40,44 @@ gesture (a flash, a breath, a double flash), not an on/off switch.
 **Hardware: a dead-front pictogram behind the reader's own smoked cover glass.** The master's black glass
 (clearcoated, roughness 0.06) is the smoked layer. The pictogram lights behind its lower part: below the NFC
 mark, in the clear glass the pressed card leaves in view. While idle nothing is drawn, so the face is exactly
-the master's. The light is drawn as the radiance it adds through the glass: an additive, tone-mapped quad on
-the pad, which gives with the glass at the press. The glass's own reflections stay over the lit glyph, as
-they do on a real cover glass.
+the master's. The light is added inside the glass's own shading (polish round): the glass's emission gains the
+status colour × the emission field, sampled in face space, before the clearcoat and the tone curve, so the
+reflection and the light behind the glass are summed as radiance and tone-mapped together, and the light
+gives with the glass at the press. (The first cut drew it as an additive quad over the glass. Blending
+happens after the tone curve and in the framebuffer's sRGB encoding, so over a bright reflection it washed
+the core towards white.)
 
-There is one indicator. The master's LED pipe stays its lens, dark and frosted (roughness 0.4 → 0.85, as a
-light pipe's diffusing lens is; at 0.4 its curved rim sparkled into a dotted dash at 1×). Its bar is the
-minus's own shape. Lit beside the pictogram it said "minus" in green over the check and doubled the minus in
-red: two red dashes at the 192 px thumbnail. The Business sub-spec's "exactly one status indicator" holds
-again.
+There is one indicator. The master's LED pipe is hidden behind the dead-front glass (polish round; the glass
+is whole under it). Its bar is the minus's own shape: lit beside the pictogram it said "minus" in green over
+the check and doubled the minus in red, and dark it still made the declined face read as two dashes. The
+Business sub-spec's "exactly one status indicator" holds again.
 
 **Light: a pre-diffused HDR emission field** (`statusGlyphField`). It is pure TypeScript and deterministic:
 512², 8-bit sRGB so the faint halo does not band, mipmapped, computed once per page. It is built from the
 glyph's signed distance:
 
 - A soft-edged core: the printed mask seen through the diffuser, edge 0.07 stroke.
-- A near halo, the diffuser: Gaussian σ 0.4 stroke, weight 0.22.
-- A far halo, the cover glass's own scatter: σ 1.3 stroke, weight 0.08. Its scale is the glass's 2–3 mm
+- A near halo, the diffuser: Gaussian σ 0.55 stroke, weight 0.32.
+- A far halo, the cover glass's own scatter: σ 1.4 stroke, weight 0.1. Its scale is the glass's 2–3 mm
   thickness.
+- Both halos weighted per glyph (`haloGain`): ×1.4 for the check, ×3.0 for the minus. The core cannot go
+  brighter without washing towards white in the tone curve, so the halo carries the glyph's presence at small
+  sizes, and red has 0.37 of green's luminance.
 - A subtle hotspot over the LED behind the middle: the stroke ends fall to 0.72. Uniform light along the
   stroke is what a good light guide aims for, so it is a hint, not a feature.
 - A fade to exactly zero before the quad's edge, plus an 8 × 8 ordered dither in the byte encoding. One byte
   near black is about four output levels after the tone curve; without the dither it drew a contour round
   the halo.
 
-Peak radiance is 2.6 (accept) and 2.7 (decline) × the status colour. Under `neutral-room`'s Neutral tone
-curve (exposure 1.15), both cores pass the shoulder about threefold: bright, a little lifted towards white,
-never clipped flat. On the 540 px still the check's core renders `(143, 255, 195)`, the minus's
-`(255, 154, 153)`, and the halos `(31, 200, 126)` and `(195, 33, 18)`. There is no post-process and no
-spill light: a 1.8 mm stroke throws no light anyone can see on a card 5 mm away. The first cut's spot moved
-the frames by less than one level.
+The radiance at the glyph's brightest point is 1.95 (accept) and 1.85 (decline) × the status colour: each
+glyph's strongest channel renders at 1.7–1.9 after `neutral-room`'s exposure (1.15), two to two and a half
+times the Neutral tone curve's shoulder. The core rolls off gently, but the curve's path to white stays
+under an eighth, so the hue holds: an LED's light is narrow-band, and its core reads as its colour, not as a
+white filament. In the production view the check's core renders `(100, 249, 164)` and the minus's
+`(250, 99, 96)`. Over a bright reflection of the cove (a close macro at another angle) the minus renders
+`(250, 126, 126)`: that is red light plus a grey reflection, which is physics; there is no white-out. There
+is no post-process and no spill light: a 1.8 mm stroke throws no light anyone can see on a card 5 mm away.
+The first cut's spot moved the frames by less than one level.
 
 **Glyphs: the product's own, exactly.** These are the shell's check `M4.5 10.5 l3.5 3.5 7.5 −8` and minus
 `M5 10 h10` (`src/ui/guestControls.ts`), stroke 2.2, round caps and joins, on the same 20-unit grid.
@@ -93,10 +101,10 @@ error.
 | Accept | `#3BE08A` | 149° | Saved Pine `#176B42` is 151°; the Party status light is the same green |
 | Decline | `#F12D22` | 3° | A red LED's red, with more green than blue. Garnet `#A62D36` sits at 355.5°, a pigment hue; lit at that hue (`#ED313F`, the first cut), the overdriven core rolled off pink. v1.2's `#E53E3E` was a plain warning red at 0° |
 
-Token contrast: 2.4:1 in luminance and 1.8:1 under deuteranopia. Rendered halos: 2.71:1 and 2.13:1. The
-decline runs a little hotter (2.7 against 2.6), because the minus carries 0.63 of the check's stroke and red
-carries 0.37 of green's luminance. A saturated red looks brighter than its luminance suggests, so the pair
-reads balanced, the minus a shade quieter, as a decline that is not an alarm should.
+Token contrast: 2.4:1 in luminance and 1.8:1 under deuteranopia. The decline runs a little hotter in its
+strongest channel (1.63 against 1.45) and much stronger in its halo, because the minus carries 0.63 of the
+check's stroke and red carries 0.37 of green's luminance. A saturated red looks brighter than its luminance
+suggests, so the pair reads balanced, the minus a shade quieter, as a decline that is not an alarm should.
 
 **Timing** (`STATUS_TIMING`, from the 0.72 s contact beat; every edge a smootherstep, C1 throughout):
 
@@ -107,7 +115,7 @@ reads balanced, the minus a shade quieter, as a decline that is not an alarm sho
   225 ms and dark 96 ms, which read as a stutter. It finishes 0.4 s after contact, before the card leaves.
   The canonical `declined` pose is lit at 1.
 - **Perceptual ramps.** Brightness is seen roughly as its cube root, and the HDR core reaches the tone
-  curve's shoulder by 40 % of full level. A ramp linear in level therefore looks like a switch: the first
+  curve's shoulder by about half of full level. A ramp linear in level therefore looks like a switch: the first
   cut, an ease-out, showed 59 % of the visible change in its first 16 ms frame. Smootherstep edges start as
   10u³, so the glyph surfaces from black and then the halo fills in. The first frame after contact is under
   6 % of full.
@@ -134,11 +142,32 @@ Round 2: "It now meets the bar… a crisp backlit pictogram with a soft glass ha
 - **The dark LED pill is a ragged 2 px dash at laptop 1×.** The frosted lens calms the sparkle. What remains
   is the rasterisation of a 15 × 2 px slanted master part. MSAA is on, so this is a resolution limit.
 
+## Polish round (the integration judge: 8.5/10, four defects)
+
+| Defect (judge) | Cause | Fix |
+| --- | --- | --- |
+| The red core blooms pink-white in macro | Two causes. (1) The light was an additive quad blended after the tone curve, in the framebuffer's sRGB encoding: over the bright reflection a close camera sees, red light `(1, 0, 0)` lifted green and blue from 108 to 157. (2) Peaks of 2.6 / 2.7 on the stroke put the core a quarter of the way to white. | The light is added inside the glass's own shading, before the tone curve (`addStatusLight`). The brightest point is set so the strongest channel renders at 1.7–1.9 (desaturation under an eighth). The halo carries the presence (`haloGain` 1.4 / 3.0). Minus core `(250, 99, 96)` in production; over the bright reflection `(250, 126, 126)` (was `(255, 247, 251)`) |
+| The dark LED pill is the minus's dash, so the declined face shows two dashes | — | The pill is hidden behind the dead-front glass (the glass is whole under it), with its glow quad |
+| Periodic light specks along the glass's bottom edge (phone) | The cover glass's 0.2 mm edge round-over, just above the gasket, faced the bright floor at grazing angles. Sub-pixel at stage scale, MSAA resolved it into evenly spaced specks. Located by recolouring the gasket, glass and steel: the speck pixels were 80 % gasket and 20 % glass sample | The round-over's normals are shaded as the face (`flattenGlassEdge`, 0.2 < n·face < 0.999); the silhouette is unchanged |
+| The lanyard's shadow is a ghostly stripe on the cove | The strands run out of the frame to off-stage anchors; the key laid their shadow on the cove beside the badge with nothing visible to cast it. With the strands off, the sewn tab, its stitching and the D-ring left a detached smudge | The strands, the tab, the stitching and the D-ring cast no shadow; the hook and the card still do |
+
+A second hostile pass on the first polish build (8.6/10) found the minus had lost 43 % of its light with the
+lower core. The halo gain gives most of it back: −13 % against the earlier build, with lit area +2 %, and it
+stays red.
+
+Evidence: `evidence/v1.5/business/polish/`.
+- `judge-view-glyph-macros.png` and `judge-view-reader.png` use the judge's own camera (accept / decline /
+  idle).
+- `edge-specks-phone-before-after.png`, `lanyard-shadow-before-after.png` (the bottom row is contrast
+  stretched) and `declined-face-before-after.png` are before/after comparisons.
+- `closeup-*`, `macro-*`, `screen-{desktop,laptop,phone}-*`, `still-*-540.png`, `thumb-*-192.png` and
+  `strip-ramp-{accept,decline}.png` are the final renders.
+
 ## Evidence (`evidence/v1.5/business/`)
 
 - `before/`: v1.4 for comparison (close-ups, phone crops, desktop page, 540 px and 192 px stills).
-- `after/closeup-{off,accept,decline}.png`, `after/closeup-dark-{accept,decline}.png`: the reader from a
-  2160 px still (light and dark templates).
+- `after/closeup-{off,accept,decline}.png`: the reader from a 2160 px still. (`closeup-dark-*` are the same
+  frames: the template only changes the card, which is away from the reader in the outcome poses.)
 - `after/macro-{off,accept,decline}.png`: the lower glass at 8× DPR.
 - `after/screen-{desktop,laptop,phone}-{accept,decline}[-reader].png`: the real fullscreen layouts and the
   reader at its on-screen size (desktop 1440 × 900 @2×, laptop 1280 × 720 @1×, phone 390 × 844 @3×).
@@ -152,7 +181,7 @@ Round 2: "It now meets the bar… a crisp backlit pictogram with a soft glass ha
 ## Tests
 
 - `pnpm typecheck`: clean.
-- `pnpm test`: 285 passed (23 files).
+- `pnpm test`: 285 passed (23 files) at the first commit; after the merge of `v1.5/integration` and the polish round, 355 passed (26 files). The polish round adds a test that the glass's edge round-over is shaded as its face, and rewrites the HDR test as an exact port of three's Neutral curve (core over the shoulder, desaturation under an eighth, weakest channel under a fifth of the strongest).
   - Rewritten status tests: the light starts from 0 at contact and is under 6 % in the first frame;
     accept's 0.22 s rise and hold; decline's two flashes, dark gap and hold, C1; the colours against
     DESIGN.md's statuses and their contrast; HDR core above the shoulder but not clipped; the halo under it
@@ -160,7 +189,7 @@ Round 2: "It now meets the bar… a crisp backlit pictogram with a soft glass ha
     field crisp, deterministic and dark at its quad's edge; the pictogram in view below the pressed card,
     inside the glass, under the NFC mark.
   - Removed: the spill-light and tile-geometry checks.
-- `pnpm test:browser`: 87 passed. The business status test is rewritten:
+- `pnpm test:browser`: 87 passed at the first commit; 91 after the merge and the polish round (port 5507). The status test now measures the glyph's shape as the light it adds over the idle glass, and checks that the core holds its hue (weakest channel 60–125). The business status test is rewritten:
   - dead front while idle, with no lit pixel and no glint;
   - lit in colour, with the core lifted but not clipped;
   - check about twice the minus's height without colour, widths within 20 %;

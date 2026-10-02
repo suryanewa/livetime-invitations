@@ -8,14 +8,14 @@ import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
-import { CARRY_FROM, DURATIONS } from '../src/scenes/birthday/poses.ts';
+import { CARRY_FROM, DURATIONS, IGNITE_START } from '../src/scenes/birthday/poses.ts';
 import {
   ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
   POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /** Wick tip of candle i in cake_secondary space (seated, nominal). */
-const IGNITE_START_OF = (i: number) => 0.84 + 0.02 * i;
+const IGNITE_START_OF = (i: number) => IGNITE_START[i]!;
 const wick = (i: number): [number, number, number] => [CANDLE_SOCKETS[i]![0], CANDLE.seat + WICK_TIP_Y, CANDLE_SOCKETS[i]![1]];
 /** The wick standing still (the cake on its stand): where every parcel was born. */
 const still = (i: number): WickAt => (_birth, out) => { const w = wick(i); out[0] = w[0]; out[1] = w[1]; out[2] = w[2]; };
@@ -83,7 +83,7 @@ describe('Birthday fire: the flame', () => {
   it('gives the melt its burn rate: 0 unlit, 1 for the steady flame, never more for a stretched one, 0 once out', () => {
     for (let i = 0; i < CANDLE_COUNT; i++) {
       expect(burnRate(i, IGNITE_START_OF(i) - 0.001, 'host')).toBe(0);
-      expect(burnRate(i, 1.3, 'host')).toBe(1);
+      expect(burnRate(i, DURATIONS.host, 'host')).toBe(1);
       expect(burnRate(i, 0.01, 'accept')).toBe(1);
       for (let t = 0; t < 1.4; t += 0.005) expect(burnRate(i, t, 'accept')).toBeLessThanOrEqual(1);
       expect(burnRate(i, extinguishedAt(i) + 0.001, 'accept')).toBe(0);
@@ -440,7 +440,7 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     expect(alphaSum(rig)).toBeGreaterThan(0);
   });
 
-  it('a change of mind from the canonical blown-out cake keeps it out; before the breath or from the bin it is lit as before', () => {
+  it('a change of mind from the canonical blown-out cake keeps it out; before the breath the lit cake blends as before', () => {
     const { rig, scene } = build();
     // A returning guest's accepted cake (no smoke), then decline: no relight, no smoke.
     scene.pose('accepted');
@@ -457,11 +457,45 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     scene.sample('accept', 0);
     scene.sample('accept', 0.03);
     expect(changeMind(scene, 'decline')).toBe(false);
-    // From the bin: the clean cut to the lit cake on its stand (the accept then blows it out).
-    scene.sample('decline', CARRY_FROM + 0.3);
+  });
+
+  it('a change of mind from the decline once the cake has lifted: the rewind brings it back with its candles out and its smoke rising on', () => {
+    const { rig, scene } = build();
+    scene.pose('guest-ready');
+    scene.sample('decline', 0);
+    const at = CARRY_FROM + 0.3;
+    scene.sample('decline', at);
+    scene.beforeRender();
+    const before = { smoke: smokeArray(rig), shorten: shortens(rig) };
+    expect(rig.smoke.mesh.visible).toBe(true);
     expect(changeMind(scene, 'accept')).toBe(true);
     scene.beforeRender();
-    expect(intensities(rig).every((v) => v > 0.9)).toBe(true);
+    // The same frame across the cut (the rewind starts from it), smoke and melt included.
+    expect(smokeArray(rig)).toEqual(before.smoke);
+    expect(shortens(rig)).toEqual(before.shorten);
+    for (let t = 0; t <= DURATIONS.accept; t += 1 / 60) {
+      scene.sample('accept', t);
+      scene.beforeRender();
+      expect(intensities(rig).every((v) => v === 0)).toBe(true);
+      shortens(rig).forEach((v, i) => expect(v).toBeGreaterThanOrEqual(before.shorten[i]! - 1e-12));
+    }
+    // And one reversal later (accept after the blow → decline → back once the cake has lifted).
+    const second = build();
+    second.scene.pose('guest-ready');
+    second.scene.sample('accept', 0);
+    second.scene.sample('accept', 0.8);
+    expect(changeMind(second.scene, 'decline')).toBe(true);
+    second.scene.sample('decline', 0.5);
+    second.scene.beforeRender();
+    const smoke = smokeArray(second.rig);
+    expect(changeMind(second.scene, 'accept')).toBe(true);
+    second.scene.beforeRender();
+    expect(smokeArray(second.rig)).toEqual(smoke);
+    for (let t = 0; t <= DURATIONS.accept; t += 1 / 30) {
+      second.scene.sample('accept', t);
+      second.scene.beforeRender();
+      expect(intensities(second.rig).every((v) => v === 0)).toBe(true);
+    }
   });
 
   it('decline snuffs each flame into a brief wisp of smoke', () => {

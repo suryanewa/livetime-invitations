@@ -1,6 +1,7 @@
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME } from '../../../models/birthdayContract.ts';
 import { CAMERA_ANGLES } from '../../render/camera.ts';
 import type { SequenceName } from '../../core/types.ts';
+import { LIGHT_FROM } from './placement.ts';
 
 /**
  * Birthday fire (v1.5): candle flames and the smoke that follows them, as pure functions of time
@@ -166,11 +167,12 @@ export function newFlicker(): Flicker {
 
 // ── Ignition (host) ──────────────────────────────────────────────────────────
 /**
- * Each wick catches 20 ms after the last (the existing cascade, 0.84 s onwards) and its flame
+ * Each wick catches 20 ms after the last, once every candle is in (placement.ts LIGHT_FROM; v1.5 polish:
+ * the slower, careful placement moved it from 0.84 s to ≈ 1.83 s) and its flame
  * grows from a small blue bead to the steady teardrop over IGNITE: a lit wick takes a moment to
  * draw molten wax up and the soot (yellow) zone appears only once the flame is large enough.
  */
-export const IGNITE_START = Array.from({ length: CANDLE_COUNT }, (_, i) => 0.84 + 0.02 * i);
+export const IGNITE_START = Array.from({ length: CANDLE_COUNT }, (_, i) => LIGHT_FROM + 0.02 * i);
 export const IGNITE = 0.34;
 
 // ── Breath (accept) ──────────────────────────────────────────────────────────

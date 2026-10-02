@@ -6,10 +6,18 @@ import { CONTACT_PITCH, CUE, LID, PLATTER, PLATTER_TOP, RECORD, RECORD_SEATED, T
  * record_authored origin (record bottom centre) in party_root space.
  */
 
-export const DURATIONS = { host: 1.2, accept: 1.6, decline: 1.4 } as const;
+/**
+ * v1.5 polish: acceptance runs 1.85 s (was 1.6): a real deck's order, the platter first and the arm
+ * at a hand's pace once it is at speed (ACCEPT_ARM), ends 0.2 s after the stylus lands.
+ */
+export const DURATIONS = { host: 1.2, accept: 1.85, decline: 1.4 } as const;
 
-/** Playback beat: the status key lights exactly once, as a function of time. */
-export const PLAY_AT = 0.5;
+/**
+ * The start/stop key is pressed: it lights and the motor starts (SPIN.start). It lights exactly
+ * once, as a function of time, three frames after the tap so the clip's first frame is still the
+ * ready pose.
+ */
+export const PLAY_AT = 0.05;
 
 /**
  * Pre-action presentation: hovering above the platter, label tipped towards the camera. High
@@ -82,11 +90,13 @@ export const RPM_33 = (100 / 3) * ((2 * Math.PI) / 60);
 
 /**
  * Belt-drive playback (v1.5: the record plays on after acceptance; spec revision #37). The motor
- * starts at SPIN.start; the platter (with the record on it) follows through the elastic belt as a
- * critically damped lag, ω = ω_ss + (A + B·u)·e^(−a·u) (from rest A = −ω_ss, B = a·A: zero angular
+ * starts when the key is pressed (SPIN.start = PLAY_AT), before the arm moves, as on a real deck:
+ * the stylus is cued at 1.65 s onto a record at 99.6 % of speed. The platter (with the record on
+ * it) follows through the elastic belt as a critically damped lag, ω = ω_ss + (A + B·u)·e^(−a·u) (from rest A = −ω_ss, B = a·A: zero angular
  * acceleration at the start), and then runs at ω_ss for as long as the record plays: the clip hands
  * the same closed form over to the scene's continuous channel (index.ts), so speed and acceleration
- * are continuous at the hand-over. No brake: the accepted pose is "playing at the display angle".
+ * are continuous at the hand-over. No brake: the accepted pose is "playing at the display angle",
+ * the lead-in done (sequences.ts ACCEPTED_AT).
  *
  * ω_ss is the real 33⅓ rpm (1.8 s a turn). v1.2 ran 2.2× faster because a silent 1.6 s clip that
  * braked to a stop had to read as playing; with the perpetual spin that reason is gone, and at the
@@ -96,7 +106,7 @@ export const RPM_33 = (100 / 3) * ((2 * Math.PI) / 60);
  * Negative rotation is clockwise from above.
  */
 export const SPIN = {
-  start: 0.3,
+  start: PLAY_AT,
   /** Belt lag rate a (1/s). */
   lag: 4.75,
   /** Steady platter speed (rad/s): 33⅓ rpm. */
@@ -113,19 +123,36 @@ export const SPIN = {
 export const COAST = { k: 0.5, c: 0.5 };
 
 /**
- * A change of mind (v1.5; the scene draws its own hand-over, index.ts `interruptCut`), timings in
- * seconds of the new outcome's clip:
- * - Decline after acceptance: the motor is cut and the platter coasts (COAST); the cue lever lifts
- *   the stylus clear (`lift`, only when it is down), the arm swings home (`swing` for the whole
- *   played → parked swing, shorter for less) and is lowered onto its rest (`lower`); the key goes
- *   dark at once, as a real stop button's lamp does. The cover closes as authored.
- * - Accept after a decline began: the cover is lifted back open from wherever it is (`lid`) and the
- *   arm hands over to the authored lift and swing (`arm`, done before the cue descends at 0.25 s);
- *   a platter still coasting is picked up by the belt when the motor starts.
- * Every hand-over starts from the pose on screen with its velocity (C¹) and lands on the authored
- * path with the authored velocity.
+ * The arm at a hand's pace (v1.5 polish; sequences.ts `armPath`). A real cue lever lifts the arm in
+ * a fraction of a second; the hand swings it at 60–90°/s; the cue's damper lowers the stylus over
+ * the better part of a second. Times in seconds:
+ * - `reach`: the hand goes from the start key to the cue lever after the press (accept only).
+ * - `lift`: the cue lever raises the arm off its rest or out of the groove (yaw held meanwhile).
+ * - `swing`: the whole rest-to-lead-in swing (0.41 rad: peak 1.41 rad/s, 81°/s; shorter swings
+ *   take time ∝ √distance), `brake` the hand's deceleration limit (rad/s²) when the arm was moving
+ *   away from where it now has to go.
+ * - `cueAt`/`cue`: the damper's descent starts no earlier than `cueAt` (by then the platter is at
+ *   99 % of speed) and takes `cue`: the stylus lands at `cueAt + cue` (STYLUS_DOWN).
+ * - `lower`: onto the rest when the arm comes home.
+ * - `leadIn`: the record turns this far (rad: 1.5 turns, 2.7 s at 33⅓) while the lead-in groove
+ *   carries the stylus from the cue to `played`; it ends after the clip, while the record plays.
+ * The arm never leaves its mechanism's range: yaw between `played` and `parked`, pitch between the
+ * cue lift's top and the vinyl (or the rest).
  */
-export const CHANGE = { lift: 0.12, swing: 0.62, lower: 0.16, arm: 0.24, lid: 0.5 } as const;
+export const ACCEPT_ARM = { reach: 0.15, lift: 0.2, swing: 0.55, brake: 12, cueAt: 0.9, cue: 0.75, lower: 0.25, leadIn: 3 * Math.PI } as const;
+
+/**
+ * A change of mind (v1.5; the scene draws its own hand-over, index.ts `interruptCut`):
+ * - Decline after acceptance: the motor is cut and the platter coasts (COAST); the arm goes home
+ *   along `armPath` from the pose on screen (lift if down, brake if it was swinging out, swing,
+ *   lower onto the rest); the key goes dark at once, as a real stop button's lamp does. The cover
+ *   closes as authored.
+ * - Accept after a decline began: the cover is lifted back open from wherever it is (`lid`), the
+ *   arm goes to the cue along `armPath` from the pose on screen and is lowered at the authored time,
+ *   and a platter still coasting is picked up by the belt when the motor starts.
+ * Every hand-over starts from the pose on screen with its velocity (C¹).
+ */
+export const CHANGE = { lid: 0.5 } as const;
 
 export const LID_OPEN = LID.open;
 export const LID_CLOSED = LID.closed;

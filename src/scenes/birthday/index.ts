@@ -4,7 +4,7 @@ import glbUrl from '../../../assets/scenes/birthday/birthday.glb?url';
 import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import { rigBirthday, type BirthdayRig } from '../../../models/birthday.ts';
 import { poseFlame } from '../../../models/birthdayFire.ts';
-import { BIN_POS, BIN_YAW, WALL_Z } from '../../../models/birthdayContract.ts';
+import { BIN_POS, BIN_YAW, MASTER, CAKE_SCALE, WALL_Z } from '../../../models/birthdayContract.ts';
 import type { CakePreset } from '../../../models/cake.ts';
 import { BIN, flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
@@ -12,15 +12,35 @@ import { bindMaterialsByName } from '../../../models/types.ts';
 import { silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
-import { birthdayFramePoints } from './framing.ts';
-import { MELT_CAP, meltState, newMeltState } from './melt.ts';
+import { birthdayFramePoints, birthdayRestFramePoints } from './framing.ts';
+import { MELT_CAP, meltState, newMeltState, SET_AFTER, solidify } from './melt.ts';
+import { runGroove } from '../../../models/cakeShaders.ts';
 import { CANDLE_LEAN, DURATIONS, ON_STAND } from './poses.ts';
-import { cakeAt, carryLean, FIRE_DONE, type FireChange, fireBegun, frameFor, LEAN_AXIS, newFrame, sampleSequence, SMOKE_EMIT_UNTIL, type BirthdayFrame } from './sequences.ts';
+import {
+  cakeAt, carryLean, FIRE_DONE, type FireChange, fireBegun, frameFor, LEAN_AXIS, newFrame, sampleSequence, SMOKE_EMIT_UNTIL, type BirthdayFrame,
+} from './sequences.ts';
+import { type AnswerChange, changeTime, planAnswerChange, sampleAnswerChange } from './change.ts';
+import { birthdayPull } from './pull.ts';
 import { ashAt, EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, MPS, newFlicker, SMOKE, type SmokeKind, wickChar } from './fire.ts';
 
 const UP = new Vector3(0, 1, 0);
 /** Half-step (s) of the carried cake's speed, for the smoke it strings out. */
 const SPEED_H = 1 / 240;
+
+/**
+ * Where the cake was on the smoke's clock, from `from` on (BirthdayScene.path): on the decline's
+ * path at decline time b − `decline`, on a change of mind's playback (change.ts changeTime at
+ * b − from), or (neither) on its stand.
+ */
+interface CakeSegment {
+  from: number;
+  decline?: number;
+  change?: AnswerChange;
+}
+/** The plain decline: its smoke's clock is its own time. */
+const DECLINE_PATH: readonly CakeSegment[] = [{ from: 0, decline: 0 }];
+/** Height of the upper tier's top above the cake's underside (cake space): the squash's lever. */
+const CAKE_TOP_Y = (MASTER.tierTop - MASTER.cakeBottom) * CAKE_SCALE;
 
 export class BirthdayScene implements SceneInstance {
   readonly category = 'birthday' as const;
@@ -32,8 +52,16 @@ export class BirthdayScene implements SceneInstance {
   readonly animatedNodes: Object3D[];
   readonly studio = { wallZ: WALL_Z };
   readonly framePoints: Vector3[];
+  /** v1.5 decline pull-back: at rest the frame holds the hero and the host's candles only. */
+  readonly restFramePoints = birthdayRestFramePoints();
 
   private readonly frame = newFrame();
+  /** What is showing: the last outcome sampled (or posed) and its time, for a change of mind. */
+  private shown: { seq: SequenceName; t: number; rate: number } | null = null;
+  /** The change of mind in progress (change.ts): the next outcome's playback rewinds the decline first. */
+  private change: AnswerChange | null = null;
+  /** The director poses guest-ready between interruptCut and the new outcome's first sample. */
+  private changeArmed = false;
   private preset: CakePreset;
   private readonly qYaw = new Quaternion();
   private readonly qTilt = new Quaternion();
@@ -50,6 +78,22 @@ export class BirthdayScene implements SceneInstance {
    */
   private liveLit = 0;
   private restingLit = false;
+  /** v1.5 polish: seconds the blown-out candles have cooled at rest (the wax sets), capped. */
+  private liveCool = 0;
+  private restingOut = false;
+  /**
+   * An interruption (a change of mind) is under way: the director asks `interruptCut()` and then
+   * calls `settle()`; the melt the guest watched form is carried across it instead of reset.
+   */
+  private interrupting = false;
+  /**
+   * A change of mind with the cake on its stand (accept → decline): the fire under way, captured by
+   * `interruptCut` and kept through the director's cut (settle, guest-ready) until the decline
+   * takes it at t = 0 (`fire`). The candles the breath has reached stay out, their smoke rises on.
+   * (From the decline, the change of mind is change.ts's rewind, which carries the fire the same way.)
+   */
+  private pendingFire: FireChange | null = null;
+  private fire: FireChange | null = null;
 
   // ── Fire: the secondary channel (v1.5) ──
   /** Live clock (s) the flicker is sampled at; `simulate` advances it. */
@@ -57,21 +101,14 @@ export class BirthdayScene implements SceneInstance {
   /** Flicker gain: 0 after settle() (still flames), back to 1 over FLICKER.resume while simulating. */
   private flickerGain = 0;
   /**
-   * Smoke tail: the smoke and embers carrying on after a sequence has ended on its own pose, on the
-   * smoke's clock (its kind's; `carry`: when the cake set off, frame.smokeCarry). Null: none.
+   * Smoke tail: the smoke and embers carrying on after a playback has ended on its own pose, on the
+   * smoke's clock (its kind's). Null: none.
    */
-  private tail: { clock: number; kind: SmokeKind; carry: number } | null = null;
+  private tail: { clock: number; kind: SmokeKind } | null = null;
+  /** Where the cake was on the smoke's clock (latest segment last): where each parcel was born. */
+  private path: readonly CakeSegment[] = [];
   /** The last sampled sequence and time (the tail starts where it left off). */
   private last: { sequence: SequenceName; t: number } | null = null;
-  /**
-   * A change of mind (v1.5): the fire already under way, captured by `interruptCut` and kept
-   * through the director's cut (settle, guest-ready) until the next sequence takes it over at t = 0.
-   * The candles the breath or a snuff has reached stay out and their smoke keeps rising.
-   */
-  private pendingChange: FireChange | null = null;
-  private change: FireChange | null = null;
-  /** The cut keeps the live lit time (the melt the guest watched form does not pop back). */
-  private keepLive = false;
   private readonly flicker = newFlicker();
   /** Each candle's wick tip in cake_secondary space (the melt burns it down), for the smoke. */
   private readonly wicks: [number, number, number][];
@@ -98,6 +135,7 @@ export class BirthdayScene implements SceneInstance {
       const d = new Vector3(Math.cos(a), 0, Math.sin(a)).applyQuaternion(c.wax.quaternion.clone().invert());
       const l = Math.hypot(d.x, d.z) || 1;
       c.melt.dir.value = { x: d.x / l, y: d.z / l };
+      c.melt.groove.value = runGroove(d.x / l, d.z / l);
     });
     this.pose('guest-ready');
     // The hero: every real mesh (the fire's camera-facing quads and ribbons excluded), plus each
@@ -131,28 +169,68 @@ export class BirthdayScene implements SceneInstance {
   }
 
   pose(pose: CanonicalPose): void {
-    // A sequence ending on its own pose (accept → accepted, decline → declined) hands its smoke to
-    // the live clock: it keeps rising from where the sequence left it (the canonical pose carries none).
+    // The director's cut of a change of mind passes through guest-ready: the change stays armed.
+    const c = this.change, cutOfChange = this.changeArmed;
+    if (this.changeArmed) this.changeArmed = false;
+    else this.change = null;
+    if (pose !== 'guest-ready') this.pendingFire = null;
+    this.fire = null;
+    // A playback ending on its own pose (accept → accepted, decline → declined) hands its smoke to
+    // the live clock: it keeps rising from where the playback left it (the canonical pose carries none).
     const last = this.last, f = this.frame;
     const ended = !!last && ((pose === 'accepted' && last.sequence === 'accept') || (pose === 'declined' && last.sequence === 'decline')) && last.t > DURATIONS[last.sequence] - 0.25;
-    this.tail = ended && f.smokeTime >= 0 && f.smokeTime < SMOKE.end ? { clock: f.smokeTime, kind: f.smokeKind, carry: f.smokeCarry } : null;
-    // The director's cut after `interruptCut` passes through guest-ready: the change stays pending.
-    if (pose !== 'guest-ready') this.pendingChange = null;
-    this.change = null;
+    this.tail = ended && f.smokeTime >= 0 && f.smokeTime < SMOKE.end ? { clock: f.smokeTime, kind: f.smokeKind } : null;
     this.last = null;
     this.restingLit = pose === 'guest-ready';
+    this.shown = pose === 'accepted' ? { seq: 'accept', t: DURATIONS.accept, rate: 0 } : pose === 'declined' ? { seq: 'decline', t: DURATIONS.decline, rate: 0 } : null;
+    // A change of mind played to its end rests on its outcome with the fire it carried: the candles
+    // the snuff reached stay out, their melt where it was (the canonical pose would pop it).
+    if (!cutOfChange && c && pose === (c.next === 'accept' ? 'accepted' : 'declined')) {
+      this.apply(sampleAnswerChange(c, DURATIONS[c.next], this.frame));
+      const sm = this.frame.smokeTime;
+      this.tail = ended && sm >= 0 && sm < SMOKE.end ? { clock: sm, kind: this.frame.smokeKind } : null;
+      this.frame.smokeTime = -1;
+      this.restingOut = true;
+      return;
+    }
+    // The wax goes on setting on the live clock only where the guest watched the blow-out (as the
+    // smoke); a canonical 'accepted' reached any other way is still.
+    this.restingOut = this.tail !== null;
     this.apply(frameFor(pose, this.frame));
   }
 
   sample(sequence: SequenceName, t: number): void {
-    // The director's cut after `interruptCut` lands here at t = 0: the carried fire takes over.
-    if (this.pendingChange && this.last === null && t === 0 && sequence !== 'host') this.change = this.pendingChange;
-    else if (this.last?.sequence !== sequence) this.change = null;
-    this.pendingChange = null;
+    const armed = this.changeArmed;
+    this.changeArmed = false;
+    if (this.change && sequence !== this.change.next) this.change = null;
+    const c = this.change;
+    // The director's cut after `interruptCut` (the cake on its stand) lands here at t = 0: the
+    // carried fire takes over.
+    const tookFire = !!this.pendingFire && this.last === null && t === 0 && sequence !== 'host' && !c;
+    if (tookFire) this.fire = this.pendingFire;
+    else if (this.last?.sequence !== sequence) this.fire = null;
+    this.pendingFire = null;
+    // Where the cake goes on the smoke's clock, set as a playback begins: a change appends to the
+    // path its smoke was born along so far.
+    const fresh = this.last === null || this.last.sequence !== sequence;
+    if (armed && c) this.path = c.fire ? [...this.path, { from: c.fire.clock, change: c }] : c.next === 'decline' ? DECLINE_PATH : [];
+    else if (tookFire && sequence === 'decline') this.path = [...this.path, { from: this.fire!.clock, decline: this.fire!.clock }];
+    else if (fresh && !c && !tookFire) this.path = sequence === 'decline' ? DECLINE_PATH : [];
     this.tail = null;
     this.last = { sequence, t };
+    this.shown = { seq: sequence, t, rate: 1 };
     this.restingLit = false;
-    this.apply(sampleSequence(sequence, t, this.frame, this.change));
+    this.restingOut = false;
+    this.apply(c ? sampleAnswerChange(c, t, this.frame) : sampleSequence(sequence, t, this.frame, this.fire));
+  }
+
+  /**
+   * v1.5 decline pull-back: the camera eases out as the bin comes in and the cake is lifted
+   * (src/render/framing.ts DECLINE_PULL), at the decline fit before the carry crests the rim. On a
+   * change of mind from the decline it comes back in on its own curve as the decline rewinds (pull.ts).
+   */
+  framePull(): number {
+    return birthdayPull(this.shown, this.change);
   }
 
   /**
@@ -171,37 +249,77 @@ export class BirthdayScene implements SceneInstance {
       this.liveLit = Math.min(MELT_CAP, this.liveLit + dt);
       this.applyMelt(this.frame);
     }
+    if (this.cooling()) {
+      this.liveCool += dt;
+      this.applyMelt(this.frame);
+    }
   }
 
   /** Frames are needed while any flame burns (it flickers), smoke is rising or the melt still forms. */
   settling(): boolean {
-    return this.tail !== null || this.frame.flames.some((f) => f.intensity > 0) || (this.restingLit && this.liveLit < MELT_CAP);
+    return this.tail !== null || this.frame.flames.some((f) => f.intensity > 0) || (this.restingLit && this.liveLit < MELT_CAP) || this.cooling();
   }
 
-  /**
-   * Rest: still flames (no flicker), no smoke, the melt back to the canonical pose's. Right after
-   * a change of mind's `interruptCut` the lit time is kept (the fire it carries keeps the smoke).
-   */
+  /** The blown-out wax is still setting on the live clock (until every pool and run has set). */
+  private cooling(): boolean {
+    return this.restingOut && this.frame.cool.some((c) => c > 0 && c + this.liveCool < SET_AFTER);
+  }
+
+  /** Rest: still flames (no flicker), no smoke, the melt back to the canonical pose's. */
   settle(): void {
+    // The settle that comes with a change of mind's cut: nothing is snapped, the change carries it
+    // (the fire, its smoke, the melt and the setting wax).
+    if (this.changeArmed || this.pendingFire) {
+      this.interrupting = false;
+      return;
+    }
     this.flickerGain = 0;
     this.tail = null;
-    if (!this.keepLive) this.liveLit = 0;
-    this.keepLive = false;
+    // A change of mind keeps the melt (the candles were really lit that long); load, replay and
+    // reduced motion return it to the canonical pose's.
+    if (!this.interrupting) this.liveLit = 0;
+    this.interrupting = false;
+    this.liveCool = 0;
+    this.restingOut = false;
     this.applyMelt(this.frame);
   }
 
-  /** The smoke's clock, kind and carry now: the sequence's, or the tail's (null: none). */
-  private smoke(): { clock: number; kind: SmokeKind; carry: number } | null {
+  /** The smoke's clock and kind now: the playback's, or the tail's (null: none). */
+  private smoke(): { clock: number; kind: SmokeKind } | null {
     const f = this.frame;
-    if (f.smokeTime >= 0) return { clock: f.smokeTime, kind: f.smokeKind, carry: f.smokeCarry };
+    if (f.smokeTime >= 0) return { clock: f.smokeTime, kind: f.smokeKind };
     return this.tail;
+  }
+
+  /** The cake's decline time when it was where smoke born at `b` (smoke clock) left it; null: on its stand. */
+  private cakeTimeAt(b: number): number | null {
+    for (let k = this.path.length - 1; k >= 0; k--) {
+      const seg = this.path[k]!;
+      if (b <= seg.from) continue;
+      if (seg.change) {
+        const [seq, s] = changeTime(seg.change, b - seg.from);
+        return seq === 'decline' ? s : null;
+      }
+      return seg.decline !== undefined ? b - seg.decline : null;
+    }
+    return null;
+  }
+
+  /** Where the cake (cake_authored) was for smoke born at `b`, and how it was leaning. */
+  private cakeFor(b: number, out: Vector3): number {
+    const s = this.cakeTimeAt(b);
+    if (s === null) {
+      out.copy(ON_STAND);
+      return 0;
+    }
+    cakeAt(s, out);
+    return carryLean(s);
   }
 
   /** Compose the authored flames with the live flicker, the embers and the smoke, and draw them. */
   beforeRender(): void {
     const f = this.frame;
     const sm = this.smoke();
-    const clock = sm?.clock ?? -1;
     const g = this.flickerGain;
     const gain = g * g * (3 - 2 * g);
     this.rig.candles.forEach((c, i) => {
@@ -222,52 +340,63 @@ export class BirthdayScene implements SceneInstance {
       this.wicks[i]![2] = w.z;
     });
     // The smoke rises in the room (birthday_root): each parcel from where its wick was when it was
-    // born, on the cake on its stand or, once it set off for the bin, carried (sequences.ts cakeAt).
+    // born, on the cake on its stand or on its way to (or back from) the bin; none is seen from
+    // wicks inside the bin.
     if (!sm) {
-      this.rig.smoke.update(-1, 'breath', () => {});
+      this.rig.smoke.update(-1, 'breath', () => 0);
       return;
     }
-    const carry = sm.carry;
-    this.rig.smoke.update(clock, sm.kind, (i, birth, out) => {
+    this.rig.smoke.update(sm.clock, sm.kind, (i, birth, out) => {
+      const s = this.cakeTimeAt(birth);
+      if (s !== null && s > SMOKE_EMIT_UNTIL) return -1;
       const w = this.wicks[i]!;
       const v = this.wickTmp.set(w[0], w[1], w[2]);
-      let p = this.cakeTmp.copy(ON_STAND);
-      let speed = 0;
-      if (carry >= 0 && birth > carry) {
-        // On the carried cake: where it was then, leaning as it swung, and how fast it moved.
-        const td = birth - carry;
-        speed = cakeAt(td + SPEED_H, this.cakeTmp).distanceTo(cakeAt(Math.max(0, td - SPEED_H), this.cakeTmp2)) / (2 * SPEED_H * MPS);
-        p = cakeAt(td, this.cakeTmp);
-        v.applyQuaternion(this.qBirth.setFromAxisAngle(LEAN_AXIS, carryLean(td)));
-      }
+      const lean = this.cakeFor(birth, this.cakeTmp);
+      if (lean !== 0) v.applyQuaternion(this.qBirth.setFromAxisAngle(LEAN_AXIS, lean));
+      const p = this.cakeTmp;
       out[0] = p.x + v.x;
       out[1] = p.y + v.y;
       out[2] = p.z + v.z;
-      return speed;
-    }, carry >= 0 ? carry + SMOKE_EMIT_UNTIL : Infinity);
+      if (s === null && this.cakeTimeAt(birth + SPEED_H) === null) return 0;
+      // How fast it moved through the air (a wick carried strings its vapour out).
+      this.cakeFor(birth + SPEED_H, this.cakeTmp2);
+      const ahead = this.cakeTmp2.clone();
+      this.cakeFor(Math.max(0, birth - SPEED_H), this.cakeTmp2);
+      return ahead.distanceTo(this.cakeTmp2) / (2 * SPEED_H * MPS);
+    });
   }
 
   /**
-   * A change of mind. From the bin (or on the way) a straight blend back would pull the cake
-   * through the stand: cut to the lit cake on its stand, as before. Otherwise the fire already under
-   * way is carried across (the director's 0 ms cut, then the new sequence continues it): blown-out
-   * or snuffed candles stay out, their smoke keeps rising on its own clock, and the lit time is kept
-   * so the melt does not pop back. Before any fire has begun the lit cake blends as before (lit time kept).
+   * A change of mind. From the decline (playing, declined, or rewinding) a straight blend back would
+   * pull the cake through the stand and a cut teleports it: the director is asked to cut, and the
+   * cut is never seen, because the next playback first rewinds the decline along its own path from
+   * exactly the current frame (change.ts), the camera with it (pull.ts); changing back to the
+   * decline mid-rewind plays it on from where it is. With the cake on its stand (accept, or a
+   * change's accept) the director is asked to cut too, and the decline continues exactly this
+   * frame. Either way the fire under way is carried across: blown-out or snuffed candles stay out
+   * (a flame mid-extinction goes on going out on its own clock), their smoke keeps rising on its
+   * own clock, and the lit time is kept so the melt does not pop back (`interrupting`). Before any
+   * fire has begun, with the cake on its stand, the lit cake blends as before (lit time kept).
    */
   interruptCut(): boolean {
-    const f = this.frame;
-    const lifted = !f.cakeVisible || f.cakePos.distanceTo(ON_STAND) > 1e-3;
-    const cut = lifted || f.binVisible;
-    const seq = this.last?.sequence ?? null;
-    this.pendingChange = null;
-    if (seq === 'host') return cut;
-    this.keepLive = true;
-    // Lifted off its stand: the clean cut back to the lit cake (the accept then has its candles to blow).
-    if (lifted) return true;
+    this.interrupting = true;
+    this.pendingFire = null;
+    const s = this.shown, c = this.change;
+    const [from, at, rate] = c && s && s.seq === c.next ? changeTime(c, s.t) : s ? [s.seq, s.t, s.rate] as const : [null, 0, 0] as const;
     const sm = this.smoke();
-    if (sm && fireBegun(sm.kind, sm.clock)) this.pendingChange = { kind: sm.kind, clock: sm.clock };
-    else if (seq === null && f.flames.every((fl) => fl.out)) this.pendingChange = { kind: 'breath', clock: FIRE_DONE };
-    return cut || this.pendingChange !== null;
+    const fire = sm && fireBegun(sm.kind, sm.clock) ? { kind: sm.kind, clock: sm.clock } : null;
+    if (s && from === 'decline') {
+      this.change = planAnswerChange('decline', at, rate, s.seq === 'accept' ? 'decline' : 'accept', fire);
+      this.changeArmed = true;
+      return true;
+    }
+    this.change = null;
+    const f = this.frame;
+    if (from === 'host') return f.binVisible || !f.cakeVisible || f.cakePos.distanceTo(ON_STAND) > 1e-3;
+    // The cake on its stand: the fire under way, or (a canonical blown-out cake) a fire long done.
+    if (fire) this.pendingFire = fire;
+    else if (s && s.rate === 0 && f.flames.every((fl) => fl.out)) this.pendingFire = { kind: 'breath', clock: FIRE_DONE };
+    return this.pendingFire !== null;
   }
 
   /** Low tier for the imported stand, frosting and candle materials (the library handles the rest). */
@@ -280,7 +409,12 @@ export class BirthdayScene implements SceneInstance {
     const scene = this.root.parent ?? this.root;
     const n = this.rig.nodes;
     n.bin_root!.visible = true;
-    for (const c of this.rig.candles) c.fire.quad.visible = true;
+    for (const c of this.rig.candles) {
+      c.fire.quad.visible = true;
+      // The molten wax (hidden until the melt shows it) is warmed too.
+      if (c.run) c.run.visible = true;
+      if (c.pool) c.pool.visible = true;
+    }
     this.rig.smoke.mesh.visible = true;
     await renderer.compileAsync(scene, camera);
     this.rig.setPreset(this.preset === 'vanilla' ? 'cocoa' : 'vanilla');
@@ -299,7 +433,7 @@ export class BirthdayScene implements SceneInstance {
 
   // ── internals ─────────────────────────────────────────────────────────────
   private applyMelt(f: BirthdayFrame): void {
-    applyMeltTo(this, f, this.liveLit, this.melt);
+    applyMeltTo(this, f, this.liveLit, this.liveCool, this.melt);
   }
 
   private apply(f: BirthdayFrame): void {
@@ -314,7 +448,11 @@ export class BirthdayScene implements SceneInstance {
     // pushes (a sub-millimetre dip and tilt on its underside centre), then the presentation yaw.
     this.qTilt.setFromEuler(this.euler.set(f.cakeTiltX, 0, f.cakeTiltZ));
     n.cake_secondary!.quaternion.setFromAxisAngle(LEAN_AXIS, f.cakeLean).multiply(this.qTilt).multiply(this.qYaw.setFromAxisAngle(UP, f.cakeYaw));
-    n.cake_secondary!.position.y = f.cakeDip;
+    // The pushes compress the sponge: the cake squashes about its underside (volume kept).
+    const sy = 1 + f.cakeDip / CAKE_TOP_Y;
+    n.cake_secondary!.scale.set(1 + 0.5 * (1 - sy), sy, 1 + 0.5 * (1 - sy));
+    // The plate's contact ring under the bead border goes as the cake leaves its seat.
+    this.rig.plate.lift.value = f.cakePos.distanceTo(ON_STAND);
     this.rig.candles.forEach((c, i) => {
       c.candle.position.y = c.seatedY + (f.drop[i] ?? 0);
       // A hand-placed candle's lean, about its base (the top leans towards its azimuth).
@@ -336,7 +474,7 @@ export class BirthdayScene implements SceneInstance {
 }
 
 /** The scene's private melt step, shared by apply and simulate. */
-function applyMeltTo(scene: BirthdayScene, f: BirthdayFrame, live: number, m: ReturnType<typeof newMeltState>): void {
+function applyMeltTo(scene: BirthdayScene, f: BirthdayFrame, live: number, liveCool: number, m: ReturnType<typeof newMeltState>): void {
   const press = scene.rig.press.press.value;
   scene.rig.candles.forEach((c, i) => {
     meltState(i, (f.litTime[i] ?? 0) + live, m);
@@ -347,9 +485,14 @@ function applyMeltTo(scene: BirthdayScene, f: BirthdayFrame, live: number, m: Re
     c.fire.shorten = m.shorten;
     if (c.melt) {
       c.melt.a.value.set(m.shorten, m.round, m.soften, m.pool);
-      // Run half-width 1.1 mm (scene units).
-      c.melt.b.value.set(m.bead, m.run, 0.0055, 0);
+      c.melt.b.value.set(m.bead, m.run, 0, 0);
+      // Out: the pool and run set (the live cooling only after the canonical blow-out).
+      c.melt.solid.value = solidify((f.cool[i] ?? 0) + ((f.cool[i] ?? 0) > 0 ? liveCool : 0));
+      c.melt.foot.value = f.press[i] ?? 0;
     }
+    // The molten wax shows once there is some: the pool in the cup, the run once it leaves the rim.
+    if (c.pool) c.pool.visible = m.pool > 0.02;
+    if (c.run) c.run.visible = m.run > 0.0002;
     const lean = CANDLE_LEAN[i]!;
     press[i]?.set(f.press[i] ?? 0, m.gloss, lean.azimuth, f.lean[i] ?? 0);
   });
