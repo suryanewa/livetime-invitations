@@ -128,12 +128,15 @@ export function screenX(x: number, z: number): number {
   return x * Math.cos(az) - z * Math.sin(az);
 }
 
+/** Height the cake's underside clears the rim by while it crosses over. */
+export const RIM_CLEARANCE = 0.06;
+
 /**
  * Carry height of the cake's underside at the top of the lift off the stand (v1.5: over the real
- * bin's 42.4 cm rim, 1.5 cm above the hover height it then settles to over the opening, so it is
+ * bin's 44.5 cm rim, 1.5 cm above the hover height it then settles to over the opening, so it is
  * clear of the rim with its lean before it reaches over it).
  */
-export const CARRY_HEIGHT = 2.255;
+export const CARRY_HEIGHT = BIN.rimTop + RIM_CLEARANCE + 0.075;
 
 /**
  * Bin resting position (bin_root origin), behind-left of the stand, clear of the plate by more
@@ -153,9 +156,6 @@ export const WALL_Z = -4.3;
 
 /** Cake underside when resting on the bin liner floor. */
 export const IN_BIN = new Vector3(BIN_POS.x, BIN.floor, BIN_POS.z);
-
-/** Height the cake's underside clears the rim by while it crosses over. */
-export const RIM_CLEARANCE = 0.06;
 
 /** Candle hover height above its seated position before the host places it. */
 export const CANDLE_HOVER = 0.5;

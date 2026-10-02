@@ -149,7 +149,7 @@ describe('Shared bin: the exported GLB', () => {
     const mats = new Map(doc.getRoot().listMaterials().map((m) => [m.getName(), m]));
     for (const name of Object.keys(BIN_MATERIALS)) expect(mats.has(name), name).toBe(true);
     // Micro-normal on every finish but the slot and the pins; occlusion + roughness on UV1 for the turned parts.
-    for (const name of ['bin_powder', 'bin_base', 'bin_ring', 'bin_liner', 'bin_plastic', 'bin_lid_under', 'bin_rubber', 'bin_steel', 'bin_tread']) {
+    for (const name of ['bin_powder', 'bin_base', 'bin_ring', 'bin_liner', 'bin_plastic', 'bin_rubber', 'bin_steel', 'bin_tread']) {
       expect(mats.get(name)!.getNormalTexture(), name).toBeTruthy();
     }
     for (const name of ['bin_powder', 'bin_base', 'bin_ring', 'bin_liner']) {

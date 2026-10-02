@@ -149,7 +149,7 @@ function accept(t: number, out: BirthdayFrame): void {
 // ── Decline: 1.5 s ────────────────────────────────────────────────────────────
 const FLAP_OPEN = cubicBezier(0.3, 0, 0.2, 1);
 /**
- * Lift off the stand (CARRY_FROM–LIFT_TO, 0.34 s, 30 cm up to clear the real bin's rim): a heavy
+ * Lift off the stand (CARRY_FROM–LIFT_TO, 0.36 s, 32 cm up to clear the real bin's rim): a heavy
  * take-off on a smootherstep, gathering speed over several frames (v1.2 review: no two-frame
  * launch; its peak step stays under 135 mm a frame) and leaving with zero velocity into the
  * carry's settle to the hover height. The bedded shell border rises before it moves across.
@@ -235,9 +235,9 @@ function decline(t: number, out: BirthdayFrame): void {
   setAll(out.flameScale, 1 - smoothstep(seg(t, 0.02, 0.18)));
   setAll(out.flameOpacity, out.flameScale[0]!);
   out.flaps = flaps(t);
-  // 0.22–0.74: cake and candles are lifted off the stand (by 0.56), carried across from 0.37 and
-  // brought to rest over the opening, steadied on its plate. 0.74: let go, it falls into the bin
-  // (gravity) and the bin's front wall hides it; it is below the rim by 0.97 s.
+  // 0.22–0.76: cake and candles are lifted off the stand (by 0.58), carried across from 0.39 and
+  // brought to rest over the opening, steadied on its plate. 0.76: let go, it falls into the bin
+  // (gravity) and the bin's front wall hides it; it is below the rim by 0.99 s.
   if (t < CARRY_FROM) out.cakePos.copy(ON_STAND);
   else if (t < CARRY_TO) {
     const u = carryAcross(t);

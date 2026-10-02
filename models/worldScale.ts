@@ -47,9 +47,9 @@ export const REFERENCE_CM = {
    */
   cardShortSide: 5.4,
   /**
-   * v1.5: the shared bin is one real 45 cm butterfly pedal bin at its real size in both scenes
-   * (models/disposalBin.ts): 33.8 cm across its base, a 31 cm mouth for the 27.7 cm cake and the
-   * 27 cm plate, 36 cm of depth. (v1.4: 37.6 × 26 cm in Birthday, 31.7 × 22 cm in Dinner.)
+   * v1.5: the shared bin is one real 47 cm butterfly pedal bin at its real size in both scenes
+   * (models/disposalBin.ts): 32.4 cm across its base, a 29.6 cm mouth for the 27.7 cm cake and the
+   * 27 cm plate, 38.6 cm of depth. (v1.4: 37.6 × 26 cm in Birthday, 31.7 × 22 cm in Dinner.)
    */
-  binDiameter: { birthday: 33.84, dinner: 33.84 },
+  binDiameter: { birthday: 32.44, dinner: 32.44 },
 } as const;

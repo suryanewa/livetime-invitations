@@ -127,7 +127,7 @@ describe('Dinner under the hero rule (recorded disposal exception)', () => {
     // The hero rule would make the dish fill 75 % of the width; the covered dish carried over the
     // open bin behind it cannot fit at that size, so the camera backs off. Measured on the real
     // silhouette at 1:1: v1.3 0.434, v1.4 0.496 (the bin scaled with the dish: 31.7 × 22 cm),
-    // v1.5 0.364 (the real 45 cm pedal bin: the dish must rise over a 42.4 cm rim; recorded
+    // v1.5 0.360 (the real 45 cm pedal bin: the dish must rise over a 42.4 cm rim; recorded
     // trade-off, docs/spec-revisions.md).
     const hero: Vector3[] = [];
     for (let i = 0; i < 64; i++) {

@@ -2,7 +2,7 @@ import type { Object3D } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { COVER, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
 import { buildDinnerGeometry } from './dinnerPremium.ts';
-import { attachBin, BIN, buildDisposalBin } from './disposalBin.ts';
+import { attachBin, BIN_CONTACT, buildDisposalBin } from './disposalBin.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
@@ -48,7 +48,7 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
     name: 'dish_shadow', shape: 'round', width: PLATE.radius * 2, depth: PLATE.radius * 2, spread: [1.45, 1.7], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,
   }));
   const binShadow = replace('bin_shadow', new ContactShadow({
-    name: 'bin_shadow', shape: 'round', width: BIN.radius * 1.9, depth: BIN.radius * 1.9, spread: [1.15, 1.5], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,
+    name: 'bin_shadow', ...BIN_CONTACT, spread: [...BIN_CONTACT.spread], opacity: dir.shadow.opacity, color: dir.shadow.color,
   }));
   nodes.dish_shadow = dishShadow;
   const coverShadow = new ContactShadow({

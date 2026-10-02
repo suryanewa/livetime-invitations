@@ -144,8 +144,8 @@ export const DINNER_BIN_START = new Vector3(-4.5, 0, -2.125);
 export const DINNER_WALL_Z = -4.2;
 /** Underside clearance over the rim while the dish crosses it, and the carry height. */
 export const DINNER_RIM_CLEARANCE = 0.06;
-/** v1.5: the plate's underside 1.5 cm over the real bin's rim (2.513 scene units). */
-export const DINNER_CARRY = 2.6;
+/** v1.5: the plate's underside 1.5 cm over the real bin's rim (44.5 cm: 2.637 scene units). */
+export const DINNER_CARRY = DINNER_BIN.rimTop + 0.087;
 /** Plate underside when the dish rests on the liner floor. */
 export const DISH_IN_BIN = new Vector3(DINNER_BIN_POS.x, DINNER_BIN.floor, DINNER_BIN_POS.z);
 

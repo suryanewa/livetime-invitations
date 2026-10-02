@@ -73,10 +73,10 @@ export async function finishBin(doc: Document, log: ComposeLog): Promise<void> {
     m.getNormalTextureInfo()!.setTexCoord(0);
   };
 
-  // Body: satin graphite powder coat (roughness 0.34 ± 0.04 over 20–40 cm), orange peel.
+  // Body: satin graphite powder coat (roughness 0.29 ± 0.04 over 20–40 cm), orange peel.
   const body = material('bin_powder');
   setNormal(body, powderN);
-  setORM(body, await turnedORM('bin_body', 2048, 1024, 0.34, 0.045, 101), 1, true);
+  setORM(body, await turnedORM('bin_body', 2048, 1024, 0.29, 0.04, 101), 1, true);
   // Base cup and lid ring: EDM-textured PP (0.56 / 0.52 ± 0.025).
   for (const [name, part, rough, seed] of [['bin_base', 'bin_base', 0.56, 103], ['bin_ring', 'bin_lid_ring', 0.52, 107]] as const) {
     const m = material(name);
@@ -89,8 +89,6 @@ export async function finishBin(doc: Document, log: ComposeLog): Promise<void> {
   setORM(liner, await turnedORM('bin_liner', 1024, 1024, 0.45, 0.03, 109), 1, true);
   // Small PP parts (hinge knuckles, pedal housing).
   setNormal(material('bin_plastic'), edmN);
-  // The lid's pressed underside: mill-finish stainless (a faint even grain).
-  setNormal(material('bin_lid_under'), await texture('bin_mill_normal', T.edmNormal(512, TILE.plastic, 0.3)));
   setNormal(material('bin_rubber'), rubberN);
   setNormal(material('bin_tread'), treadN);
   // Brushed stainless: grain along u, anisotropic highlight across it.

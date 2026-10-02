@@ -220,7 +220,7 @@ const FLAP_OPEN = cubicBezier(0.3, 0, 0.2, 1);
  * the opening (v1.5: a shorter settle than v1.4's (0.33, 0, 0.3, 1), whose long tail held the dish
  * still over the bin for a quarter-second before it was let go).
  */
-const TRANSFER = cubicBezier(0.33, 0, 0.45, 1);
+const TRANSFER = cubicBezier(0.33, 0, 0.6, 1);
 /**
  * v1.5 (the real 45 cm bin): the dish is carried up and across to rest over the opening by
  * RELEASE, then let go: it falls into the bin under gravity (9.81 m/s² in Dinner's units).

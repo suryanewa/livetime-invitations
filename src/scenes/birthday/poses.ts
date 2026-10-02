@@ -72,29 +72,30 @@ export const CARRY = CARRY_HEIGHT;
 export const DROPPED = IN_BIN;
 
 /**
- * Decline beats (v1.5, the real 45 cm bin): the lift off the stand (0.22–0.56, up to CARRY
- * height, 30 cm), the carry across (0.37–0.74, overlapping the end of the lift) to rest over the
- * opening, then the release: the cake falls into the bin under gravity (BIN_DROP) and is below
- * the rim by 0.97 s, when the flaps start to close.
+ * Decline beats (v1.5, the real 47 cm bin): the lift off the stand (0.22–0.58, up to CARRY
+ * height, 32 cm), the carry across (0.39–0.76, overlapping the end of the lift) to rest over the
+ * opening, then the release: the cake falls into the bin under gravity (BIN_DROP_G) and is below
+ * the rim by 0.986 s, when the flaps start to close.
  */
 export const CARRY_FROM = 0.22;
 /** End of the lift off the stand (to CARRY height); the carry's gentle lowering to the rim follows. */
-export const LIFT_TO = 0.56;
+export const LIFT_TO = 0.58;
 /** The carry across starts once the cake is well clear of the stand (it rises first). */
-export const ACROSS_FROM = 0.37;
+export const ACROSS_FROM = 0.39;
 /** Over the opening, at rest: the release. */
-export const CARRY_TO = 0.74;
+export const CARRY_TO = 0.76;
 /** Gravity in Birthday units (9.81 m/s² at 1 unit = 20 cm). */
 export const BIN_DROP_G = GRAVITY;
 /** The cake lands on the bucket floor (hidden: far below the rim) at DROP_TO. */
 export const DROP_TO = CARRY_TO + Math.sqrt((2 * (BIN.rimTop + RIM_CLEARANCE - BIN.floor)) / BIN_DROP_G);
-/** The flaps start closing once the cake and candles are below the rim (0.966 s). */
-export const FLAPS_CLOSE = 0.97;
+/** The flaps start closing once the cake and candles are below the rim (0.986 s). */
+export const FLAPS_CLOSE = 0.99;
 
 /**
  * Carry lean: the cake on its plate behaves as a damped pendulum driven by the carry's plan
  * acceleration (2.1 Hz, ζ 0.4): it leans back as it sets off, forward as it slows over the bin,
- * and is steadied (faded to upright) before it is let go, LEAN_FADE. Peak scaled to LEAN_MAX.
+ * and is steadied (faded to upright) by the time it is let go over the opening, LEAN_FADE (so it
+ * drops into the 29.6 cm mouth upright). Peak scaled to LEAN_MAX.
  */
 export const CARRY_LEAN = { hz: 2.1, zeta: 0.4 } as const;
-export const LEAN_FADE = [0.68, 0.79] as const;
+export const LEAN_FADE = [0.68, 0.76] as const;

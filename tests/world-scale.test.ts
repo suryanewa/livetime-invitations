@@ -44,18 +44,18 @@ describe('World scale (v1.4): every object at its real size', () => {
     near(toCm(2 * COVER.radius, DINNER_WORLD_SCALE), 22.1, 0.01);
     near(toCm(DISH_HEIGHT, DINNER_WORLD_SCALE), 15.9, 0.01);
     near(toCm(2 * DINNER_BIN.radius, DINNER_WORLD_SCALE), REFERENCE_CM.binDiameter.dinner, 0.005);
-    near(toCm(DINNER_BIN.height, DINNER_WORLD_SCALE), 44.9, 0.005);
+    near(toCm(DINNER_BIN.height, DINNER_WORLD_SCALE), 47, 0.005);
     expect(PLATE.radius).toBeLessThan(DINNER_BIN.opening);
     expect(DINNER_BIN.floor + DISH_HEIGHT).toBeLessThan(DINNER_BIN.rimTop);
   });
 
-  it('the shared bin is a real 45 cm pedal bin: 33.8 cm across, a 31 cm mouth, 36 cm deep, h/d 1.33', () => {
-    near(toCm(2 * BIN.radius, 1), 33.84, 0.005);
-    near(toCm(BIN.height, 1), 44.9, 0.005);
-    near(toCm(2 * BIN.opening, 1), 31, 0.005);
-    near(toCm(BIN.rimTop - BIN.floor, 1), 36.45, 0.005);
+  it('the shared bin is a real 47 cm pedal bin: 32.4 cm across, a 29.6 cm mouth, 38.6 cm deep, h/d 1.45', () => {
+    near(toCm(2 * BIN.radius, 1), 32.44, 0.005);
+    near(toCm(BIN.height, 1), 47, 0.005);
+    near(toCm(2 * BIN.opening, 1), 29.6, 0.005);
+    near(toCm(BIN.rimTop - BIN.floor, 1), 38.55, 0.005);
     // Between the Vipp 14 (Ø 30 × 37 cm, 1.23) and the Brabantia NewIcon 20 L (Ø 29 × 46.7 cm, 1.61).
-    expect(BIN.height / (2 * BIN.radius)).toBeGreaterThan(1.23);
+    expect(BIN.height / (2 * BIN.radius)).toBeGreaterThan(1.4);
     expect(BIN.height / (2 * BIN.radius)).toBeLessThan(1.61);
   });
 

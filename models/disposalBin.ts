@@ -3,6 +3,7 @@ import {
   type Object3D, Quaternion, Vector2, Vector3,
 } from 'three';
 import { beveledPlate, group, mesh } from './geometry.ts';
+import { ExtrudeGeometry, Shape } from 'three';
 import { prepareImported } from './imported.ts';
 import type { ModelContext } from './types.ts';
 
@@ -43,30 +44,35 @@ import type { ModelContext } from './types.ts';
 /** Centimetres → world units. */
 const U = 1 / 20;
 
+/** Clear mouth radius (cm): the cake (13.84 cm across its piping, upright by then) plus 8 mm. */
+const MOUTH = 14.8;
+/** Lid-ring top above the floor (cm): the rim; the closed lid's crown is 2.5 cm above it. */
+const RIM = 44.5;
+
 /** The design in centimetres (the source of every number below). */
 export const BIN_CM = {
   /** Powder-coated shell radius, base-cup outer radius, lid-ring outer radius. */
-  body: 16.5,
-  base: 16.92,
-  ring: 16.74,
+  body: MOUTH + 1.0,
+  base: MOUTH + 1.42,
+  ring: MOUTH + 1.24,
   /** Clear mouth: the inner bucket's wall (straight to the floor fillet). */
-  mouth: 15.5,
+  mouth: MOUTH,
   /** Top of the lid ring (the flaps rest on it; the hinge plane), and the closed lid's crown. */
-  rimTop: 42.4,
-  crown: 44.9,
+  rimTop: RIM,
+  crown: RIM + 2.5,
   /** Top of the inner bucket's floor. */
   floor: 5.95,
   /** Lid half-shell outline radius, split half-gap (2 mm gap), split corner radius, hinge chord. */
-  lid: 16.35,
+  lid: MOUTH + 0.85,
   splitGap: 0.1,
   lidCorner: 0.3,
-  lidChord: 15.85,
+  lidChord: MOUTH + 0.18,
   /** Lid shell: edge top above the ring, dome rise to the crown, shell depth (rim lip). */
   lidEdge: 0.6,
   lidRise: 1.9,
   lidDepth: 0.55,
-  /** Hinge pin axis: distance from the axis (along local x) and height above the ring top. */
-  hingeX: 16.25,
+  /** Hinge pin axis: distance from the axis (along local x; the knuckles' outer edge is the ring's flat top edge) and height above the ring top. */
+  hingeX: MOUTH + 0.58,
   hingeY: 0.32,
 } as const;
 
@@ -140,7 +146,15 @@ export const BIN_NODES = ['bin_root', 'bin_body', 'bin_lid', 'bin_flap_l', 'bin_
  * past their hinges and stand 59.5 cm high; the pedal reaches 23.2 cm from the axis.
  * tests/birthday.test.ts checks the built geometry stays inside.
  */
-export const BIN_BOUNDS = new Box3(new Vector3(-1.13, -0.001, -1.18), new Vector3(1.13, 3.0, 1.18));
+export const BIN_BOUNDS = new Box3(new Vector3(-1.1, -0.001, -1.15), new Vector3(1.1, 3.05, 1.15));
+
+/**
+ * The bin's contact shadow (the rigs' `bin_shadow`): footprint the base cup's diameter, a tight
+ * dark line round it (the 4 mm foot puts the base close to the floor) and a short soft spread,
+ * as dense as the masters' contact under the cake stand and the plate (v1.4: 0.95 × the rim, line
+ * 0.45, which left the bin looking set down a little apart from the floor).
+ */
+export const BIN_CONTACT = { shape: 'round', width: 2 * BIN.radius, depth: 2 * BIN.radius, spread: [1.22, 1.45], line: 0.85, lineScale: 1.07 } as const;
 
 /** Rotation.z for each flap at opening fraction k (left lifts with +z, right with −z). */
 export function flapAngles(k: number): [number, number] {
@@ -248,9 +262,9 @@ export function binLight(binRoot: Object3D): BinLight {
  * Light inside the bin, for anything that goes into it (v1.5; physically based, replacing the
  * v1.2 dimmer). Below the rim a point sees the room only through the mouth: its indirect
  * diffuse light is the opening's cosine-weighted share of the sky, R² / (R² + d²) at depth d
- * under a mouth of radius R (0.96 at 3 cm, 0.7 at 10 cm, 0.16 on the floor), and its indirect
- * specular reflects the room only if the reflected ray leaves through the mouth, else the dark
- * bucket wall. Direct light needs nothing: the shadow map already has the walls. `on` gates it
+ * under a mouth of radius R (0.96 at 3 cm, 0.7 at 10 cm, 0.13 on the floor), and its indirect
+ * specular reflects the room only if the reflected ray leaves through the mouth (an exact
+ * per-pixel test against the rim's plane), else the grey bucket wall. Direct light needs nothing: the shadow map already has the walls. `on` gates it
  * (Birthday: once the cake is over the opening); it also applies only inside the mouth's cylinder.
  */
 export function patchBinVisibility(material: Material, light: BinLight, on: { value: number }): void {
@@ -271,13 +285,19 @@ export function patchBinVisibility(material: Material, light: BinLight, on: { va
       .replace('#include <common>', '#include <common>\nvarying vec3 vBinW;\nuniform float uBinRimY;\nuniform vec2 uBinAxis;\nuniform float uBinR;\nuniform float uBinOn;')
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
   {
-    float binIn = uBinOn * (1.0 - smoothstep(uBinR * 0.92, uBinR * 1.08, length(vBinW.xz - uBinAxis)));
+    // Inside the mouth's cylinder, fading in over the last 2 cm above the rim (so switching it on
+    // over the opening never changes a pixel).
+    float binIn = uBinOn * (1.0 - smoothstep(uBinR * 0.92, uBinR * 1.08, length(vBinW.xz - uBinAxis)))
+      * (1.0 - smoothstep(0.0, 0.1 * uBinR / ${BIN.opening.toFixed(4)}, vBinW.y - uBinRimY));
     float binD = max(uBinRimY - vBinW.y, 0.0);
     float binR2 = uBinR * uBinR;
     float binDiff = binR2 / (binR2 + binD * binD);
+    // The reflected ray reaches the room only if it leaves through the mouth: intersect it with
+    // the rim's plane; elsewhere it sees the bucket's wall (a dim grey, about an eighth of the room).
     vec3 binRefl = inverseTransformDirection(reflect(-geometryViewDir, normal), viewMatrix);
-    float binCos = binD * inversesqrt(binR2 + binD * binD);
-    float binSpec = mix(0.06, 1.0, smoothstep(binCos - 0.12, binCos + 0.04, binRefl.y));
+    vec2 binHit = vBinW.xz + binRefl.xz * (binD / max(binRefl.y, 1e-3)) - uBinAxis;
+    float binOut = binRefl.y > 0.0 ? 1.0 - smoothstep(uBinR * 0.96, uBinR * 1.04, length(binHit)) : 0.0;
+    float binSpec = mix(0.12, 1.0, binOut);
     reflectedLight.indirectDiffuse *= mix(1.0, binDiff, binIn);
     reflectedLight.indirectSpecular *= mix(1.0, binSpec, binIn);
     #ifdef USE_CLEARCOAT
@@ -316,13 +336,12 @@ function linkPedal(binRoot: Object3D): void {
  * unique UV set (the lathe parts); the others are tiled micro-detail on UV0 only.
  */
 export const BIN_MATERIALS = {
-  bin_powder: { color: '#45474A', roughness: 0.34, uv1: true },
+  bin_powder: { color: '#4A4846', roughness: 0.29, uv1: true },
   bin_base: { color: '#1C1D1F', roughness: 0.56, uv1: true },
   bin_ring: { color: '#1C1D1F', roughness: 0.52, uv1: true },
   bin_liner: { color: '#6E7175', roughness: 0.45, uv1: true },
   bin_plastic: { color: '#1C1D1F', roughness: 0.54 },
-  bin_lid_under: { color: '#BDBBB6', roughness: 0.36, metalness: 1 },
-  bin_rubber: { color: '#121314', roughness: 0.86 },
+  bin_rubber: { color: '#0D0D0E', roughness: 0.8 },
   bin_slot: { color: '#060607', roughness: 0.9 },
   bin_steel: { color: '#CBC9C4', roughness: 0.3, metalness: 1, anisotropy: 0.55 },
   bin_pin: { color: '#2E2F31', roughness: 0.42, metalness: 1 },
@@ -347,32 +366,33 @@ function binMaterials(): Record<BinMaterialName, Material> {
 type Corner = [r: number, y: number, fillet?: number];
 
 /** Each lathe part: its loop, its material, and its UV0 tile (cm per micro-texture tile). */
+const RB = BIN_CM.body, RC = BIN_CM.base, RR = BIN_CM.ring;
 export const BIN_LATHES: { name: string; material: BinMaterialName; loop: Corner[]; tile: number; segments: number }[] = [
   {
     // Rubber foot ring, 4 mm tall and inset 5 mm under the base: a fine dark line at the floor.
     name: 'bin_foot', material: 'bin_rubber', tile: 3, segments: 96,
-    loop: [[15.4, 0, 0.12], [16.4, 0, 0.15], [16.4, 0.4, 0.1], [15.4, 0.4, 0.1]],
+    loop: [[RB - 1.1, 0, 0.12], [RB - 0.1, 0, 0.15], [RB - 0.1, 0.4, 0.1], [RB - 1.1, 0.4, 0.1]],
   },
   {
     // Base cup: a soft 6 mm bottom radius, a flat 3.4 cm wall 4 mm proud of the shell, a narrow
     // top shoulder the shell stands into.
     name: 'bin_base', material: 'bin_base', tile: 3, segments: 160,
-    loop: [[14.2, 0.36, 0.12], [16.92, 0.36, 0.6], [16.92, 4.8, 0.26], [16.53, 4.8, 0.1], [16.53, 2.75, 0.1], [15.6, 2.75, 0.1], [15.6, 1.25, 0.1], [14.2, 1.25, 0.1]],
+    loop: [[RB - 2.3, 0.36, 0.12], [RC, 0.36, 0.6], [RC, 4.8, 0.26], [RB + 0.03, 4.8, 0.1], [RB + 0.03, 2.75, 0.1], [RB - 0.9, 2.75, 0.1], [RB - 0.9, 1.25, 0.1], [RB - 2.3, 1.25, 0.1]],
   },
   {
     // Powder-coated shell with its rolled bead under the lid ring.
     name: 'bin_body', material: 'bin_powder', tile: 5.76, segments: 192,
-    loop: [[16.24, 2.85, 0.04], [16.5, 2.85, 0.04], [16.5, 40.2, 0.6], [16.64, 40.55, 0.22], [16.56, 40.84, 0.18], [16.24, 40.8, 0.12]],
+    loop: [[RB - 0.26, 2.85, 0.04], [RB, 2.85, 0.04], [RB, RIM - 2.2, 0.6], [RB + 0.14, RIM - 1.85, 0.22], [RB + 0.06, RIM - 1.56, 0.18], [RB - 0.26, RIM - 1.6, 0.12]],
   },
   {
     // Lid ring: overhangs the bead by 1 mm (the seam's shadow), a 3.4 mm flat top the lid rests on.
     name: 'bin_lid_ring', material: 'bin_ring', tile: 3, segments: 192,
-    loop: [[16.2, 40.92, 0.06], [16.74, 40.92, 0.15], [16.74, 42.4, 0.34], [15.88, 42.4, 0.18], [15.88, 41.5, 0.08], [16.2, 41.5, 0.06]],
+    loop: [[RB - 0.3, RIM - 1.48, 0.06], [RR, RIM - 1.48, 0.15], [RR, RIM, 0.34], [MOUTH + 0.38, RIM, 0.18], [MOUTH + 0.38, RIM - 0.9, 0.08], [RB - 0.3, RIM - 0.9, 0.06]],
   },
   {
-    // Inner bucket: rolled lip 4.5 mm below the ring top, straight 15.5 cm-radius well.
+    // Inner bucket: rolled lip 4.5 mm below the ring top, a straight well (the clear mouth).
     name: 'bin_liner', material: 'bin_liner', tile: 3, segments: 128,
-    loop: [[0, 5.6], [15.8, 5.6, 1.0], [15.8, 41.95, 0.15], [15.5, 41.95, 0.14], [15.5, 5.95, 0.9], [0, 5.95]],
+    loop: [[0, 5.6], [MOUTH + 0.3, 5.6, 1.0], [MOUTH + 0.3, RIM - 0.45, 0.15], [MOUTH, RIM - 0.45, 0.14], [MOUTH, 5.95, 0.9], [0, 5.95]],
   },
 ];
 
@@ -383,7 +403,7 @@ interface LoopPoint { r: number; y: number; nr: number; ny: number; s: number }
  * length. Counter-clockwise, so the outward normal is the tangent turned −90°. A corner without
  * a fillet is a hard edge (the point appears twice, once per face normal).
  */
-export function roundLoop(corners: readonly Corner[], arcStep = Math.PI / 20): LoopPoint[] {
+export function roundLoop(corners: readonly Corner[], arcStep = Math.PI / 20, fineRadius = 0.5): LoopPoint[] {
   const n = corners.length;
   type Piece = { a: Vector2; b: Vector2 } | { c: Vector2; r: number; from: number; to: number };
   const pieces: Piece[] = [];
@@ -439,7 +459,7 @@ export function roundLoop(corners: readonly Corner[], arcStep = Math.PI / 20): L
   for (const piece of pieces) {
     if ('c' in piece) {
       // Finer steps on the larger radii (their facets would show on the silhouette).
-      const step = piece.r >= 0.5 ? arcStep / 2 : arcStep;
+      const step = piece.r >= fineRadius ? arcStep / 2 : arcStep;
       const steps = Math.max(2, Math.ceil(Math.abs(piece.to - piece.from) / step));
       const dir = Math.sign(piece.to - piece.from);
       for (let k = 0; k <= steps; k++) {
@@ -714,20 +734,19 @@ function lidHalf(): { shell: BufferGeometry; under: BufferGeometry; knuckle: Buf
     const k = (2 * BIN_CM.lidRise) / (R * R);
     return [k * x, 1, k * z];
   };
-  // Dome: K rings from the centroid out to the band's inner edge. Spun finish: the lid blank is
-  // spun (concentric grain round the lid's centre) before it is cut in two, so u runs round the
-  // centre (angle × the lid radius) and v out along the radius; both halves continue the same rings.
-  const spunUV = (x: number, z: number): [number, number] => [(Math.atan2(z, -x) * R) / brush, Math.hypot(x, z) / brush];
+  // Dome: K rings from the centroid out to the band's inner edge. Brushed finish: the halves are
+  // pressed from brushed coil, the grain running front to back, parallel to the split (u along z).
+  const brushUV = (x: number, z: number): [number, number] => [z / brush, x / brush];
   const K = 24;
   const domeStart = positions.length / 3;
-  const centre = vtx(c.x, lidTop(c.x, c.z), c.z, ...domeNormal(c.x, c.z), ...spunUV(c.x, c.z));
+  const centre = vtx(c.x, lidTop(c.x, c.z), c.z, ...domeNormal(c.x, c.z), ...brushUV(c.x, c.z));
   for (let k = 1; k <= K; k++) {
     const rho = k / K;
     for (let i = 0; i < N; i++) {
       const p = outline[i]!, b = bands[i]!;
       const ix = p.x - b.inset * p.nx, iz = p.z - b.inset * p.nz;
       const x = c.x + (ix - c.x) * rho, z = c.z + (iz - c.z) * rho;
-      vtx(x, lidTop(x, z), z, ...domeNormal(x, z), ...spunUV(x, z));
+      vtx(x, lidTop(x, z), z, ...domeNormal(x, z), ...brushUV(x, z));
     }
   }
   const ring = (k: number, i: number) => domeStart + 1 + (k - 1) * N + (i % N);
@@ -772,7 +791,7 @@ function lidHalf(): { shell: BufferGeometry; under: BufferGeometry; knuckle: Buf
     up.push(x * U, y * U, z * U);
     const l = Math.hypot(...n);
     un.push(n[0] / l, n[1] / l, n[2] / l);
-    uu.push(x / 3, z / 3);
+    uu.push(z / brush, x / brush);
     return up.length / 3 - 1;
   };
   const inset = hem + 0.02;
@@ -853,28 +872,102 @@ function hingePin(side: -1 | 1): BufferGeometry {
 // ── Pedal ─────────────────────────────────────────────────────────────────────────────────────
 
 /** Pedal hinge axis in the pedal frame (+z radially out at BIN.pedalAngle, cm). */
-export const PEDAL_HINGE = { y: 2.3, z: 18.55 } as const;
+export const PEDAL_HINGE = { y: 2.3, z: BIN_CM.base + 1.63 } as const;
+
+/**
+ * A block swept round the bin's axis (pedal frame: x along the circumference, z radial, cm): a
+ * rounded-rect section (radial z0–z1, height y0–y1, corner rc) carried along an arc of length
+ * `length` at radius R0, its ends rounded by `re` (a moulded part following the base cup's curve).
+ */
+function bentBlock(length: number, z0: number, z1: number, y0: number, y1: number, rc: number, re: number, R0: number, tile: number): BufferGeometry {
+  const section = (e: number) => {
+    const za = z0 + e, zb = z1 - e, ya = y0 + e, yb = y1 - e, r = Math.max(rc - e, 0.04);
+    // A fixed step on every fillet, so every section has the same number of points.
+    const loop = roundLoop([[za, ya, r], [zb, ya, r], [zb, yb, r], [za, yb, r]], Math.PI / 12, Infinity);
+    return loop.slice(0, -1);
+  };
+  const rows: { x: number; e: number }[] = [];
+  const half = length / 2 - re;
+  const endSteps = 6, mid = Math.max(2, Math.ceil((2 * half) / 0.4));
+  for (let k = endSteps; k > 0; k--) { const a = (k / endSteps) * (Math.PI / 2); rows.push({ x: -half - re * Math.sin(a), e: re * (1 - Math.cos(a)) }); }
+  for (let k = 0; k <= mid; k++) rows.push({ x: -half + (2 * half * k) / mid, e: 0 });
+  for (let k = 1; k <= endSteps; k++) { const a = (k / endSteps) * (Math.PI / 2); rows.push({ x: half + re * Math.sin(a), e: re * (1 - Math.cos(a)) }); }
+  const sections = rows.map((r) => section(r.e));
+  const M = sections[0]!.length;
+  const pos: number[] = [], idx: number[] = [];
+  const bend = (x: number, y: number, z: number) => { const th = x / R0; pos.push(z * Math.sin(th) * U, y * U, z * Math.cos(th) * U); };
+  rows.forEach((r, j) => { for (const q of sections[j]!) bend(r.x, q.y, q.r); });
+  for (let j = 0; j + 1 < rows.length; j++) {
+    for (let i = 0; i < M; i++) {
+      const a = j * M + i, b = j * M + ((i + 1) % M), c = a + M, d = b + M;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  // End caps: fans from each end section's centre.
+  for (const [j, flip] of [[0, true], [rows.length - 1, false]] as const) {
+    const cz = (z0 + z1) / 2, cy = (y0 + y1) / 2;
+    const centre = pos.length / 3;
+    bend(rows[j]!.x, cy, cz);
+    for (let i = 0; i < M; i++) {
+      const a = j * M + i, b = j * M + ((i + 1) % M);
+      if (flip) idx.push(centre, a, b); else idx.push(centre, b, a);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  orientOutward(g);
+  g.computeVertexNormals();
+  return boxUV(g, tile);
+}
+
+/**
+ * The pedal lever's plate (hinge frame: origin on the hinge axis, z out, cm): a straight back
+ * edge on the barrel, a front edge curved round the bin's axis (as a stamped pedal follows the
+ * base), 1.1 cm front corners, 4 mm thick with 1.2 mm rounded edges.
+ */
+function leverPlate(width: number, tipRadius: number, hingeZ: number, thickness: number, bevel: number): BufferGeometry {
+  const hw = width / 2;
+  const tipZ = (x: number) => Math.sqrt(tipRadius * tipRadius - x * x) - hingeZ;
+  const corners: Corner[] = [[-hw + bevel, bevel, 0.3], [hw - bevel, bevel, 0.3]];
+  for (let k = 0; k <= 24; k++) {
+    const x = hw - bevel - ((2 * (hw - bevel)) * k) / 24;
+    corners.push([x, tipZ(x) - bevel, k === 0 || k === 24 ? 1.0 : 0]);
+  }
+  const loop = roundLoop(corners, Math.PI / 48, 0).slice(0, -1);
+  const shape = new Shape(loop.map((p) => new Vector2(p.r * U, p.y * U)));
+  const g = new ExtrudeGeometry(shape, { depth: (thickness - 2 * bevel) * U, bevelEnabled: true, bevelThickness: bevel * U, bevelSize: bevel * U, bevelSegments: 5, curveSegments: 8 });
+  // Shape in (x, z-out) → lie flat: shape y becomes z, extrusion becomes y (centred on the axis).
+  g.rotateX(Math.PI / 2);
+  g.translate(0, ((thickness - 2 * bevel) / 2) * U, 0);
+  return g;
+}
 
 function pedalParts() {
   const { y: hy, z: hz } = PEDAL_HINGE;
-  // Housing: a PP block on the base cup's front, its face 1.3 cm proud of the cup.
-  const housing = roundedBlock(12, 3.4, 2.2, 0.55, [0, 2.3, 17.1], 3);
-  // The slot the lever's linkage runs through (a dark recess on the housing face).
-  const slot = roundedBlock(9.6, 0.9, 0.12, 0.08, [0, hy - 0.15, 18.2], 2);
-  // Hinge lugs either side of the lever's barrel, and the pin through them.
-  const lugs = [-1, 1].map((sx) => roundedBlock(0.8, 1.15, 0.9, 0.2, [sx * 5.0, hy, 18.4], 3));
+  const R0 = BIN_CM.base + 0.28;
+  // Housing: a PP moulding on the base cup's front, following its curve, its face 1.3 cm proud.
+  const face = BIN_CM.base + 1.28;
+  const housing = bentBlock(12, BIN_CM.base - 0.92, face, 0.6, 4.0, 0.55, 0.55, R0, 3);
+  // The slot the lever's linkage runs through (a dark recess in the housing's face).
+  const slot = bentBlock(9.6, face - 0.06, face + 0.06, hy - 0.6, hy + 0.3, 0.08, 0.08, R0, 2);
+  // Hinge lugs either side of the lever's barrel, from the curved face out to the straight axis,
+  // and the pin through them.
+  const lugs = [-1, 1].map((sx) => {
+    const x = sx * 5.0, at = Math.sqrt(face * face - x * x) - 0.3;
+    return roundedBlock(0.8, 1.15, hz + 0.45 - at, 0.2, [x, hy, (at + hz + 0.45) / 2], 3);
+  });
   const pin = turned([[0, -5.42], [0.13, -5.4, 0.08], [0.13, 5.4, 0.08], [0, 5.42]], 16, 1);
   pin.rotateZ(Math.PI / 2);
   pin.translate(0, hy * U, hz * U);
   // Moving parts, in the hinge's own space (origin on the hinge axis): barrel, lever, tread.
   const barrel = turned([[0, -4.5], [0.34, -4.5, 0.1], [0.34, 4.5, 0.1], [0, 4.5]], 28, 2);
   barrel.rotateZ(Math.PI / 2);
-  const lever = beveledPlate(9.0 * U, 4.9 * U, 0.4 * U, 1.1 * U, 0.12 * U, 4);
-  lever.rotateX(-Math.PI / 2);
-  lever.translate(0, 0, 2.45 * U);
+  const lever = leverPlate(9.0, hz + 4.9, hz, 0.4, 0.12);
   const tread = beveledPlate(7.6 * U, 3.3 * U, 0.3 * U, 0.85 * U, 0.1 * U, 4);
   tread.rotateX(-Math.PI / 2);
-  tread.translate(0, 0.35 * U, 2.75 * U);
+  tread.translate(0, 0.35 * U, 2.6 * U);
   return {
     housing, slot, lugs, pin,
     lever: merge([boxUV(indexed(barrel), 6), boxUV(indexed(lever), 6, true)]),
@@ -905,7 +998,7 @@ export function buildDisposalBin(_ctx: ModelContext): Object3D {
     const flap = group(side < 0 ? 'bin_flap_l' : 'bin_flap_r', lid);
     flap.position.set(side * BIN.hingeX, BIN.hingeY, 0);
     const name = side < 0 ? 'bin_flap_l' : 'bin_flap_r';
-    for (const [suffix, geometry, material] of [['shell', half.shell, mats.bin_steel], ['under', half.under, mats.bin_lid_under], ['knuckle', half.knuckle, mats.bin_steel]] as const) {
+    for (const [suffix, geometry, material] of [['shell', half.shell, mats.bin_steel], ['under', half.under, mats.bin_steel], ['knuckle', half.knuckle, mats.bin_plastic]] as const) {
       const g = geometry.clone();
       if (side > 0) mirrorX(g);
       g.translate(-side * BIN.hingeX, -BIN.hingeY, 0);

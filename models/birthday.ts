@@ -4,7 +4,7 @@ import { ContactShadow } from '../src/render/contactShadow.ts';
 import { BIN_POS, BIN_YAW, birthdayBounds, STAND } from './birthdayContract.ts';
 import { BIRTHDAY_GLB_NODES } from './birthdayParts.ts';
 import { buildCakeGeometry, type CakePreset } from './cake.ts';
-import { attachBin, BIN, binLight, buildDisposalBin, patchBinVisibility } from './disposalBin.ts';
+import { attachBin, BIN, BIN_CONTACT, binLight, buildDisposalBin, patchBinVisibility } from './disposalBin.ts';
 import type { MaterialVariants } from './imported.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
@@ -132,7 +132,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     name: 'cake_shadow', width: STAND.foot * 2, depth: STAND.foot * 2, spread: [1.9, 2.1], opacity: dir.shadow.opacity, line: 0.42, color: dir.shadow.color,
   }));
   const binShadow = replace('bin_shadow', new ContactShadow({
-    name: 'bin_shadow', width: BIN.radius * 1.9, depth: BIN.radius * 1.9, spread: [1.15, 1.5], opacity: dir.shadow.opacity, line: 0.45, color: dir.shadow.color,
+    name: 'bin_shadow', ...BIN_CONTACT, spread: [...BIN_CONTACT.spread], opacity: dir.shadow.opacity, color: dir.shadow.color,
   }));
   nodes.cake_shadow = cakeShadow;
 

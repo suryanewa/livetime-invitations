@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test';
  * it is wide and low; across, it sits centred unless a path needs the room; every path stays in
  * frame. The disposal scenes are the recorded exceptions (docs/spec-revisions.md #3): since v1.5
  * the shared bin is a real 45 cm pedal bin, and the object carried over its 42.4 cm rim sets the
- * frame in Dinner (the dish at 0.364 of the width at 1:1; v1.4 0.496) and, by 3 %, in Birthday
+ * frame in Dinner (the dish at 0.360 of the width at 1:1; v1.4 0.496) and, by 3 %, in Birthday
  * (the cake at 0.58 of the height; v1.4 0.60).
  */
 
@@ -25,7 +25,7 @@ for (const scene of SCENES) {
       if (scene === 'dinner') {
         // The dish carried over the open bin behind it cannot fit at the hero size: the camera backs off.
         expect(f.pathLimited, label).toBe(true);
-        expect(Math.max(f.heroWidth / 0.75, f.heroHeight / 0.6), label).toBeGreaterThan(0.43);
+        expect(Math.max(f.heroWidth / 0.75, f.heroHeight / 0.6), label).toBeGreaterThan(0.42);
         continue;
       }
       if (scene === 'birthday') {
