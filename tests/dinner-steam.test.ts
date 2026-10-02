@@ -79,6 +79,23 @@ describe('Dinner steam plan (v1.5)', () => {
     }
   });
 
+  it('the dome sheds a trail from its trailing (guest) rim as it travels, and squeezes a puff out as it lands', () => {
+    for (const p of steamPuffs().filter((q) => q.kind === 'trail')) {
+      expect(p.t0).toBeGreaterThan(ACCEPT.liftFrom);
+      expect(p.t0).toBeLessThan(ACCEPT.touch);
+      // On the side away from the dome's travel (the guest side, towards the camera).
+      expect(-(p.out.x * REVEAL_DIR.x + p.out.z * REVEAL_DIR.z)).toBeGreaterThan(0.3);
+    }
+    const rest = sampleSequence('accept', ACCEPT.flat, newFrame()).coverPos;
+    for (const p of steamPuffs().filter((q) => q.kind === 'landing')) {
+      // As the trailing side comes down (touch → flat), at the rim of the landed dome, low.
+      expect(p.t0).toBeGreaterThan(ACCEPT.touch - 0.02);
+      expect(p.t0).toBeLessThan(ACCEPT.flat + 0.02);
+      expect(Math.hypot(p.pos.x - rest.x, p.pos.z - rest.z)).toBeGreaterThan(COVER.radius);
+      expect(p.pos.y).toBeLessThan(0.05);
+    }
+  });
+
   it('no puff is born in or sinks into the plate or the table', () => {
     const s = newPuffState();
     for (const p of steamPuffs()) {
@@ -115,9 +132,9 @@ describe('Dinner steam plan (v1.5)', () => {
     };
     // Visible above the plate's far rim (h ≳ 0.3 su from the camera) through the second after the
     // reveal, thinning, and below 1 % everywhere (invisible over the cove) by STEAM_END.
-    expect(maxDensity(1.2, 0.3, 0.9)).toBeGreaterThan(0.2);
-    expect(maxDensity(2.0, 0.3, 0.9)).toBeGreaterThan(0.05);
-    expect(maxDensity(2.0)).toBeLessThan(maxDensity(1.2));
+    expect(maxDensity(1.2, 0.3, 0.9)).toBeGreaterThan(0.12);
+    expect(maxDensity(1.8, 0.3, 0.9)).toBeGreaterThan(0.03);
+    expect(maxDensity(1.8)).toBeLessThan(maxDensity(1.2));
     expect(maxDensity(STEAM_END)).toBeLessThanOrEqual(0.0101);
     for (const p of steamPuffs()) expect(p.t0 + p.life).toBeLessThanOrEqual(STEAM_END);
     expect(STEAM_END).toBeGreaterThan(DURATIONS.accept + 1);

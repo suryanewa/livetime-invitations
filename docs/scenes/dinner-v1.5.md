@@ -58,7 +58,9 @@ the CPU sets a handful of uniforms per frame.
 | Spill | 22 puffs | 0.10–0.30 s, weighted to the widening gap | round the raised rim (all within 70° of it, mean within 30°), 6–8 mm off the bead | up the raised side's outer wall at 15–24 cm/s (the exchange outflow caught by the hot wall's boundary layer, drawn up by the lifting dome): a thin filament sheet, drawn out 1.7–2.1× along the rise | 0.35–0.5 s |
 | Release | 10 | 0.21–0.35 s | under the lifting dome, at least 1.3 cm above the plate and below the rim | lifts off with the dome (30–50 % of its rise) and on, buoyant | 0.4–0.6 s |
 | Pocket | 14 | 0.30–0.49 s | inside the dome as it is carried off (weighted to its crown, where the warm air sat) | 20–35 % of the dome's velocity (its wake), then a fast buoyant rise, fraying | 0.45–0.7 s |
-| Column | 7 plumes | 0.24–0.32 s, as the rim clears the well: at full strength at once, then thinning (decay 0.5–0.65 s) | the middle of the plate's well, r < 0.26 su | rises at 17–21 cm/s; a meander frozen into the rising vapour, the whole plume flapping ±1–2 cm at 0.7 Hz, strands that churn and curl; a slight lean after the departing dome (its wake) | gone by STEAM_END, 3.44 s |
+| Trail | 8 | 0.38–0.59 s | the trailing (guest-side) rim of the travelling dome | streams back off the edge (25–45 % of the dome's velocity), rises; thinning | 0.3–0.45 s |
+| Landing | 7 | 0.79–0.86 s, as the trailing side comes down | the landed dome's trailing rim, either side of the plate's edge (1.4 cm away), 2–4 cm up | squeezed out across the table at 4–7 cm/s, rising a little | 0.35–0.5 s |
+| Column | 4 plumes, uneven (one dominant, three narrower and weaker) | 0.26–0.34 s, as the rim clears the well: at full strength at once, then thinning from the bottom (decay 0.45–0.6 s) | the front half of the well, r < 0.24 su (clear of the cloche set down behind-left) | rises at 17–21 cm/s; forms 2.5 cm off the porcelain; a meander frozen into the rising vapour, a slow ±0.5–1 cm sway at 0.6 Hz, strands that churn and curl; evaporates gently (e^(−h/24 cm)) so its first, strongest vapour rises out of view | gone by STEAM_END, 2.73 s |
 
 - **Puffs** are camera-facing soft billboards. The vertex shader places each puff at its age: emission momentum
   decaying over 0.18 s, buoyant acceleration (0.2 s) and deceleration by entrainment (1.6 s), radius growth, meander
@@ -70,8 +72,8 @@ the CPU sets a handful of uniforms per frame.
   filaments as they evaporate.
 - **Plumes** are ribbons up from the plate, as wide as the camera's horizontal, so they shear with their path and
   never twist or fold. Their density at height h is the source as it was h/rise ago. So the column grows up off the
-  plate at its strongest, then thins from the bottom as the source weakens, while its first vapour rises away and
-  evaporates (e^(−h/14 cm)). It fades in over its first 1.3 cm and out over its top 6 cm, so no ribbon end shows and
+  plate at its strongest, then thins from the bottom as the source weakens, while its first vapour keeps rising out
+  of view. It fades in over its first 2.5 cm and out over the top 6 cm of its 24 cm, so no ribbon end shows and
   nothing lies on the plate. The fragment shader draws the strand or two a rising sheet folds into: wandering and
   curling side to side (laminar for the first few centimetres), the pattern itself churning in time rather than
   sliding up, breaking into wisps higher.
@@ -91,7 +93,7 @@ the CPU sets a handful of uniforms per frame.
 - **Plays on the reveal only.** The accept's samples drive the steam clock (`steamState.tau` is the accept's time),
   so a replay starts it from zero and nothing accumulates. Decline and host never show steam: the cloche stays on.
 - **After the reveal**, the director poses `accepted` at 1.5 s and the steam carries on in `simulate`. `settling()`
-  stays true while it rises, until `STEAM_END` (3.44 s), when every puff has gone and every plume is below 1 %
+  stays true while it rises, until `STEAM_END` (2.73 s), when every puff has gone and every plume is below 1 %
   density (white at 1 % moves the greige cove by 0.3 of an 8-bit step). The scene then ends clear and the loop idles
   (browser test: no frames after it, and the frame equals the reduced-motion still).
 - **`settle()`** snaps the steam to rest. The exception is the settle that comes with a change of mind's cut: the

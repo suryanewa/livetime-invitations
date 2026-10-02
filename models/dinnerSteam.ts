@@ -271,7 +271,7 @@ void main() {
   // The envelope: a Gaussian on a radius warped by the field (so its outline is the field's, and
   // stacked puffs never print rings), shrinking as it evaporates (from the edges in), and zero
   // well inside the quad's circle.
-  vec2 rw = vCorner + 0.55 * w;
+  vec2 rw = vCorner + 0.5 * w;
   float env = exp(-dot(rw, rw) * (2.6 + 2.6 * vErode)) * (1.0 - smoothstep(0.6, 1.0, sqrt(r2)));
   // (Low tier: one octave and no filaments, half the lookups.)
   float n = 0.5 + 0.5 * (uLow ? 0.85 * snoise(ROT * qw) : 0.7 * snoise(ROT * qw) + 0.3 * snoise(ROT * (ROT * qw) * 2.3 + 5.3));
@@ -281,7 +281,8 @@ void main() {
   vec3 wq = vPos * vec3(3.4, 1.3, 3.4) + vec3(0.0, -uTime * 0.6, 0.0) + 0.45 * w.x;
   float sn = uLow ? 0.0 : snoise(ROT * wq);
   float sheet = 1.0 - sn * sn;
-  float dens = env * n * n * 1.7 * mix(1.0, 0.25 + 0.95 * sheet * sheet, max(vWisp, vErode));
+  // Densest in the middle (never a shell with a hollow centre), the field modulating it.
+  float dens = env * (0.35 + 0.65 * n) * 1.25 * mix(1.0, 0.25 + 0.95 * sheet * sheet, max(vWisp, vErode));
   // Evaporation thins it from its faint parts first, then it is gone.
   float d = clamp((dens - 0.3 * vErode) / (1.0 - 0.3 * vErode), 0.0, 1.0);
   float k = contact(vPos);
@@ -384,13 +385,19 @@ void main() {
   // ROOM× wider so the wandering strands never meet its edges.
   float s = h - vRise * uTime;
   float free = smoothstep(0.0, 0.25, h);
-  float c1 = (0.85 * snoise(vec3(s * 2.6, vSeed, 0.9 * uTime)) + (uLow ? 0.0 : 0.35 * snoise(vec3(s * 5.5, vSeed + 3.0, 1.3 * uTime)))) * free * (1.0 + 0.6 * h);
-  float c2 = c1 + 0.9 * snoise(vec3(s * 2.0, vSeed + 5.0, 0.8 * uTime)) * free;
-  float sig = 0.3 + 0.35 * h;
+  // Eddies a couple of centimetres across reshape in a fraction of a second (the z of the noise
+  // runs with τ), so the strands are not a pattern sliding up.
+  float c1 = (0.85 * snoise(vec3(s * 2.6, vSeed, 1.25 * uTime)) + (uLow ? 0.0 : 0.35 * snoise(vec3(s * 8.0, vSeed + 3.0, 2.0 * uTime)))) * free * (1.0 + 0.6 * h);
+  float c2 = c1 + 0.9 * snoise(vec3(s * 2.0, vSeed + 5.0, 1.1 * uTime)) * free;
+  // Laminar and soft at the base (a broad sheet, never bars over the plate), thin bright strands
+  // once it turns turbulent, widening slowly by diffusion.
+  float sig = mix(0.9, 0.17, smoothstep(0.05, 0.45, h)) + 0.22 * h;
   float a1 = (u - c1) / sig, a2 = (u - c2) / (1.25 * sig);
   float strands = max(exp(-a1 * a1), 0.7 * exp(-a2 * a2));
-  float breakup = 0.5 + 0.5 * snoise(vec3(u * 1.2, s * 4.0, vSeed + 9.0 + 0.8 * uTime));
-  float d = strands * mix(1.0, smoothstep(0.1, 0.8, breakup), 0.85 * smoothstep(0.15, 0.9, h));
+  float breakup = 0.5 + 0.5 * snoise(vec3(u * 1.2, s * 4.0, vSeed + 9.0 + 1.1 * uTime));
+  // Gaps open along the strands as they rise (wisps), but the cores stay dense: steam reads by
+  // its bright filament edges.
+  float d = strands * mix(1.0, 0.35 + 0.65 * smoothstep(0.1, 0.8, breakup), smoothstep(0.15, 0.9, h));
   d *= smoothstep(ROOM, 0.8 * ROOM, abs(u));
   float k = contact(vPos);
   if (k < 0.0) discard;

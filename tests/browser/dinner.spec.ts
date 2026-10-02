@@ -9,8 +9,11 @@ type Snap = { resource: string; visual: string; response: { intent: string | nul
 const state = (page: Page) => page.evaluate(() => (window as any).__showcase.state as Snap);
 const requests = (page: Page) => page.evaluate(() => (window as any).__showcase.requests.length as number);
 
-/** Mean per-channel difference (0–255) the column makes in a 256 px still just after the reveal (measured 0.24). */
-const STEAM_VISIBLE = 0.1;
+/**
+ * Mean per-channel difference (0–255) the steam still makes in a 256 px still just after the
+ * reveal, when the column is thinning (measured 0.07; the cleared frame measures 0).
+ */
+const STEAM_VISIBLE = 0.03;
 
 async function ready(page: Page, url = '/?scene=dinner') {
   await page.goto(url);
