@@ -437,7 +437,8 @@ export class DinnerSteam {
   private readonly plumes: Mesh<InstancedBufferGeometry, ShaderMaterial>;
   private readonly materials: ShaderMaterial[];
   private readonly coverInv = new Matrix4();
-  private key: Object3D | null = null;
+  /** The rig's shadow-casting key (undefined: not looked for yet; null: the rig has none). */
+  private key: Object3D | null | undefined = undefined;
   private readonly noise: DataTexture;
 
   constructor(puffs: readonly Puff[], plumes: readonly Plume[]) {
@@ -459,7 +460,6 @@ export class DinnerSteam {
       uPlate: { value: new Vector3() },
       uCamRight: { value: new Vector3(1, 0, 0) },
       uCamUp: { value: new Vector3(0, 1, 0) },
-      uCamBack: { value: new Vector3(0, 0, 1) },
     };
     this.shared = shared;
     const material = (name: string, vertexShader: string, fragmentShader: string) => new ShaderMaterial({
@@ -509,8 +509,7 @@ export class DinnerSteam {
       cam.multiplyMatrices(toScene, camera.matrixWorld);
       shared.uCamRight.value.setFromMatrixColumn(cam, 0).normalize();
       shared.uCamUp.value.setFromMatrixColumn(cam, 1).normalize();
-      shared.uCamBack.value.setFromMatrixColumn(cam, 2).normalize();
-      if (this.key?.parent == null) this.key = findKey(scene);
+      if (this.key === undefined || (this.key && !this.key.parent)) this.key = findKey(scene);
       if (this.key) {
         lp.setFromMatrixPosition(this.key.matrixWorld).applyMatrix4(toScene);
         cp.setFromMatrixPosition(parent.matrixWorld).applyMatrix4(toScene);
@@ -523,7 +522,7 @@ export class DinnerSteam {
     uLow: { value: boolean };
     uTime: { value: number }; uEmitEnd: { value: number }; uFade: { value: number };
     uCoverInv: { value: Matrix4 }; uPlate: { value: Vector3 };
-    uCamRight: { value: Vector3 }; uCamUp: { value: Vector3 }; uCamBack: { value: Vector3 }; uKeyDir: { value: Vector3 };
+    uCamRight: { value: Vector3 }; uCamUp: { value: Vector3 }; uKeyDir: { value: Vector3 };
   };
 
   /**

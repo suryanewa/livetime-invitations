@@ -156,7 +156,8 @@ const SCENE_CAPTURE = {
     sharedDeclined: true,
     sharedReady: true,
     sharedAll: true,
-    clips: { host: 1.5, accept: 1.8, decline: 1.8, change: 2.6 },
+    // v1.5: the accept clip runs on until the reveal's steam has gone (STEAM_END 3.6 s).
+    clips: { host: 1.5, accept: 3.8, decline: 1.8, change: 2.6 },
   },
 } as const;
 

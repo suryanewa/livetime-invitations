@@ -157,7 +157,7 @@ export function buildPuffs(): Puff[] {
     p.t0 = 0.03 + 0.23 * Math.sqrt((i + rnd()) / n);
     // Gap round the rim ∝ 1 + cos Δφ (the far rim is the pivot): weight the angle by it.
     let d = 0;
-    for (let k = 0; k < 8; k++) { d = gauss() * 0.75; if (Math.abs(d) < 1.35) break; }
+    for (let k = 0; k < 8; k++) { d = gauss() * 0.9; if (Math.abs(d) < 1.35) break; }
     const a = RAISED + d;
     rimAt(p.t0, a, rim);
     const gap = Math.max(0, rim.y - plateTop(Math.hypot(rim.x, rim.z)));
@@ -174,13 +174,13 @@ export function buildPuffs(): Puff[] {
     p.vel.copy(p.out).multiplyScalar(0.35 * u * range(0.8, 1.2)).addScaledVector(cv, 0.3);
     p.vel.y += u * range(0.8, 1.1);
     p.rise = range(0.75, 1.0);
-    p.size = 0.08 + 0.6 * gap + range(0, 0.02);
-    p.grow = range(0.26, 0.34);
+    p.size = 0.1 + 0.7 * gap + range(0, 0.03);
+    p.grow = range(0.3, 0.4);
     p.life = range(0.5, 0.8);
     p.peak = range(0.55, 0.7) * (0.6 + 0.4 * Math.min(1, gap / 0.08));
     p.sway = range(0.05, 0.09);
-    p.curl = range(0.035, 0.06) * (0.5 + Math.min(1, gap / 0.1));
-    p.curlRate = range(8, 11);
+    p.curl = range(0.06, 0.09) * (0.5 + Math.min(1, gap / 0.1));
+    p.curlRate = range(5, 6.5);
     puffs.push(p);
   }
 

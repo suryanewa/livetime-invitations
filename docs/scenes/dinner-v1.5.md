@@ -52,10 +52,10 @@ the CPU sets a handful of uniforms per frame.
 
 | Element | Count | Born (τ) | Where | Motion | Life |
 | --- | --- | --- | --- | --- | --- |
-| Spill | 16 puffs | 0.08–0.26 s, weighted to the widening gap | round the raised rim (all within 70° of it), at the bead, just outside | exchange outflow 0.3–0.45 su/s turned upward, a roll-up curl round the lip | 0.5–0.8 s |
-| Release | 8 | 0.21–0.33 s | round the raised side, between the plate and the lifting rim | outward, drawn up after the dome | 0.6–0.9 s |
-| Pocket | 14 | 0.32–0.51 s | inside the dome as it is carried off (warm air at its crown) | 22–42 % of the dome's velocity (its wake), then buoyant | 0.55–0.85 s |
-| Trail | 8 | 0.36–0.60 s | the dome's trailing rim | dragged after it, thinning | 0.5–0.7 s |
+| Spill | 16 puffs | 0.08–0.26 s, weighted to the widening gap | round the raised rim (all within 70° of it, mean within 30°), at the bead, just outside | exchange outflow 0.3–0.45 su/s (5–7 cm/s) turned upward, rolling up into a curl round the lip (1–2 cm radius, ≈ 120°, at the shear's speed) | 0.5–0.8 s |
+| Release | 8 | 0.21–0.32 s | round the raised side, between the plate and the lifting rim | outward, drawn up after the dome | 0.6–0.9 s |
+| Pocket | 14 | 0.30–0.51 s | inside the dome as it is carried off (warm air at its crown) | 22–42 % of the dome's velocity (its wake), then buoyant | 0.55–0.85 s |
+| Trail | 8 | 0.35–0.60 s | the dome's trailing rim | dragged after it, thinning | 0.5–0.7 s |
 | Column | 6 plumes | 0.30–0.42 s (once the rim has cleared the well), decaying with τ ≈ 0.55–0.75 s | the plate's well, r < 0.34 su | rises at 0.78–0.95 su/s (13–16 cm/s); meander frozen into the rising vapour; leans back-left with the dome's wake (0.32 su per su of height, dying away over 0.8 s) | gone ≈ 3.6 s |
 
 - **Puffs** are camera-facing soft billboards. The vertex shader places each puff at its age: emission momentum
