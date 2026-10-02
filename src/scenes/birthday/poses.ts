@@ -64,35 +64,14 @@ export const CANDLE_LEAN: readonly { angle: number; azimuth: number }[] = (() =>
  */
 export const CAKE_LOAD = { hz: 14, zeta: 0.35, dip: 0.0012, tilt: 0.0012, release: 0.035 } as const;
 
-/** Flames rise once their candle has settled (0.84–1.06 s), 20 ms apart, no overshoot. */
-export const FLAME_START = each((i) => 0.84 + 0.02 * i);
-export const FLAME_RISE = 0.12;
-
 /**
- * Breath: flames lean away from the camera and to the right; wicks follow a little. The sideways
- * part (z, in the picture plane) is what reads from the 20°/15° camera: the away part is
- * foreshortened. ≈ 31° at full breath, up to ≈ 46° as each flame dies.
+ * Flames (v1.5): ignition, the breath, extinction and smoke are physics in fire.ts (IGNITE_START,
+ * BREATH, SMOKE), sampled as pure functions of time. Each wick catches once its candle has seated
+ * (0.84 s on, 20 ms apart) and its flame grows for IGNITE; the guest's breath arrives 0.06 s into
+ * accept and the flames go out nearest the mouth first, the last by ≈0.55 s; the smoke rises for
+ * a few seconds after the sequence, on the scene's live clock.
  */
-export const LEAN = { x: -0.45, z: -0.3 };
-export const WICK_LEAN = 0.3;
-/** The gust is not steady: each flame's lean flutters ±12 % at 7 Hz, out of phase with its neighbours. */
-export const FLAME_FLUTTER = { amount: 0.12, hz: 7 } as const;
-/** At full breath a flame is drawn out this much taller and this much thinner (scale per axis). */
-export const FLAME_STRETCH = { tall: 0.22, thin: 0.15 } as const;
-
-/** Extinguish windows, left to right (0.25–0.595 s), and one wisp each (0.60–0.99 s). */
-export const OUT_START = each((i) => 0.25 + 0.044 * i);
-export const OUT_LEN = 0.125;
-export const WISP_START = each((i) => 0.6 + 0.018 * i);
-export const WISP_LEN = 0.3;
-export const WISP_OPACITY = 0.62;
-/**
- * A wisp leaves the wick: its foot stays on the wick tip while the curl unfurls upward (its
- * height grows from WISP_GROW_FROM to full), and it only lifts off (WISP_RISE, cubic ease-in) as
- * it dissolves, so the smoke never floats detached above a candle while it is visible.
- */
-export const WISP_RISE = 0.07;
-export const WISP_GROW_FROM = 0.4;
+export { IGNITE, IGNITE_START } from './fire.ts';
 
 /** Decline path keys. */
 export const BIN_AT = BIN_POS;

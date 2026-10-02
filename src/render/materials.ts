@@ -1,5 +1,6 @@
 import { Color, DoubleSide, FrontSide, type Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, ShaderMaterial, Texture, Vector2 } from 'three';
 import { ballMaterial } from './ballMaterial.ts';
+import { createFlameMaterial } from './flame.ts';
 import { cardPrint, grooveDirections, holoPattern, labelPrint, strapPrint } from './print.ts';
 import { perforationDarkMap, perforationMaps, releaseCachedTexture, retainCachedTexture, ringNormal, stippleNormal, weaveLiningNormal, weaveNormal } from './textures.ts';
 
@@ -34,8 +35,10 @@ export interface SurfaceSpec {
   /** Unlit, exact colour (flames). Never tone mapped so they read as light sources. */
   unlit?: boolean;
   opacity?: number;
-  /** View-dependent unlit flame: hot core facing the camera, orange rim. */
+  /** View-dependent unlit flame: hot core facing the camera, orange rim (v1.1 tooling cakes). */
   flame?: { core: string; rim: string };
+  /** Volumetric candle flame driven by the Birthday rig (v1.5, src/render/flame.ts). */
+  volumetricFlame?: boolean;
   /** Printed graphics generated at load (fidelity pass). */
   print?: 'card-light' | 'card-dark' | 'strap' | 'label-coral' | 'label-cobalt';
   /** Basketball leather and shader seams (src/render/ballMaterial.ts). */
@@ -115,6 +118,8 @@ const food: Record<string, SurfaceSpec> = {
   mat_wick: { color: '#2A2420', roughness: 0.9 },
   mat_flame_core: { color: '#FFF6DC', roughness: 1, unlit: true },
   mat_flame_outer: { color: '#FF9A33', roughness: 1, flame: { core: '#FFF4C9', rim: '#FF8A2B' } },
+  // Colour comes from temperature (Planck); `color` is only the token-sheet swatch (≈1,900 K soot).
+  mat_flame: { color: '#FFB15C', roughness: 1, volumetricFlame: true },
   mat_pasta: { color: '#F2CF7A', roughness: 0.62 },
   mat_sauce: { color: '#C8432B', roughness: 0.45 },
   mat_basil: { color: '#3F7A45', roughness: 0.6 },
@@ -370,7 +375,12 @@ export const DIRECTIONS = {
   };
 }
 
-function flameMaterial(name: string, core: string, rim: string): ShaderMaterial {
+/**
+ * The v1.1 view-dependent lathe flame: hot core facing the camera, orange rim. Since v1.5 only the
+ * code-authored tooling cakes (study, lookdev: models/cake.ts) draw it; the product's flames are
+ * `mat_flame` (volumetric, below).
+ */
+function legacyFlameMaterial(name: string, core: string, rim: string): ShaderMaterial {
   return new ShaderMaterial({
     name,
     uniforms: {
@@ -394,8 +404,6 @@ function flameMaterial(name: string, core: string, rim: string): ShaderMaterial 
       varying float vHeight;
       void main() {
         float facing = clamp(abs(vNormal.z), 0.0, 1.0);
-        // Pale core low in the flame, warm towards the tip; the silhouette fades instead of
-        // drawing an outline.
         float core = smoothstep(0.2, 0.9, facing) * (1.0 - smoothstep(0.03, 0.15, vHeight));
         vec3 col = mix(uRim, uCore, core);
         float alpha = smoothstep(0.02, 0.5, facing) * uOpacity;
@@ -406,6 +414,16 @@ function flameMaterial(name: string, core: string, rim: string): ShaderMaterial 
     depthWrite: false,
     toneMapped: false,
   });
+}
+
+/**
+ * Candle flame (v1.5, Birthday #4): a ray-marched diffusion flame on a camera-facing quad that the
+ * Birthday rig drives (models/birthday.ts), coloured by soot's Planck radiance at each point's
+ * temperature and tone mapped as the HDR emitter it is (src/render/flame.ts). No colour tokens:
+ * the colours come from temperature.
+ */
+function flameMaterial(name: string): ShaderMaterial {
+  return createFlameMaterial(name);
 }
 
 /**
@@ -440,7 +458,8 @@ function holoFoil(name: string, spec: SurfaceSpec): Material {
 }
 
 function buildMaterial(name: string, spec: SurfaceSpec): Material {
-  if (spec.flame) return flameMaterial(name, spec.flame.core, spec.flame.rim);
+  if (spec.volumetricFlame) return flameMaterial(name);
+  if (spec.flame) return legacyFlameMaterial(name, spec.flame.core, spec.flame.rim);
   if (spec.unlit) {
     return new MeshBasicMaterial({
       name,
