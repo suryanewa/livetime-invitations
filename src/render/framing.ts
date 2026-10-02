@@ -53,7 +53,8 @@ export const DECLINE_PULL = { from: 0, to: 0.65 } as const;
  * and 0.7 s): a symmetric smootherstep is calmer at its peak (1.87 ×) but leaves Dinner's opening
  * flaps clipped by the frame's top edge (23 % of the bin's height, 0.23 s), and the front-loaded
  * standard ease (0.4, 0, 0.2, 1) clips them barely less for a much faster middle (2.73 ×); this
- * one clips their tips (8 %, 0.18 s, while the frame is still widening) and never the cake.
+ * one clipped their tips (8 %, 0.18 s, while the frame is still widening; 4 % for 0.12 s once the
+ * flaps open 0.04 s later in the bin's entrance, dinner/sequences.ts FLAPS_OPEN) and never the cake.
  */
 export const PULL_EASE = cubicBezier(0.3, 0, 0.3, 1);
 

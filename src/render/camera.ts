@@ -204,6 +204,50 @@ export interface HeroFraming {
 }
 
 /**
+ * The points of `points` that can ever set a framing at the shared angle (v1.5): the vertices of
+ * their convex hulls in the camera's (depth, across) and (depth, up) planes. Every fit here looks
+ * along `cameraDirection()` from the aim, so a point's place on screen is x = k·X / (d − Z) and
+ * y = k·Y / (d − Z) (X across, Y up, Z towards the camera, d the distance, k the lens and aspect);
+ * for any distance and aspect the extremes of those linear-fractional functions over a point set,
+ * and its nearest depth, are taken at vertices of the (Z, X) and (Z, Y) hulls. So the reduction is
+ * exact for the hero, bounds and orthographic fits (the probe and the unit test check it), and it
+ * takes the bin's every vertex (≈ 10⁵ points) to a few hundred: the fit's 120 bisection steps
+ * then cost microseconds, not the half-second refit the phone layout's dock used to trigger.
+ */
+export function framingHull(points: readonly Vector3[]): Vector3[] {
+  if (points.length <= 8) return [...points];
+  const back = cameraDirection();
+  const right = new Vector3(0, 1, 0).cross(back).normalize();
+  const up = new Vector3().crossVectors(back, right);
+  const n = points.length;
+  const z = new Float64Array(n), x = new Float64Array(n), y = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const p = points[i]!;
+    z[i] = p.dot(back);
+    x[i] = p.dot(right);
+    y[i] = p.dot(up);
+  }
+  const keep = new Set<number>();
+  const order = Array.from({ length: n }, (_, i) => i);
+  for (const v of [x, y]) {
+    // Andrew's monotone chain on (z, v); strictly convex turns only.
+    order.sort((a, b) => z[a]! - z[b]! || v[a]! - v[b]!);
+    const cross = (o: number, a: number, b: number) => (z[a]! - z[o]!) * (v[b]! - v[o]!) - (v[a]! - v[o]!) * (z[b]! - z[o]!);
+    const chain = (ids: number[]) => {
+      const h: number[] = [];
+      for (const i of ids) {
+        while (h.length >= 2 && cross(h[h.length - 2]!, h[h.length - 1]!, i) <= 0) h.pop();
+        h.push(i);
+      }
+      return h;
+    };
+    for (const i of chain(order)) keep.add(i);
+    for (const i of chain([...order].reverse())) keep.add(i);
+  }
+  return [...keep].sort((a, b) => a - b).map((i) => points[i]!);
+}
+
+/**
  * The two fits of a scene whose decline needs more room than its rest (v1.5, the decline
  * pull-back; docs/style-reference.md): `rest` holds the hero and the paths of host and accept,
  * `decline` the hero and every path (the carry over the bin's rim and the open bin). A scene

@@ -21,8 +21,8 @@ import { hasWebGL2, resetWebGL2Probe } from '../render/createRenderer.ts';
 import { type DirectionId, LOCKED_DIRECTION, MaterialLibrary } from '../render/materials.ts';
 import { QualityMonitor, TIER_DPR, type Tier } from '../render/quality.ts';
 import { DEFAULT_RIG } from '../render/rigRegistry.ts';
-import { Stage, type StageOptions } from '../render/stage.ts';
-import { type FrameRect, type FramingPair, frameSquare, NO_INSETS } from '../render/camera.ts';
+import { type FramingReport, Stage, type StageOptions } from '../render/stage.ts';
+import { type FrameRect, frameSquare, NO_INSETS } from '../render/camera.ts';
 
 /**
  * Embeddable invitation controller (Master §7). Three independent dimensions — resource,
@@ -87,9 +87,10 @@ export interface InvitationHandle extends InvitationController {
   /**
    * Tooling only (framing checks): the hero fits at `aspect` (width / height), or null: `rest`
    * (pull 0: host-ready, guest-ready, accepted) and `decline` (pull 1: the declined pose), the same
-   * fit for a scene that does not pull back.
+   * fit for a scene that does not pull back; the live `pull`; and the fit's cost guards (`solves`
+   * so far, the reduced `points`).
    */
-  framing(aspect?: number): FramingPair | null;
+  framing(aspect?: number): FramingReport | null;
 }
 
 export const LOAD_TIMEOUT_MS = 6000;
@@ -922,7 +923,8 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
 
     framing(aspect = 1) {
       if (!stage || !scene || resource !== 'ready') return null;
-      return stage.measureFraming(aspect);
+      const pair = stage.measureFraming(aspect);
+      return pair && { ...pair, pull: stage.currentPull, solves: stage.fitSolves, points: stage.framingPointCounts };
     },
 
     captureStill(size: number, dpr = 2, type = 'image/png', quality?: number, captureOptions?: { empty?: boolean; field?: number }) {

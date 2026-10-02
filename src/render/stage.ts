@@ -1,7 +1,7 @@
 import { Box3, Color, type Material, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PCFShadowMap, PerspectiveCamera, Scene, type Texture, Vector3, VSMShadowMap, type WebGLRenderer } from 'three';
 import {
-  createStageCamera, type FrameInsets, type FrameRect, type FramingPair, frameSquare, fitCameraToBounds, fitPerspectiveToBounds, PERSPECTIVE_FOV, placeHeroView, pulledView,
-  solveHeroFits,
+  createStageCamera, type FrameInsets, type FrameRect, type FramingPair, frameSquare, fitCameraToBounds, fitPerspectiveToBounds, framingHull, PERSPECTIVE_FOV, placeHeroView,
+  pulledView, solveHeroFits,
 } from './camera.ts';
 import { HERO_FILL, PATH_CLEARANCE } from './framing.ts';
 import { createRenderer, sizeRenderer } from './createRenderer.ts';
@@ -48,6 +48,19 @@ function releaseDfgLUT(renderer: WebGLRenderer, scene: Scene): void {
     }
   });
   dfgLUT?.dispose();
+}
+
+/**
+ * What `InvitationHandle.framing()` reports (tooling and tests, v1.5): the two fits at an aspect,
+ * where the live camera is between them, and the fit's cost guards.
+ */
+export interface FramingReport extends FramingPair {
+  /** The live pull (0 rest, 1 decline). */
+  pull: number;
+  /** Hero fits solved since the stage was made (the render loop never solves one). */
+  solves: number;
+  /** Points the fit works on, after framingHull. */
+  points: { hero: number; rest: number; decline: number };
 }
 
 export interface StageOptions {
@@ -188,13 +201,16 @@ export class Stage {
     this.content = object;
     this.framePoints = this.heroPoints = this.restPoints = undefined;
     this.pull = 0;
+    this.fits.clear();
     if (object) {
       this.scene.add(object);
       object.updateMatrixWorld(true);
       const toWorld = object.matrixWorld;
-      this.framePoints = framePoints?.map((p) => p.clone().applyMatrix4(toWorld));
-      this.heroPoints = heroPoints?.map((p) => p.clone().applyMatrix4(toWorld));
-      this.restPoints = restFramePoints?.map((p) => p.clone().applyMatrix4(toWorld));
+      // Only the points that can set a framing at the shared angle (exact; framingHull).
+      const world = (pts?: readonly Vector3[]) => (pts ? framingHull(pts.map((p) => p.clone().applyMatrix4(toWorld))) : undefined);
+      this.framePoints = world(framePoints);
+      this.heroPoints = world(heroPoints);
+      this.restPoints = world(restFramePoints);
       if (bounds) this.bounds.copy(bounds).applyMatrix4(toWorld);
       this.assignOwnEnvironment(object);
       // v1.4: the set scales with the scene's world scale (rig.ts setWall): the cove and the key's
@@ -252,6 +268,7 @@ export class Stage {
 
   /** Motion bounds in the content's own space (see setContent). */
   setBounds(bounds: Box3): void {
+    this.fits.clear();
     this.bounds.copy(bounds);
     if (this.content) this.bounds.applyMatrix4(this.content.matrixWorld);
     this.studio.setContent?.(this.bounds, this.studioScale);
@@ -276,6 +293,19 @@ export class Stage {
   framing: FramingPair | null = null;
   /** The decline pull-back (v1.5): 0 the rest fit, 1 the decline fit (`setPull`). */
   private pull = 0;
+  /**
+   * Solved hero fits by aspect (v1.5). A fit depends on the content and the aspect only (the
+   * fullscreen frame square is always fitted square, then placed), so a resize, an inset change,
+   * a still or a pull only places the camera; a fit is solved once per content and aspect.
+   */
+  private readonly fits = new Map<number, FramingPair>();
+  /** Tooling (guard tests): hero fits solved since the stage was made. */
+  fitSolves = 0;
+
+  /** Tooling (guard tests): how many points the hero fit works on, after framingHull. */
+  get framingPointCounts(): { hero: number; rest: number; decline: number } {
+    return { hero: this.heroPoints?.length ?? 0, rest: this.restPoints?.length ?? this.framePoints?.length ?? 0, decline: this.framePoints?.length ?? 0 };
+  }
   /** What the last hero fit was made for, so `setPull` can place the camera without refitting. */
   private view: { aim: Vector3; aspect: number; frame: FrameRect | undefined } | null = null;
 
@@ -326,12 +356,19 @@ export class Stage {
     this.view = null;
     if (this.camera instanceof PerspectiveCamera) {
       if (this.heroPoints?.length) {
-        const paths = this.framePoints?.length ? this.framePoints : boxCorners(this.bounds);
         const aim = this.bounds.getCenter(aimPoint).clone();
-        // Two fits when the rest needs less room than the decline (v1.5), else one.
-        const sets = this.restPoints?.length ? [this.restPoints, paths] : [paths];
-        const fits = solveHeroFits(this.camera, aim, aspect, this.heroPoints, sets, HERO_FILL, PATH_CLEARANCE, frame);
-        this.framing = { rest: fits[0]!, decline: fits[fits.length - 1]! };
+        const key = Math.round((frame ? 1 : aspect) * 1e6);
+        let pair = this.fits.get(key);
+        if (!pair) {
+          const paths = this.framePoints?.length ? this.framePoints : boxCorners(this.bounds);
+          // Two fits when the rest needs less room than the decline (v1.5), else one.
+          const sets = this.restPoints?.length ? [this.restPoints, paths] : [paths];
+          const fits = solveHeroFits(this.camera, aim, aspect, this.heroPoints, sets, HERO_FILL, PATH_CLEARANCE, frame);
+          pair = { rest: fits[0]!, decline: fits[fits.length - 1]! };
+          this.fits.set(key, pair);
+          this.fitSolves++;
+        }
+        this.framing = pair;
         this.view = { aim, aspect, frame };
         this.placeView();
       } else fitPerspectiveToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints, frame);
