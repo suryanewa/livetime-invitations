@@ -596,6 +596,13 @@ describe('Birthday runtime GLB matches the contract', async () => {
     expect(hi - lo).toBeGreaterThan(0.15);
     expect(sum / n).toBeGreaterThan(0.55);
     expect(sum / n).toBeLessThan(0.62);
+    // A faint albedo finish (scraped lows and pockets a shade deeper), averaging the palette colour.
+    const finish = await loadSharp()(body.getBaseColorTexture()!.getImage()!).raw().toBuffer({ resolveWithObject: true });
+    let fs = 0, fmin = 1, fn = 0;
+    for (let i = 0; i < finish.data.length; i += finish.info.channels * 7) { const v = finish.data[i]! / 255; fs += v; fmin = Math.min(fmin, v); fn++; }
+    expect(fs / fn).toBeGreaterThan(0.98);
+    expect(fmin).toBeGreaterThan(0.93);
+    expect(cocoa.getBaseColorTexture()).toBe(body.getBaseColorTexture());
     // A very slight sheen on the piping and rosettes, and the convexity the runtime reads.
     for (const n of ['cake_piping', 'cake_rosette']) {
       const sheen = mat(n).getExtension('KHR_materials_sheen') as unknown as { getSheenColorFactor(): number[] } | null;

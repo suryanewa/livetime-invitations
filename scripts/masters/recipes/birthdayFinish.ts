@@ -654,10 +654,19 @@ function sideHeight(x: number, y: number, P: Pockets): { h: number; pocket: numb
   const period = 20;
   const u = x / period;
   let h = 0;
-  // Streaks: 0.6–3 mm spacing, ±15–40 µm, strength varying along the pass.
-  const press = 0.55 + 0.45 * fbm(u * 8, y * 0.4, 5, 2, 8);
-  h += press * 0.0036 * fbm(u * 3, y * 6.5, 11, 3, 3);
-  h += press * 0.0016 * fbm(u * 2, y * 17, 13, 2, 2);
+  // Scraper lines: not a brushed texture but a few discrete ridges and grooves (a nick in the blade,
+  // a crumb dragged round), ≈ 1 in 3 of 2.4 mm slots carries one; each 0.3–0.9 mm wide, ±20–50 µm,
+  // fading in and out along the turn as the pressure changed. Plus a faint fine grain.
+  const slot = 0.24, gy = Math.floor(y / slot);
+  for (let k = gy - 2; k <= gy + 2; k++) {
+    if (hash2(k, 7, 61) > 0.36) continue;
+    const r1 = hash2(k, 8, 61), r2 = hash2(k, 9, 61), r3 = hash2(k, 10, 61);
+    const centre = (k + r1) * slot, width = 0.03 + 0.06 * r2;
+    const amp = (r3 > 0.5 ? 1 : -1) * (0.002 + 0.003 * r3);
+    const along = Math.max(0, fbm(u * 5 + k * 1.7, k * 0.37, 71, 2, 5) * 1.6 + 0.2);
+    h += amp * along * Math.exp(-(((y - centre) / width) ** 2));
+  }
+  h += 0.0006 * fbm(u * 3, y * 9, 11, 2, 3);
   // Soft waviness (1–4 cm), ±0.25 mm: the scraper's passes, what keeps the broad highlight from
   // reading as a lathe at a distance (slopes ≈ 2–4°).
   h += 0.025 * fbm(u * 7, y * 0.4, 17, 3, 7);
@@ -683,15 +692,15 @@ function strokesFor(seed: number, radius: number): Stroke[] {
     const R = 4 + 6 * r();
     const ang = r() * 2 * Math.PI, dist = radius * Math.sqrt(r()) * 1.05;
     const a0 = r() * 2 * Math.PI;
-    return { cx: dist * Math.cos(ang) - R * Math.cos(a0 + 0.6), cz: dist * Math.sin(ang) - R * Math.sin(a0 + 0.6), R, w: 1.2 + 1.8 * r(), a0, a1: a0 + 0.5 + 0.9 * r(), lift: 0.002 + 0.004 * r() };
+    return { cx: dist * Math.cos(ang) - R * Math.cos(a0 + 0.6), cz: dist * Math.sin(ang) - R * Math.sin(a0 + 0.6), R, w: 1.2 + 1.8 * r(), a0, a1: a0 + 0.5 + 0.9 * r(), lift: 0.004 + 0.008 * r() };
   });
 }
 
 function topHeight(x: number, z: number, S: Stroke[], P: Pockets): { h: number; pocket: number; edge: number } {
   let h = 0.016 * fbm(x * 0.35, z * 0.35, 23, 3);
   let edge = 0;
-  // Painter's order: each stroke levels what is under it to its own plateau, leaving a ridge where
-  // its edge lifted (40–60 µm, 0.5 mm wide).
+  // Painter's order: each stroke levels what is under it to its own plateau (40–120 µm proud),
+  // leaving a ridge where its edge lifted (80 µm, 0.5 mm wide).
   for (const s of S) {
     const dx = x - s.cx, dz = z - s.cz;
     const rr = Math.hypot(dx, dz);
@@ -705,7 +714,7 @@ function topHeight(x: number, z: number, S: Stroke[], P: Pockets): { h: number; 
     const inside = (1 - smoothstep(0.85, 1.05, across)) * along;
     h = h * (1 - inside) + s.lift * inside + 0.6 * inside * 0.002 * fbm(x * 3, z * 3, 29, 2);
     const ridge = Math.exp(-(((rr - (s.R + s.w / 2)) / 0.03) ** 2)) * along;
-    h += 0.005 * ridge;
+    h += 0.008 * ridge;
     edge = Math.max(edge, ridge);
   }
   let pocket = 0;
@@ -748,7 +757,7 @@ function boxBlurRegions(src: Float32Array, size: number, half: number, r: number
  * Generates the body's normal map (glTF convention, tangent space along +u and −v) and its
  * metallic-roughness map (G = roughness 0.45–0.70, B = metalness 0) as RGBA8, ATLAS × ATLAS.
  */
-export function frostingMaps(size = ATLAS): { normal: Uint8Array; roughness: Uint8Array; stats: { min: number; max: number; mean: number } } {
+export function frostingMaps(size = ATLAS): { normal: Uint8Array; roughness: Uint8Array; albedo: Uint8Array; stats: { min: number; max: number; mean: number } } {
   const H = new Float32Array(size * size), pocketMask = new Float32Array(size * size), edgeMask = new Float32Array(size * size);
   // Side region: v 0.02–0.48 ↔ y 0–9.4 cm (one UV unit ≈ 20.4 cm), u 0–1 ↔ x 0–20 cm.
   const sideCm = { x: 20, y: 20.4 };
@@ -778,7 +787,7 @@ export function frostingMaps(size = ATLAS): { normal: Uint8Array; roughness: Uin
   let hpVar = 0;
   for (let k = 0; k < H.length; k++) hpVar += (H[k]! - blur[k]!) ** 2;
   const hpStd = Math.sqrt(hpVar / H.length) || 1;
-  const normal = new Uint8Array(size * size * 4), roughness = new Uint8Array(size * size * 4);
+  const normal = new Uint8Array(size * size * 4), roughness = new Uint8Array(size * size * 4), albedo = new Uint8Array(size * size * 4);
   let min = 1, max = 0, sum = 0;
   for (let py = 0; py < size; py++) {
     const top = py >= half;
@@ -807,9 +816,28 @@ export function frostingMaps(size = ATLAS): { normal: Uint8Array; roughness: Uin
       roughness[4 * k + 1] = Math.round(rough * 255);
       roughness[4 * k + 2] = 0;
       roughness[4 * k + 3] = 255;
+      // Albedo multiplier (sRGB, ≈ 0.965–1.0): a hand-scraped finish is not one even film. Where the
+      // blade pressed (the relief's lows) the cream is denser and reads a touch deeper; a pocket's
+      // floor is a shade darker. Mean ≈ 0.99 (sRGB): the palette colour is what the eye averages.
+      const a = clamp(0.997 + 0.008 * clamp(hp, -2.5, 0.4) + 0.006 * fbm((px / size) * 5, (py / size) * 5, 47, 3, top ? 0 : 5) - 0.02 * pocketMask[k]!, 0.95, 1);
+      const a8 = Math.round(a * 255);
+      albedo[4 * k] = a8; albedo[4 * k + 1] = a8; albedo[4 * k + 2] = a8; albedo[4 * k + 3] = 255;
     }
   }
-  return { normal, roughness, stats: { min, max, mean: sum / (size * size) } };
+  return { normal, roughness, albedo, stats: { min, max, mean: sum / (size * size) } };
+}
+
+/**
+ * 2×2 box average (RGBA8): roughness and the albedo finish vary slowly and ship at half the relief's
+ * size (GPU memory 64 → 32 MiB); a box keeps the values inside the generated range (Lanczos rings).
+ */
+function halve(data: Uint8Array, size: number): Uint8Array {
+  const h = size / 2, out = new Uint8Array(h * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < h; x++) for (let c = 0; c < 4; c++) {
+    const at = (dx: number, dy: number) => data[((2 * y + dy) * size + 2 * x + dx) * 4 + c]!;
+    out[(y * h + x) * 4 + c] = Math.round((at(0, 0) + at(1, 0) + at(0, 1) + at(1, 1)) / 4);
+  }
+  return out;
 }
 
 async function png(data: Uint8Array, size: number): Promise<Uint8Array> {
@@ -974,6 +1002,12 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
     if (!info || info.kind === 'body') continue;
     const prims = node.getMesh()!.listPrimitives();
     const datas = prims.map((p) => { const d = primData(p); geometry.set(p, d); return d; });
+    if (/rope_edge$/.test(node.getName())) {
+      // The master's twisted rope is coarse (its twists read as saw teeth up close): relax it into
+      // rounded twists, as a rope piped from a star tip settles.
+      for (const d of datas) for (const c of components(d)) { taubin(c, 3); recomputeNormals(c); }
+      log(`  finish ${node.getName()}: twists relaxed (Taubin, 3 passes)`);
+    }
     if (!info.mount) continue;
     // Rosette meshes carry their centre pearls as a second primitive: a pearl moves with the
     // rosette it sits in.
@@ -1076,14 +1110,15 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
     if (!m) throw new Error(`birthday finish: no material ${name}`);
     return m;
   };
-  const { normal, roughness, stats } = frostingMaps();
+  const { normal, roughness, albedo, stats } = frostingMaps();
   const body = mat('cake_buttercream');
   body.setExtension('KHR_materials_clearcoat', null);
   body.setNormalTexture(doc.createTexture('cake_buttercream_relief').setImage(await png(normal, ATLAS)).setMimeType('image/png'));
-  body.setMetallicRoughnessTexture(doc.createTexture('cake_buttercream_roughness').setImage(await png(roughness, ATLAS)).setMimeType('image/png'));
+  body.setMetallicRoughnessTexture(doc.createTexture('cake_buttercream_roughness').setImage(await png(halve(roughness, ATLAS), ATLAS / 2)).setMimeType('image/png'));
+  body.setBaseColorTexture(doc.createTexture('cake_buttercream_finish').setImage(await png(halve(albedo, ATLAS), ATLAS / 2)).setMimeType('image/png'));
   body.setRoughnessFactor(1).setMetallicFactor(0);
   body.setExtras({ ...(body.getExtras() as object), frosting: 'body' });
-  log(`  finish maps: relief + roughness ${ATLAS}² (roughness ${stats.min.toFixed(2)}–${stats.max.toFixed(2)}, mean ${stats.mean.toFixed(3)})`);
+  log(`  finish maps: relief ${ATLAS}², roughness and albedo finish ${ATLAS / 2}² (roughness ${stats.min.toFixed(2)}–${stats.max.toFixed(2)}, mean ${stats.mean.toFixed(3)})`);
   const sheenExt = doc.createExtension(KHRMaterialsSheen);
   for (const name of ['cake_piping', 'cake_rosette']) {
     const m = mat(name);

@@ -50,7 +50,18 @@ import { finishCake } from './birthdayFinish.ts';
  *   the studio, judged again under the new rigs.
  * - Materials keep the master's clearcoat and the pearls' iridescence; renamed `cake_*` so no
  *   library name (and no other scene) collides. Textures: the candles' 256×4 wax LUTs only (kept
- *   exact by the LUT rule).
+ *   exact by the LUT rule). v1.5 (next line) takes the clearcoat off the frosting.
+ * - v1.5 (edits #3, #5, #6; docs/scenes/birthday-v1.5-cake.md): the master's `transform` is the
+ *   hand finish (birthdayFinish.ts). Tiers rebuilt as dense lathes of their own profile (the top's
+ *   candle annulus at 0.44 mm, so the runtime can press collars into it) with a relief UV atlas;
+ *   a finish field on every frosting part (tiers ±1.4 % from round at low frequency, tops ±0.7 mm,
+ *   a hand wobble on the side piping); beads, shells, dots, pearls and rosettes ±2–9 % in size and
+ *   up to ±12° in twist about where they touch the cake; two rosettes softened. Frosting without
+ *   clearcoat; the body with generated relief (normal), roughness (0.45–0.70, lossless) and a
+ *   faint albedo finish, shared by both presets; piping and rosettes with a very slight sheen and
+ *   a `_RIDGE` convexity. Candles re-tessellated from the master's own twisted six-flute surface
+ *   (128 around, 0.39 mm rows) with a `_PROFILE` the melt shader deforms (models/cakeShaders.ts).
+ *   CAKE_RADIUS and the crown height were re-measured after the finish (models/birthdayContract.ts).
  */
 
 const lin = (hex: string): [number, number, number, number] => {
@@ -117,6 +128,7 @@ export const recipe: SceneRecipe = {
   ],
   variants: ['vanilla', 'cocoa'],
   materialVariants: cocoa,
+  // The generated roughness map stays exact (its 0.45–0.70 range is the point; lossy WebP overshot it).
   // The generated roughness map stays exact (its 0.45–0.70 range is the point; lossy WebP overshot it).
   textures: { maxSize: 2048, quality: 90, lossless: ['cake_buttercream/metallicRoughnessTexture'] },
   contract: BIRTHDAY_GLB_NODES,

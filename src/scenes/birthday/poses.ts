@@ -58,9 +58,11 @@ export const CANDLE_LEAN: readonly { angle: number; azimuth: number }[] = (() =>
 /**
  * The cake takes each push: the stand is rigid ceramic, the cake on it a stiff spring (sponge
  * and buttercream, ≈ 1.5 kg at ≈ 14 Hz, ζ 0.35). `dip` is the static settling under a full push
- * (≈ 3 N: 0.24 mm), `tilt` the rock about its underside centre per unit push at the socket radius.
+ * (≈ 3 N: 0.24 mm; the overlapping cascade peaks at ≈ 0.5 mm), `tilt` the rock about its underside
+ * centre per unit push at the socket radius (0.07°: a 25 cm cake on a flat plate barely rocks; the
+ * give is mostly the sponge under the candle).
  */
-export const CAKE_LOAD = { hz: 14, zeta: 0.35, dip: 0.0012, tilt: 0.0039, release: 0.035 } as const;
+export const CAKE_LOAD = { hz: 14, zeta: 0.35, dip: 0.0012, tilt: 0.0012, release: 0.035 } as const;
 
 /** Flames rise once their candle has settled (0.84–1.06 s), 20 ms apart, no overshoot. */
 export const FLAME_START = each((i) => 0.84 + 0.02 * i);
