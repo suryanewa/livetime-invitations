@@ -317,11 +317,10 @@ async function captureThumbs() {
     await saveDataUrl(join(staged, `${category}.webp`), url as string);
   }
   await browser.close();
-  const { cp } = await import('node:fs/promises');
-  const dest = join(import.meta.dirname, '..', 'assets', 'ui', 'collection');
-  await mkdir(dest, { recursive: true });
-  await cp(staged, dest, { recursive: true });
-  console.log('thumbnails →', dest);
+  // These are the v1.1 study-page thumbnails (the lookdev models), staged only: the collection's
+  // thumbnails in assets/ui/collection/ are the live scene at guest-ready and are written by
+  // `pnpm capture <scene>` (tests/browser/posters.spec.ts holds them to the live scene).
+  console.log('study thumbnails staged →', staged, '(not the collection thumbnails: use pnpm capture <scene>)');
 }
 
 /**
