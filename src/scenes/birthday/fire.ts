@@ -131,6 +131,13 @@ export interface Flicker {
   swayZ: number;
   /** Phase of the travelling varicose wave (radians), for the shader's shimmer. */
   phase: number;
+  /**
+   * v1.6: the live clock this was sampled at (s) and the flicker's gain (0 still, after settle()
+   * and under reduced motion; 1 live): the volume's turbulence is carried on the clock and the
+   * heat haze over the flame shimmers only while live.
+   */
+  time: number;
+  gain: number;
 }
 
 /**
@@ -158,11 +165,13 @@ export function flicker(i: number, t: number, gain: number, out: Flicker): Flick
   out.swayX = (FLICKER.sway * s1 + FLICKER.draft * d1) * gain;
   out.swayZ = (FLICKER.sway * s2 + FLICKER.draft * 0.6 * d2) * gain;
   out.phase = 2 * Math.PI * f * t + p1;
+  out.time = t;
+  out.gain = gain;
   return out;
 }
 
 export function newFlicker(): Flicker {
-  return { height: 1, width: 1, intensity: 1, swayX: 0, swayZ: 0, phase: 0 };
+  return { height: 1, width: 1, intensity: 1, swayX: 0, swayZ: 0, phase: 0, time: 0, gain: 0 };
 }
 
 // ── Ignition (host) ──────────────────────────────────────────────────────────

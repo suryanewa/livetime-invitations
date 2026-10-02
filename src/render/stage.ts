@@ -4,8 +4,10 @@ import {
   pulledView, solveHeroFits,
 } from './camera.ts';
 import { HERO_FILL, PATH_CLEARANCE } from './framing.ts';
+import { Bloom } from './bloom.ts';
 import { createRenderer, sizeRenderer } from './createRenderer.ts';
 import { releaseShadowTextureGpu } from './contactShadow.ts';
+import { HeatHaze } from './heatHaze.ts';
 import { STUDY_RIG } from './lighting.ts';
 import type { Rig, RigBuild } from './rig.ts';
 import { resolveRig } from './rigRegistry.ts';
@@ -95,6 +97,10 @@ export class Stage {
   private cssWidth = 1;
   private cssHeight = 1;
   private dprCap = 2;
+  /** v1.6: the camera's glare round HDR emitters (src/render/bloom.ts); a no-op in a frame that drew none. */
+  readonly bloom = new Bloom();
+  /** v1.6: heat haze over the flames (src/render/heatHaze.ts); a no-op in a frame that drew no plume. */
+  readonly haze = new HeatHaze();
 
   static create(options: StageOptions = {}): Stage | null {
     const result = createRenderer(options);
@@ -174,6 +180,8 @@ export class Stage {
    */
   setLowDetail(enabled: boolean): void {
     this.studio.setLowDetail?.(enabled);
+    this.bloom.setLowDetail(enabled);
+    this.haze.enabled = !enabled;
     if (this.content) this.applyMetalEnvIntensity(this.content);
   }
 
@@ -390,7 +398,10 @@ export class Stage {
   }
 
   render(): void {
+    const glow = this.bloom.prepare(this.renderer, this.scene, this.camera);
     this.renderer.render(this.scene, this.camera);
+    this.haze.apply(this.renderer, this.camera);
+    if (glow) this.bloom.composite(this.renderer);
   }
 
   /** The hero fits (rest and decline) at another aspect (tooling), leaving the live fit as it was. */
@@ -446,6 +457,8 @@ export class Stage {
     // Before the content and studio (whose materials lead to the shared LUT) leave the scene.
     releaseDfgLUT(this.renderer, this.scene);
     this.setContent(null);
+    this.bloom.dispose();
+    this.haze.dispose();
     if (this.studio.objects.length) this.scene.remove(...this.studio.objects);
     this.scene.remove(this.aim);
     if (this.scene.environment === this.studio.environment) this.scene.environment = null;

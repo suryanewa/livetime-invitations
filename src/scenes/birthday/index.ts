@@ -343,6 +343,9 @@ export class BirthdayScene implements SceneInstance {
       return;
     }
     this.flickerGain = 0;
+    // v1.6: the still flame is the same still every time (its volume's turbulence is carried on
+    // this clock: posters, reduced motion); the flicker's gain is 0 here, so nothing jumps.
+    this.liveTime = 0;
     this.tail = null;
     // A change of mind keeps the melt (the candles were really lit that long); load, replay and
     // reduced motion return it to the canonical pose's.

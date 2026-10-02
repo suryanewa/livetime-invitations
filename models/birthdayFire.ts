@@ -1,10 +1,12 @@
 import {
-  Box3, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, type Material, Matrix3, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, Vector2,
+  Box3, BufferAttribute, BufferGeometry, type Camera, Color, DynamicDrawUsage, type Material, Matrix3, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, Vector2,
   Vector3, Vector4, type WebGLRenderer,
 } from 'three';
 import type { MaterialLibrary } from '../src/render/materials.ts';
 import { CANDLE } from './birthdayContract.ts';
-import { blackbodyAt, createSmokeMaterial, FLAME_GLARE, type FlameUniforms, sootRadiance } from '../src/render/flame.ts';
+import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
+import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, sootRadiance } from '../src/render/flame.ts';
+import { addHaze } from '../src/render/heatHaze.ts';
 import {
   FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, rand, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeStrand, type SmokeStrand, sootFormed, type WakeAt, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
@@ -48,6 +50,15 @@ export interface FlameLights {
   intensity: { value: number[] };
   color: { value: Color };
   radius2: { value: number };
+  /**
+   * v1.6: every candle as an occluder of every flame's light (world): its axis from its base to its
+   * wax top (burnt down by the melt), and (the candle's radius, the flame's own radius as a light).
+   */
+  candleA: { value: Vector3[] };
+  candleB: { value: Vector3[] };
+  occluder: { value: Vector2 };
+  /** The top tier as an occluder (world): its centre in plan (x, z), its top surface's height, its radius. */
+  tier: { value: Vector4 };
 }
 
 export function createFlameLights(): FlameLights {
@@ -56,7 +67,111 @@ export function createFlameLights(): FlameLights {
     intensity: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => 0) },
     color: { value: flameLightColor() },
     radius2: { value: FLAME_LIGHT_RADIUS ** 2 },
+    // Unposed candles stand far away (they occlude nothing until a flame rig places them).
+    candleA: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => new Vector3(0, -1e3, 0)) },
+    candleB: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => new Vector3(0, -1e3 - 0.1, 0)) },
+    occluder: { value: new Vector2(CANDLE.radius, FLAME_SOURCE_RADIUS) },
+    tier: { value: new Vector4(0, -1e3, -1e3, 0) },
   };
+}
+
+/**
+ * The top tier as an occluder (cake_secondary units): its buttercream wall stands at 0.485–0.489
+ * under the rim piping (measured on the master; the hand finish moves it by ±1.4 %), so a cylinder
+ * a little inside it (every point of the wall outside it) hides the flames from the tier's sides
+ * and from the tier below.
+ */
+const TOP_TIER_RADIUS = 0.465;
+const tierAt = new Vector3();
+/** The flame as a light for its shadows: the luminous zone's half-width and a little (scene units). */
+const FLAME_SOURCE_RADIUS = 0.013;
+/**
+ * Wax glow (v1.6): a candle's top is lit from inside. The flame's light falls on the pool and the
+ * rim and scatters through the wax (paraffin's transport mean free path is millimetres), so the
+ * candle's top few millimetres glow warm round their whole circumference, fading downwards
+ * (e-folding WAX_MFP), as in every macro photograph of a burning candle.
+ */
+const WAX_GLOW = 0.12;
+const WAX_MFP = 0.012;
+
+/** The flames' light in a fragment shader (pars and the loop, chained before lights_fragment_end). */
+const FLAME_LIGHT_PARS = /* glsl */ `
+uniform vec3 uFlamePos[${FLAME_LIGHT_COUNT}];
+uniform float uFlameI[${FLAME_LIGHT_COUNT}];
+uniform vec3 uFlameColor;
+uniform float uFlameR2;
+uniform vec3 uCandleA[${FLAME_LIGHT_COUNT}];
+uniform vec3 uCandleB[${FLAME_LIGHT_COUNT}];
+uniform vec2 uCandleR;
+uniform vec4 uTier;`;
+
+function flameLightLoop(wax: boolean): string {
+  const N = FLAME_LIGHT_COUNT;
+  return /* glsl */ `
+  {
+    // In the world (the candles stand along its up): this point and its normal.
+    mat3 fRt = transpose(mat3(viewMatrix));
+    vec3 fP = fRt * (geometryPosition - viewMatrix[3].xyz);
+    vec3 fN = fRt * geometryNormal;
+    ${wax ? `// The candle this point is on: its own flame's light reaches it through the wax.
+    int fOwn = -1;
+    float fBelow = 0.0;
+    for (int k = 0; k < ${N}; k++) {
+      vec3 ab = uCandleB[k] - uCandleA[k];
+      float ab2 = max(dot(ab, ab), 1e-12);
+      float tt = dot(fP - uCandleA[k], ab) / ab2;
+      if (tt > -0.05 && tt < 1.25 && distance(fP, uCandleA[k] + ab * clamp(tt, 0.0, 1.0)) < 1.6 * uCandleR.x + 0.002) {
+        fOwn = k;
+        fBelow = max(0.0, 1.0 - tt) * sqrt(ab2);
+      }
+    }` : ''}
+    // Where this point is outside the top tier, the tier's rim between it and the flames.
+    vec2 fM = fP.xz - uTier.xy;
+    float fOut = dot(fM, fM) - uTier.w * uTier.w;
+    // Six flames: their diffuse irradiance summed exactly (each through its shadows), shaded once
+    // along their summed direction (one BRDF evaluation instead of six).
+    vec3 fS = vec3(0.0);
+    float fE = 0.0;
+    for (int fi = 0; fi < ${N}; fi++) {
+      if (uFlameI[fi] <= 0.0) continue;
+      vec3 F = uFlamePos[fi];
+      vec3 fd = F - fP;
+      float fd2 = dot(fd, fd);
+      // Its own candle's shadow: the flame stands a few millimetres over the wax, so the candle
+      // hides it from everything round its foot (a disk, soft-edged by the flame's size, wider the
+      // further below the top; its centre opposite the flame's lean). The other candles' shadows
+      // from it fall where the other five flames light (a few per cent: not drawn).
+      vec3 B = uCandleB[fi];
+      float H = max(F.y - B.y, 1e-3), D = B.y - fP.y;
+      vec2 c = B.xz + (B.xz - F.xz) * (D / H);
+      float w = uCandleR.y * D / H + 2e-4;
+      float vis = D > 0.0 ? smoothstep(-w, w, length(fP.xz - c) - uCandleR.x * (H + D) / H) : 1.0;
+      // The top tier's rim (outside it, below its top: the line of sight must pass over the rim).
+      if (fOut > 0.0 && fP.y < uTier.z) {
+        vec2 u = fd.xz;
+        float a = max(dot(u, u), 1e-10), b = dot(fM, u);
+        float se = (-b - sqrt(max(b * b - a * fOut, 0.0))) / a;
+        float wt = uCandleR.y * se + 1e-3;
+        vis *= smoothstep(-wt, wt, fP.y + se * fd.y - uTier.z);
+      }
+      float E = uFlameI[fi] / (fd2 + uFlameR2) * vis;
+      vec3 L = fd * inversesqrt(fd2);
+      fS += E * L;
+      fE += E * max(dot(fN, L), 0.0);
+    }
+    if (fE > 0.0) {
+      vec3 fL = normalize(fS + 1e-6 * fN);
+      IncidentLight flameLight;
+      flameLight.direction = normalize(mat3(viewMatrix) * fL);
+      flameLight.color = uFlameColor * (fE / max(dot(fN, fL), 0.1));
+      flameLight.visible = true;
+      RE_Direct(flameLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
+    }
+    ${wax ? `if (fOwn >= 0 && uFlameI[fOwn] > 0.0) {
+      vec3 ft = uFlamePos[fOwn] - uCandleB[fOwn];
+      reflectedLight.indirectDiffuse += material.diffuseColor * uFlameColor * (uFlameI[fOwn] / (dot(ft, ft) + uFlameR2)) * ${WAX_GLOW.toFixed(3)} * exp(-fBelow / ${WAX_MFP.toFixed(4)});
+    }` : ''}
+  }`;
 }
 
 /**
@@ -65,34 +180,30 @@ export function createFlameLights(): FlameLights {
  * ≈1.3 ms a frame at 1170² on the M2 Pro, for a contribution the cove 80 cm away never shows
  * (≈0.5 %). Added through three's own RE_Direct, so the frosting's sheen and the candles'
  * clearcoat respond to it as to any light. Chains onto an existing onBeforeCompile (the bin shade).
+ *
+ * v1.6: each flame's light is shadowed by every candle (an analytic soft shadow: the candle a
+ * capsule, the flame a source of its own size, so the shadow is sharp at the candle's foot and
+ * opens into a penumbra away from it; a candle's own flame, a few millimetres over its top, leaves
+ * a dark disk round its foot, as a real candle does), and the wax of each candle glows under its
+ * own flame (the light scattered through it).
  */
 export function patchFlameLight(material: Material, lights: FlameLights): void {
   if (material.userData.flameLight) return;
   material.userData.flameLight = true;
+  const wax = material.name.startsWith('cake_candle');
   const prev = material.onBeforeCompile;
   const prevKey = material.customProgramCacheKey;
   material.onBeforeCompile = (shader, renderer) => {
     prev.call(material, shader, renderer);
-    shader.uniforms.uFlamePos = lights.pos;
-    shader.uniforms.uFlameI = lights.intensity;
-    shader.uniforms.uFlameColor = lights.color;
-    shader.uniforms.uFlameR2 = lights.radius2;
+    Object.assign(shader.uniforms, {
+      uFlamePos: lights.pos, uFlameI: lights.intensity, uFlameColor: lights.color, uFlameR2: lights.radius2, uCandleA: lights.candleA, uCandleB: lights.candleB, uCandleR: lights.occluder,
+      uTier: lights.tier,
+    });
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nuniform vec3 uFlamePos[${FLAME_LIGHT_COUNT}];\nuniform float uFlameI[${FLAME_LIGHT_COUNT}];\nuniform vec3 uFlameColor;\nuniform float uFlameR2;`)
-      .replace('#include <lights_fragment_end>', `
-  for (int fi = 0; fi < ${FLAME_LIGHT_COUNT}; fi++) {
-    if (uFlameI[fi] <= 0.0) continue;
-    vec3 flv = (viewMatrix * vec4(uFlamePos[fi], 1.0)).xyz - geometryPosition;
-    float fd2 = dot(flv, flv);
-    IncidentLight flameLight;
-    flameLight.direction = flv * inversesqrt(fd2);
-    flameLight.color = uFlameColor * (uFlameI[fi] / (fd2 + uFlameR2));
-    flameLight.visible = true;
-    RE_Direct(flameLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
-  }
-#include <lights_fragment_end>`);
+      .replace('#include <common>', `#include <common>\n${FLAME_LIGHT_PARS}`)
+      .replace('#include <lights_fragment_end>', `${flameLightLoop(wax)}\n#include <lights_fragment_end>`);
   };
-  material.customProgramCacheKey = () => `${prevKey.call(material)}+flame-light-v1`;
+  material.customProgramCacheKey = () => `${prevKey.call(material)}+flame-light-v4${wax ? '-wax' : ''}`;
   material.needsUpdate = true;
 }
 
@@ -113,6 +224,10 @@ export interface FlameRig {
   wick: WickLook;
   /** Where the charred braid's curl carries the tip (candle space, at full char): the ember and the smoke leave from there. */
   curlTip: Vector3;
+  /** v1.6: the flame's HDR twin, drawn in the bloom pass only (src/render/bloom.ts). */
+  twin: Mesh;
+  /** v1.6: the live clock and flicker gain it was posed with (the heat haze shimmers only while live). */
+  live: { time: number; gain: number };
 }
 
 /**
@@ -178,6 +293,14 @@ const buffer = new Vector2();
 const centroid = new Vector3();
 const view = new Vector3();
 const clip = new Vector4();
+const hazeFoot = new Vector3();
+const hazeUp = new Vector3();
+/**
+ * The heat haze over a flame (src/render/heatHaze.ts): a column `width` × the flame's radius wide
+ * and `height` × its rest length tall, from just under its tip; its light behind bent by up to
+ * `px` CSS px (laptop: 2–4 device px).
+ */
+export const HAZE = { width: 6, height: 4.5, px: 1.2 } as const;
 /**
  * Wick ember radiance scale (on soot's 1,900 K = 1 scale): a freshly bared ember (1,320 K) is a
  * bright orange point; at its in-flame glow (EMBER.lit) a dim red tip in the dark zone.
@@ -234,35 +357,72 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   quad.userData.fx = true;
   quad.renderOrder = 4;
   quad.frustumCulled = false;
+  // Its twin for the bloom pass: the same uniforms, drawn as scene-linear HDR (its visibility is the quad's).
+  const twinMaterial = createFlameBloomMaterial(material);
+  material.addEventListener('dispose', () => twinMaterial.dispose());
+  const twin = new Mesh(quadGeometry, twinMaterial);
+  twin.name = `${node.name}_fx_bloom`;
+  twin.userData.fx = true;
+  twin.frustumCulled = false;
+  bloomOnly(twin);
+  quad.add(twin);
   const u = material.uniforms;
   u.uWidest.value = FLAME_REST.widest;
-  quad.onBeforeRender = (renderer: WebGLRenderer, _s, camera) => {
+  const live = { time: 0, gain: 0 };
+  /**
+   * The flame's camera-dependent uniforms, for whichever pass draws it first (the bloom pass's twin,
+   * before the scene; then the quad): the quad faces the camera from in front of the flame, the
+   * flame's pixel size, the bloom's footprint floor. Returns where it is on screen.
+   */
+  const face = (renderer: WebGLRenderer, camera: Camera) => {
     inv.copy(quad.matrixWorld).invert();
     u.uCam.value.setFromMatrixPosition(camera.matrixWorld).applyMatrix4(inv);
     u.uRight.value.setFromMatrixColumn(camera.matrixWorld, 0).transformDirection(inv);
     u.uUp.value.setFromMatrixColumn(camera.matrixWorld, 1).transformDirection(inv);
     // In front of the flame (towards the camera) so the wick inside it never depth-clips the quad.
     u.uCenter.value.copy(u.uCam.value).sub(u.uMid.value).normalize().multiplyScalar(u.uBoundR.value).add(u.uMid.value);
-    // The camera's glare (src/render/flame.ts FLAME_GLARE): the luminous centroid on screen, the
-    // flame's projected luminous area, the PSF in device pixels; the quad grows to hold the skirt.
+    u.uExposure.value = renderer.toneMappingExposure;
+    // On screen (the canvas, whichever target is bound): the luminous centroid, the flame's size.
     renderer.getDrawingBufferSize(buffer);
     const dpr = renderer.getPixelRatio();
     centroid.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.55 * u.uShape.value[0]).applyMatrix4(quad.matrixWorld);
     view.copy(centroid).applyMatrix4(camera.matrixWorldInverse);
     clip.set(view.x, view.y, view.z, 1).applyMatrix4(camera.projectionMatrix);
     const depth = Math.max(1e-4, -view.z);
-    const pxPerUnit = (buffer.y * camera.projectionMatrix.elements[5]!) / (2 * depth);
-    u.uScreenC.value.set((clip.x / clip.w * 0.5 + 0.5) * buffer.x, (clip.y / clip.w * 0.5 + 0.5) * buffer.y);
-    const s1 = FLAME_GLARE.sigma * dpr, s2 = FLAME_GLARE.skirt * dpr;
-    u.uPsf.value.set(s1, s2);
-    // Luminous area (teardrop ≈ 0.6 of its box) × its radiance on the film's scale (≈5) × the
-    // fraction the optics spread, over the bleed lobe's area: the PSF's peak, capped.
-    const area = 0.6 * (u.uShape.value[0] * pxPerUnit) * (2 * u.uShape.value[1] * pxPerUnit);
+    const scale = quad.matrixWorld.getMaxScaleOnAxis();
+    const pxPerUnit = (buffer.y * camera.projectionMatrix.elements[5]!) / (2 * depth) * scale;
+    const sx = (clip.x / clip.w * 0.5 + 0.5) * buffer.x, sy = (clip.y / clip.w * 0.5 + 0.5) * buffer.y;
+    u.uPx.value = 1 / pxPerUnit;
     const output = u.uState.value[2] * sootFormed(u.uState.value[3]);
-    const flux = 5 * area * output;
-    // The sensor's bloom floor (a fixed pixel footprint, however small the flame) or the flux's share.
-    u.uPsfPeak.value = Math.max(FLAME_GLARE.floor * output, Math.min(FLAME_GLARE.cap * 5 * output, (FLAME_GLARE.fraction * flux) / (2 * Math.PI * s1 * s1)));
-    u.uHalf.value = Math.max(u.uHalf.value, (3.2 * s2) / pxPerUnit);
+    // The sensor's footprint floor for the bloom (src/render/flame.ts FLAME_BLOOM_FLOOR), in the
+    // bloom target's pixels (CSS px), fading out as the flame grows large on screen.
+    const tall = (u.uShape.value[0] * pxPerUnit) / dpr;
+    const [f0, f1] = FLAME_BLOOM_FLOOR.fade;
+    const fade = 1 - Math.min(1, Math.max(0, (tall - f0) / (f1 - f0)));
+    u.uFloor.value.set(sx / dpr, sy / dpr, FLAME_BLOOM_FLOOR.sigma, FLAME_BLOOM_FLOOR.floor * output * fade);
+    // The quad holds the floor's Gaussian too (in the bloom pass).
+    u.uHalf.value = Math.max(u.uHalf.value, (4 * FLAME_BLOOM_FLOOR.sigma * dpr) / pxPerUnit);
+    return { sx, sy, dpr, scale, pxPerUnit, output };
+  };
+  twin.onBeforeRender = (renderer: WebGLRenderer, _s, camera) => {
+    face(renderer, camera);
+  };
+  quad.onBeforeRender = (renderer: WebGLRenderer, _s, camera) => {
+    const { sx, sy, dpr, scale, pxPerUnit, output } = face(renderer, camera);
+    // Into a target (tooling) nothing is registered: the bloom and the haze are the stage's own.
+    if (renderer.getRenderTarget() !== null || output <= 1e-3) return;
+    // Its glow's reach, for the bloom's composite.
+    const h = u.uHalf.value * pxPerUnit * 1.5;
+    emitBloom(renderer, [sx - h, sy - h, sx + h, sy + h]);
+    // The heat haze over it: a column from just under its tip along its axis, while live.
+    const L = u.uShape.value[0], R = u.uShape.value[1];
+    hazeFoot.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.85 * L).addScaledVector(u.uAxisX.value, -u.uShape.value[2] * 0.5).applyMatrix4(quad.matrixWorld);
+    hazeUp.copy(u.uAxisY.value).transformDirection(quad.matrixWorld);
+    addHaze(renderer, index, {
+      foot: hazeFoot, up: hazeUp, width: HAZE.width * R * scale, height: HAZE.height * FLAME_REST.length * scale,
+      // The breath blows the hot gas away and mixes it cold within a few millimetres: no plume, no haze.
+      strength: HAZE.px * dpr * live.gain * Math.min(1, output) * (1 - u.uNoise.value.y) ** 2, time: live.time, seed: 7.3 * index + 1.1,
+    });
   };
   node.add(quad);
 
@@ -281,7 +441,7 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
       .applyMatrix3(new Matrix3().setFromMatrix4(new Matrix4().multiplyMatrices(toCandle, wm.matrixWorld)));
   }
   u.uWickR.value = CANDLE.wickRadius;
-  return { node, quad, material, wickTip: top, index, shorten: 0, lights, wickMaterial: w.material, wick: w.look, curlTip };
+  return { node, quad, material, wickTip: top, index, shorten: 0, lights, wickMaterial: w.material, wick: w.look, curlTip, twin, live };
 }
 
 const qInv = new Quaternion();
@@ -312,6 +472,21 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   } else r.wick.ember.value.setRGB(0, 0, 0);
   // The light is the flame's luminous (soot) output: a fresh blue bead lights almost nothing.
   r.lights.intensity.value[r.index] = CANDLE_LIGHT * Math.max(0, f.intensity * fl.intensity) * sootFormed(f.lit);
+  // The candle as an occluder of every flame's light: its axis from its base to its wax top (in the
+  // world, where the light's shader works), whether or not its own flame burns.
+  candle.updateWorldMatrix(true, false);
+  r.lights.candleA.value[r.index]!.set(0, 0, 0).applyMatrix4(candle.matrixWorld);
+  r.lights.candleB.value[r.index]!.set(0, CANDLE.height - r.shorten, 0).applyMatrix4(candle.matrixWorld);
+  const ws = candle.matrixWorld.getMaxScaleOnAxis();
+  r.lights.occluder.value.set(CANDLE.radius * ws, FLAME_SOURCE_RADIUS * ws);
+  // The top tier (its axis is the cake's; its top where the candles stand, a few millimetres down
+  // so the uneven, hand-finished top is never shadowed by itself).
+  if (r.index === 0 && candle.parent) {
+    candle.parent.getWorldPosition(tierAt);
+    r.lights.tier.value.set(tierAt.x, tierAt.z, r.lights.candleA.value[0]!.y + (CANDLE.insert - 0.004) * ws, TOP_TIER_RADIUS * ws);
+  }
+  r.live.time = fl.time;
+  r.live.gain = fl.gain;
   if (!visible) return;
   // World up and the cake-plan flow in the flame node's frame (the node may be counter-rotated
   // against its candle's lean, or not: both go through world space).
@@ -350,17 +525,22 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   u.uState.value[1] = f.cool;
   u.uState.value[2] = Math.max(0, f.intensity * fl.intensity);
   u.uState.value[3] = f.lit;
+  // The bloom's twin shows only while there is a flame to glow (an ember alone does not bloom).
+  r.twin.visible = u.uState.value[2] * sootFormed(f.lit) > 1e-3;
   // The ember sits on the tip where the charred braid has curled it.
   const c = r.wick.char.value;
   u.uWick.value.set(r.wickTip.x + r.curlTip.x * c, r.wickTip.y + r.curlTip.y * c - r.shorten, r.wickTip.z + r.curlTip.z * c).applyMatrix4(toNode);
   u.uWickFoot.value.set(r.wickTip.x, r.wickTip.y - 4 * MM_UNITS - r.shorten, r.wickTip.z).applyMatrix4(toNode);
   u.uEmber.value = ember;
   u.uPhase.value = fl.phase;
+  // The volume's turbulence: carried on the live clock; the breath's gust tears the flame (by its lean), and a dying flame frays.
+  u.uNoise.value.set(fl.time, Math.min(1, Math.max(f.tilt / 1.1, 0.6 * f.cut)), 3.7 * r.index + 0.5);
   tip.copy(u.uBase.value).addScaledVector(u.uAxisY.value, L).addScaledVector(u.uAxisX.value, -bend);
   u.uMid.value.copy(u.uBase.value).add(tip).multiplyScalar(0.5);
-  u.uBoundR.value = 0.5 * tip.distanceTo(u.uBase.value) + 1.25 * R + 0.0008;
-  // The quad covers the march sphere, the halo and the ember.
-  u.uHalf.value = Math.max(u.uBoundR.value + 7 * R, u.uMid.value.distanceTo(u.uWick.value) + 0.005);
+  // Holds the march's box: the flame, its widest radius and the turbulence's reach.
+  u.uBoundR.value = 0.5 * tip.distanceTo(u.uBase.value) + 1.7 * R + (1.2 + 3.5 * u.uNoise.value.y) * MM_UNITS;
+  // The quad covers the march sphere (the box and the turbulence's reach) and the ember.
+  u.uHalf.value = Math.max(u.uBoundR.value + 0.5 * R, u.uMid.value.distanceTo(u.uWick.value) + 0.005);
   r.lights.pos.value[r.index]!.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.42 * L).applyMatrix4(r.node.matrixWorld);
 }
 
