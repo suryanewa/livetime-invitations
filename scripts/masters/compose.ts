@@ -559,7 +559,7 @@ async function materialVariants(doc: Document, recipe: SceneRecipe, log: Compose
 /**
  * Builds the masters into `doc` (the builder's document, or a fresh one) in the documented order:
  * drop builder nodes → scene-level create → each master (drop, materials, decimate, merge+place,
- * create, node maps, noShadowCast) → joins → shadow proxies → material variants → contract check.
+ * create, node maps, noShadowCast) → joins → shadow proxies → material variants → finish → contract check.
  */
 export async function composeMasters(doc: Document, recipe: SceneRecipe, log: ComposeLog = console.log): Promise<void> {
   for (const name of recipe.dropBuilderNodes ?? []) {
@@ -576,6 +576,7 @@ export async function composeMasters(doc: Document, recipe: SceneRecipe, log: Co
   for (const j of recipe.join ?? []) joinUnder(doc, j.parent, j.nodes, j.prefix ?? j.parent, contract, holders, log);
   for (const s of recipe.shadowProxies ?? []) await shadowProxy(doc, s.name, s.from, s.parent, s.ratio, s.error ?? 0.02, log);
   await materialVariants(doc, recipe, log);
+  if (recipe.finish) await recipe.finish(doc, log);
   checkContract(doc, recipe.contract);
 }
 

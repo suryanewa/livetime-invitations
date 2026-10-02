@@ -2,6 +2,10 @@ import { Matrix3, Matrix4, Quaternion } from 'three';
 import { BALL_R, HOOP_SCALE, RIM_LOCAL, SPORTS_NODES } from '../../../models/sportsContract.ts';
 import { buildSportsGeometry } from '../../../models/sportsPremium.ts';
 import { SEAM_FRAME } from '../../../src/render/ballMaterial.ts';
+import type { Document, Material, Texture } from '@gltf-transform/core';
+import { STAND_TILE } from '../../../models/sportsPremium.ts';
+import { loadSharp } from '../sharp.ts';
+import * as T from '../../bin/textures.ts';
 import type { Quat, RawImage, SceneRecipe } from '../types.ts';
 
 /**
@@ -20,8 +24,10 @@ import type { Quat, RawImage, SceneRecipe } from '../types.ts';
  * - Cream preset: a second albedo (`ball_leather_cream`) generated here from the orange one by a
  *   deterministic remap (below) and stored with KHR_materials_variants (variants orange, cream);
  *   ORM and normal maps are shared. `setPreset` switches with `loadMaterialVariants`.
- *   v1.2 fidelity pass: the cream is a cooler ivory (236, 229, 212; was 239, 228, 205) so its lit
- *   side separates from the peach stage by hue instead of merging with it. The orange albedo is
+ *   v1.2 fidelity pass: the cream was a cooler ivory (236, 229, 212) to separate from the peach
+ *   stage; v1.5 polish: against the greige `neutral-room` cove the ivory all but vanished at 540 and
+ *   192 px, so the cream is a warm buff (231, 207, 163), which separates from the cool stage by hue
+ *   and a little by value and still reads as a cream ball. The orange albedo is
  *   kept exactly as authored and renders as authored (v1.2's load-time LEATHER_GRADE multiply,
  *   fitted to the v1.1 peach stage, was removed in the studio pass v1.3).
  * - Hoop: `basketball-hoop.glb` at HOOP_SCALE (v1.5: rim inner radius 0.451 → 0.5115 su, the
@@ -68,14 +74,14 @@ function ballRotation(): Quat {
 
 /**
  * Cream albedo from the orange one. Panels: the master's panel colour (sRGB 223, 64, 10 median)
- * becomes an ivory cream (236, 229, 212), keeping each texel's relative brightness so the pebble
+ * becomes a warm cream (231, 207, 163), keeping each texel's relative brightness so the pebble
  * mottling survives. Seams and grooves (dark texels) keep their original colour. Linear-light
  * maths; a pure function of the input pixels.
  */
 const lin = (c: number) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
 const srgb = (x: number) => Math.round(255 * Math.min(1, Math.max(0, x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055)));
 const PANEL = [223, 64, 10].map(lin) as [number, number, number];
-const CREAM = [236, 229, 212].map(lin) as [number, number, number];
+const CREAM = [231, 207, 163].map(lin) as [number, number, number];
 const luma = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 export function creamAlbedo(img: RawImage): RawImage {
   const LUT = new Float32Array(256).map((_, i) => lin(i));
@@ -94,6 +100,39 @@ export function creamAlbedo(img: RawImage): RawImage {
     if (ch === 4) out[i + 3] = img.data[i + 3]!;
   }
   return { ...img, data: out };
+}
+
+/**
+ * The stand's maps (v1.5 polish), generated with the shared bin's deterministic generators
+ * (scripts/bin/textures.ts) and encoded by the recipe's texture policy (WebP, normals lossless):
+ * - `hoop_stand_pp`: moulded polypropylene with an EDM mould grain (VDI 3400 ≈ Ref 27: 0.1–0.4 mm
+ *   pits, 5° RMS slope) on UV0 (3 cm tiles), roughness 0.55 ± 0.04 mottled over 24 cm on UV1;
+ * - `hoop_stand_powder`: satin powder coat with orange peel (2–3 mm wavelength, 0.55° RMS slope,
+ *   sparse dust inclusions) on UV0 (5.76 cm tiles), roughness 0.36 ± 0.03 on UV1.
+ */
+export async function finishStand(doc: Document, log: (line: string) => void): Promise<void> {
+  const sharp = loadSharp();
+  const texture = async (name: string, img: T.Image): Promise<Texture> => {
+    const png = await sharp(img.data, { raw: { width: img.width, height: img.height, channels: 4 } }).png({ compressionLevel: 9 }).toBuffer();
+    return doc.createTexture(name).setImage(new Uint8Array(png)).setMimeType('image/png');
+  };
+  const material = (name: string): Material => {
+    const m = doc.getRoot().listMaterials().find((x) => x.getName() === name);
+    if (!m) throw new Error(`stand material ${name} missing`);
+    return m;
+  };
+  const finish = async (name: string, normal: T.Image, rough: number, spread: number, seed: number) => {
+    const m = material(name);
+    m.setNormalTexture(await texture(`${name}_normal`, normal)).setNormalScale(1);
+    m.getNormalTextureInfo()!.setTexCoord(0);
+    const mottle = T.roughnessMottle(512, 512, 3, 3, seed);
+    const r = T.field(512, 512, (_u, _v, c, row) => rough + spread * mottle[row * 512 + c]!);
+    m.setMetallicRoughnessTexture(await texture(`${name}_orm`, T.orm(512, 512, 1, r, 0))).setRoughnessFactor(1).setMetallicFactor(1);
+    m.getMetallicRoughnessTextureInfo()!.setTexCoord(1);
+  };
+  await finish('hoop_stand_pp', T.edmNormal(512, STAND_TILE.pp.micro), 0.55, 0.04, 211);
+  await finish('hoop_stand_powder', T.powderNormal(512, STAND_TILE.powder.micro), 0.36, 0.03, 223);
+  log('  stand: moulded-PP and powder-coat maps generated');
 }
 
 export const recipe: SceneRecipe = {
@@ -137,5 +176,6 @@ export const recipe: SceneRecipe = {
   variants: ['orange', 'cream'],
   materialVariants: [{ variant: 'cream', of: 'ball_leather', name: 'ball_leather_cream', baseColor: creamAlbedo }],
   textures: { maxSize: 2048, quality: 90 },
+  finish: finishStand,
   contract: SPORTS_NODES,
 };

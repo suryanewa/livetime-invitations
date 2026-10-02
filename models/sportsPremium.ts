@@ -1,8 +1,8 @@
-import { type BufferGeometry, type Object3D, SphereGeometry, TorusGeometry, Vector2 } from 'three';
+import { BufferAttribute, type BufferGeometry, Color, MeshStandardMaterial, type Object3D, SphereGeometry, TorusGeometry, Vector2 } from 'three';
 import { beveledPlate, filletPolyline, group, mergeParts, mesh, perforationRow, roundedBox } from './geometry.ts';
 import { cap, place, planContour, planRoundedRect, profile, sweep, turned } from './recordParts.ts';
 import { markNoShadowCast } from './shadowProxy.ts';
-import { BALL_AT, BALL_R, BOARD as MASTER_BOARD, BOARD_PIVOT, HOOP_ROOT, POLE, RIM, RIM_LOCAL, STAND, type BallPreset } from './sportsContract.ts';
+import { BALL_AT, BALL_R, BOARD as MASTER_BOARD, BOARD_PIVOT, HOOP_ROOT, POLE, RIM, RIM_LOCAL, SPORTS_CM_PER_UNIT, STAND, type BallPreset } from './sportsContract.ts';
 import { backerFrame, type BoardChannel, baseGeometry, boardGeometry, boltHead, channelLiner, netGeometry, outlineFrame, outlinePlate } from './sportsParts.ts';
 import type { ModelContext } from './types.ts';
 
@@ -153,9 +153,11 @@ function buildMasterStand(lib: Lib, hoop: Object3D): void {
   // Arms: box section from the pole's axis (inside the sleeve) to the back plate; the lower one is longer (the pole leans).
   const armTo = back - plateT;
   const arms = [upperY, lowerY].map((y) => place(roundedBox(A.width, A.height, armTo - axisZ(y), 0.012, 2), { y, z: (axisZ(y) + armTo) / 2 }));
-  // Satin HDPE (base, socket, fill cap, wheels, collar and knob) and black powder-coated steel (pole, sleeve, arms).
-  mesh('hoop_stand', mergeParts([side, top, under, fill, socket, ...wheels, collarG, knob].map((geometry) => ({ geometry }))), lib.get('mat_stand_plastic'), hoop);
-  mesh('hoop_pole', mergeParts([lower, upper, sleeve, ...arms].map((geometry) => ({ geometry }))), lib.get('mat_stand_steel'), hoop);
+  // Moulded PP (base, socket, fill cap, wheels, collar and knob) and black powder-coated steel
+  // (pole, sleeve, arms): the stand's own materials, textured at export (recipes/sports.ts
+  // `finishStand`: micro-normal on UV0, roughness variation on UV1, both projected here).
+  mesh('hoop_stand', standUVs(mergeParts([side, top, under, fill, socket, ...wheels, collarG, knob].map((geometry) => ({ geometry }))), STAND_TILE.pp), STAND_MATERIALS.pp(), hoop);
+  mesh('hoop_pole', standUVs(mergeParts([lower, upper, sleeve, ...arms].map((geometry) => ({ geometry }))), STAND_TILE.powder), STAND_MATERIALS.powder(), hoop);
 
   // Steel: the back plate on the board's flat back, the arms' through-bolts and the wheel hubs.
   const plateH = armSpan + 0.2;
@@ -163,6 +165,40 @@ function buildMasterStand(lib: Lib, hoop: Object3D): void {
   const bolts = [upperY, lowerY].flatMap((y) => [-1, 1].map((sx) => place(boltHead(0.016), { ry: (sx * Math.PI) / 2, x: sx * (sleeveR - 0.002), y, z: axisZ(y) })));
   const hubs = [-1, 1].map((sx) => place(turned([[0, 0], [0.045, 0, 0.004], [0.045, 0.012, 0.006], [0, 0.016]], { segments: 24, filletSegments: 2 }), { rz: (-sx * Math.PI) / 2, x: sx * (B.halfWidth + wheelW - 0.012), y: wheelR, z: wheelZ }));
   mesh('hoop_hardware', mergeParts([backPlate, ...bolts, ...hubs].map((geometry) => ({ geometry }))), lib.get('mat_metal'), hoop);
+}
+
+/**
+ * The stand's materials (v1.5 polish): a blow-moulded polypropylene base (satin black, roughness
+ * 0.55) and a black powder-coated steel pole (satin, 0.36). Their maps are generated at export
+ * (scripts/masters/recipes/sports.ts `finishStand`, with the shared bin's generators): the PP's
+ * mould grain and the coat's orange peel as micro-normals, and a soft roughness mottle.
+ */
+export const STAND_MATERIALS = {
+  pp: () => new MeshStandardMaterial({ name: 'hoop_stand_pp', color: new Color('#1E2023'), roughness: 0.55, metalness: 0 }),
+  powder: () => new MeshStandardMaterial({ name: 'hoop_stand_powder', color: new Color('#1A1C1F'), roughness: 0.36, metalness: 0 }),
+} as const;
+/** Texture tiles (cm per UV unit): UV0 the micro-normal's, UV1 the roughness mottle's. */
+export const STAND_TILE = { pp: { micro: 3, mottle: 24 }, powder: { micro: 5.76, mottle: 24 } } as const;
+
+/**
+ * Box-projected UVs in scene centimetres (each vertex on the plane its normal faces most): UV0 at
+ * the micro tile, UV1 at the mottle tile. The seams where the projection switches are invisible
+ * at a few millimetres of grain.
+ */
+function standUVs(g: BufferGeometry, tile: { micro: number; mottle: number }): BufferGeometry {
+  const pos = g.getAttribute('position'), nor = g.getAttribute('normal');
+  const uv0 = new Float32Array(pos.count * 2), uv1 = new Float32Array(pos.count * 2);
+  const cmPer = SPORTS_CM_PER_UNIT;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i) * cmPer, y = pos.getY(i) * cmPer, z = pos.getZ(i) * cmPer;
+    const nx = Math.abs(nor.getX(i)), ny = Math.abs(nor.getY(i)), nz = Math.abs(nor.getZ(i));
+    const [u, v] = ny >= nx && ny >= nz ? [x, z] : nx >= nz ? [z, y] : [x, y];
+    uv0[i * 2] = u / tile.micro; uv0[i * 2 + 1] = v / tile.micro;
+    uv1[i * 2] = u / tile.mottle; uv1[i * 2 + 1] = v / tile.mottle;
+  }
+  g.setAttribute('uv', new BufferAttribute(uv0, 2));
+  g.setAttribute('uv1', new BufferAttribute(uv1, 2));
+  return g;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

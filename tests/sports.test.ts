@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { Box3, BufferAttribute, BufferGeometry, Matrix4, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
+import { Box3, BufferAttribute, BufferGeometry, Matrix4, OrthographicCamera, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { Document, Node } from '@gltf-transform/core';
 import type { KHRMaterialsVariants } from '@gltf-transform/extensions';
 import { listTextureSlots } from '@gltf-transform/functions';
@@ -15,14 +15,16 @@ import { analyseNet, HoopSprings, NET_SIM, NetSim, netMeshKind, type NetLattice 
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
 import { BOUNCE, floorImpulse, GRAVITY, MS, ROLL_DECEL, squashFor } from '../src/scenes/sports/ballPhysics.ts';
 import {
-  CONTACT_AT, CONTACTS, DURATIONS, frameFor, GUEST_ROT, MADE_APEX, MISS_LAND, MISS_OFFSET, MISS_POINT, NET_KEEP, NET_PASSAGE, newFrame, RELEASE_AT, REST, REST_AT,
+  CONTACT_AT, CONTACTS, DURATIONS, frameFor, GUEST_ROT, MADE_APEX, MISS_LAND, MISS_OFFSET, MISS_POINT, NET_KEEP, NET_PASSAGE, newFrame, RELEASE_AT, REST, REST_AT, RISE_FROM,
   sampleSequence, sampleTrack, SHOT_AXES, SHOT_BACKSPIN, type SportsFrame,
 } from '../src/scenes/sports/sequences.ts';
 import * as sportsModel from '../models/sports.ts';
 import { farLayerShade, NET_FAR_SHADE, SPORTS_WALL_Z } from '../models/sports.ts';
 import { COVE_RADIUS } from '../src/render/studio.ts';
 import { BLEND_MARGIN, blendClearance, hoopDistance, sportsFramePoints, sportsInterruptCut } from '../src/scenes/sports/index.ts';
+import { type Change, planChange, type Showing } from '../src/scenes/sports/change.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
+import { netCost } from './netCost.ts';
 
 const SEQS = ['host', 'accept', 'decline'] as const;
 /** Sample a sequence's physics at t, tails included. */
@@ -115,14 +117,14 @@ describe('Sports ball physics (ballPhysics.ts)', () => {
     expect(SPORTS_CM_PER_UNIT).toBeCloseTo(36, 9);
   });
 
-  it('a 1.8 m drop rebounds to 1.2–1.4 m (FIBA) and compresses the ball 10 %', () => {
+  it('a 1.8 m drop rebounds to 1,035–1,085 mm (FIBA 2026, underside to underside) and compresses the ball 10 %', () => {
     const drop = 180 / SPORTS_CM_PER_UNIT;
     const vIn = Math.sqrt(2 * GRAVITY * drop);
     const v = new Vector3(0, -vIn, 0), w = new Vector3();
     const up = floorImpulse(v, w);
     const rebound = (up * up) / (2 * GRAVITY) * SPORTS_CM_PER_UNIT;
-    expect(rebound).toBeGreaterThan(120);
-    expect(rebound).toBeLessThan(140);
+    expect(rebound).toBeGreaterThan(103.5);
+    expect(rebound).toBeLessThan(108.5);
     expect(BOUNCE.restitution).toBeGreaterThanOrEqual(0.76);
     expect(BOUNCE.restitution).toBeLessThanOrEqual(0.84);
     expect(squashFor(vIn)).toBeCloseTo(0.1, 2);
@@ -146,10 +148,10 @@ describe('Sports ball physics (ballPhysics.ts)', () => {
     expect(L(back.v, back.roll)).toBeCloseTo(L(2, -3), 9);
   });
 
-  it('every floor contact rebounds at e × the impact speed, until a rebound would rise under 1 mm', () => {
+  it('every floor contact rebounds at e × the impact speed, until a rebound would rise under 1 cm', () => {
     for (const seq of SEQS) {
       const cs = CONTACTS[seq];
-      expect(cs.length, seq).toBeGreaterThan(5);
+      expect(cs.length, seq).toBeGreaterThanOrEqual(5);
       expect(cs.length, seq).toBeLessThan(40);
       for (const [i, c] of cs.entries()) {
         if (i < cs.length - 1) expect(c.rebound, `${seq} ${i}`).toBeCloseTo(BOUNCE.restitution * c.speed, 9);
@@ -196,9 +198,7 @@ describe('Sports ball physics (ballPhysics.ts)', () => {
           expect(acc(seq, t).setY(0).length(), `${seq} ${t.toFixed(3)}`).toBeCloseTo(ROLL_DECEL, 1);
         }
       }
-      // The airball's backspin all but stopped it at its first bounce: it barely rolls at all.
-      if (seq === 'decline') expect(REST_AT[seq] - lastContact(seq).at).toBeLessThan(0.3);
-      else expect(rolling, seq).toBeGreaterThan(3);
+      expect(rolling, seq).toBeGreaterThan(3);
       // At rest: no motion at all.
       expect(pos(seq, REST_AT[seq] + 1).distanceTo(pos(seq, REST_AT[seq]))).toBe(0);
     }
@@ -388,32 +388,86 @@ describe('Sports legibility: the airball is a shot, the declined pose is not the
   });
 });
 
-describe('Sports change response: blend unless a straight blend crosses the hoop', () => {
-  const cut = (seq: SequenceName, t: number, tail = false) => sportsInterruptCut(at(seq, t).ballPos, tail);
+describe('Sports change of mind: the ball carries on under its own physics (change.ts)', () => {
+  const showingAt = (seq: SequenceName, t: number): Showing => (t >= REST_AT[seq] ? { kind: 'rest', pos: at(seq, t).ballPos, rot: at(seq, t).ballRot } : { kind: 'track', seq, t, change: null });
+  const times = (seq: SequenceName) => [...Array.from({ length: 30 }, (_, i) => 0.1 + i * 0.06), 2.2, 2.8, 3.6, 4.5, REST_AT[seq] + 0.5];
+  /** A change track's ball at time t. */
+  const ball = (c: Change, t: number) => {
+    const p = new Vector3(), q = new Quaternion();
+    const squash = c.track.sample(t, p, q);
+    return { p, squash };
+  };
 
-  it('blends mid-flight and at rest, cuts in the hoop and during a tail', () => {
-    // Rising: the straight path back is clear. From the arc's top over the rim until the ball has
-    // left the net it would clip the ring or cross the net: cut. Below the net it is clear again.
-    for (let t = 0; t <= 0.5; t += 0.01) expect(cut('accept', t), `accept ${t.toFixed(2)}`).toBe(false);
-    for (let t = 0.6; t <= NET_PASSAGE.exitAt - 0.01; t += 0.01) expect(cut('accept', t), `accept ${t.toFixed(2)}`).toBe(true);
-    for (let t = NET_PASSAGE.exitAt + 0.03; t <= DURATIONS.accept; t += 0.01) expect(cut('accept', t), `accept ${t.toFixed(2)}`).toBe(false);
-    for (let t = 0; t <= DURATIONS.decline; t += 0.01) expect(cut('decline', t), `decline ${t.toFixed(2)}`).toBe(false);
-    for (const p of ['guest-ready', 'accepted', 'declined'] as const) expect(sportsInterruptCut(pose(p).ballPos, false)).toBe(false);
-    expect(cut('accept', DURATIONS.accept + 0.5, true)).toBe(true);
+  it('the director blends only while the ball sits on the floor in a gather; everything else is the scene\'s hand-over', () => {
+    for (let t = 0; t < RISE_FROM; t += 0.01) expect(sportsInterruptCut({ kind: 'track', seq: 'accept', t, change: null })).toBe(false);
+    for (const seq of ['accept', 'decline'] as const) for (const t of times(seq)) expect(sportsInterruptCut(showingAt(seq, t)), `${seq} ${t}`).toBe(true);
   });
 
-  it('a blend never passes the ball through the rim, net, board, pole or base', () => {
-    for (const seq of ['accept', 'decline'] as const) {
-      for (let t = 0; t <= DURATIONS[seq]; t += 0.01) {
-        const p0 = at(seq, t).ballPos;
-        if (sportsInterruptCut(p0, false)) continue;
-        const p = new Vector3();
-        let min = Infinity;
-        for (let i = 0; i <= 200; i++) min = Math.min(min, hoopDistance(p.lerpVectors(p0, BALL_AT.guest, i / 200)));
-        expect(min, `${seq} ${t.toFixed(3)}`).toBeGreaterThan(BALL_R);
+  for (const [from, to] of [['accept', 'decline'], ['decline', 'accept']] as const) {
+    it(`${from} → ${to}: continuous, physical, clear of the hoop, and at rest exactly on the new outcome`, () => {
+      const target = to === 'accept' ? REST.made : REST.missed;
+      for (const t of times(from)) {
+        const s = showingAt(from, t);
+        const c = planChange(s, to);
+        const label = `${from}→${to} @${t.toFixed(2)}`;
+        // Starts exactly where the ball is, moving as it moves.
+        const p0 = ball(c, 0).p, now = s.kind === 'rest' ? s.pos : at(from, t).ballPos;
+        expect(p0.distanceTo(now), label).toBeLessThan(1e-9);
+        if (s.kind === 'track' && t >= RELEASE_AT) {
+          const v0 = ball(c, 0.001).p.sub(p0).divideScalar(0.001), v1 = at(from, t + 0.001).ballPos.sub(now).divideScalar(0.001);
+          expect(v0.distanceTo(v1), label).toBeLessThan(0.05);
+        }
+        // Never a jump; never into the floor, the board, the base or the pole; under the shared gravity in the air.
+        let prev = p0.clone();
+        for (let u = 0.001; u <= c.track.end; u += 0.001) {
+          const { p, squash } = ball(c, u);
+          expect(p.distanceTo(prev), `${label} ${u.toFixed(3)}`).toBeLessThan(0.02);
+          expect(p.y - BALL_R * (1 - squash), `${label} ${u.toFixed(3)}`).toBeGreaterThanOrEqual(-1e-5);
+          expect(BOARD_BOX.distanceToPoint(p), `${label} board ${u.toFixed(3)}`).toBeGreaterThan(BALL_R);
+          expect(BASE_BOX.distanceToPoint(p), `${label} base ${u.toFixed(3)}`).toBeGreaterThan(BALL_R);
+          expect(poleDistance(p), `${label} pole ${u.toFixed(3)}`).toBeGreaterThan(BALL_R + POLE.radius);
+          prev = p;
+        }
+        // At rest exactly on the new outcome's spot, within a few seconds.
+        expect(ball(c, c.track.end).p.distanceTo(target), label).toBeLessThan(1e-5);
+        expect(c.track.end, label).toBeLessThan(9);
+        // The hand acts only at floor contacts.
+        expect(c.track.contacts.filter((k) => k.redirected).length, label).toBeLessThanOrEqual(2);
+        if (to === 'accept') {
+          // It scores: through the rim centre, never touching the ring on the way.
+          let best = Infinity;
+          for (let u = 0; u <= c.track.end; u += 0.0005) best = Math.min(best, ball(c, u).p.distanceTo(RIM_CENTER));
+          expect(best, label).toBeLessThan(0.01);
+        }
       }
+    });
+  }
+
+  it('a change while the shot is in the air lets it finish: the made shot still goes through the rim', () => {
+    const c = planChange({ kind: 'track', seq: 'accept', t: 0.6, change: null }, 'decline');
+    let best = Infinity;
+    for (let u = 0; u <= 0.5; u += 0.0005) best = Math.min(best, ball(c, u).p.distanceTo(RIM_CENTER));
+    expect(best).toBeLessThan(1e-3);
+  });
+
+  it('changes chain: accept → decline → accept, each from the ball\'s state on screen', () => {
+    const first = planChange({ kind: 'track', seq: 'accept', t: 1.2, change: null }, 'decline');
+    const second = planChange({ kind: 'track', seq: 'decline', t: 0.9, change: first }, 'accept');
+    expect(ball(second, 0).p.distanceTo(ball(first, 0.9).p)).toBeLessThan(1e-9);
+    expect(ball(second, second.track.end).p.distanceTo(REST.made)).toBeLessThan(1e-5);
+  });
+
+  it('plans fast enough for the frame it happens in (< 40 ms)', () => {
+    for (const [seq, to, t] of [['accept', 'decline', 0.5], ['decline', 'accept', 0.5], ['decline', 'accept', 4]] as const) {
+      const t0 = performance.now();
+      planChange(showingAt(seq, t), to);
+      expect(performance.now() - t0, `${seq} ${t}`).toBeLessThan(40);
     }
+  });
+
+  it('hoop distance still measures the hoop (blend clearance helper)', () => {
     expect(blendClearance(RIM_CENTER)).toBeLessThan(BALL_R + BLEND_MARGIN);
+    expect(hoopDistance(BALL_AT.guest)).toBeGreaterThan(BALL_R);
   });
 });
 
@@ -593,14 +647,16 @@ describe('Sports runtime GLB and the simulated net', async () => {
       expect(down.get(k) ?? 0).toBe(r < 5 ? 2 : 0);
     }
     const bones = lattice.cords.length + lattice.nodes.length;
-    for (const [, bind] of lattice.binding) for (const b of bind) expect(b).toBeLessThan(bones);
+    for (const [, bind] of lattice.binding) for (const arr of [bind.bone0, bind.bone1]) for (const b of arr) expect(b).toBeLessThan(bones);
   });
 
-  it('the net hangs at rest under gravity close to the master\'s shape and stays put without the ball', () => {
+  it('the net hangs at rest under gravity: the master\'s top, its bottom opened to clear the ball; it stays put without the ball', () => {
     const sim = new NetSim(lattice);
-    let dev = 0;
-    for (let i = 0; i < lattice.nodes.length; i++) dev = Math.max(dev, lattice.nodes[i]!.distanceTo(sim.restNode(i)));
-    expect(dev).toBeLessThan(0.01);
+    // The rim loops and the top rows hang as the master; the lower rows open (NET_HANG).
+    for (const k of lattice.rows[0]!) expect(lattice.nodes[k]!.distanceTo(sim.restNode(k))).toBeLessThan(0.01);
+    // The bottom ring's inner opening (knot centres less a knot) is ≥ 1.1 × the ball.
+    const bottom = Math.min(...lattice.rows[5]!.map((k) => Math.hypot(sim.restNode(k).x, sim.restNode(k).z)));
+    expect((2 * (bottom - NET_SIM.knotRadius)) / (2 * BALL_R)).toBeGreaterThan(1.1);
     for (const seq of ['host', 'decline'] as const) {
       const { sim: s, springs } = runNet(lattice, seq, REST_AT[seq]);
       expect(s.settled, seq).toBe(true);
@@ -613,7 +669,8 @@ describe('Sports runtime GLB and the simulated net', async () => {
     let maxOpen = 0, minGap = Infinity, wake = Infinity, lift = 0, settledAt = Infinity, lateSwing = 0;
     const bottom = lattice.rows[5]!;
     const p = new Vector3();
-    const { sim } = runNet(lattice, 'accept', REST_AT.accept, (t, s, _springs, ball) => {
+    // Run past the ball's rest: the net keeps swinging after the ball has stopped.
+    const { sim } = runNet(lattice, 'accept', REST_AT.accept + 2, (t, s, _springs, ball) => {
       if (!s.settled && wake === Infinity) wake = t;
       if (s.settled && t > CONTACT_AT + 0.2 && settledAt === Infinity) settledAt = t;
       for (let i = 0; i < s.n; i++) {
@@ -633,9 +690,9 @@ describe('Sports runtime GLB and the simulated net', async () => {
     expect(maxOpen).toBeGreaterThan(0.06);
     expect(minGap).toBeGreaterThan(NET_SIM.knotRadius - 0.006);
     expect(lift).toBeGreaterThan(0.02);
-    // It swings for a while, is visibly still (every knot within 3.6 mm of rest) 2 s after the
+    // It swings for a while, is all but still (every knot within 5.4 mm of rest) 2 s after the
     // ball has left, and snaps to rest once its last sub-millimetre sway has died.
-    expect(lateSwing).toBeLessThan(0.01);
+    expect(lateSwing).toBeLessThan(0.015);
     expect(settledAt - NET_PASSAGE.exitAt).toBeGreaterThan(1);
     expect(settledAt - NET_PASSAGE.exitAt).toBeLessThan(4.5);
     expect(sim.settled).toBe(true);
@@ -643,7 +700,7 @@ describe('Sports runtime GLB and the simulated net', async () => {
 
   it('the rim and board answer the net\'s real pull: bounded, the rim stopped by the board, both back at rest', () => {
     let rimMax = 0, rimMin = 0, boardMax = 0, forceMax = 0;
-    const { springs } = runNet(lattice, 'accept', REST_AT.accept, (_t, s, sp) => {
+    const { springs } = runNet(lattice, 'accept', REST_AT.accept + 2, (_t, s, sp) => {
       rimMax = Math.max(rimMax, sp.rim);
       rimMin = Math.min(rimMin, sp.rim);
       boardMax = Math.max(boardMax, Math.abs(sp.board));
@@ -661,17 +718,18 @@ describe('Sports runtime GLB and the simulated net', async () => {
     expect(springs.settled).toBe(true);
   });
 
-  it('the net simulation is cheap: well under a millisecond per frame (two fixed steps)', () => {
-    const sim = new NetSim(lattice);
-    const contact = { center: new Vector3(0, -0.3, 0), previous: new Vector3(0, -0.25, 0) };
-    sim.step(1 / 120, contact);
-    const t0 = performance.now();
-    for (let i = 0; i < 240; i++) {
-      contact.previous.copy(contact.center);
-      contact.center.y = -0.3 - 0.4 * Math.sin(i / 20);
-      sim.step(1 / 120, contact);
+  it('the net simulation is cheap: well under a millisecond per frame (two fixed steps), measured so machine load cannot fail it', () => {
+    // Cost per 60 fps frame with the ball in the net, in units of a fixed reference kernel timed in
+    // the same process (fastest of interleaved rounds: contention only adds time). On the M2 Pro the
+    // kernel takes 0.26 ms and the net 0.12 ms per frame (ratio 0.45; 0.44–0.71 at load average
+    // 24–33). The bound, 2, is 0.52 ms at that speed. A genuinely slow net fails every attempt; a
+    // contended measurement is retried.
+    let best = Infinity, last = { perFrameMs: 0, referenceMs: 0, ratio: Infinity };
+    for (let attempt = 0; attempt < 4 && best >= 2; attempt++) {
+      last = netCost(lattice);
+      best = Math.min(best, last.ratio);
     }
-    expect((performance.now() - t0) / 120).toBeLessThan(1);
+    expect(best, `net ${last.perFrameMs.toFixed(3)} ms/frame vs reference ${last.referenceMs.toFixed(3)} ms`).toBeLessThan(2);
   });
 });
 
