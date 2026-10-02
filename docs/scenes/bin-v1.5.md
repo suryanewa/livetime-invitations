@@ -253,7 +253,12 @@ long task and a dropped frame on the phone); the 6.6 MB bin was downloaded befor
 decline shows it; and the bin swept in from far off-frame, crossing the visible part in 0.1–0.2 s on a phone, its
 cove shadow in frame before it. What changed:
 
-- **The bin loads after ready** (`src/scenes/deferredBin.ts`). Birthday and Dinner rig a placeholder bin
+- **The bin loads after ready** (`src/scenes/deferredBin.ts`). Why defer, rather than only shrink it: its GLB
+  is 4.6 MB of geometry and 0.75 MB of maps, so no texture cut moves it off the critical path. Deferred, the
+  scene needs 7.9 MB before it is live in Birthday (was 14.4) and 3.4 MB in Dinner (was 10.0); on an emulated
+  9 Mbit/s link the bin arrives, warm, 7.0 s after ready in both, the time the old load spent on it before ready.
+  The shared warm frame at load (the controller draws everything hidden once behind the poster) no longer covers
+  the bin, so it warms itself once it has arrived (below). Birthday and Dinner rig a placeholder bin
   (`binPlaceholder`: `bin_root`, the lid and flap pivots and the contact shadow's place) and are ready without
   it; the decline's camera fit takes the open bin from its design (`openBinSilhouette`: the turned parts' profile
   hulls revolved and the flaps, hinges and pedal from their builders, computed once while the scene's own GLB
@@ -292,7 +297,11 @@ cove shadow in frame before it. What changed:
 
 Changes outside the bin's files: the scene contract (`src/core/sequence.ts`: `DeferredContext`, `needs`,
 `ensure`, `prefetch`), the director's hold (`src/core/visualDirector.ts`), the controller (ensure at load for a
-saved decline, prefetch after ready, the failure fallback, `deferredReady()` for tooling), `Stage.adoptContent`,
-and the framing owner's test of the bin's arrival (tests/pull.test.ts: settled and open before the object reaches
-it, rather than before the cake sets off across, which the 0.38 s slide no longer allows).
+saved decline, prefetch after ready, the failure fallback, `deferredReady()` for tooling), `Stage.adoptContent`;
+the capture tooling and the poster-staleness test wait for `deferredReady()` (scripts/capture.ts,
+tests/browser/posters.spec.ts); the framing owner's test of the bin's arrival (tests/pull.test.ts: settled and
+open before the object reaches it, rather than before the cake sets off across, which the 0.38 s slide no
+longer allows); and Birthday's camera rewind plan (src/scenes/birthday/pull.ts) also checks the instant before the
+scene's rewind ends, which its samples stepped over once the rewound entrance ended already moving. The two
+declined posters are recaptured (`pnpm capture birthday|dinner`, only `shared-declined.webp` shipped).
 

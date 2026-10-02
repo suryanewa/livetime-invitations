@@ -1,4 +1,4 @@
-import { Box3, type Camera, type Object3D, Vector3, type WebGLRenderer } from 'three';
+import { Box3, type Camera, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
@@ -10,7 +10,8 @@ import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowD
 import { silhouettePoints } from '../../render/framing.ts';
 import { finalPose, type SceneInstance, type SceneLoadContext, type SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
-import { DURATIONS, frameFor, newFrame, REST_AT, sampleSequence, sampleTrack, type SportsFrame } from './sequences.ts';
+import { DURATIONS, frameFor, newFrame, REST_AT, sampleTrack, type SportsFrame } from './sequences.ts';
+import { type Change, changeHandover, planChange, type Showing } from './change.ts';
 
 /** Outer net silhouette beyond its inner envelope (cords, knots, the far layer's thickness). */
 const NET_OUTSET = 0.05;
@@ -36,6 +37,20 @@ export function sportsFramePoints(sequences: readonly SequenceName[] = SEQUENCES
     sphere(sampleTrack(seq, REST_AT[seq], f).ballPos.clone());
   }
   sphere(BALL_AT.host);
+  // Changes of mind (change.ts) at representative moments: they keep to the same floor and air.
+  if (sequences.includes('accept') && sequences.includes('decline')) {
+    const p = new Vector3(), q = new Quaternion();
+    for (const [from, to, times] of [['accept', 'decline', [0.3, 0.7, 1.0, 1.3, 2.5]], ['decline', 'accept', [0.3, 0.9, 1.4, 3]]] as const) {
+      for (const t of [...times, REST_AT[from] + 0.1]) {
+        const showing: Showing = t > REST_AT[from] ? { kind: 'rest', pos: sampleTrack(from, t, f).ballPos.clone(), rot: new Quaternion() } : { kind: 'track', seq: from, t, change: null };
+        const c = planChange(showing, to);
+        for (let u = 0; u <= c.track.end; u += 0.04) {
+          c.track.sample(u, p, q);
+          sphere(p.clone());
+        }
+      }
+    }
+  }
   // Hoop: the board's eight corners (its top-back edge is the silhouette at the 15° elevation),
   // the rim ring and the base's footprint.
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const z of [BOARD.front, BOARD.front - BOARD.thickness]) {
@@ -113,14 +128,13 @@ export function blendClearance(from: Vector3, to: Vector3 = BALL_AT.guest, sampl
 }
 
 /**
- * Spec revision #9: blend through guest-ready wherever a straight blend is clean, and cut where it
- * would pass the ball through the rim, net, board, arms, pole or base, or while the ball is still
- * playing out its physics after the sequence (`tail`: a blend would first snap it to rest). The
- * net keeps swinging through either (`SportsScene.refresh` carries its motion over the director's
- * settle), so it answers the ball leaving it.
+ * v1.5 (polish): a change of mind never blends or cuts the ball. The scene draws the hand-over
+ * itself from the ball's state on screen (`change.ts`): it carries on under its own physics and
+ * the hand acts through its next floor contact. Only in the first 0.1 s of a gather, while the ball
+ * still sits on the floor at the guest spot, does the director blend (a few centimetres).
  */
-export function sportsInterruptCut(ball: Vector3, tail: boolean): boolean {
-  return tail || blendClearance(ball) < BALL_R + BLEND_MARGIN;
+export function sportsInterruptCut(showing: Showing): boolean {
+  return changeHandover(showing);
 }
 
 /**
@@ -130,11 +144,20 @@ export function sportsInterruptCut(ball: Vector3, tail: boolean): boolean {
  */
 export const BLOB_FALLOFF = { withKeyShadow: 0.35, alone: 1.6 } as const;
 
-/** Where the ball's time stands for the net: the sequence (or tail) and its time. */
+/** Where the ball's time stands: the sequence (or its tail), its time, and the change of mind it plays (if any). */
 interface Clock {
   seq: SequenceName;
   t: number;
+  change: Change | null;
 }
+
+/** The ball of a sequence (or of a change of mind) at time t, tails included. */
+export function sampleProgram(seq: SequenceName, change: Change | null, t: number, out: SportsFrame): SportsFrame {
+  if (!change) return sampleTrack(seq, t, out);
+  out.squash = change.track.sample(Math.min(Math.max(t, 0), change.track.end), out.ballPos, out.ballRot);
+  return out;
+}
+const restAt = (seq: SequenceName, change: Change | null) => (change ? Math.max(DURATIONS[seq], change.track.end) : REST_AT[seq]);
 
 export class SportsScene implements SceneInstance {
   readonly category = 'sports' as const;
@@ -157,6 +180,8 @@ export class SportsScene implements SceneInstance {
   private tail: Clock | null = null;
   /** The ball's time as the net last saw it (the net steps through the ball's path, not frame to frame). */
   private netClock: Clock | null = null;
+  /** What `interruptCut` found on screen; the new sequence's first sample plans the change from it. */
+  private pending: Showing | null = null;
   /**
    * The net's and the hoop springs' motion as the last `settle()` found it. An interruption (the
    * director's cut or blend) settles and then calls `refresh()`, which restores it: the net keeps
@@ -191,14 +216,16 @@ export class SportsScene implements SceneInstance {
   /**
    * A canonical pose. The director ends a sequence by posing its final pose right after sampling
    * it: then the ball plays on through its tail (the rest of its physics) in `simulate`, and the
-   * net keeps moving; `settle()` snaps both. Any other pose places the ball at once.
+   * net keeps moving; `settle()` snaps both. Any other pose places the ball at once. A change of
+   * mind's planning state survives the director's cut (settle, pose guest-ready, refresh).
    */
   pose(pose: CanonicalPose): void {
     const s = this.sampling;
     this.sampling = null;
-    if (s && pose === finalPose(s.seq) && REST_AT[s.seq] > DURATIONS[s.seq] + 1e-6) {
-      this.tail = { seq: s.seq, t: DURATIONS[s.seq] };
-      this.apply(sampleTrack(s.seq, this.tail.t, this.frame));
+    if (pose !== 'guest-ready') this.pending = null;
+    if (s && pose === finalPose(s.seq) && restAt(s.seq, s.change) > DURATIONS[s.seq] + 1e-6) {
+      this.tail = { seq: s.seq, t: DURATIONS[s.seq], change: s.change };
+      this.apply(sampleProgram(s.seq, s.change, this.tail.t, this.frame));
       return;
     }
     this.tail = null;
@@ -208,31 +235,36 @@ export class SportsScene implements SceneInstance {
 
   sample(sequence: SequenceName, t: number): void {
     this.carry = null;
+    let change = this.sampling?.seq === sequence && t >= this.sampling.t - 1e-6 ? this.sampling.change : null;
+    // The director's hand-over after `interruptCut` lands here at t = 0: plan the change of mind.
+    if (this.pending && t === 0 && sequence !== 'host') change = planChange(this.pending, sequence);
+    this.pending = null;
     // A new run of a sequence starts the net's view of the ball afresh.
-    if (!this.netClock || this.netClock.seq !== sequence || t < this.netClock.t - 1e-6 || this.tail) this.netClock = { seq: sequence, t };
+    if (!this.netClock || this.netClock.seq !== sequence || this.netClock.change !== change || t < this.netClock.t - 1e-6 || this.tail) this.netClock = { seq: sequence, t, change };
     this.tail = null;
-    this.sampling = { seq: sequence, t };
-    this.apply(sampleSequence(sequence, t, this.frame));
+    this.sampling = { seq: sequence, t, change };
+    this.apply(sampleProgram(sequence, change, Math.min(t, DURATIONS[sequence]), this.frame));
   }
 
   /** The continuous channel: the tail, the net (stepping along the ball's own path) and the hoop springs. */
   simulate(dt: number): void {
     this.carry = null;
     if (this.tail) {
-      this.tail.t = Math.min(this.tail.t + dt, REST_AT[this.tail.seq]);
-      this.apply(sampleTrack(this.tail.seq, this.tail.t, this.frame));
-      if (this.tail.t >= REST_AT[this.tail.seq]) this.tail = null;
+      const end = restAt(this.tail.seq, this.tail.change);
+      this.tail.t = Math.min(this.tail.t + dt, end);
+      this.apply(sampleProgram(this.tail.seq, this.tail.change, this.tail.t, this.frame));
+      if (this.tail.t >= end) this.tail = null;
     }
     const net = this.rig.net;
     if (!net) return;
     const target = this.tail ?? this.sampling;
     const c = this.contact;
-    if (target && this.netClock && this.netClock.seq === target.seq) {
+    if (target && this.netClock && this.netClock.seq === target.seq && this.netClock.change === target.change) {
       // Step the ball along its track by dt (never past where the director has it).
       const t0 = Math.max(this.netClock.t, target.t - 0.1);
       const t1 = Math.min(target.t, t0 + dt);
-      this.ballInNet(sampleTrack(target.seq, t0, this.scratch).ballPos, c.previous);
-      this.ballInNet(sampleTrack(target.seq, t1, this.scratch).ballPos, c.center);
+      this.ballInNet(sampleProgram(target.seq, target.change, t0, this.scratch).ballPos, c.previous);
+      this.ballInNet(sampleProgram(target.seq, target.change, t1, this.scratch).ballPos, c.center);
       this.netClock.t = t1;
     } else {
       this.ballInNet(this.rig.nodes.ball_authored!.position, c.center);
@@ -250,9 +282,9 @@ export class SportsScene implements SceneInstance {
     return this.tail !== null || !(this.rig.net?.sim.settled ?? true) || !this.rig.springs.settled;
   }
 
-  /** Snap everything to rest: the tail to its end (the canonical pose), the net to its hanging pose, the hoop to rest. */
+  /** Snap everything to rest: the tail to its end, the net to its hanging pose, the hoop to rest. */
   settle(): void {
-    if (this.tail) this.apply(sampleTrack(this.tail.seq, REST_AT[this.tail.seq], this.frame));
+    if (this.tail) this.apply(sampleProgram(this.tail.seq, this.tail.change, restAt(this.tail.seq, this.tail.change), this.frame));
     this.tail = null;
     this.sampling = null;
     this.netClock = null;
@@ -280,9 +312,23 @@ export class SportsScene implements SceneInstance {
     this.updateShadow(n.ball_authored!.position, 1 - n.ball_secondary!.scale.y);
   }
 
-  /** Cut where a straight blend from the ball's current position would cross the hoop, or during a tail. */
+  /** What is on screen: a sequence's (or a change's) physics at its time, or a ball at rest. */
+  private showing(): Showing {
+    const c = this.tail ?? this.sampling;
+    if (c) return { kind: 'track', seq: c.seq, t: c.t, change: c.change };
+    return { kind: 'rest', pos: this.frame.ballPos.clone(), rot: this.frame.ballRot.clone() };
+  }
+
+  /**
+   * A change of mind: the scene takes the hand-over (the director's 0 ms cut) and plans it at the
+   * new sequence's first sample from the ball's state on screen (`change.ts`), unless the ball still
+   * sits on the floor in the first 0.1 s of a gather (then the director's short blend is right).
+   */
   interruptCut(): boolean {
-    return sportsInterruptCut(this.rig.nodes.ball_authored!.position, this.tail !== null);
+    const showing = this.showing();
+    if ((showing.kind === 'track' && showing.seq === 'host') || !sportsInterruptCut(showing)) return false;
+    this.pending = showing;
+    return true;
   }
 
   /** Low tier for the imported ball, board, rim and net materials (the library handles the stand). */

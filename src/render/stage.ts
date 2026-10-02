@@ -94,7 +94,7 @@ export class Stage {
   private bounds = new Box3();
   private cssWidth = 1;
   private cssHeight = 1;
-  private dprCap = 1.5;
+  private dprCap = 2;
 
   static create(options: StageOptions = {}): Stage | null {
     const result = createRenderer(options);

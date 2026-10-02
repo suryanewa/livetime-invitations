@@ -19,10 +19,11 @@ import { VisualDirector } from './visualDirector.ts';
 import { FixedStepper } from '../motion/spring.ts';
 import { hasWebGL2, resetWebGL2Probe } from '../render/createRenderer.ts';
 import { type DirectionId, LOCKED_DIRECTION, MaterialLibrary } from '../render/materials.ts';
-import { QualityMonitor, TIER_DPR, type Tier } from '../render/quality.ts';
+import { QualityMonitor, type Tier } from '../render/quality.ts';
 import { DEFAULT_RIG } from '../render/rigRegistry.ts';
 import { type FramingReport, Stage, type StageOptions } from '../render/stage.ts';
 import { type FrameRect, frameSquare, NO_INSETS } from '../render/camera.ts';
+import { PULL_EASE } from '../render/framing.ts';
 
 /**
  * Embeddable invitation controller (Master §7). Three independent dimensions — resource,
@@ -82,8 +83,11 @@ export interface InvitationHandle extends InvitationController {
    * renders the bare stage (content hidden for that frame) for the stage-colour measurement.
    */
   captureStill(size: number, dpr?: number, type?: string, quality?: number, options?: { empty?: boolean; field?: number }): string | null;
-  /** Tooling only (resource checks): live GPU object counts, or null without a stage. */
-  renderInfo(): { geometries: number; textures: number; programs: number } | null;
+  /**
+   * Tooling only (resource checks): live GPU object counts, and the drawing buffer (its device
+   * pixels per CSS pixel and its size), or null without a stage.
+   */
+  renderInfo(): { geometries: number; textures: number; programs: number; pixelRatio: number; buffer: [number, number] } | null;
   /**
    * Tooling only (framing checks): the hero fits at `aspect` (width / height), or null: `rest`
    * (pull 0: host-ready, guest-ready, accepted) and `decline` (pull 1: the declined pose), the same
@@ -102,6 +106,8 @@ export const LOAD_TIMEOUT_MS = 6000;
 /** The backdrop still's field, in frame squares (it is this many frame sizes wide and tall). */
 export const BACKDROP_FIELD = 7;
 const ENTRANCE_MS = 220;
+/** How long the frame square takes to follow a change of the overlay insets (v1.5). */
+export const INSET_EASE_MS = 250;
 const LATE_LOAD_MS = 1200;
 
 export function createInvitation(options: InvitationOptions): InvitationHandle {
@@ -167,6 +173,13 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   const root = options.mount;
   const fullscreen = options.layout === 'fullscreen';
   let insets: FrameInsets = { ...NO_INSETS, ...options.frameInsets };
+  /**
+   * The insets the frame square is shown at (v1.5): `insets` eased in over INSET_EASE_MS when the
+   * host's overlays change size while the scene is live (a bottom sheet swapping its panel), so the
+   * object scales with the sheet instead of jumping in one frame.
+   */
+  let shownInsets: FrameInsets = { ...insets };
+  let insetTween: { from: FrameInsets; to: FrameInsets; start: number } | null = null;
   let frameRect: FrameRect | null = null;
   root.classList.add('lt-stage');
   root.classList.toggle('lt-stage--fullscreen', fullscreen);
@@ -442,9 +455,25 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       if (abort.signal.aborted || disposed) return;
       director.attach(instance);
       // One warm frame while the poster still covers the canvas: compileAsync neither builds the
-      // shadow pass's depth program nor uploads textures, so without it the first frame after
-      // 'ready' (guest input live) would link and upload synchronously. Hidden tabs never draw.
+      // shadow pass's depth program nor uploads textures or geometry, so without it the first
+      // frame after 'ready' (guest input live) would link and upload synchronously. Hidden tabs
+      // never draw.
       if (!document.hidden) {
+        // v1.5: also everything hidden for now (the bin, the flames, smoke and steam) for one frame,
+        // so that their first appearance mid-sequence uploads nothing: the bin's first decline drew
+        // its 216k-triangle geometry and its textures inside one frame (a 33–100 ms frame).
+        const hidden: { visible: boolean }[] = [];
+        instance.root.traverse((o) => {
+          if (!o.visible) {
+            hidden.push(o);
+            o.visible = true;
+          }
+        });
+        if (hidden.length) {
+          s.render();
+          for (const o of hidden) o.visible = false;
+          s.renderer.shadowMap.needsUpdate = true;
+        }
         prepareFrame(s, instance);
         s.render();
       }
@@ -578,6 +607,26 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     s.setPull(instance.framePull?.() ?? 0);
   }
 
+  /**
+   * One frame of the inset ease (`shownInsets` towards `insets`): the pull's ease (PULL_EASE) over
+   * INSET_EASE_MS of wall time; the frame square, the poster's place and the camera follow (the
+   * fit is cached: this only places the camera).
+   */
+  function stepInsets(now: number) {
+    const tw = insetTween;
+    if (!tw || !stage) return;
+    const u = Math.min(1, Math.max(0, (now - tw.start) / INSET_EASE_MS));
+    const k = PULL_EASE(u);
+    const mix = (a: number, b: number) => a + (b - a) * k;
+    shownInsets = { top: mix(tw.from.top, tw.to.top), right: mix(tw.from.right, tw.to.right), bottom: mix(tw.from.bottom, tw.to.bottom), left: mix(tw.from.left, tw.to.left) };
+    if (u >= 1) {
+      shownInsets = { ...tw.to };
+      insetTween = null;
+    }
+    updateFrame();
+    stage.setFrameInsets(shownInsets);
+  }
+
   let simulate: ((dt: number) => void) | null = null;
   function frame(now: number) {
     raf = 0;
@@ -596,6 +645,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       stepper.advance(dt, simulate);
       settling = scene.settling?.() ?? false;
     }
+    stepInsets(now);
     prepareFrame(stage, scene);
     stage.render();
     if (!drawnSinceReady) {
@@ -604,7 +654,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     }
     positionGrabTarget();
 
-    const active = playing || settling || pointerActive;
+    const active = playing || settling || pointerActive || insetTween !== null;
     looping = active;
     if (active) {
       if (warm && lastFrameAt) quality.record(now - lastFrameAt, now);
@@ -623,6 +673,14 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   }
 
   function applyQuality() {
+    // The pixel-ratio step (v1.5): a smaller drawing buffer, nothing else changes.
+    if (quality.applyPendingDpr()) {
+      resize();
+      redraw();
+      options.onResourceState?.({ state: resource, reason: 'reduced-quality' });
+      emit();
+      return;
+    }
     const next = quality.applyPending();
     if (!next) return;
     if (next === 'static') {
@@ -688,7 +746,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
    */
   function updateFrame() {
     if (!fullscreen) return;
-    const f = (frameRect = frameSquare(root.clientWidth || 1, root.clientHeight || 1, insets));
+    const f = (frameRect = frameSquare(root.clientWidth || 1, root.clientHeight || 1, shownInsets));
     root.style.setProperty('--lt-frame-x', `${f.x}px`);
     root.style.setProperty('--lt-frame-y', `${f.y}px`);
     root.style.setProperty('--lt-frame-size', `${f.size}px`);
@@ -699,8 +757,8 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     if (!stage) return;
     const w = root.clientWidth || 1;
     const h = root.clientHeight || w;
-    stage.setFrameInsets(fullscreen ? insets : null);
-    stage.resize(w, h, TIER_DPR[quality.tier]);
+    stage.setFrameInsets(fullscreen ? shownInsets : null);
+    stage.resize(w, h, quality.dprCap);
   }
 
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
@@ -927,6 +985,14 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       const merged = { ...NO_INSETS, ...next };
       if (merged.top === insets.top && merged.right === insets.right && merged.bottom === insets.bottom && merged.left === insets.left) return;
       insets = merged;
+      // Eased only while the live canvas shows (a poster is placed at once), with motion on.
+      if (stage && scene && resource === 'ready' && drawnSinceReady && !reduced() && !document.hidden && onScreen) {
+        insetTween = { from: { ...shownInsets }, to: { ...merged }, start: performance.now() };
+        requestFrame();
+        return;
+      }
+      insetTween = null;
+      shownInsets = { ...merged };
       resize();
       redraw();
       requestFrame();
@@ -958,6 +1024,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       if (disposed) return;
       quality.tier = tier;
       quality.pending = null;
+      quality.resetDpr();
       if (tier === 'static') {
         loadAbort?.abort();
         loadAbort = null;
@@ -980,7 +1047,11 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     renderInfo() {
       if (!stage) return null;
       const info = stage.renderer.info;
-      return { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 };
+      const gl = stage.renderer.getContext();
+      return {
+        geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0,
+        pixelRatio: stage.renderer.getPixelRatio(), buffer: [gl.drawingBufferWidth, gl.drawingBufferHeight],
+      };
     },
 
     deferredReady() {

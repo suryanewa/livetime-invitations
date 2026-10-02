@@ -101,3 +101,16 @@ export function meltAmount(candle: number, tLit: number): number {
   const c = MELT_CANDLE[Math.min(Math.max(candle, 0), CANDLE_COUNT - 1)]!;
   return (m.round + m.pool + m.bead + m.run / (c.runLength * MM) + m.gloss) / 5;
 }
+
+/**
+ * After the flame goes out the molten wax sets (v1.5 polish): paraffin's pool and run go from a
+ * clear, glossy liquid to opaque, satin solid in 10–30 s of real time; on the same 7.5× clock
+ * that is 1.3–4 s on screen. 0 liquid – 1 set, from seconds since the flame went out.
+ */
+export function solidify(tCool: number): number {
+  return step(0, SET_REAL, Math.max(0, tCool) * MELT_TIME_SCALE);
+}
+
+/** Real seconds the wax takes to set (paraffin: 10–30 s), and the same on screen (≈ 2.9 s). */
+const SET_REAL = 22;
+export const SET_AFTER = SET_REAL / MELT_TIME_SCALE;

@@ -143,7 +143,8 @@ const SCENE_CAPTURE = {
     presets: [['vanilla', '{ category: "birthday", cake: "vanilla" }'], ['cocoa', '{ category: "birthday", cake: "cocoa" }']],
     // Declined shows the empty stand and the closed bin: identical for both frostings.
     sharedDeclined: true,
-    clips: { host: 1.6, accept: 1.7, decline: 1.8, change: 2.6 },
+    // v1.5 polish: the careful candle placement makes the host beat ≈ 2.45 s.
+    clips: { host: 2.8, accept: 1.7, decline: 1.8, change: 2.6 },
   },
   sports: {
     presets: [['orange', '{ category: "sports", ball: "orange" }'], ['cream', '{ category: "sports", ball: "cream" }']],
@@ -194,7 +195,16 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
   const waitReady = async () => {
     for (let i = 0; i < 400; i++) {
       const r = await call<string>('(s) => s.state?.resource');
-      if (r === 'ready') return;
+      if (r === 'ready') {
+        // v1.5: Birthday and Dinner load the bin after ready; the stills and the recordings wait
+        // for it (a decline would wait for it anyway, and shift the recording's timing).
+        for (let j = 0; j < 600; j++) {
+          if (await call<boolean>('(s) => s.controller.deferredReady()')) return;
+          await tick(50);
+          await page.waitForTimeout(20);
+        }
+        throw new Error('the deferred assets never arrived');
+      }
       await tick(50);
       await page.waitForTimeout(10);
     }

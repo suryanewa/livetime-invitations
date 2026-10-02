@@ -1,12 +1,12 @@
 {
  "birthday-decline": {
   "fits": {
-   "restDistance": 12.408687599211623,
-   "declineDistance": 14.019191930430395
+   "restDistance": 12.255381338344687,
+   "declineDistance": 13.921084852680016
   },
   "solvesDuring": 0,
-  "peakZoomPerFrame": 0.006543887984371581,
-  "worstSpeedChangePerFrame": 0.0007859221698124507,
+  "peakZoomPerFrame": 0.006833948647008697,
+  "worstSpeedChangePerFrame": 0.0008207585095999074,
   "worstAt": 96,
   "rows": [
    {
@@ -3906,13 +3906,13 @@
  },
  "birthday-change-0.45s": {
   "fits": {
-   "restDistance": 12.408687599211623,
-   "declineDistance": 14.019191930430395
+   "restDistance": 12.255381338344687,
+   "declineDistance": 13.921084852680016
   },
   "solvesDuring": 0,
-  "peakZoomPerFrame": 0.11005723293512978,
-  "worstSpeedChangePerFrame": 0.1121807202331196,
-  "worstAt": 448,
+  "peakZoomPerFrame": 0.01075781473756622,
+  "worstSpeedChangePerFrame": 0.001724070516580189,
+  "worstAt": 528,
   "rows": [
    {
     "ms": 0,
@@ -4056,112 +4056,112 @@
    },
    {
     "ms": 448,
-    "pull": 0,
+    "pull": 0.917515851996564,
     "visual": "accept-playing"
    },
    {
     "ms": 464,
-    "pull": 0,
+    "pull": 0.9300523593174325,
     "visual": "accept-playing"
    },
    {
     "ms": 480,
-    "pull": 0,
+    "pull": 0.9351719799667363,
     "visual": "accept-playing"
    },
    {
     "ms": 496,
-    "pull": 0,
+    "pull": 0.9295733597798242,
     "visual": "accept-playing"
    },
    {
     "ms": 512,
-    "pull": 0,
+    "pull": 0.9112700984226871,
     "visual": "accept-playing"
    },
    {
     "ms": 528,
-    "pull": 0,
+    "pull": 0.8794382909768108,
     "visual": "accept-playing"
    },
    {
     "ms": 544,
-    "pull": 0,
+    "pull": 0.8342640695240289,
     "visual": "accept-playing"
    },
    {
     "ms": 560,
-    "pull": 0,
+    "pull": 0.7767911447313764,
     "visual": "accept-playing"
    },
    {
     "ms": 576,
-    "pull": 0,
+    "pull": 0.7087683474359432,
     "visual": "accept-playing"
    },
    {
     "ms": 592,
-    "pull": 0,
+    "pull": 0.6324971702297256,
     "visual": "accept-playing"
    },
    {
     "ms": 608,
-    "pull": 0,
+    "pull": 0.5506793090444813,
     "visual": "accept-playing"
    },
    {
     "ms": 624,
-    "pull": 0,
+    "pull": 0.46626420473658137,
     "visual": "accept-playing"
    },
    {
     "ms": 640,
-    "pull": 0,
+    "pull": 0.38229658467186406,
     "visual": "accept-playing"
    },
    {
     "ms": 656,
-    "pull": 0,
+    "pull": 0.3017640043104869,
     "visual": "accept-playing"
    },
    {
     "ms": 672,
-    "pull": 0,
+    "pull": 0.22744438879178008,
     "visual": "accept-playing"
    },
    {
     "ms": 688,
-    "pull": 0,
+    "pull": 0.16175357451910186,
     "visual": "accept-playing"
    },
    {
     "ms": 704,
-    "pull": 0,
+    "pull": 0.10659285074468751,
     "visual": "accept-playing"
    },
    {
     "ms": 720,
-    "pull": 0,
+    "pull": 0.06319650115450699,
     "visual": "accept-playing"
    },
    {
     "ms": 736,
-    "pull": 0,
+    "pull": 0.03197934545311272,
     "visual": "accept-playing"
    },
    {
     "ms": 752,
-    "pull": 0,
+    "pull": 0.012384280948498095,
     "visual": "accept-playing"
    },
    {
     "ms": 768,
-    "pull": 0,
+    "pull": 0.0027298241369486825,
     "visual": "accept-playing"
    },
    {
     "ms": 784,
-    "pull": 0,
+    "pull": 0.000057652287892277003,
     "visual": "accept-playing"
    },
    {

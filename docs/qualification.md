@@ -94,6 +94,21 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 - Drawing buffer at the showcase stage (≈400 CSS px, DPR 1.5 → 600², MSAA 4×): ≈13 MiB. **Total ≈ 20 MiB** against the 48 MiB budget.
 - **Risk recorded:** at the master's 2.5 MP drawing-buffer ceiling, MSAA 4× alone would need ≈90 MiB. Embeds larger than ≈700 CSS px at DPR 1.5 should create the renderer without MSAA; this is a decision for Milestone 7 integration guidance.
 
+## v1.5: Normal at 2 device pixels, the frame-square ease (2026-10-02)
+
+The judges measured the integrated v1.5 build: the live canvas drew at 1.5 device pixels per CSS pixel on the 2× laptop and the 3× phone (Normal's Master §9 cap), so on the phone every edge, the stand's grooves, the flames and the prints were upscaled 2× next to crisp UI. Normal now renders at up to 2 (spec revision #40), within the 2.5-million-pixel drawing-buffer ceiling, which is kept. Before any tier drop Normal takes one cheaper step down to 1.5 (p95 over 20 ms in two consecutive 1 s windows, between sequences, never undone automatically).
+
+Frame pacing, every sequence of every scene (the judges' own harness, `flows.mjs`: host ×2, the first accept and decline, decline after accept and back, both mid-sequence changes of mind, replay), M2 Pro, Chrome, other Chromes running. Worst p50 / worst p95 over the nine sequences, ms:
+
+| Device | Party | Birthday | Sports | Dinner | Business |
+| --- | --- | --- | --- | --- | --- |
+| 390 × 844 @3× (buffer 780 × 1688, ratio 2) | 16.7 / 16.8 | 16.7 / 16.8 | 16.7 / 16.8 | 16.7 / 16.8 | 16.7 / 16.8 |
+| 1280 × 720 @2× (buffer 2108 × 1185, ratio 1.65: the 2.5 MP ceiling) | 16.7 / 16.8 | 16.7 / 16.8 | 16.7 / 16.8 | 16.7 / 16.8 | 16.7 / 16.8 |
+
+Every sequence holds 60 fps at the new ratio (p95 ≤ 16.8 ms), so nothing steps down on this machine. Single slow frames remained only in a scene's first decline: the bin's first appearance uploaded its 216k-triangle geometry and its textures inside one frame (33–100 ms; the judges' 1.5× runs had the same spikes elsewhere). The controller's warm frame at load now draws everything hidden once, behind the poster: profiled again at both sizes (four first declines each), no frame exceeds 30 ms and no frame spends more than 4.4 ms in script; time to ready is unchanged within noise (A/B, five loads each: Birthday median 984 vs 1014 ms, Dinner 821 vs 849 ms; the longest load task about 210 ms either way). The flows harness still records isolated 33–67 ms frames under the machine's background load (other Chromes running), at p95 ≤ 16.8 ms. The laptop's full 2× (3.7 MP at 1280 × 720) would need the ceiling raised, an owner's decision (memory: 4× MSAA at 3.7 MP is about 130 MiB of drawing buffer).
+
+"Preview as guest" on the phone swapped the sheet's panel and the frame square jumped 1.56× in one frame; it now eases over 250 ms (237 → 369 px in 15 frames, `evidence/v1.5/framing/phone-preview-ease-every32ms.webp`).
+
 ## v1.3: the studio pass (2026-10-01)
 
 The masters are now lit by a physically plausible studio, rig `neutral-room`: the Models viewer's room at full environment strength, one soft key, a greige cove. They are seen through an 18° perspective lens, with no CSS finish and none of the v1.2 grades (revisions #31–#36; `docs/style-reference.md` v1.3). The objects, beats and durations are those of v1.2. The budgets stay waived. The tables below supersede v1.2's sequence-length, cadence and GLB tables; v1.2's budget and cold-load figures still hold to within a few KiB (Runtime GLBs, below).

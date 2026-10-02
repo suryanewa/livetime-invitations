@@ -31,6 +31,8 @@ export class DeferredBin {
   private hurry = false;
   private disposed = false;
   private readonly abort = new AbortController();
+  /** Waits in progress (`moment`): dispose ends them at once, so nothing keeps the renderer. */
+  private readonly wake = new Set<() => void>();
   private loaded: Object3D | null = null;
 
   /**
@@ -63,6 +65,8 @@ export class DeferredBin {
   dispose(): void {
     this.disposed = true;
     this.abort.abort();
+    for (const w of this.wake) w();
+    this.wake.clear();
   }
 
   private load(context: DeferredContext): Promise<void> {
@@ -99,6 +103,7 @@ export class DeferredBin {
         if (this.disposed) return;
         await renderer.compileAsync(mesh, camera, scene);
       }
+      if (this.disposed) return;
       // 2. Textures, one per idle moment.
       for (const texture of binTextures(this.binRoot)) {
         await this.moment(context);
@@ -117,7 +122,9 @@ export class DeferredBin {
   /** The next idle moment that is not during a sequence (none once a decline waits). */
   private async moment(context: DeferredContext): Promise<void> {
     while (!this.hurry && !this.disposed) {
-      await context.idle();
+      let w: () => void = () => {};
+      await Promise.race([context.idle(), new Promise<void>((r) => this.wake.add((w = r)))]);
+      this.wake.delete(w);
       if (!context.busy()) return;
     }
   }
