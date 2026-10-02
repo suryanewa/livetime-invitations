@@ -4,7 +4,7 @@ import { cm, REFERENCE_CM, WORLD_UNIT_CM } from '../models/worldScale.ts';
 import { PARTY_WORLD_SCALE, PLAYER, RECORD } from '../models/recordContract.ts';
 import { BIRTHDAY_WORLD_SCALE, CAKE_RADIUS, CAKE_SCALE, CAKE_TOTAL_HEIGHT, MASTER } from '../models/birthdayContract.ts';
 import { BALL_R, BOARD, RIM, RIM_CENTER, SPORTS_WORLD_SCALE } from '../models/sportsContract.ts';
-import { COVER, DINNER_WORLD_SCALE, DISH_HEIGHT, PLATE } from '../models/dinnerContract.ts';
+import { COVER, DINNER_BIN, DINNER_WORLD_SCALE, DISH_HEIGHT, PLATE } from '../models/dinnerContract.ts';
 import { BUSINESS_WORLD_SCALE, CARD, CARD_PRINT, MM_PER_UNIT, READER } from '../models/businessContract.ts';
 
 /**
@@ -31,21 +31,32 @@ describe('World scale (v1.4): every object at its real size', () => {
     expect(CAKE_RADIUS).toBeLessThan(BIN.opening);
   });
 
-  it('Sports: an 18 cm mini ball, the rim 1.6 × its diameter, a 58.6 cm mini board', () => {
+  it('Sports (v1.5): an 18 cm mini ball, a 14.5" (36.8 cm) rim at 4 ft, a 74.9 cm mini board', () => {
     expect(SPORTS_WORLD_SCALE).toBeCloseTo(1.8, 10);
     near(toCm(2 * BALL_R, SPORTS_WORLD_SCALE), REFERENCE_CM.miniBall, 1e-9);
-    expect(RIM.innerRadius / BALL_R).toBeCloseTo(1.6, 10);
-    near(toCm(BOARD.width, SPORTS_WORLD_SCALE), 58.6, 0.005);
-    near(toCm(RIM_CENTER.y, SPORTS_WORLD_SCALE), 61.9, 0.005);
+    near(toCm(2 * RIM.innerRadius, SPORTS_WORLD_SCALE), 36.83, 1e-9);
+    near(toCm(BOARD.width, SPORTS_WORLD_SCALE), 74.9, 0.005);
+    near(toCm(RIM_CENTER.y + RIM.tube, SPORTS_WORLD_SCALE), 121.92, 1e-6);
   });
 
-  it('Dinner: a 27 cm plate under a 21.9 cm cloche; the bin sized against the dish', () => {
+  it('Dinner: a 27 cm plate under a 21.9 cm cloche; the real bin keeps its size here', () => {
     near(toCm(2 * PLATE.radius, DINNER_WORLD_SCALE), REFERENCE_CM.plate, 1e-9);
     near(toCm(2 * COVER.radius, DINNER_WORLD_SCALE), 22.1, 0.01);
     near(toCm(DISH_HEIGHT, DINNER_WORLD_SCALE), 15.9, 0.01);
-    near(toCm(2 * BIN.radius, DINNER_WORLD_SCALE), REFERENCE_CM.binDiameter.dinner, 0.005);
-    expect(PLATE.radius).toBeLessThan(BIN.opening);
-    expect(BIN.floor + DISH_HEIGHT).toBeLessThan(BIN.rimTop);
+    near(toCm(2 * DINNER_BIN.radius, DINNER_WORLD_SCALE), REFERENCE_CM.binDiameter.dinner, 0.005);
+    near(toCm(DINNER_BIN.height, DINNER_WORLD_SCALE), 47, 0.005);
+    expect(PLATE.radius).toBeLessThan(DINNER_BIN.opening);
+    expect(DINNER_BIN.floor + DISH_HEIGHT).toBeLessThan(DINNER_BIN.rimTop);
+  });
+
+  it('the shared bin is a real 47 cm pedal bin: 32.4 cm across, a 29.6 cm mouth, 38.6 cm deep, h/d 1.45', () => {
+    near(toCm(2 * BIN.radius, 1), 32.44, 0.005);
+    near(toCm(BIN.height, 1), 47, 0.005);
+    near(toCm(2 * BIN.opening, 1), 29.6, 0.005);
+    near(toCm(BIN.rimTop - BIN.floor, 1), 38.55, 0.005);
+    // Between the Vipp 14 (Ø 30 × 37 cm, 1.23) and the Brabantia NewIcon 20 L (Ø 29 × 46.7 cm, 1.61).
+    expect(BIN.height / (2 * BIN.radius)).toBeGreaterThan(1.4);
+    expect(BIN.height / (2 * BIN.radius)).toBeLessThan(1.61);
   });
 
   it('Business: a CR80 card; the holder about 5.7 × 8.9 cm, the reader 7.0 × 10.4 cm', () => {

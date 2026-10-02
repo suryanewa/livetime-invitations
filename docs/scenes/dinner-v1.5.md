@@ -193,6 +193,34 @@ The visible-steam curve (`steam-visibility-curve.txt`, summed brightening over t
 - **Thin over light.** By design the steam is subtle against the cove and the porcelain (see Research). It is most
   legible in motion and over the silver.
 
+## Integration with v1.5/integration (2026-10-02)
+
+Merged `v1.5/integration` (`9561419`: Party, Business, Sports, both Birthday branches and the bin) into this branch.
+
+- **No textual conflicts.** `scripts/capture.ts` keeps both Party's 3.6 s accept clip and Dinner's 3.8 s one. The
+  steam does not touch the cloche's material, so the bin owner's chained `patchBinVisibility` is unaffected.
+- **The steam clock after a change back to accept.** With the real bin, a decline → accept rewind may take 0.6 s,
+  and the accept after it then plays up to 1.46× faster (`REWIND.max.accept`, `k`). The steam now follows the
+  accept's own time while the cover moves and real time after the reveal's motion ends (`revealSteamTime`, which
+  is continuous). Without this, `changeTime` holding at `CONTENT_END` would have frozen the steam until the
+  director's end. The reveal's end no longer jumps the clock to 1.5 s, so it carries on from the last sample. Tested:
+  the steam clock never steps more than k per frame and never goes back.
+- **The change of mind's 0.25 s clearing is independent of the rewind's length**, so it composes with the new
+  `REWIND.max.accept` and `outcomePace`. Verified in the merged change strip: the steam is gone over the bin by
+  0.69 s.
+- **Party's controller changes** (equal sub-steps ≤ 1/120 s per frame, the rAF clock, the off-screen pause) need no
+  change here: `simulate` sums its steps and `settling()` ends with the steam.
+- **Re-measured on the merged code:**
+  - Steam frame cost: at most 0.24 ms at 1400² and 0.27 ms at 2000². The dish is now smaller in the frame, under
+    the bigger bin.
+  - Cadence on the phone viewport: p95 16.8 ms, tier Normal.
+  - One 0.5 s main-thread task right after the first accept on the 390×844 page. It is the camera refit
+    (`fitPerspectiveToHero` → `extents` over Dinner's frame points), and it is identical with the steam hidden: it
+    comes with the integration, not the steam (reported).
+- **Merged evidence:** `evidence/v1.5/dinner/merged/`. It holds reveal frames and strips in the new framing,
+  close-ups, the change, decline and host strips with the real bin (decline shows no steam), and the frame cost and
+  cadence results. The pre-merge strips are in `pre-merge/`.
+
 ## Evidence and tests
 
 Evidence is under `evidence/v1.5/dinner/` and is not committed:
@@ -215,11 +243,11 @@ untouched.
 
 Tests:
 
-- `tests/dinner-steam.test.ts` has 12 tests. The plan: deterministic; spills first from the raised side while the far
+- `tests/dinner-steam.test.ts` has 13 tests (the 13th: the steam clock through a change back to accept). The plan: deterministic; spills first from the raised side while the far
   rim is down; the pocket is released inside the dome and shown once clear; a trail from the trailing rim and a
   set-down puff; nothing in or through the plate or the table; speeds; the column grows, shows, thins and is gone,
   with no fold. On stage: the reveal clock; the steam carries on and ends clear; decline and host show none; reduced
   motion and settle; replay; the change of mind.
 - `tests/browser/dinner.spec.ts` checks that the steam shows after the reveal, that the loop keeps drawing while it
   rises and then idles, and that the final frame equals the reduced-motion still.
-- Totals: unit 294, browser 88.
+- Totals: unit 294 and browser 88 before the merge; unit 354 and browser 91 after it.

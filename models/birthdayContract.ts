@@ -23,11 +23,18 @@ export const MASTER = {
   footRadius: 0.379156,
   /** Lowest vertex of the tiers and piping (the bottom shell border; it beds 0.009 into the plate). */
   cakeBottom: -0.251947,
-  /** Widest point of the tiers and piping (the bottom tier's tassels and rosettes). */
-  cakeRadius: 0.628963,
-  /** Top-tier surface where the candles stand, and the crown rosettes' tips. */
+  /**
+   * Widest point of the tiers and piping (the bottom tier's rosettes). v1.5: re-measured after the
+   * hand finish (scripts/masters/recipes/birthdayFinish.ts: ±1.4 % drift, ±4 % rosette sizes); the
+   * master's own was 0.628963.
+   */
+  cakeRadius: 0.63424,
+  /**
+   * Top-tier surface where the candles stand (the master's; v1.5 the finished top is uneven by
+   * ±0.7 mm about it), and the crown rosettes' tips (v1.5 re-measured; the master's 0.639565).
+   */
   tierTop: 0.603,
-  cakeTop: 0.639565,
+  cakeTop: 0.64334,
   /** Candles (all six identical): base, top, radius; they bed 0.017 into the top tier. */
   candleBase: 0.586,
   candleTop: 0.8028,
@@ -65,8 +72,9 @@ export const CAKE_SCALE = 1.1;
  * World units per Birthday scene unit (v1.4, models/worldScale.ts): 1. Birthday was already
  * authored at the world scale: the cake on its stand (stand foot to the top tier's rosettes,
  * 1.5876 scan × 1.1 = 1.746) is 34.9 cm (reference 35 cm), the bottom tier 27.7 cm across its
- * piping, the stand 33.5 cm, a candle 4.8 cm. The bin is sized against it: the cake with candles
- * (23.6 cm) sinks below the 26 cm rim.
+ * piping, the stand 33.5 cm, a candle 4.8 cm. v1.5: the shared bin is a real 47 cm pedal bin
+ * (models/disposalBin.ts) at its real size here too: the cake with candles (23.6 cm) drops into
+ * its 29.6 cm mouth and 38.6 cm deep bucket.
  */
 export const BIRTHDAY_WORLD_SCALE = 1;
 
@@ -127,13 +135,24 @@ export function screenX(x: number, z: number): number {
   return x * Math.cos(az) - z * Math.sin(az);
 }
 
-/** Carry height of the cake's underside while it glides from the stand to the bin. */
-export const CARRY_HEIGHT = 1.42;
+/** Height the cake's underside clears the rim by while it crosses over. */
+export const RIM_CLEARANCE = 0.06;
 
 /**
- * Bin resting position (bin_root origin), behind-left of the stand and ≥ 1.95 from its axis so
- * the plate never touches the bin (radius 0.94). It is turned to face the stand so the cake
- * enters between the butterfly flaps (they hinge along the bin's local z axis).
+ * Carry height of the cake's underside at the top of the lift off the stand (v1.5: over the real
+ * bin's 44.5 cm rim, 1.5 cm above the hover height it then settles to over the opening, so it is
+ * clear of the rim with its lean before it reaches over it).
+ */
+export const CARRY_HEIGHT = BIN.rimTop + RIM_CLEARANCE + 0.075;
+
+/**
+ * Bin resting position (bin_root origin), behind-left of the stand, clear of the plate by more
+ * than 4 cm (stand 0.838 + bin 0.846 + 0.04 = 1.724; this is 2.01). It is turned to face the
+ * stand so the cake enters between the butterfly flaps (they hinge along the bin's local z axis).
+ * v1.5: a placement search over the real bin found this v1.2 place the best at every aspect
+ * (0.563 of the frame height at 3:4, 1:1 and 3:2; 0.524 with the real-size v1.5 flames, which
+ * no longer pad the hero's top); further left the 1:1 fill reaches 0.59 but the 3:4 one falls to
+ * 0.45 (the bin then sets the width).
  */
 export const BIN_POS = new Vector3(-1.04, 0, -1.72);
 export const BIN_YAW = Math.atan2(-BIN_POS.x, -BIN_POS.z);
@@ -146,9 +165,6 @@ export const WALL_Z = -4.3;
 /** Cake underside when resting on the bin liner floor. */
 export const IN_BIN = new Vector3(BIN_POS.x, BIN.floor, BIN_POS.z);
 
-/** Height the cake's underside clears the rim by while it crosses over. */
-export const RIM_CLEARANCE = 0.06;
-
 /** Candle hover height above its seated position before the host places it. */
 export const CANDLE_HOVER = 0.5;
 
@@ -156,22 +172,28 @@ export const CANDLE_HOVER = 0.5;
 export const LEAN_MAX = (1.8 * Math.PI) / 180;
 
 /**
- * Drawn flame (the v1.1 view-dependent shader flame at each wick): this many times the master
- * flame's height and width. At the master's own size (0.15 tall) the six flames were a few pixels
- * at the bin-inclusive framing and the accept blow-out barely changed the frame (v1.2 review); at
- * 1.5× the teardrop is about the candle's own visible height above the crown, as a birthday
- * candle's flame is, and the breath has something to bend.
+ * The candle flame (v1.5, edit #4): its real size, drawn by the fire rig (models/birthdayFire.ts,
+ * src/scenes/birthday/fire.ts), candle_NN space. Sunderland et al., Proc. Combust. Inst. 33 (2011):
+ * paraffin on a ≈1.1 mm wick, flame length from the pool Lf = 3.85·L^0.634 mm and width at the
+ * wick top Wf = 3.38·L^0.201 mm; the master's wick stands L = 4.2 mm above the candle top, so
+ * Lf ≈ 10 mm, Wf ≈ 4.5 mm, and a twisted birthday wick burns a little larger: the blue cup's
+ * bottom 1 mm above the pool (the lowest ≈20 % of a thin wick is quenched), 13 mm from there to
+ * the tip, 5 mm wide at the wick top. The master's own flame (0.152 tall, 3 cm) and v1.2's drawn
+ * 1.5× of it (4.5 cm) were 2–3× too large; the exported GLB carries no flame mesh, only the
+ * `flame_NN` anchor at CANDLE.flameBase.
  */
-export const FLAME_DRAW = { height: 1.5, width: 1.45 } as const;
-
-/** Drawn flame height and widest radius (candle_NN space). */
+const MM = 0.005;
 export const FLAME = {
-  height: CANDLE.flameHeight * FLAME_DRAW.height,
-  radius: CANDLE.flameRadius * FLAME_DRAW.width,
+  /** Bottom of the blue cup above the candle base. */
+  base: CANDLE.height + 1.0 * MM,
+  /** Base to tip. */
+  height: 13 * MM,
+  /** Half the widest width (5 mm). */
+  radius: 2.5 * MM,
 } as const;
 
-/** Flame top above the candle base at full size. */
-export const FLAME_TOP = CANDLE.flameBase + FLAME.height;
+/** Flame top above the candle base at full size (14 mm above the wax). */
+export const FLAME_TOP = FLAME.base + FLAME.height;
 
 /**
  * Complete motion bounds: stand, hovering candles, lit flames, the cake's arc over the rim and

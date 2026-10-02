@@ -61,9 +61,18 @@ export interface SceneInstance {
   pose(pose: CanonicalPose): void;
   /** Deterministic sample of a sequence at t seconds (clamped to [0, duration]). */
   sample(sequence: SequenceName, t: number): void;
-  /** Advance bounded secondary motion by one fixed step. Never called under reduced motion. */
+  /**
+   * Advance secondary motion by one step (at most 1/120 s; v1.5: a frame's steps sum exactly to
+   * its clock delta, so motion that runs on here is as smooth as a sampled sequence). Never
+   * called under reduced motion, nor while the stage is hidden or off-screen.
+   */
   simulate?(dt: number): void;
-  /** True while any secondary offset (or pointer blend) still needs frames. */
+  /**
+   * True while any secondary offset (or pointer blend) still needs frames. A scene may keep it
+   * true indefinitely for motion that runs on (v1.5: Party's playing record): the controller
+   * then draws only while the stage is visible (a hidden tab or an off-screen stage suspends the
+   * loop and pauses the clock).
+   */
   settling?(): boolean;
   /** Snap secondary offsets to rest (reduced motion, interruption, settle deadline). */
   settle?(): void;

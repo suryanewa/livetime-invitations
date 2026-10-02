@@ -34,8 +34,9 @@ export const REFERENCE_CM = {
    */
   cakeOnStand: 35,
   /**
-   * Sports: a mini (size 3) basketball, 18 cm. The hoop master is a wall-mount mini hoop; its rim's
-   * inner diameter stays 1.6 × the ball (28.8 cm), its board comes out 58.6 cm wide.
+   * Sports: a mini (size 3) basketball, 18 cm. Since v1.5 the hoop is a mini hoop system of the
+   * SKLZ Pro Mini Hoop System class (models/sportsContract.ts HOOP_PRODUCT_CM): a 14.5" (36.8 cm)
+   * rim at 4 ft; the master's board comes out 74.9 cm wide.
    */
   miniBall: 18,
   /** Dinner: a 27 cm dinner plate; the cloche keeps its real size against it (21.9 cm dome). */
@@ -47,10 +48,9 @@ export const REFERENCE_CM = {
    */
   cardShortSide: 5.4,
   /**
-   * The shared bin is one design sized against what it receives. Birthday: the cake (27.7 cm across
-   * its piping, 23.6 cm with its candles) needs the 37.6 cm bin (35.6 cm opening, 26 cm tall).
-   * Dinner: the covered dish (27 cm plate, 15.9 cm tall) takes it at Dinner's scale, 31.7 cm
-   * (30 cm opening, 21.9 cm tall, 20.3 cm deep). Both keep their approved choreography.
+   * v1.5: the shared bin is one real 47 cm butterfly pedal bin at its real size in both scenes
+   * (models/disposalBin.ts): 32.4 cm across its base, a 29.6 cm mouth for the 27.7 cm cake and the
+   * 27 cm plate, 38.6 cm of depth. (v1.4: 37.6 × 26 cm in Birthday, 31.7 × 22 cm in Dinner.)
    */
-  binDiameter: { birthday: 37.6, dinner: 31.7 },
+  binDiameter: { birthday: 32.44, dinner: 32.44 },
 } as const;

@@ -5,26 +5,35 @@ import type { Node } from '@gltf-transform/core';
 import type { KHRMaterialsVariants } from '@gltf-transform/extensions';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
+import { loadSharp } from '../scripts/masters/sharp.ts';
 import { PALETTE, recipe } from '../scripts/masters/recipes/birthday.ts';
 import {
-  BIN_POS, BIN_YAW, birthdayBounds, CAKE_RADIUS, CAKE_SCALE, CAKE_TOTAL_HEIGHT, CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME, FLAME_DRAW, FLAME_TOP, LEAN_MAX, MASTER,
+  BIN_POS, BIN_YAW, birthdayBounds, CAKE_RADIUS, CAKE_SCALE, CAKE_TOTAL_HEIGHT, CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME, FLAME_TOP, LEAN_MAX, MASTER,
   RIM_CLEARANCE, screenX, STAND, STAND_TOP,
 } from '../models/birthdayContract.ts';
-import { BIRTHDAY_GLB_NODES, buildBirthdayGeometry, FLAME_SIZE } from '../models/birthdayParts.ts';
-import { BIN, buildDisposalBin } from '../models/disposalBin.ts';
+import { BIRTHDAY_GLB_NODES, buildBirthdayGeometry } from '../models/birthdayParts.ts';
+import { BIN, BIN_CLOSE, buildDisposalBin } from '../models/disposalBin.ts';
 import { BIN_SHADE } from '../models/birthday.ts';
 import {
-  CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LAND_SPEED, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAME_FLUTTER, FLAME_RISE, FLAME_START, LEAN, LEAN_FADE, LIFT_TO, OUT_LEN, OUT_START,
-  WISP_OPACITY,
+  CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LEAN, CANDLE_PRESS, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAPS_CLOSE, IGNITE, IGNITE_START,
+  LEAN_FADE, LIFT_TO,
 } from '../src/scenes/birthday/poses.ts';
-import { candleDrop, carryLean, frameFor, LEAN_AXIS, newFrame, sampleSequence, type BirthdayFrame } from '../src/scenes/birthday/sequences.ts';
+import { BREATH_AT, burnRate, extinguishedAt, type FlameState } from '../src/scenes/birthday/fire.ts';
+import {
+  ACCEPTED_LIT, cakeLoad, candleDrop, carryLean, DECLINED_LIT, flameScaleOf, frameFor, GUEST_READY_LIT, LEAN_AXIS, litTime, newFrame, pressOf, sampleSequence, type BirthdayFrame,
+} from '../src/scenes/birthday/sequences.ts';
+import { candleShortening, MELT_CANDLE, MELT_CAP, MELT_TIME_SCALE, meltAmount, meltState } from '../src/scenes/birthday/melt.ts';
 import { birthdayFramePoints } from '../src/scenes/birthday/framing.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
 const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
 const pose = (p: CanonicalPose) => frameFor(p, newFrame());
-const ARRAYS = ['drop', 'flameScale', 'flameOpacity', 'flameLean', 'flameStretch', 'wispOpacity', 'wispRise', 'wispGrow'] as const;
-const SCALARS = ['cakeYaw', 'cakeLean', 'wickLean', 'flaps'] as const;
+const ARRAYS = ['drop', 'press', 'lean', 'litTime'] as const;
+const SCALARS = ['cakeYaw', 'cakeLean', 'cakeDip', 'cakeTiltX', 'cakeTiltZ', 'flaps'] as const;
+/** A flame's drawn channels (the lean as a plan vector, so its direction is moot when upright). */
+const FLAME_KEYS = ['lit', 'height', 'width', 'leanX', 'leanZ', 'bend', 'neck', 'lift', 'cut', 'cool', 'intensity'] as const;
+const flameChannel = (f: FlameState, k: (typeof FLAME_KEYS)[number]) =>
+  k === 'leanX' ? f.tilt * f.dirX : k === 'leanZ' ? f.tilt * f.dirZ : f[k];
 const DEG = Math.PI / 180;
 
 function close(a: BirthdayFrame, b: BirthdayFrame, eps = 1e-6) {
@@ -34,6 +43,13 @@ function close(a: BirthdayFrame, b: BirthdayFrame, eps = 1e-6) {
   for (const k of ARRAYS) {
     expect(a[k].length).toBe(CANDLE_COUNT);
     for (let i = 0; i < CANDLE_COUNT; i++) expect(Math.abs(a[k][i]! - b[k][i]!), `${k}[${i}]`).toBeLessThan(eps);
+  }
+  // The drawn state of each flame (a flame that is out has no shape to compare).
+  for (let i = 0; i < CANDLE_COUNT; i++) {
+    const fa = a.flames[i]!, fb = b.flames[i]!;
+    expect(fa.out, `flame ${i} out`).toBe(fb.out);
+    expect(Math.abs(fa.intensity - fb.intensity), `flame ${i} intensity`).toBeLessThan(eps);
+    if (!fa.out) for (const k of FLAME_KEYS) expect(Math.abs(flameChannel(fa, k) - flameChannel(fb, k)), `flame ${i} ${k}`).toBeLessThan(eps);
   }
   expect(a.cakeVisible).toBe(b.cakeVisible);
   expect(a.cakeInBin).toBe(b.cakeInBin);
@@ -49,8 +65,9 @@ function binLocal(p: Vector3) {
 
 /** Every animated channel of a frame as one flat list (for the velocity-continuity test). */
 function channels(f: BirthdayFrame): number[] {
-  const out = [f.cakePos.x, f.cakePos.y, f.cakePos.z, f.binPos.x, f.binPos.y, f.binPos.z, f.cakeYaw, f.cakeLean, f.wickLean, f.flaps];
+  const out = [f.cakePos.x, f.cakePos.y, f.cakePos.z, f.binPos.x, f.binPos.y, f.binPos.z, f.cakeYaw, f.cakeLean, f.cakeDip, f.cakeTiltX, f.cakeTiltZ, f.flaps];
   for (const k of ARRAYS) out.push(...f[k]);
+  for (const fl of f.flames) for (const k of FLAME_KEYS) out.push(flameChannel(fl, k));
   return out;
 }
 
@@ -73,7 +90,7 @@ describe('Birthday choreography', () => {
         expect(Math.abs(cur.cakeLean - prev.cakeLean)).toBeLessThan(0.001);
         for (let k = 0; k < CANDLE_COUNT; k++) {
           expect(Math.abs(cur.drop[k]! - prev.drop[k]!)).toBeLessThan(0.01);
-          expect(Math.abs(cur.flameOpacity[k]! - prev.flameOpacity[k]!)).toBeLessThan(0.05);
+          expect(Math.abs(cur.flames[k]!.intensity - prev.flames[k]!.intensity)).toBeLessThan(0.05);
         }
         expect(Math.abs(cur.flaps - prev.flaps)).toBeLessThan(0.03);
         if (seq !== 'decline' || i > 1) expect(cur.binPos.distanceTo(prev.binPos)).toBeLessThan(0.05);
@@ -84,107 +101,220 @@ describe('Birthday choreography', () => {
 
   it('is C1: no velocity jumps anywhere (second differences at 0.1 ms stay at acceleration scale)', () => {
     // A velocity jump Δv shows as a second difference ≈ Δv·h; smooth motion gives a·h². With
-    // h = 0.1 ms, 1e-5 allows accelerations up to 1000 units/s² (a flame's 0.12 s rise peaks at
-    // 420/s²) and catches any velocity jump over 0.1 units/s. Exempt: a flame's scale, lean and a
-    // wisp's rise while they are invisible (opacity 0), and the first step of decline, where the
-    // bin appears (a visibility switch, not motion).
+    // h = 0.1 ms, 1e-5 allows accelerations up to 1000 units/s² and catches any velocity jump over
+    // 0.1 units/s. Flame channels are dimensionless (scale, radians); their breath response is
+    // fast: the breath's front arrives as a C¹ pulse peaking in 75 ms, whose onset accelerates the
+    // lean at ≈8,000 rad/s² (a real flame answers a gust within ≈10 ms), so they allow 1e-4
+    // (jumps over 1 rad/s, under a degree per frame, are still caught). Exempt:
+    // a flame's shape channels while it is invisible (intensity 0 at either end), and the first step
+    // of decline, where the bin appears (a visibility switch, not motion).
     const h = 0.0001;
+    const names = ['cake.x', 'cake.y', 'cake.z', 'bin.x', 'bin.y', 'bin.z', ...SCALARS, ...ARRAYS.flatMap((k) => Array.from({ length: CANDLE_COUNT }, (_, j) => `${k}[${j}]`)),
+      ...Array.from({ length: CANDLE_COUNT }, (_, j) => FLAME_KEYS.map((k) => `flame[${j}].${k}`)).flat()];
+    const base = 6 + SCALARS.length + ARRAYS.length * CANDLE_COUNT;
     for (const seq of ['host', 'accept', 'decline'] as const) {
       for (let i = 1; i < DURATIONS[seq] / h - 0.5; i++) {
         if (seq === 'decline' && i < 2) continue;
         const a = at(seq, (i - 1) * h), b = at(seq, i * h), c = at(seq, (i + 1) * h);
         const ca = channels(a), cb = channels(b), cc = channels(c);
-        const names = ['cake.x', 'cake.y', 'cake.z', 'bin.x', 'bin.y', 'bin.z', ...SCALARS, ...ARRAYS.flatMap((k) => Array.from({ length: CANDLE_COUNT }, (_, j) => `${k}[${j}]`))];
         for (let k = 0; k < cb.length; k++) {
-          const name = names[k]!;
-          const m = /^(flameScale|flameLean|flameStretch|flameOpacity)\[(\d)\]$/.exec(name);
-          if (m && Math.min(a.flameOpacity[+m[2]!]!, c.flameOpacity[+m[2]!]!) < 1e-9) continue;
-          const w = /^(?:wispRise|wispGrow)\[(\d)\]$/.exec(name);
-          if (w && Math.min(a.wispOpacity[+w[1]!]!, c.wispOpacity[+w[1]!]!) < 1e-9) continue;
+          const flame = k >= base ? Math.floor((k - base) / FLAME_KEYS.length) : -1;
+          if (flame >= 0 && Math.min(a.flames[flame]!.intensity, c.flames[flame]!.intensity) < 1e-9) continue;
+          // Contact: the buttercream starts moving with the candle the instant it is touched (the
+          // candle itself is C1 through it; its push-in progress starts at the candle's speed).
+          const p = /^press\[(\d)\]$/.exec(names[k]!);
+          if (p && Math.abs(i * h - (CANDLE_START[+p[1]!]! + CANDLE_DESCENT)) < 2 * h) continue;
           const d2 = Math.abs(ca[k]! - 2 * cb[k]! + cc[k]!);
           // Positions: the bin's 2.8-unit slide-in peaks near 1100 units/s²; allow 3000 (jumps > 0.3 units/s).
-          if (d2 >= (k < 6 ? 3e-5 : 1e-5)) throw new Error(`${seq} ${name} at ${(i * h * 1000).toFixed(1)} ms: second difference ${d2.toExponential(2)}`);
+          const limit = k < 6 ? 3e-5 : flame >= 0 ? 1e-4 : 1e-5;
+          if (d2 < limit) continue;
+          if (flame >= 0) {
+            // Large but smooth (a gust's onset)? A velocity jump's second difference scales with
+            // the step (Δv·h), smooth motion's with its square (a·h²): at h/4 a jump keeps a
+            // quarter of it, smooth motion a sixteenth.
+            const q = h / 4, t = i * h;
+            const d2q = Math.abs(channels(at(seq, t - q))[k]! - 2 * channels(at(seq, t))[k]! + channels(at(seq, t + q))[k]!);
+            if (d2 / Math.max(d2q, 1e-300) > 10) continue;
+          }
+          throw new Error(`${seq} ${names[k]} at ${(i * h * 1000).toFixed(1)} ms: second difference ${d2.toExponential(2)}`);
         }
       }
     }
   });
 
-  it('six candles lower 55 ms apart, left to right, press in a few millimetres and seat exactly', () => {
+  it('six candles lower 55 ms apart, meet the buttercream at a careful speed and are pushed in, slowing, to the seat', () => {
     expect(CANDLE_START).toHaveLength(6);
     for (let i = 1; i < CANDLE_COUNT; i++) expect(CANDLE_START[i]! - CANDLE_START[i - 1]!).toBeCloseTo(0.055, 9);
     for (let i = 0; i < CANDLE_COUNT; i++) {
       expect(at('host', CANDLE_START[i]! - 0.001).drop[i]).toBe(CANDLE_HOVER);
       expect(at('host', CANDLE_START[i]! + 0.05).drop[i]).toBeLessThan(CANDLE_HOVER);
       expect(at('host', CANDLE_SEATED[i]!).drop[i]).toBe(0);
-      expect(CANDLE_SEATED[i]).toBeLessThan(FLAME_START[i]!);
+      expect(CANDLE_SEATED[i]).toBeLessThan(IGNITE_START[i]!);
     }
-    // Descent: monotone, landing at CANDLE_LAND_SPEED; then the settle stays within 2–8 mm.
-    let prev = Infinity, press = 0, rebound = 0;
-    for (let ms = 0; ms <= 600; ms++) {
-      const d = candleDrop(ms / 1000);
-      if (ms / 1000 <= CANDLE_DESCENT) expect(d).toBeLessThanOrEqual(prev);
-      else { press = Math.min(press, d); rebound = Math.max(rebound, d); }
+    // Monotone all the way down, never below the seat (buttercream is plastic: no rebound).
+    let prev = Infinity;
+    for (let us = 0; us <= 600_000; us += 250) {
+      const d = candleDrop(us / 1e6);
+      expect(d).toBeLessThanOrEqual(prev + 1e-12);
+      expect(d).toBeGreaterThanOrEqual(0);
       prev = d;
     }
-    expect(-press).toBeGreaterThan(0.002);
-    expect(-press).toBeLessThan(0.008);
-    expect(rebound).toBeLessThan(0.002);
-    const v = (candleDrop(CANDLE_DESCENT + 1e-6) - candleDrop(CANDLE_DESCENT - 1e-6)) / 2e-6;
-    expect(v).toBeCloseTo(-CANDLE_LAND_SPEED, 3);
+    // Contact: the base reaches the surface (CANDLE.insert above the seat) at CANDLE_CONTACT_SPEED.
+    expect(candleDrop(CANDLE_DESCENT)).toBeCloseTo(CANDLE.insert, 9);
+    const v = (t: number) => (candleDrop(t + 1e-6) - candleDrop(t - 1e-6)) / 2e-6;
+    expect(v(CANDLE_DESCENT)).toBeCloseTo(-CANDLE_CONTACT_SPEED, 3);
+    expect(CANDLE_CONTACT_SPEED).toBeLessThan(0.3); // ≤ 6 cm/s: placed, not dropped
+    // Push-in: the candle slows all the way, harder the deeper it goes, and stops at the seat.
+    let lastSpeed = Infinity, lastDecel = -Infinity;
+    for (let k = 1; k < 40; k++) {
+      const t = CANDLE_DESCENT + (k / 40) * CANDLE_PRESS;
+      const speed = -v(t);
+      const decel = (v(t + 1e-4) - v(t - 1e-4)) / 2e-4;
+      expect(speed).toBeLessThan(lastSpeed);
+      expect(decel).toBeGreaterThan(lastDecel - 1e-6);
+      lastSpeed = speed;
+      lastDecel = decel;
+    }
+    expect(Math.abs(v(CANDLE_DESCENT + CANDLE_PRESS - 1e-5))).toBeLessThan(1e-3);
+    expect(CANDLE_PRESS).toBeGreaterThan(0.08);
+    expect(CANDLE_PRESS).toBeLessThan(0.2);
   });
 
-  it('flames appear only in 0.84–1.06 s as a restrained rise, never a flash', () => {
-    const end = FLAME_START[CANDLE_COUNT - 1]! + FLAME_RISE;
-    expect(end).toBeLessThanOrEqual(1.06 + 1e-9);
+  it('the press: no collar before contact, a full collar once seated; each candle takes its own fixed lean (≤ 2°)', () => {
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const contact = CANDLE_START[i]! + CANDLE_DESCENT;
+      expect(at('host', contact - 0.002).press[i]).toBe(0);
+      expect(at('host', contact - 0.002).lean[i]).toBe(0);
+      expect(at('host', contact + CANDLE_PRESS / 2).press[i]).toBeGreaterThan(0.3);
+      expect(at('host', CANDLE_SEATED[i]!).press[i]).toBe(1);
+      expect(at('host', CANDLE_SEATED[i]!).lean[i]).toBe(1);
+      expect(pressOf(CANDLE.insert)).toBe(0);
+      expect(CANDLE_LEAN[i]!.angle).toBeGreaterThanOrEqual(0.6 * DEG - 1e-9);
+      expect(CANDLE_LEAN[i]!.angle).toBeLessThanOrEqual(1.8 * DEG + 1e-9);
+    }
+    // Hand-placed, not machined: the six lean in different directions.
+    const dirs = CANDLE_LEAN.map((l) => l.azimuth);
+    for (let i = 0; i < dirs.length; i++) for (let j = i + 1; j < dirs.length; j++) expect(Math.cos(dirs[i]! - dirs[j]!)).toBeLessThan(0.99);
+    expect(pose('host-ready').press.every((p) => p === 0)).toBe(true);
+    expect(pose('guest-ready').lean.every((p) => p === 1)).toBe(true);
+  });
+
+  it('the cake takes each push: a sub-millimetre dip and tilt that rings down to exactly 0 before guest-ready', () => {
+    let dip = 0, tilt = 0;
+    const load: [number, number, number] = [0, 0, 0];
+    for (let ms = 0; ms <= DURATIONS.host * 1000; ms++) {
+      cakeLoad(ms / 1000, load);
+      dip = Math.min(dip, load[0]);
+      tilt = Math.max(tilt, Math.hypot(load[1], load[2]));
+      if (ms < (CANDLE_START[0]! + CANDLE_DESCENT) * 1000) expect(load).toEqual([0, 0, 0]);
+    }
+    expect(-dip).toBeGreaterThan(0.0005); // ≥ 0.1 mm: it gives
+    expect(-dip).toBeLessThan(0.005); // < 1 mm
+    expect(tilt).toBeLessThan(0.5 * DEG);
+    expect(tilt * 0.62).toBeLessThan(0.005); // the rim moves < 1 mm
+    expect(cakeLoad(1.25)).toEqual([0, 0, 0]);
+    expect(CAKE_LOAD.hz).toBeGreaterThan(8);
+  });
+
+  it('lit time (the melt\'s clock): 0 until a flame lights, grows with the fire\'s burn rate, freezes once it is out', () => {
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      expect(litTime('host', i, IGNITE_START[i]! - 0.001)).toBe(0);
+      expect(at('host', DURATIONS.host).litTime[i]).toBeCloseTo(GUEST_READY_LIT[i]!, 9);
+      // Seconds at full flame since it lit: less than the time since its wick caught (it grows),
+      // more than the time since it was fully grown.
+      expect(GUEST_READY_LIT[i]).toBeLessThan(DURATIONS.host - IGNITE_START[i]!);
+      expect(GUEST_READY_LIT[i]).toBeGreaterThan(DURATIONS.host - IGNITE_START[i]! - IGNITE);
+      // The melt reads the fire: the rate is the flame's output × size, exactly.
+      expect(flameScaleOf('accept', i, 0.2)).toBe(burnRate(i, 0.2, 'accept'));
+      const out = extinguishedAt(i);
+      expect(litTime('accept', i, out + 0.05)).toBeCloseTo(litTime('accept', i, DURATIONS.accept), 9);
+      expect(litTime('accept', i, out)).toBeGreaterThan(litTime('accept', i, BREATH_AT[i]!.lift));
+      expect(pose('accepted').litTime[i]).toBeCloseTo(ACCEPTED_LIT[i]!, 9);
+      expect(pose('declined').litTime[i]).toBeCloseTo(DECLINED_LIT[i]!, 9);
+      expect(pose('host-ready').litTime[i]).toBe(0);
+      let prev = -1;
+      for (let ms = 0; ms <= 1400; ms += 5) {
+        const l = litTime('accept', i, ms / 1000);
+        expect(l).toBeGreaterThanOrEqual(prev);
+        prev = l;
+      }
+      expect(flameScaleOf('accept', i, out + 0.01)).toBe(0);
+    }
+  });
+
+  it('flames catch only once their candle has seated (0.84 s on) and grow to steady by 1.28 s, never a flash', () => {
+    const end = IGNITE_START[CANDLE_COUNT - 1]! + IGNITE;
+    expect(end).toBeLessThanOrEqual(1.28 + 1e-9);
     let prev = Array.from({ length: CANDLE_COUNT }, () => 0);
     for (let i = 0; i <= 1300; i++) {
-      const f = at('host', i / 1000);
+      const t = i / 1000;
+      const f = at('host', t);
       for (let k = 0; k < CANDLE_COUNT; k++) {
-        const o = f.flameOpacity[k]!;
-        if (i / 1000 < 0.84) expect(o).toBe(0);
-        if (i / 1000 >= end) expect(o).toBe(1);
-        expect(o).toBeGreaterThanOrEqual(prev[k]! - 1e-12);
-        expect(f.flameScale[k]!).toBeLessThanOrEqual(1);
-        prev[k] = o;
+        const fl = f.flames[k]!;
+        expect(CANDLE_SEATED[k]).toBeLessThan(IGNITE_START[k]!);
+        if (t < IGNITE_START[k]!) expect(fl.intensity).toBe(0);
+        if (t >= end) { expect(fl.intensity).toBe(1); expect(fl.height).toBe(1); }
+        expect(fl.intensity).toBeGreaterThanOrEqual(prev[k]! - 1e-12);
+        expect(fl.intensity).toBeLessThanOrEqual(1);
+        expect(fl.height).toBeLessThanOrEqual(1);
+        prev[k] = fl.intensity;
       }
     }
   });
 
-  it('accept: flames go out left to right by 0.60 s; one faint wisp each, gone by 1.00 s; wicks at rest', () => {
+  it('accept: a breath from the camera side puts the flames out nearest the mouth first, each from the base up in 100–200 ms', () => {
+    // Order: the breath reaches the candle nearest the mouth first (strongest flow) and lifts its
+    // flame first; each then takes its own 110–170 ms (seeded) to go out, so neighbours may swap.
     const outAt = Array.from({ length: CANDLE_COUNT }, (_, k) => {
-      for (let i = 0; i <= 1400; i++) if (at('accept', i / 1000).flameOpacity[k] === 0) return i;
+      for (let i = 0; i <= 1400; i++) if (at('accept', i / 1000).flames[k]!.out) return i / 1000;
       return Infinity;
     });
-    for (let k = 1; k < CANDLE_COUNT; k++) expect(outAt[k - 1]).toBeLessThan(outAt[k]!);
-    expect(outAt[CANDLE_COUNT - 1]).toBeLessThanOrEqual(600);
-    expect(OUT_START[CANDLE_COUNT - 1]! + OUT_LEN).toBeLessThanOrEqual(0.6);
-    for (let i = 0; i <= 1400; i++) {
-      const f = at('accept', i / 1000);
-      for (let k = 0; k < CANDLE_COUNT; k++) {
-        expect(f.wispOpacity[k]!).toBeLessThanOrEqual(WISP_OPACITY + 1e-9);
-        if (i < 600 || i >= 1000) expect(f.wispOpacity[k]).toBe(0);
-        // While it reads (over half its peak) the wisp's foot stays on the wick: no floating smoke.
-        if (f.wispOpacity[k]! >= WISP_OPACITY / 2) expect(f.wispRise[k]!).toBeLessThan(0.03);
+    const nearest = BREATH_AT.reduce((m, b, k) => (b.peak > BREATH_AT[m]!.peak ? k : m), 0);
+    expect(Math.min(...BREATH_AT.map((b) => b.lift))).toBe(BREATH_AT[nearest]!.lift);
+    expect(Math.min(...BREATH_AT.map((b) => b.arrive))).toBe(BREATH_AT[nearest]!.arrive);
+    expect(Math.max(...outAt)).toBeLessThanOrEqual(0.45);
+    // A wave, not all at once: ≥ 100 ms from first to last.
+    expect(Math.max(...outAt) - Math.min(...outAt)).toBeGreaterThan(0.1);
+    for (let k = 0; k < CANDLE_COUNT; k++) {
+      const b = BREATH_AT[k]!;
+      expect(outAt[k]).toBeCloseTo(extinguishedAt(k), 2);
+      // Extinction from lift-off to dark: 100–200 ms, the front moving from the base up.
+      expect(extinguishedAt(k) - b.lift).toBeGreaterThanOrEqual(0.1);
+      expect(extinguishedAt(k) - b.lift).toBeLessThanOrEqual(0.2);
+      let prevCut = 0;
+      for (let t = b.lift; t < extinguishedAt(k); t += 0.002) {
+        const f = at('accept', t).flames[k]!;
+        expect(f.cut).toBeGreaterThanOrEqual(prevCut - 1e-12);
+        prevCut = f.cut;
       }
+      // Before the breath arrives: the steady flame.
+      const calm = at('accept', b.arrive - 0.001).flames[k]!;
+      expect(calm.tilt).toBe(0);
+      expect(calm.intensity).toBe(1);
     }
-    expect(at('accept', 1.4).wickLean).toBe(0);
   });
 
-  it('accept: the breath visibly bends and draws out every lit flame before it goes out', () => {
-    // Full breath at 0.25 s: every flame leans (flutter within ±FLAME_FLUTTER) and is stretched.
-    for (let ms = 250; ms <= 600; ms++) {
-      const f = at('accept', ms / 1000);
-      for (let k = 0; k < CANDLE_COUNT; k++) {
-        if (f.flameOpacity[k]! <= 0) continue;
-        expect(f.flameLean[k]!).toBeGreaterThan(1 - FLAME_FLUTTER.amount - 1e-9);
-        expect(f.flameLean[k]!).toBeLessThan(1.5 * (1 + FLAME_FLUTTER.amount) + 1e-9);
-        expect(f.flameStretch[k]!).toBeCloseTo(1, 9);
-      }
+  it('accept: before it goes out every flame bends away from the breath, stretches, thins, necks and lifts off the wick', () => {
+    for (let k = 0; k < CANDLE_COUNT; k++) {
+      const b = BREATH_AT[k]!;
+      const f = at('accept', b.lift).flames[k]!;
+      // Leaning ≥ 50° (atan of the lift-off flow over the flame's buoyant velocity), longer and thinner.
+      expect(f.tilt).toBeGreaterThan((50 * Math.PI) / 180);
+      expect(f.height).toBeGreaterThan(1.2);
+      expect(f.width).toBeLessThan(0.85);
+      expect(f.neck).toBeGreaterThan(0.5);
+      // Away from the camera (the mouth is on its side) and with a sideways part that reads on screen.
+      const towardCam = [Math.sin((20 * Math.PI) / 180), Math.cos((20 * Math.PI) / 180)];
+      const away = -(f.dirX * towardCam[0]! + f.dirZ * towardCam[1]!);
+      const side = Math.abs(f.dirX * towardCam[1]! - f.dirZ * towardCam[0]!);
+      expect(away).toBeGreaterThan(0.5);
+      expect(side).toBeGreaterThan(0.5 * away);
+      // Lifted: the base a few millimetres off the wick mid-extinction, never carried off far.
+      const mid = at('accept', b.lift + 0.4 * b.out).flames[k]!;
+      expect(mid.lift).toBeGreaterThan(0.001);
+      expect(mid.lift).toBeLessThan(0.025);
     }
-    // The lean reads in the picture plane: its sideways part is at least half its away part.
-    expect(Math.abs(LEAN.z)).toBeGreaterThan(0.5 * Math.abs(LEAN.x));
-    expect(Math.hypot(LEAN.x, LEAN.z)).toBeLessThan(0.6);
-    expect(pose('accepted').flameStretch.every((v) => v === 0)).toBe(true);
+    expect(pose('accepted').flames.every((f) => f.out)).toBe(true);
   });
 
   it('candles are numbered left to right as the shared camera sees them', () => {
@@ -274,9 +404,10 @@ describe('Birthday choreography', () => {
     })();
     const f = at('decline', closingStarts);
     expect(f.cakePos.y + CAKE_TOTAL_HEIGHT).toBeLessThan(BIN.rimTop - 0.012);
-    expect(at('decline', 1.2).flaps).toBeLessThan(0.05);
+    // v1.5: the bin's soft close: nearly shut (the damper's last gap) BIN_CLOSE.toGap after it starts.
+    expect(at('decline', FLAPS_CLOSE + BIN_CLOSE.toGap).flaps).toBeLessThan(0.05);
     expect(at('decline', 1.5).cakeVisible).toBe(false);
-    expect(at('decline', 0.2).flameOpacity.every((o) => o === 0)).toBe(true);
+    expect(at('decline', 0.2).flames.every((f) => f.out)).toBe(true);
   });
 
   it('the bin clears the stand: plan distance exceeds plate + bin radii', () => {
@@ -286,6 +417,50 @@ describe('Birthday choreography', () => {
   it('the cake with candles fits the bin opening and sits below the flaps on the liner floor', () => {
     expect(CAKE_RADIUS).toBeLessThan(BIN.opening - 0.04);
     expect(BIN.floor + CAKE_TOTAL_HEIGHT).toBeLessThan(BIN.rimTop - 0.006);
+  });
+});
+
+describe('Birthday melt (pure functions of lit time; the fire owner reads candleShortening)', () => {
+  it('is fresh at the start, capped, and the same for the same lit time', () => {
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const fresh = meltState(i, 0);
+      expect(fresh).toMatchObject({ round: 0, soften: 0, pool: 0, bead: 0, run: 0, shorten: 0, gloss: 0 });
+      expect(meltState(i, MELT_CAP)).toEqual(meltState(i, MELT_CAP + 100));
+      expect(meltState(i, 7.3)).toEqual(meltState(i, 7.3));
+      expect(meltAmount(i, MELT_CAP)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('follows real paraffin, compressed MELT_TIME_SCALE×: a run leaves the rim after 20–40 s of burning', () => {
+    expect(MELT_TIME_SCALE).toBeGreaterThan(5);
+    expect(MELT_TIME_SCALE).toBeLessThan(12);
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const c = MELT_CANDLE[i]!;
+      expect(c.runAt).toBeGreaterThanOrEqual(20);
+      expect(c.runAt).toBeLessThanOrEqual(40);
+      expect(meltState(i, (c.runAt - 0.5) / MELT_TIME_SCALE).run).toBe(0);
+      expect(meltState(i, (c.runAt + 10) / MELT_TIME_SCALE).run).toBeGreaterThan(0.002);
+      // Subtle: the run never reaches the frosting, the top burns down by a hair.
+      expect(meltState(i, MELT_CAP).run).toBeLessThan(0.45 * CANDLE.height);
+      expect(candleShortening(i, MELT_CAP)).toBeLessThanOrEqual(0.0041);
+      expect(candleShortening(i, MELT_CAP)).toBeGreaterThan(0.002);
+      // The canonical poses are nearly fresh (posters, reduced motion): no run yet.
+      expect(meltState(i, GUEST_READY_LIT[i]!).run).toBe(0);
+      expect(meltState(i, ACCEPTED_LIT[i]!).run).toBe(0);
+      // Monotone in lit time.
+      let prev = meltAmount(i, 0);
+      for (let t = 0.1; t <= MELT_CAP; t += 0.1) {
+        const m = meltAmount(i, t);
+        expect(m).toBeGreaterThanOrEqual(prev - 1e-12);
+        prev = m;
+      }
+    }
+  });
+
+  it('the candles that lean more run first (the pool spills on the low side)', () => {
+    const order = [...CANDLE_LEAN.keys()].sort((a, b) => CANDLE_LEAN[b]!.angle - CANDLE_LEAN[a]!.angle);
+    const runs = order.map((i) => MELT_CANDLE[i]!.runAt);
+    for (let k = 1; k < runs.length; k++) expect(runs[k]!).toBeGreaterThanOrEqual(runs[k - 1]! - 1e-9);
   });
 });
 
@@ -314,7 +489,7 @@ describe('Birthday builder (code-authored candles)', () => {
   const lib = plainLibrary();
   const root = buildBirthdayGeometry({ lib });
 
-  it('puts each candle on its master socket with a wick and a flame at the tip', () => {
+  it('puts each candle on its master socket with a wick and the flame\'s anchor at the tip (no flame mesh)', () => {
     for (let i = 0; i < CANDLE_COUNT; i++) {
       const id = String(i + 1).padStart(2, '0');
       const candle = root.getObjectByName(`candle_${id}`)!;
@@ -323,25 +498,20 @@ describe('Birthday builder (code-authored candles)', () => {
       expect(candle.position.y).toBeCloseTo(CANDLE.seat, 9);
       const flame = candle.getObjectByName(`flame_${id}`)!;
       expect(flame.position.y).toBeCloseTo(CANDLE.flameBase, 9);
-      const fb = box(flame);
-      const cb = box(candle);
-      // The drawn flame: FLAME_DRAW × the master's (1.5 tall, 1.45 wide), lathe a quarter wider.
-      expect(fb.max.y - fb.min.y).toBeCloseTo(FLAME.height, 3);
-      expect(FLAME.height).toBeCloseTo(CANDLE.flameHeight * FLAME_DRAW.height, 9);
-      expect(fb.max.x - fb.min.x).toBeLessThan(FLAME.radius * 2 * 1.4);
-      expect(fb.max.x - fb.min.x).toBeGreaterThan(CANDLE.flameRadius * 2 * 1.4);
+      expect(flame.children).toHaveLength(0);
       const wick = box(candle.getObjectByName(`wick_${id}`)!);
       const base = STAND_TOP + CANDLE.seat;
       expect(wick.max.y - base).toBeGreaterThan(CANDLE.wickBase + CANDLE.wickHeight - 0.002);
       expect(wick.min.y - base).toBeLessThan(CANDLE.height);
-      expect(wick.max.y).toBeLessThan(fb.min.y + CANDLE.flameHeight * 0.3);
-      expect(cb.max.y).toBeCloseTo(fb.max.y, 9);
+      // The real flame (v1.5): its cup 1 mm above the wax, the wick top inside it, its tip 14 mm up.
+      expect(FLAME.base).toBeGreaterThan(CANDLE.height);
+      expect(wick.max.y - base).toBeGreaterThan(FLAME.base);
+      expect(wick.max.y - base).toBeLessThan(FLAME.base + 0.4 * FLAME.height);
+      expect((FLAME_TOP - CANDLE.height) / 0.005).toBeCloseTo(14, 6);
     }
-    expect(FLAME_SIZE.height).toBeGreaterThan(0.9);
   });
 });
 
-/** The exported runtime GLB (pnpm models birthday), measured with gltf-transform. */
 describe('Birthday runtime GLB matches the contract', async () => {
   const doc = await createIO().read(join(import.meta.dirname, '..', 'assets', 'scenes', 'birthday', 'birthday.glb'));
   const node = (name: string) => findNode(doc, name);
@@ -445,12 +615,97 @@ describe('Birthday runtime GLB matches the contract', async () => {
     for (const n of ['cake_candle_pink', 'cake_candle_blue']) expect(mat(n).getBaseColorTexture()?.getSize()).toEqual([256, 4]);
   });
 
-  it('the default (\'vanilla\' key) is the owner’s blue theme at the master’s own roughness (no studio regrade)', () => {
+  it('the default (\'vanilla\' key) is the owner’s blue theme; buttercream, not plastic (v1.5): no clearcoat, a generated relief, roughness 0.45–0.70', async () => {
     // v1.2.1 darkened the body to #E0D3BF at roughness 0.58 for the v1.1 peach stage; removed in v1.3.
     expect(PALETTE.vanilla).toMatchObject({ body: '#B0CBFF', piping: '#FFFDFA', rosette: '#88B0F7' });
     const mat = (n: string) => doc.getRoot().listMaterials().find((m) => m.getName() === n)!;
-    expect(mat('cake_buttercream').getRoughnessFactor()).not.toBeCloseTo(0.58, 3);
-    expect(mat('cake_buttercream').getRoughnessFactor()).toBeCloseTo(mat('cake_buttercream_cocoa').getRoughnessFactor(), 6);
+    for (const n of ['cake_buttercream', 'cake_piping', 'cake_rosette']) {
+      expect(mat(n).getExtension('KHR_materials_clearcoat'), n).toBeNull();
+      expect(mat(`${n}_cocoa`).getExtension('KHR_materials_clearcoat'), `${n}_cocoa`).toBeNull();
+    }
+    // Sugar pearls stay glossy candy.
+    expect(mat('cake_pearl').getExtension('KHR_materials_clearcoat')).not.toBeNull();
+    // The body's relief and roughness come from generated maps, shared by both presets.
+    const body = mat('cake_buttercream'), cocoa = mat('cake_buttercream_cocoa');
+    expect(body.getNormalTexture()?.getSize()).toEqual([2048, 2048]);
+    expect(cocoa.getNormalTexture()).toBe(body.getNormalTexture());
+    expect(cocoa.getMetallicRoughnessTexture()).toBe(body.getMetallicRoughnessTexture());
+    expect(body.getRoughnessFactor()).toBe(1);
+    expect(body.getMetallicFactor()).toBe(0);
+    const { data, info } = await loadSharp()(body.getMetallicRoughnessTexture()!.getImage()!).raw().toBuffer({ resolveWithObject: true });
+    let lo = 1, hi = 0, sum = 0, n = 0;
+    for (let i = 0; i < data.length; i += info.channels * 7) {
+      const r = data[i + 1]! / 255;
+      lo = Math.min(lo, r); hi = Math.max(hi, r); sum += r; n++;
+    }
+    expect(lo).toBeGreaterThanOrEqual(0.44);
+    expect(hi).toBeLessThanOrEqual(0.71);
+    expect(hi - lo).toBeGreaterThan(0.15);
+    expect(sum / n).toBeGreaterThan(0.55);
+    expect(sum / n).toBeLessThan(0.62);
+    // A faint albedo finish (scraped lows and pockets a shade deeper), averaging the palette colour.
+    const finish = await loadSharp()(body.getBaseColorTexture()!.getImage()!).raw().toBuffer({ resolveWithObject: true });
+    let fs = 0, fmin = 1, fn = 0;
+    for (let i = 0; i < finish.data.length; i += finish.info.channels * 7) { const v = finish.data[i]! / 255; fs += v; fmin = Math.min(fmin, v); fn++; }
+    expect(fs / fn).toBeGreaterThan(0.98);
+    expect(fmin).toBeGreaterThan(0.93);
+    expect(cocoa.getBaseColorTexture()).toBe(body.getBaseColorTexture());
+    // A very slight sheen on the piping and rosettes, and the convexity the runtime reads.
+    for (const n of ['cake_piping', 'cake_rosette']) {
+      const sheen = mat(n).getExtension('KHR_materials_sheen') as unknown as { getSheenColorFactor(): number[] } | null;
+      expect(Math.max(...sheen!.getSheenColorFactor())).toBeLessThanOrEqual(0.15);
+    }
+    for (const name of ['frosting_cake_piping', 'frosting_cake_rosette']) {
+      const ridge = node(name).getMesh()!.listPrimitives()[0]!.getAttribute('_RIDGE');
+      expect(ridge, name).not.toBeNull();
+      const a = ridge!.getArray()!;
+      expect(Math.min(...a)).toBeLessThan(-0.3);
+      expect(Math.max(...a)).toBeGreaterThan(0.3);
+    }
+    expect(mat('cake_buttercream').getExtras()).toMatchObject({ frosting: 'body' });
+  });
+
+  it('the finished tiers are not perfect cylinders: radius drifts 1–2 % at low frequency, the top is uneven by under a millimetre', () => {
+    const body = node('frosting_cake_buttercream');
+    const toCs = worldOf(node('cake_secondary')).invert().multiply(worldOf(body));
+    const pos = body.getMesh()!.listPrimitives()[0]!.getAttribute('POSITION')!;
+    const e = [0, 0, 0];
+    // Radius of the top tier's side at mid-height, by angle (72 bins); the top surface near the sockets.
+    const yMid = ((0.4 - MASTER.cakeBottom) * CAKE_SCALE), R = 0.43 * CAKE_SCALE;
+    const bins = new Array<number>(72).fill(0), counts = new Array<number>(72).fill(0);
+    const top = (MASTER.tierTop - MASTER.cakeBottom) * CAKE_SCALE;
+    const socketY: number[][] = CANDLE_SOCKETS.map(() => []);
+    for (let i = 0; i < pos.getCount(); i++) {
+      const v = new Vector3(...(pos.getElement(i, e) as [number, number, number])).applyMatrix4(toCs);
+      const r = Math.hypot(v.x, v.z);
+      if (Math.abs(v.y - yMid) < 0.02 && Math.abs(r - R) < 0.03) {
+        const b = Math.floor(((Math.atan2(v.z, v.x) + Math.PI) / (2 * Math.PI)) * 72) % 72;
+        bins[b]! += r; counts[b]!++;
+      }
+      CANDLE_SOCKETS.forEach(([sx, sz], k) => { if (Math.hypot(v.x - sx, v.z - sz) < 0.03 && Math.abs(v.y - top) < 0.01) socketY[k]!.push(v.y); });
+    }
+    const radii = bins.map((b, k) => b / counts[k]!);
+    const mean = radii.reduce((a, b) => a + b, 0) / radii.length;
+    const drift = Math.max(...radii.map((r) => Math.abs(r / mean - 1)));
+    expect(drift).toBeGreaterThan(0.008);
+    expect(drift).toBeLessThan(0.02);
+    // Low frequency: neighbouring 5° bins differ by far less than the drift.
+    for (let k = 0; k < 72; k++) expect(Math.abs(radii[k]! - radii[(k + 1) % 72]!) / mean).toBeLessThan(0.004);
+    // The candles stand on a top within ±1 mm of the master's.
+    for (const ys of socketY) {
+      expect(ys.length).toBeGreaterThan(50);
+      const y = ys.reduce((a, b) => a + b, 0) / ys.length;
+      expect(Math.abs(y - top)).toBeLessThan(0.005);
+    }
+  });
+
+  it('the candles are re-tessellated from the master (fine enough to melt) and carry their melt profile', () => {
+    const holder = node('candle_01_wax_mesh');
+    const prim = holder.getMesh()!.listPrimitives()[0]!;
+    expect(prim.getAttribute('POSITION')!.getCount()).toBeGreaterThan(10_000);
+    const profile = prim.getAttribute('_PROFILE')!.getArray()!;
+    expect(Math.max(...profile)).toBeCloseTo(3, 6);
+    expect(Math.min(...profile)).toBe(-1);
   });
 
   it('the stand, hovering candles, the carried cake and the open bin stay inside the motion bounds and frame points', () => {

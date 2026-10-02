@@ -159,3 +159,43 @@ test('Frosting variants and the Low tier on the cake master: visible, exact roun
   }
   expect(errors).toEqual([]);
 });
+
+test('Live fire: lit flames keep the loop running; after Accept the smoke rises past the sequence, then the loop idles', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(() => {
+    const raf = window.requestAnimationFrame.bind(window);
+    (window as any).__rafCalls = 0;
+    window.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      (window as any).__rafCalls++;
+      return raf(cb);
+    };
+  });
+  const calls = () => page.evaluate(() => (window as any).__rafCalls as number);
+  await ready(page);
+  await page.getByRole('button', { name: 'Guest', exact: true }).click();
+  // Guest-ready, lit: the flames flicker (simulate), so frames keep coming (v1.5 decision: the
+  // idle check lives on a scene that idles, tests/browser/idle.spec.ts).
+  await page.waitForTimeout(500);
+  let before = await calls();
+  await page.waitForTimeout(1000);
+  expect(await calls()).toBeGreaterThan(before + 30);
+  await page.getByRole('button', { name: 'Accept' }).click();
+  await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('accepted-pose');
+  // The smoke outlives the 1.4 s sequence (to 3.8 s after the breath): still drawing just after.
+  before = await calls();
+  await page.waitForTimeout(600);
+  expect(await calls()).toBeGreaterThan(before + 10);
+  // Then nothing moves: the loop stops and stays stopped.
+  await page.waitForTimeout(2600);
+  before = await calls();
+  await page.waitForTimeout(1500);
+  expect(await calls()).toBe(before);
+  // Reduced motion at guest-ready: still flames, no frames.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await ready(page);
+  await page.getByRole('button', { name: 'Guest', exact: true }).click();
+  await page.waitForTimeout(600);
+  before = await calls();
+  await page.waitForTimeout(1200);
+  expect(await calls()).toBeLessThanOrEqual(before + 1);
+});

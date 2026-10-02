@@ -1,19 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { Box3, Matrix4, OrthographicCamera, Vector3 } from 'three';
-import type { Node } from '@gltf-transform/core';
+import { Box3, BufferAttribute, BufferGeometry, Matrix4, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
+import type { Document, Node } from '@gltf-transform/core';
 import type { KHRMaterialsVariants } from '@gltf-transform/extensions';
 import { listTextureSlots } from '@gltf-transform/functions';
-import { cameraDirection, fitCameraToBounds } from '../src/render/camera.ts';
+import { cameraDirection, fitCameraToBounds, fitPerspectiveToHero, PERSPECTIVE_FOV } from '../src/render/camera.ts';
+import { HERO_FILL, PATH_CLEARANCE } from '../src/render/framing.ts';
 import { SEAM_FRAME } from '../src/render/ballMaterial.ts';
 import {
-  BALL_AT, BALL_R, BOARD, BOARD_PIVOT, HOOP_ROOT, HOOP_SCALE, NET, NET_ENVELOPE_SLACK, netInnerRadius, netOpening, netRestRadius, newNetPose, POLE, RECOIL_LIMIT, RIM, RIM_BRACKET,
-  RIM_CENTER, RIM_HINGE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES,
+  BALL_AT, BALL_R, BOARD, BOARD_PIVOT, HOOP_PRODUCT_CM, HOOP_ROOT, HOOP_SCALE, NET, netRestRadius, POLE, RECOIL_LIMIT, RIM, RIM_BACKSTOP, RIM_BRACKET,
+  RIM_CENTER, RIM_HINGE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_CM_PER_UNIT, SPORTS_NODES, STAND, recoilPoint,
 } from '../models/sportsContract.ts';
+import { analyseNet, HoopSprings, NET_SIM, NetSim, netMeshKind, type NetLattice } from '../models/sportsNet.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
+import { BOUNCE, floorImpulse, GRAVITY, MS, ROLL_DECEL, squashFor } from '../src/scenes/sports/ballPhysics.ts';
 import {
-  CONTACT_AT, DURATIONS, frameFor, GRAVITY, HOOP_SETTLED, IMPACTS, LANDINGS, MADE_LAND_AT, MISS_LAND_AT, MISS_POINT, NET_DRAG, NET_EXIT, newFrame, PASS_LAND_AT, RELEASE_AT,
-  ROLLS, sampleSequence, SHOT_AXES, SHOT_BACKSPIN, SKID, SQUASH, type SportsFrame,
+  CONTACT_AT, CONTACTS, DURATIONS, frameFor, GUEST_ROT, MADE_APEX, MISS_LAND, MISS_OFFSET, MISS_POINT, NET_KEEP, NET_PASSAGE, newFrame, RELEASE_AT, REST, REST_AT,
+  sampleSequence, sampleTrack, SHOT_AXES, SHOT_BACKSPIN, type SportsFrame,
 } from '../src/scenes/sports/sequences.ts';
 import * as sportsModel from '../models/sports.ts';
 import { farLayerShade, NET_FAR_SHADE, SPORTS_WALL_Z } from '../models/sports.ts';
@@ -21,35 +24,209 @@ import { COVE_RADIUS } from '../src/render/studio.ts';
 import { BLEND_MARGIN, blendClearance, hoopDistance, sportsFramePoints, sportsInterruptCut } from '../src/scenes/sports/index.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
-const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
+const SEQS = ['host', 'accept', 'decline'] as const;
+/** Sample a sequence's physics at t, tails included. */
+const at = (seq: SequenceName, t: number) => sampleTrack(seq, t, newFrame());
 const pose = (p: CanonicalPose) => frameFor(p, newFrame());
 const close = (a: SportsFrame, b: SportsFrame, eps = 1e-6) => {
   expect(a.ballPos.distanceTo(b.ballPos)).toBeLessThan(eps);
   expect(a.ballRot.angleTo(b.ballRot)).toBeLessThan(eps);
-  expect(a.net.active).toBe(b.net.active);
-  for (const k of ['squash', 'ballDrop', 'rimPitch', 'boardPitch'] as const) expect(Math.abs(a[k] - b[k]), k).toBeLessThan(eps);
+  expect(Math.abs(a.squash - b.squash)).toBeLessThan(eps);
 };
 const horizontal = (p: Vector3, c: Vector3) => Math.hypot(p.x - c.x, p.z - c.z);
+const toCm = (su: number) => su * SPORTS_CM_PER_UNIT;
 
 /** Board as a box in world space. */
 const BOARD_BOX = new Box3(
   new Vector3(HOOP_ROOT.x - BOARD.width / 2, BOARD.centerY - BOARD.height / 2, HOOP_ROOT.z + BOARD.front - BOARD.thickness),
   new Vector3(HOOP_ROOT.x + BOARD.width / 2, BOARD.centerY + BOARD.height / 2, HOOP_ROOT.z + BOARD.front),
 );
+const BASE_BOX = new Box3(
+  new Vector3(HOOP_ROOT.x - STAND.base.halfWidth, 0, HOOP_ROOT.z + STAND.base.back),
+  new Vector3(HOOP_ROOT.x + STAND.base.halfWidth, STAND.base.height, HOOP_ROOT.z + STAND.base.front),
+);
+const poleDistance = (p: Vector3) => {
+  const a = HOOP_ROOT.clone().add(POLE.foot), b = HOOP_ROOT.clone().add(POLE.head), d = b.clone().sub(a);
+  const u = Math.min(1, Math.max(0, p.clone().sub(a).dot(d) / d.lengthSq()));
+  return p.clone().sub(a).addScaledVector(d, -u).length();
+};
 
-describe('Sports choreography', () => {
-  it('each sequence starts and ends exactly on its canonical poses', () => {
-    close(at('host', 0), pose('host-ready'));
-    close(at('host', DURATIONS.host), pose('guest-ready'));
-    for (const seq of ['accept', 'decline'] as const) close(at(seq, 0), pose('guest-ready'));
-    close(at('accept', DURATIONS.accept), pose('accepted'));
-    close(at('decline', DURATIONS.decline), pose('declined'));
+/** Velocity and acceleration by central differences (1 ms). */
+const H = 1e-3;
+const pos = (seq: SequenceName, t: number) => at(seq, t).ballPos;
+const vel = (seq: SequenceName, t: number) => pos(seq, t + H).sub(pos(seq, t - H)).divideScalar(2 * H);
+const acc = (seq: SequenceName, t: number) => pos(seq, t + H).add(pos(seq, t - H)).sub(pos(seq, t).multiplyScalar(2)).divideScalar(H * H);
+/** World angular velocity (rad/s) from orientations 1 ms apart (central difference). */
+const omega = (seq: SequenceName, t: number) => {
+  const q0 = at(seq, t - H).ballRot, q1 = at(seq, t + H).ballRot;
+  const d = q1.clone().multiply(q0.clone().invert());
+  if (d.w < 0) d.set(-d.x, -d.y, -d.z, -d.w);
+  const s = Math.sqrt(Math.max(0, 1 - d.w * d.w));
+  const angle = 2 * Math.atan2(s, d.w);
+  return s < 1e-12 ? new Vector3() : new Vector3(d.x, d.y, d.z).divideScalar(s).multiplyScalar(angle / (2 * H));
+};
+/** True while t lies in (or within a ms of) a floor contact or the net. */
+const inContact = (seq: SequenceName, t: number) => CONTACTS[seq].some((c) => t > c.at - 2 * H && t < c.at + BOUNCE.contactTime + 2 * H);
+const inNet = (seq: SequenceName, t: number) => seq === 'accept' && t > CONTACT_AT - 2 * H && t < NET_PASSAGE.exitAt + 2 * H;
+const lastContact = (seq: SequenceName) => CONTACTS[seq][CONTACTS[seq].length - 1]!;
+
+describe('Sports v1.5 proportions: one real mini hoop system', () => {
+  it('ball, rim, board, height and net have the product\'s proportions', () => {
+    // A 7" mini ball in a 14.5" rim: ball / rim 0.49 (regulation 0.52), rim / ball 2.05.
+    expect(toCm(2 * BALL_R)).toBeCloseTo(18, 6);
+    expect(toCm(2 * RIM.innerRadius)).toBeCloseTo(HOOP_PRODUCT_CM.rimInner, 6);
+    expect((2 * BALL_R) / (2 * RIM.innerRadius)).toBeGreaterThan(0.45);
+    expect((2 * BALL_R) / (2 * RIM.innerRadius)).toBeLessThan(0.53);
+    // The 4 ft setting, measured to the top of the ring.
+    expect(toCm(RIM_LOCAL.y + RIM.tube)).toBeCloseTo(121.92, 6);
+    // A regulation hoop's silhouette: rim height / board width 1.63 (regulation 1.67).
+    expect(RIM_LOCAL.y / BOARD.width).toBeGreaterThan(1.55);
+    expect(RIM_LOCAL.y / BOARD.width).toBeLessThan(1.75);
+    // The master board at this rim: 74.9 × 58.9 cm, width 2.03 × the rim (a mini hoop's).
+    expect(toCm(BOARD.width)).toBeCloseTo(74.9, 0);
+    expect(toCm(BOARD.height)).toBeCloseTo(58.9, 0);
+    // The pole below the board is ≥ 1.8 × the board's height (the old stand: 1.13).
+    expect((BOARD.centerY - BOARD.height / 2) / BOARD.height).toBeGreaterThan(1.8);
+    // The net hangs 0.855 × the rim (regulation 0.875).
+    expect(NET.depth / (2 * RIM.innerRadius)).toBeGreaterThan(0.8);
+    expect(NET.depth / (2 * RIM.innerRadius)).toBeLessThan(0.9);
   });
 
-  it('has no discontinuities in position or spin (1 ms samples)', () => {
-    for (const seq of ['host', 'accept', 'decline'] as const) {
+  it('a portable stand: the base behind the board, the pole leaning forward, the rim overhanging the base', () => {
+    expect((POLE.lean * 180) / Math.PI).toBeGreaterThan(10);
+    expect((POLE.lean * 180) / Math.PI).toBeLessThan(18);
+    // The base's front stays behind the board's back; the rim's centre is ≥ 60 cm in front of it.
+    expect(STAND.base.front).toBeLessThan(BOARD.front - BOARD.thickness);
+    expect(toCm(RIM_LOCAL.z - STAND.base.front)).toBeGreaterThan(60);
+    // The pole's head reaches the arms behind the board; its foot sits on the base.
+    expect(POLE.foot.z).toBeGreaterThan(STAND.base.back);
+    expect(POLE.foot.z).toBeLessThan(STAND.base.front);
+  });
+
+  it('the rest net is narrower than the ball (so the ball must open it) and starts at the rim', () => {
+    expect(Math.min(...NET.profile.map(([, r]) => r))).toBeLessThan(BALL_R);
+    expect(Math.abs(netRestRadius(0) - RIM.innerRadius)).toBeLessThan(0.006);
+  });
+});
+
+describe('Sports ball physics (ballPhysics.ts)', () => {
+  it('standard gravity in scene units: 9.81 m/s² at 36 cm per unit', () => {
+    expect(GRAVITY).toBeCloseTo(27.25, 2);
+    expect(SPORTS_CM_PER_UNIT).toBeCloseTo(36, 9);
+  });
+
+  it('a 1.8 m drop rebounds to 1.2–1.4 m (FIBA) and compresses the ball 10 %', () => {
+    const drop = 180 / SPORTS_CM_PER_UNIT;
+    const vIn = Math.sqrt(2 * GRAVITY * drop);
+    const v = new Vector3(0, -vIn, 0), w = new Vector3();
+    const up = floorImpulse(v, w);
+    const rebound = (up * up) / (2 * GRAVITY) * SPORTS_CM_PER_UNIT;
+    expect(rebound).toBeGreaterThan(120);
+    expect(rebound).toBeLessThan(140);
+    expect(BOUNCE.restitution).toBeGreaterThanOrEqual(0.76);
+    expect(BOUNCE.restitution).toBeLessThanOrEqual(0.84);
+    expect(squashFor(vIn)).toBeCloseTo(0.1, 2);
+    expect(squashFor(5.94 * MS)).toBeCloseTo(0.1, 9);
+  });
+
+  it('spin couples through friction: backspin checks up, topspin runs on, no spin leaves rolling', () => {
+    const bounce = (spinR: number) => {
+      // Moving along +x, falling at 4 su/s; spinR = ω·R about −z (positive = topspin).
+      const v = new Vector3(2, -4, 0), w = new Vector3(0, 0, -spinR / BALL_R);
+      floorImpulse(v, w);
+      return { v: v.x, roll: -w.z * BALL_R };
+    };
+    const none = bounce(0), back = bounce(-3), top = bounce(3);
+    expect(back.v).toBeLessThan(none.v - 0.5);
+    expect(top.v).toBeGreaterThan(none.v + 0.5);
+    // No spin: grips and leaves nearly rolling (e_t reverses the contact point a little).
+    expect(Math.abs(none.v - none.roll) / none.v).toBeLessThan(0.3);
+    // Angular momentum about the contact point is conserved by a gripping bounce.
+    const L = (v: number, r: number) => v + BOUNCE.inertia * r;
+    expect(L(back.v, back.roll)).toBeCloseTo(L(2, -3), 9);
+  });
+
+  it('every floor contact rebounds at e × the impact speed, until a rebound would rise under 1 mm', () => {
+    for (const seq of SEQS) {
+      const cs = CONTACTS[seq];
+      expect(cs.length, seq).toBeGreaterThan(5);
+      expect(cs.length, seq).toBeLessThan(40);
+      for (const [i, c] of cs.entries()) {
+        if (i < cs.length - 1) expect(c.rebound, `${seq} ${i}`).toBeCloseTo(BOUNCE.restitution * c.speed, 9);
+        // Successive impacts arrive at the speed the last rebound left with.
+        if (i > 0) expect(c.speed, `${seq} ${i}`).toBeCloseTo(cs[i - 1]!.rebound, 6);
+      }
+      expect(lastContact(seq).rebound).toBe(0);
+      expect(BOUNCE.restitution * lastContact(seq).speed).toBeLessThan(BOUNCE.minBounceSpeed);
+    }
+  });
+
+  it('squash follows the impact, along the floor normal, and the drawn ball never enters or hovers off the floor', () => {
+    for (const seq of SEQS) {
+      let peak = 0;
+      for (let t = 0; t <= REST_AT[seq]; t += 0.0005) {
+        const f = at(seq, t);
+        expect(f.squash).toBeGreaterThanOrEqual(0);
+        expect(f.squash).toBeLessThanOrEqual(0.1);
+        peak = Math.max(peak, f.squash);
+        // The drawn bottom (vertical scale 1 − squash about the centre) is never below the floor…
+        const bottom = f.ballPos.y - BALL_R * (1 - f.squash);
+        expect(bottom, `${seq} ${t.toFixed(4)}`).toBeGreaterThanOrEqual(-1e-5);
+        // …and while it is squashed it is exactly on it (no hover during a contact).
+        if (f.squash > 1e-4) expect(bottom, `${seq} ${t.toFixed(4)}`).toBeLessThan(1e-5);
+      }
+      expect(peak, seq).toBeCloseTo(Math.max(...CONTACTS[seq].map((c) => c.squash)), 2);
+    }
+    // The hardest impact (the airball's first) compresses ≈ 8 %; small hops barely at all.
+    expect(CONTACTS.decline[0]!.squash).toBeGreaterThan(0.07);
+    expect(CONTACTS.decline[0]!.squash).toBeLessThan(0.1);
+  });
+
+  it('after the last bounce the ball rolls without sliding and decelerates by rolling resistance to rest', () => {
+    for (const seq of SEQS) {
+      const from = lastContact(seq).at + BOUNCE.contactTime + 0.05;
+      let rolling = 0;
+      for (let t = from; t < REST_AT[seq] - 0.01; t += 0.005) {
+        const v = vel(seq, t).setY(0);
+        const w = omega(seq, t);
+        const expected = new Vector3(0, 1, 0).cross(v).divideScalar(BALL_R);
+        expect(w.distanceTo(expected), `${seq} ${t.toFixed(3)}`).toBeLessThan(0.05 * Math.max(1, expected.length()));
+        if (v.length() > 0.01) {
+          rolling++;
+          expect(acc(seq, t).setY(0).length(), `${seq} ${t.toFixed(3)}`).toBeCloseTo(ROLL_DECEL, 1);
+        }
+      }
+      // The airball's backspin all but stopped it at its first bounce: it barely rolls at all.
+      if (seq === 'decline') expect(REST_AT[seq] - lastContact(seq).at).toBeLessThan(0.3);
+      else expect(rolling, seq).toBeGreaterThan(3);
+      // At rest: no motion at all.
+      expect(pos(seq, REST_AT[seq] + 1).distanceTo(pos(seq, REST_AT[seq]))).toBe(0);
+    }
+  });
+});
+
+describe('Sports choreography', () => {
+  it('each sequence starts on its canonical pose and its physics comes to rest exactly on the next', () => {
+    close(at('host', 0), pose('host-ready'));
+    close(at('host', REST_AT.host), pose('guest-ready'));
+    for (const seq of ['accept', 'decline'] as const) close(at(seq, 0), pose('guest-ready'));
+    close(at('accept', REST_AT.accept), pose('accepted'));
+    close(at('decline', REST_AT.decline), pose('declined'));
+    // The director samples [0, duration]; the rest (the tail) plays in the scene's continuous channel.
+    for (const seq of SEQS) {
+      close(sampleSequence(seq, DURATIONS[seq] + 5, newFrame()), at(seq, DURATIONS[seq]));
+      expect(REST_AT[seq]).toBeGreaterThan(DURATIONS[seq]);
+      expect(REST_AT[seq]).toBeLessThan(8);
+    }
+    // The pass comes to rest exactly on the guest spot, in the seam frame's orientation.
+    expect(REST.guest.distanceTo(BALL_AT.guest)).toBeLessThan(1e-6);
+    expect(pose('guest-ready').ballRot.angleTo(GUEST_ROT)).toBeLessThan(1e-6);
+  });
+
+  it('has no discontinuities in position or spin (1 ms samples, tails included)', () => {
+    for (const seq of SEQS) {
       let prev = at(seq, 0);
-      for (let i = 1; i <= DURATIONS[seq] * 1000; i++) {
+      for (let i = 1; i <= REST_AT[seq] * 1000; i++) {
         const cur = at(seq, i / 1000);
         expect(cur.ballPos.distanceTo(prev.ballPos)).toBeLessThan(0.02);
         expect(cur.ballRot.angleTo(prev.ballRot)).toBeLessThan(0.03);
@@ -61,419 +238,254 @@ describe('Sports choreography', () => {
   it('every Accept passes through the rim centre at the contact beat without touching the ring', () => {
     expect(at('accept', CONTACT_AT).ballPos.distanceTo(RIM_CENTER)).toBeLessThan(1e-6);
     let apex = 0;
-    for (let i = 0; i <= 1700; i++) {
+    for (let i = 0; i <= REST_AT.accept * 1000; i++) {
       const p = at('accept', i / 1000).ballPos;
       apex = Math.max(apex, p.y);
-      // Wherever the ball could reach the ring (its height band, near the hoop), it stays inside.
       if (Math.abs(p.y - RIM_CENTER.y) < BALL_R + RIM.tube && horizontal(p, RIM_CENTER) < RIM.innerRadius + BALL_R + RIM.tube + 0.05) {
         expect(horizontal(p, RIM_CENTER) + BALL_R).toBeLessThan(RIM.innerRadius - RIM.tube + 1e-6);
       }
     }
     expect(apex).toBeGreaterThan(RIM_CENTER.y + 0.6);
+    expect(apex).toBeCloseTo(MADE_APEX, 3);
   });
 
   it('every Decline visibly misses: never within a ball-width of the ring near rim height', () => {
-    for (let i = 0; i <= 1600; i++) {
+    for (let i = 0; i <= REST_AT.decline * 1000; i++) {
       const p = at('decline', i / 1000).ballPos;
       if (Math.abs(p.y - RIM_CENTER.y) < 0.5) expect(horizontal(p, RIM_CENTER)).toBeGreaterThan(RIM.innerRadius + 2 * BALL_R + 0.1);
     }
   });
 
-  it('the ball never enters the floor, the backboard or the pole', () => {
-    const pole = new Vector3(HOOP_ROOT.x, 0, HOOP_ROOT.z + POLE.z);
-    for (const seq of ['host', 'accept', 'decline'] as const) {
-      for (let i = 0; i <= DURATIONS[seq] * 1000; i++) {
+  it('the ball never enters the floor, the backboard, the pole or the base', () => {
+    for (const seq of SEQS) {
+      for (let i = 0; i <= REST_AT[seq] * 1000; i++) {
         const p = at(seq, i / 1000).ballPos;
-        expect(p.y).toBeGreaterThanOrEqual(BALL_R - 1e-9);
-        expect(BOARD_BOX.distanceToPoint(p)).toBeGreaterThan(BALL_R);
-        if (p.y < POLE.top) expect(horizontal(p, pole)).toBeGreaterThan(BALL_R + POLE.radius * 1.2);
-        if (p.y < BALL_R + 0.07) expect(horizontal(p, pole)).toBeGreaterThan(BALL_R + POLE.baseRadius - 0.02);
+        expect(p.y).toBeGreaterThanOrEqual(BALL_R * (1 - 0.1) - 1e-9);
+        expect(BOARD_BOX.distanceToPoint(p), `${seq} board`).toBeGreaterThan(BALL_R);
+        expect(BASE_BOX.distanceToPoint(p), `${seq} base`).toBeGreaterThan(BALL_R + 0.1);
+        expect(poleDistance(p), `${seq} pole`).toBeGreaterThan(BALL_R + POLE.radius + 0.05);
       }
     }
   });
 
-  it('the hoop moves only for the made shot, from the contact beat, and is at rest at the end', () => {
-    for (const seq of ['host', 'decline'] as const) {
-      for (let i = 0; i <= DURATIONS[seq] * 1000; i += 5) {
-        const f = at(seq, i / 1000);
-        expect(f.net.active).toBe(false);
-        expect(f.rimPitch).toBe(0);
-        expect(f.boardPitch).toBe(0);
-      }
-    }
-    expect(at('accept', CONTACT_AT - 0.001).net.active).toBe(false);
-    expect(at('accept', CONTACT_AT + 0.06).net.active).toBe(true);
-    for (const t of [CONTACT_AT + HOOP_SETTLED + 1e-9, DURATIONS.accept]) {
-      const f = at('accept', t);
-      expect(f.net.active).toBe(false);
-      expect(f.rimPitch).toBe(0);
-      expect(f.boardPitch).toBe(0);
-    }
-  });
-
-  it('the made ball passes through the swishing net without touching a cord (ball-following bulge)', () => {
-    // Every net vertex sits at or outside its measured envelope less NET_ENVELOPE_SLACK (the GLB
-    // test below); the deformed envelope, so reduced, must clear the ball's cross-section at every
-    // drawn row height, in every direction, with a visible gap.
-    let minGap = Infinity;
-    for (let i = Math.round(CONTACT_AT * 1000); i <= Math.round((CONTACT_AT + HOOP_SETTLED) * 1000); i++) {
-      const n = at('accept', i / 1000).net;
-      if (!n.active) continue;
-      for (let a = 0; a < 48; a++) {
-        const ux = Math.cos((a / 48) * Math.PI * 2), uz = Math.sin((a / 48) * Math.PI * 2);
-        for (let r = 0; r <= 120; r++) {
-          const t = r / 120;
-          const dy = -t * NET.depth * (1 + n.stretch) - n.ball.y;
-          if (Math.abs(dy) >= BALL_R) continue;
-          const c = Math.sqrt(BALL_R * BALL_R - dy * dy);
-          const rr = netInnerRadius(t, ux, uz, n) - NET_ENVELOPE_SLACK;
-          minGap = Math.min(minGap, Math.hypot(rr * ux - n.ball.x, rr * uz - n.ball.z) - c);
-        }
-      }
-    }
-    expect(minGap).toBeGreaterThan(0.005);
-  });
-
-  it('the swish is a bulge that travels with the ball, then a rebound that settles', () => {
-    const fr = newNetPose();
-    // At rest nothing moves; the top row (the hooks) never moves.
-    for (let t = 0; t <= 1; t += 0.05) expect(netOpening(t, 1, 0, fr)).toBe(0);
-    // Inside the net the opening peaks near the ball's depth and is zero a ball-width away from it.
-    for (const k of [0.04, 0.08, 0.12]) {
-      const n = at('accept', CONTACT_AT + k).net;
-      expect(netOpening(0, 1, 0, n)).toBe(0);
-      const depthOfBall = -n.ball.y / (NET.depth * (1 + n.stretch));
-      let best = 0, bestT = 0;
-      for (let t = 0; t <= 1; t += 0.005) {
-        const o = netOpening(t, -n.ball.x, -n.ball.z, n) + netOpening(t, n.ball.z, -n.ball.x, n);
-        if (o > best) { best = o; bestT = t; }
-      }
-      expect(best).toBeGreaterThan(0.04);
-      if (depthOfBall < 0.9) expect(Math.abs(bestT - depthOfBall)).toBeLessThan(0.2);
-      // Rows well above the ball are back on their rest envelope.
-      const above = depthOfBall - (BALL_R + 0.45) / NET.depth;
-      if (above > 0) expect(netOpening(above, 1, 0, n)).toBe(0);
-    }
-    // Once the ball's top has left the bottom (NET_EXIT) the lower rows pull in past rest: the rebound.
-    expect(pos('accept', CONTACT_AT + NET_EXIT).y + BALL_R).toBeCloseTo(RIM_CENTER.y - NET.depth, 6);
-    expect(at('accept', CONTACT_AT + NET_EXIT - 0.001).net.snap).toBe(0);
-    let snap = 0;
-    for (let k = NET_EXIT; k < HOOP_SETTLED; k += 0.005) snap = Math.max(snap, at('accept', CONTACT_AT + k).net.snap);
-    expect(snap).toBeGreaterThan(0.015);
-  });
-
-  it('the made ball lands after leaving the net, bounces once and settles below/beside the hoop', () => {
-    let bounces = 0, rising = false, prevY = RIM_CENTER.y;
-    for (let i = Math.round(CONTACT_AT * 1000); i <= 1700; i++) {
-      const y = at('accept', i / 1000).ballPos.y;
-      if (y > prevY + 1e-9 && !rising) { bounces++; rising = true; }
-      if (y < prevY - 1e-9) rising = false;
-      prevY = y;
-    }
-    expect(bounces).toBe(1);
-    expect(horizontal(BALL_AT.made, RIM_CENTER)).toBeLessThan(0.7);
+  it('the made ball leaves the net, bounces lower each time and comes to rest in front of the hoop', () => {
+    const cs = CONTACTS.accept;
+    expect(cs[0]!.at).toBeGreaterThan(NET_PASSAGE.exitAt);
+    for (let i = 1; i < cs.length; i++) expect(cs[i]!.speed).toBeLessThan(cs[i - 1]!.speed);
+    // Under the rim, then out towards the camera, clear of the base.
+    expect(horizontal(cs[0]!.point, RIM_CENTER)).toBeLessThan(0.4);
+    expect(REST.made.z).toBeGreaterThan(cs[0]!.point.z);
+    expect(BASE_BOX.distanceToPoint(REST.made)).toBeGreaterThan(1.5);
   });
 });
 
-/** Velocity and acceleration by central differences (1 ms). */
-const H = 1e-3;
-const pos = (seq: SequenceName, t: number) => at(seq, t).ballPos;
-const vel = (seq: SequenceName, t: number) => pos(seq, t + H).sub(pos(seq, t - H)).divideScalar(2 * H);
-const acc = (seq: SequenceName, t: number) => pos(seq, t + H).add(pos(seq, t - H)).sub(pos(seq, t).multiplyScalar(2)).divideScalar(H * H);
-const DOWN_G = () => new Vector3(0, -GRAVITY, 0);
-/** Ball centre in the shared camera's view plane (orthographic: equal to stage units). */
-const screen = (p: Vector3) => {
-  const camera = new OrthographicCamera();
-  fitCameraToBounds(camera, SPORTS_BOUNDS, 1, undefined, sportsFramePoints());
-  const q = p.clone().applyMatrix4(camera.matrixWorldInverse);
-  return new Vector3(q.x, q.y, 0);
-};
-
-describe('Sports ballistics: one gravity, no stalls, bounded net drag', () => {
-  it('the made ball keeps moving through the rim: no stall at the contact beat', () => {
+describe('Sports ballistics: one gravity, no stalls, a bounded net drag', () => {
+  it('the made ball keeps moving through the rim and the net: no stall', () => {
     const before = vel('accept', CONTACT_AT - 2 * H), after = vel('accept', CONTACT_AT + 2 * H);
-    // The ball enters the net with the arc's own velocity (it used to drop from −6 to 0 u/s in 1 ms).
     expect(after.distanceTo(before)).toBeLessThan(0.2);
     expect(before.y).toBeLessThan(-5);
-    // Through the net and down to the floor it never slows below the net's pass-through speed.
-    for (let t = CONTACT_AT; t < MADE_LAND_AT - 2 * H; t += H) expect(vel('accept', t).length()).toBeGreaterThan(0.45 * before.length());
-    // Per 60 fps frame it keeps covering ground after contact (it used to sit in the rim ~6 frames).
-    for (let i = 0; i < 6; i++) {
-      const t = CONTACT_AT + i / 60;
-      expect(pos('accept', t + 1 / 60).distanceTo(pos('accept', t))).toBeGreaterThan(0.05);
-    }
+    for (let t = CONTACT_AT; t < CONTACTS.accept[0]!.at - 2 * H; t += H) expect(vel('accept', t).length()).toBeGreaterThan(0.45 * before.length());
+    // The net checks the fall to NET_KEEP of the entry speed and turns the drift back out.
+    expect(NET_PASSAGE.exit.y / NET_PASSAGE.entry.y).toBeCloseTo(NET_KEEP, 1);
+    expect(NET_PASSAGE.exit.z).toBeGreaterThan(0);
   });
 
-  it('after release every flight falls under one gravity; only the net adds a bounded drag', () => {
-    expect(NET_DRAG).toBeLessThan(2.5 * GRAVITY);
-    const flights: [SequenceName, number, number][] = [['host', 0.2, PASS_LAND_AT], ['accept', RELEASE_AT, MADE_LAND_AT], ['decline', RELEASE_AT, MISS_LAND_AT]];
-    for (const [seq, t0, t1] of flights) {
-      for (let t = t0 + 2 * H; t <= t1 - 2 * H; t += H) {
-        const a = acc(seq, t);
-        const inNet = seq === 'accept' && t > CONTACT_AT - 2 * H && t < CONTACT_AT + NET_EXIT + 2 * H;
-        if (inNet) {
-          expect(a.clone().sub(DOWN_G()).length()).toBeLessThanOrEqual(NET_DRAG + 1e-3);
-          expect(a.length()).toBeLessThanOrEqual(GRAVITY + NET_DRAG);
-        } else {
-          // Free flight, the airball included past its miss point: exactly the shared gravity.
-          expect(a.distanceTo(DOWN_G())).toBeLessThan(0.05);
-        }
-      }
-    }
-  });
-
-  it('bounces and the catch hop fall under the same gravity', () => {
-    const hops: [SequenceName, number, number][] = [['host', PASS_LAND_AT, DURATIONS.host], ['accept', MADE_LAND_AT, DURATIONS.accept], ['decline', MISS_LAND_AT, DURATIONS.decline]];
-    for (const [seq, t0, t1] of hops) {
+  it('after release every flight falls under standard gravity; only the net adds a bounded drag', () => {
+    const g = new Vector3(0, -GRAVITY, 0);
+    for (const seq of SEQS) {
       let airborne = 0;
-      for (let t = t0 + 2 * H; t <= t1 - 2 * H; t += H) {
-        if (Math.min(pos(seq, t - H).y, pos(seq, t).y, pos(seq, t + H).y) <= BALL_R + 1e-9) continue;
+      for (let t = RELEASE_AT + 2 * H; t < CONTACTS[seq].at(-1)!.at; t += H) {
+        if (inContact(seq, t)) continue;
+        const a = acc(seq, t);
+        if (inNet(seq, t)) {
+          // The snug net checks the ball at up to ≈ 2.6 g.
+          expect(a.distanceTo(g)).toBeLessThan(3 * GRAVITY);
+          continue;
+        }
         airborne++;
-        expect(acc(seq, t).y).toBeCloseTo(-GRAVITY, 1);
+        expect(a.distanceTo(g), `${seq} ${t.toFixed(3)}`).toBeLessThan(0.05);
       }
-      expect(airborne).toBeGreaterThan(50);
+      expect(airborne, seq).toBeGreaterThan(400);
     }
   });
 
   it('the gather hands the flight a moving ball: the release is not a step from rest', () => {
     for (const seq of ['accept', 'decline'] as const) {
-      // One-sided velocities right at the release (10 µs steps).
       const e = 1e-5;
       const pre = pos(seq, RELEASE_AT - e).sub(pos(seq, RELEASE_AT - 2 * e)).divideScalar(e);
       const post = pos(seq, RELEASE_AT + 2 * e).sub(pos(seq, RELEASE_AT + e)).divideScalar(e);
-      // Same horizontal velocity on both sides of the release, and already rising fast.
       expect(Math.hypot(pre.x - post.x, pre.z - post.z)).toBeLessThan(0.2);
       expect(pre.y).toBeGreaterThan(0.4 * post.y);
-      // Never parked mid-air: once off the floor it only speeds up until it leaves.
       for (let t = RELEASE_AT - 0.08; t < RELEASE_AT - 0.01; t += 0.005) expect(vel(seq, t + 0.005).y).toBeGreaterThan(vel(seq, t).y);
     }
   });
-
-  it('landing times and landing spots are derived from the curves', () => {
-    for (const [seq, landAt, land] of [['accept', MADE_LAND_AT, LANDINGS.made], ['decline', MISS_LAND_AT, LANDINGS.missed]] as const) {
-      expect(pos(seq, landAt).distanceTo(land)).toBeLessThan(1e-6);
-      expect(pos(seq, landAt - 0.01).y).toBeGreaterThan(BALL_R + 0.04);
-    }
-    // Both balls land and then roll on towards their rest spots (no slide back).
-    expect(horizontal(BALL_AT.made, LANDINGS.made)).toBeGreaterThan(0.15);
-    expect(horizontal(BALL_AT.missed, LANDINGS.missed)).toBeGreaterThan(0.15);
-    expect(horizontal(BALL_AT.missed, BALL_AT.guest)).toBeGreaterThan(horizontal(LANDINGS.missed, BALL_AT.guest));
-  });
 });
 
-/** World angular velocity (rad/s) from orientations 1 ms apart (central difference). */
-const omega = (seq: SequenceName, t: number) => {
-  const q0 = at(seq, t - H).ballRot, q1 = at(seq, t + H).ballRot;
-  const d = q1.clone().multiply(q0.clone().invert());
-  if (d.w < 0) d.set(-d.x, -d.y, -d.z, -d.w);
-  const s = Math.sqrt(Math.max(0, 1 - d.w * d.w));
-  const angle = 2 * Math.atan2(s, d.w);
-  return s < 1e-12 ? new Vector3() : new Vector3(d.x, d.y, d.z).divideScalar(s).multiplyScalar(angle / (2 * H));
-};
-const hvel = (seq: SequenceName, t: number) => vel(seq, t).setY(0);
-const REV = 2 * Math.PI;
-
-describe('Sports v1.2 spin, squash and hoop recoil', () => {
+describe('Sports spin', () => {
   it('the shots leave with real backspin (2–3 rev/s) about their roll axes', () => {
-    for (const [seq, rev, t1] of [['accept', SHOT_BACKSPIN.made, CONTACT_AT], ['decline', SHOT_BACKSPIN.missed, MISS_LAND_AT]] as const) {
+    for (const [seq, rev, t1] of [['accept', SHOT_BACKSPIN.made, CONTACT_AT], ['decline', SHOT_BACKSPIN.missed, CONTACTS.decline[0]!.at]] as const) {
       expect(rev).toBeGreaterThanOrEqual(2);
       expect(rev).toBeLessThanOrEqual(3);
       for (let t = RELEASE_AT + 0.02; t < t1 - 0.02; t += 0.05) {
-        const w = omega(seq, t);
-        // Backspin: about −(up × direction of travel), i.e. the top of the ball turns back.
-        expect(w.dot(SHOT_AXES[seq]) / REV, `${seq} ${t.toFixed(2)}`).toBeCloseTo(-rev, 2);
+        expect(omega(seq, t).dot(SHOT_AXES[seq]) / (2 * Math.PI), `${seq} ${t.toFixed(2)}`).toBeCloseTo(-rev, 2);
       }
     }
   });
 
-  it('the spin rate is continuous everywhere (C1 orientation: no spin pops at any beat)', () => {
-    for (const seq of ['host', 'accept', 'decline'] as const) {
+  it('the spin rate never jumps: it changes only across a contact or in the net, and smoothly there', () => {
+    for (const seq of SEQS) {
       let prev = omega(seq, 2 * H);
-      for (let i = 3; i <= DURATIONS[seq] * 1000 - 2; i++) {
-        const cur = omega(seq, i / 1000);
-        // ≤ 1.5 rad/s change per ms: the steepest handover is the bounce skid (spin to rolling
-        // during the 35 ms contact); everywhere else the rate changes far more gently.
-        expect(cur.distanceTo(prev), `${seq} ${i} ms`).toBeLessThan(1.5);
+      for (let i = 3; i <= REST_AT[seq] * 1000 - 2; i++) {
+        const t = i / 1000;
+        const cur = omega(seq, t);
+        // ≤ 2.5 rad/s per ms: the steepest handover is a contact's 30 ms skid.
+        expect(cur.distanceTo(prev), `${seq} ${i} ms`).toBeLessThan(2.5);
         prev = cur;
       }
     }
   });
-
-  it('on the floor the ball rolls without sliding: spin matches the distance rolled', () => {
-    for (const seq of ['host', 'accept', 'decline'] as const) {
-      const r = ROLLS[seq];
-      let rolling = 0;
-      for (let t = r.from + 0.01; t < r.to - 0.01; t += 0.01) {
-        // On the floor only (a bounce hop may still be in the air after the skid).
-        if (Math.max(pos(seq, t - H).y, pos(seq, t).y, pos(seq, t + H).y) > BALL_R + 1e-9) continue;
-        rolling++;
-        const v = hvel(seq, t);
-        const w = omega(seq, t);
-        // Rolling: ω × (−R·up) = v at the contact point is zero, i.e. ω·R = up × v… per component:
-        const expected = new Vector3(0, 1, 0).cross(v).divideScalar(BALL_R);
-        expect(w.distanceTo(expected), `${seq} ${t.toFixed(2)}`).toBeLessThan(0.05 * Math.max(1, expected.length()));
-      }
-      expect(rolling, seq).toBeGreaterThan(10);
-    }
-    // The skid (air spin handing over to rolling) happens only while the ball is on the floor.
-    expect(SKID).toBeLessThanOrEqual(0.04);
-  });
-
-  it('squash is bounded, volume-preserving and along the floor normal; the drawn ball never enters the floor', () => {
-    expect(SQUASH.max).toBeLessThanOrEqual(0.1);
-    for (const seq of ['host', 'accept', 'decline'] as const) {
-      expect(IMPACTS[seq].length).toBe(2);
-      let peak = 0, prev = at(seq, 0);
-      for (let i = 0; i <= DURATIONS[seq] * 1000; i++) {
-        const f = at(seq, i / 1000);
-        expect(Math.abs(f.squash)).toBeLessThanOrEqual(SQUASH.max + 1e-9);
-        peak = Math.max(peak, f.squash);
-        // Scale (1/√(1−a), 1−a, 1/√(1−a)): volume 1. Drawn bottom = centre + drop − R(1 − a).
-        const sv = 1 - f.squash, sh = 1 / Math.sqrt(sv);
-        expect(sh * sh * sv).toBeCloseTo(1, 12);
-        expect(f.ballPos.y + f.ballDrop - BALL_R * sv).toBeGreaterThanOrEqual(-1e-9);
-        // No pops: the squash and the drawn centre (authored path + contact hold) change smoothly.
-        expect(Math.abs(f.squash - prev.squash)).toBeLessThan(0.015);
-        expect(Math.abs(f.ballPos.y + f.ballDrop - prev.ballPos.y - prev.ballDrop)).toBeLessThan(0.02);
-        prev = f;
-      }
-      expect(peak, seq).toBeGreaterThan(0.015);
-    }
-  });
-
-  it('rim and board recoil: visible, bounded, C1 and back to exactly zero (no clip into the board)', () => {
-    const max = { rim: 0, board: 0, rimMin: 0 };
-    let prev = at('accept', CONTACT_AT - H), prevRate = 0;
-    for (let i = Math.round(CONTACT_AT * 1000); i <= Math.round((CONTACT_AT + HOOP_SETTLED) * 1000) + 5; i++) {
-      const f = at('accept', i / 1000);
-      max.rim = Math.max(max.rim, Math.abs(f.rimPitch));
-      max.rimMin = Math.min(max.rimMin, f.rimPitch);
-      max.board = Math.max(max.board, Math.abs(f.boardPitch));
-      const rate = (f.rimPitch - prev.rimPitch) / H;
-      expect(Math.abs(rate - prevRate), `rim rate jump at ${i} ms`).toBeLessThan(0.04);
-      prevRate = rate;
-      prev = f;
-    }
-    const deg = 180 / Math.PI;
-    expect(max.rim * deg).toBeLessThanOrEqual(RECOIL_LIMIT.rimDeg);
-    expect(max.rim * deg).toBeGreaterThan(2);
-    expect(max.board * deg).toBeLessThanOrEqual(RECOIL_LIMIT.boardDeg);
-    expect(max.board * deg).toBeGreaterThan(0.45);
-    // Tipping back past rest would push the plate's top edge into the board face (1.5 mm gap).
-    const plateHeight = RIM_BRACKET.max.y - RIM_HINGE.y;
-    expect(max.rimMin * deg).toBeGreaterThanOrEqual(-0.5);
-    expect(Math.sin(-max.rimMin) * plateHeight).toBeLessThan(0.0015);
-  });
 });
 
 describe('Sports legibility: the airball is a shot, the declined pose is not the ready pose', () => {
+  const screen = (p: Vector3) => {
+    const camera = new OrthographicCamera();
+    fitCameraToBounds(camera, SPORTS_BOUNDS, 1, undefined, sportsFramePoints());
+    const q = p.clone().applyMatrix4(camera.matrixWorldInverse);
+    return new Vector3(q.x, q.y, 0);
+  };
+
   it('the airball travels towards the hoop, passes rim height beside it and lands past the backboard', () => {
     const guest = screen(BALL_AT.guest), miss = screen(MISS_POINT), rim = screen(RIM_CENTER);
     expect(MISS_POINT.y).toBeCloseTo(RIM_CENTER.y, 6);
-    // On screen it heads for the rim, then passes it with a clear gap (ring radius + ball + margin).
-    expect(miss.x - guest.x).toBeGreaterThan(0.4);
+    expect(miss.x - guest.x).toBeGreaterThan(0.1);
     expect(rim.x - miss.x).toBeGreaterThan(RIM.innerRadius + RIM.tube + BALL_R + 0.2);
-    // In the court it travels further than the made shot and comes down behind the board's plane.
-    expect(horizontal(LANDINGS.missed, BALL_AT.guest)).toBeGreaterThan(horizontal(RIM_CENTER, BALL_AT.guest));
-    expect(LANDINGS.missed.z).toBeLessThan(HOOP_ROOT.z + BOARD.front - BOARD.thickness);
+    expect(MISS_OFFSET).toBeGreaterThan(RIM.innerRadius + RIM.tube + BALL_R + 0.2);
+    expect(CONTACTS.decline[0]!.point.distanceTo(MISS_LAND)).toBeLessThan(1e-6);
+    expect(MISS_LAND.z).toBeLessThan(HOOP_ROOT.z + BOARD.front - BOARD.thickness);
   });
 
   it('the declined ball ends well apart from guest-ready, accepted and host-ready at phone scale', () => {
     const declined = screen(pose('declined').ballPos);
     for (const other of ['guest-ready', 'accepted', 'host-ready'] as const) {
-      const gap = declined.distanceTo(screen(pose(other).ballPos)) / (2 * BALL_R);
-      // At least 1.2 ball diameters in 2D (never a screen-x-only test): the silhouettes never touch.
-      expect(gap, other).toBeGreaterThanOrEqual(1.2);
+      expect(declined.distanceTo(screen(pose(other).ballPos)) / (2 * BALL_R), other).toBeGreaterThanOrEqual(1.2);
     }
+    expect(screen(pose('accepted').ballPos).distanceTo(screen(pose('guest-ready').ballPos)) / (2 * BALL_R)).toBeGreaterThanOrEqual(1.2);
   });
 
-  it('the airball and the declined rest never widen the frame', () => {
-    for (const aspect of [0.75, 1, 1.5]) {
-      const fit = (seqs: readonly SequenceName[]) => {
-        const c = new OrthographicCamera();
-        fitCameraToBounds(c, SPORTS_BOUNDS, aspect, undefined, sportsFramePoints(seqs));
-        return [c.left, c.right, c.bottom, c.top];
-      };
-      const all = fit(['host', 'accept', 'decline']), without = fit(['host', 'accept']);
-      for (let i = 0; i < 4; i++) expect(all[i]).toBeCloseTo(without[i]!, 6);
-    }
+  it('the ball still reads at a good size under the hero framing (≥ 5.5 % of the frame height)', () => {
+    // The hero: the hoop's silhouette (board corners, base) and the ball at guest-ready.
+    const hero: Vector3[] = [];
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const z of [BOARD.front, BOARD.front - BOARD.thickness]) hero.push(new Vector3(HOOP_ROOT.x + (sx * BOARD.width) / 2, BOARD.centerY + (sy * BOARD.height) / 2, HOOP_ROOT.z + z));
+    for (const corner of [BASE_BOX.min, BASE_BOX.max]) hero.push(corner.clone());
+    hero.push(new Vector3(BASE_BOX.min.x, 0, BASE_BOX.max.z), new Vector3(BASE_BOX.max.x, 0, BASE_BOX.max.z));
+    for (const d of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) hero.push(BALL_AT.guest.clone().add(new Vector3(...d).multiplyScalar(BALL_R)));
+    const camera = new PerspectiveCamera(PERSPECTIVE_FOV, 1, 0.5, 400);
+    const fit = fitPerspectiveToHero(camera, SPORTS_BOUNDS.getCenter(new Vector3()), 1, hero, sportsFramePoints(), HERO_FILL, PATH_CLEARANCE);
+    expect(fit.pathLimited).toBe(false);
+    const top = BALL_AT.guest.clone().setY(2 * BALL_R).project(camera), bottom = BALL_AT.guest.clone().setY(0).project(camera);
+    // 5.9 % (v1.4: 9 %): the real ratio of a 7" ball to a 4 ft mini system, 42 px on a 720 px poster.
+    expect((top.y - bottom.y) / 2).toBeGreaterThan(0.055);
   });
 });
 
 describe('Sports change response: blend unless a straight blend crosses the hoop', () => {
-  const cut = (seq: SequenceName, t: number) => {
-    const f = at(seq, t);
-    return sportsInterruptCut(f.ballPos, f);
-  };
+  const cut = (seq: SequenceName, t: number, tail = false) => sportsInterruptCut(at(seq, t).ballPos, tail);
 
-  it('blends mid-flight and at rest, cuts at the rim and while the net moves', () => {
-    // The old cylinder rule cut from 0.39 s; the straight path back stays clear there.
-    for (let t = 0; t <= 0.75; t += 0.01) expect(cut('accept', t), `accept ${t.toFixed(2)}`).toBe(false);
-    expect(cut('accept', 0.5)).toBe(false);
-    // Above the rim the straight path back would clip the ring; inside the net it would cross it.
-    expect(cut('accept', 0.85)).toBe(true);
-    expect(cut('accept', CONTACT_AT + 0.1)).toBe(true);
-    // The airball never crosses the hoop, so a change always blends (both directions now agree).
+  it('blends mid-flight and at rest, cuts in the hoop and during a tail', () => {
+    // Rising: the straight path back is clear. From the arc's top over the rim until the ball has
+    // left the net it would clip the ring or cross the net: cut. Below the net it is clear again.
+    for (let t = 0; t <= 0.5; t += 0.01) expect(cut('accept', t), `accept ${t.toFixed(2)}`).toBe(false);
+    for (let t = 0.6; t <= NET_PASSAGE.exitAt - 0.01; t += 0.01) expect(cut('accept', t), `accept ${t.toFixed(2)}`).toBe(true);
+    for (let t = NET_PASSAGE.exitAt + 0.03; t <= DURATIONS.accept; t += 0.01) expect(cut('accept', t), `accept ${t.toFixed(2)}`).toBe(false);
     for (let t = 0; t <= DURATIONS.decline; t += 0.01) expect(cut('decline', t), `decline ${t.toFixed(2)}`).toBe(false);
-    for (const p of ['guest-ready', 'accepted', 'declined'] as const) expect(sportsInterruptCut(pose(p).ballPos, pose(p))).toBe(false);
+    for (const p of ['guest-ready', 'accepted', 'declined'] as const) expect(sportsInterruptCut(pose(p).ballPos, false)).toBe(false);
+    expect(cut('accept', DURATIONS.accept + 0.5, true)).toBe(true);
   });
 
-  it('a blend never passes the ball through the rim, net, board or pole', () => {
+  it('a blend never passes the ball through the rim, net, board, pole or base', () => {
     for (const seq of ['accept', 'decline'] as const) {
       for (let t = 0; t <= DURATIONS[seq]; t += 0.01) {
-        const f = at(seq, t);
-        if (sportsInterruptCut(f.ballPos, f)) continue;
-        // Dense re-check of the straight path (the decision samples it 32 times).
+        const p0 = at(seq, t).ballPos;
+        if (sportsInterruptCut(p0, false)) continue;
         const p = new Vector3();
         let min = Infinity;
-        for (let i = 0; i <= 200; i++) min = Math.min(min, hoopDistance(p.lerpVectors(f.ballPos, BALL_AT.guest, i / 200)));
+        for (let i = 0; i <= 200; i++) min = Math.min(min, hoopDistance(p.lerpVectors(p0, BALL_AT.guest, i / 200)));
         expect(min, `${seq} ${t.toFixed(3)}`).toBeGreaterThan(BALL_R);
       }
     }
-    // And the clearance really measures the hoop: from inside the rim a blend is blocked.
     expect(blendClearance(RIM_CENTER)).toBeLessThan(BALL_R + BLEND_MARGIN);
   });
 });
 
-describe('Sports framing and model contract', () => {
-  it('ball and hoop fill 60–75 % of the stage width in the ready pose', () => {
-    const camera = new OrthographicCamera();
-    fitCameraToBounds(camera, SPORTS_BOUNDS, 1, undefined, sportsFramePoints());
-    const inv = camera.matrixWorldInverse;
-    let min = Infinity, max = -Infinity;
-    const add = (p: Vector3) => { const q = p.clone().applyMatrix4(inv); min = Math.min(min, q.x); max = Math.max(max, q.x); };
-    for (const s of [-1, 1]) add(new Vector3(BALL_AT.guest.x + s * BALL_R, BALL_R, BALL_AT.guest.z));
-    for (const sx of [-1, 1]) for (const sy of [-1, 1]) add(new Vector3(HOOP_ROOT.x + (sx * BOARD.width) / 2, BOARD.centerY + (sy * BOARD.height) / 2, HOOP_ROOT.z + BOARD.front));
-    const fill = (max - min) / (camera.right - camera.left);
-    expect(fill).toBeGreaterThanOrEqual(0.6);
-    expect(fill).toBeLessThanOrEqual(0.75);
-  });
+// ── The exported runtime GLB (pnpm models sports), measured with gltf-transform ──
+const GLB = join(import.meta.dirname, '..', 'assets', 'scenes', 'sports', 'sports.glb');
 
-  it('the rest net is narrower than the ball (so the swish must bulge) and starts at the rim', () => {
-    expect(Math.min(...NET.profile.map(([, r]) => r))).toBeLessThan(BALL_R);
-    expect(Math.abs(netRestRadius(0) - RIM.innerRadius)).toBeLessThan(0.005);
+/** The net's meshes from the GLB, in net space (as the rig bakes them). */
+function netMeshes(doc: Document) {
+  const hoop = findNode(doc, 'hoop_root'), net = findNode(doc, 'net');
+  const toHoop = new Matrix4().fromArray(hoop.getWorldMatrix()).invert();
+  const out: { geometry: BufferGeometry; kind: 'strands' | 'knots' | 'loops' }[] = [];
+  net.traverse((n) => {
+    const m = n.getMesh();
+    if (!m) return;
+    const mat = new Matrix4().multiplyMatrices(toHoop, new Matrix4().fromArray(n.getWorldMatrix()));
+    for (const prim of m.listPrimitives()) {
+      const p = prim.getAttribute('POSITION')!;
+      const arr = new Float32Array(p.getCount() * 3), e = [0, 0, 0], v = new Vector3();
+      for (let i = 0; i < p.getCount(); i++) {
+        p.getElement(i, e);
+        v.set(e[0]!, e[1]!, e[2]!).applyMatrix4(mat).sub(RIM_LOCAL).toArray(arr, i * 3);
+      }
+      const g = new BufferGeometry();
+      g.setAttribute('position', new BufferAttribute(arr, 3));
+      const idx = prim.getIndices();
+      if (idx) g.setIndex(new BufferAttribute(Uint32Array.from(idx.getArray()!), 1));
+      const kind = netMeshKind(n.getName()) ?? netMeshKind(n.getParentNode()?.getName() ?? '');
+      if (kind) out.push({ geometry: g, kind });
+    }
   });
-});
+  return out;
+}
 
-/** The exported runtime GLB (pnpm models sports), measured with gltf-transform. */
-describe('Sports runtime GLB matches the contract', async () => {
-  const doc = await createIO().read(join(import.meta.dirname, '..', 'assets', 'scenes', 'sports', 'sports.glb'));
+/** Run the net along a sequence's ball path (net space, fixed 1/120 s steps), as the scene does. */
+function runNet(lattice: NetLattice, seq: SequenceName, seconds: number, each?: (t: number, sim: NetSim, springs: HoopSprings, ball: Vector3) => void) {
+  const sim = new NetSim(lattice), springs = new HoopSprings();
+  const dt = 1 / 120, f = newFrame();
+  const toNet = (p: Vector3, out: Vector3) => {
+    const o = recoilPoint(RIM_LOCAL, springs.board, springs.rim);
+    out.copy(p).sub(HOOP_ROOT).sub(o);
+    const a = -(springs.board + springs.rim), c = Math.cos(a), s = Math.sin(a);
+    return out.set(out.x, out.y * c - out.z * s, out.y * s + out.z * c);
+  };
+  const contact = { center: new Vector3(), previous: new Vector3() };
+  for (let t = 0; t < seconds; t += dt) {
+    toNet(sampleTrack(seq, t, f).ballPos, contact.previous);
+    toNet(sampleTrack(seq, t + dt, f).ballPos, contact.center);
+    sim.step(dt, contact);
+    springs.step(dt, sim.settled ? 0 : sim.hookTorqueRim, sim.settled ? 0 : sim.hookTorqueBoard);
+    each?.(t + dt, sim, springs, contact.center);
+  }
+  return { sim, springs };
+}
+
+describe('Sports runtime GLB and the simulated net', async () => {
+  const doc = await createIO().read(GLB);
   const node = (name: string) => findNode(doc, name);
   const worldOf = (n: Node) => new Matrix4().fromArray(n.getWorldMatrix());
-  /** Every vertex under `n`, in sports_root space. */
   const vertices = (n: Node) => {
     const out: Vector3[] = [];
     const toRoot = worldOf(node('sports_root')).invert();
     n.traverse((c) => {
       const m = toRoot.clone().multiply(worldOf(c));
       for (const prim of c.getMesh()?.listPrimitives() ?? []) {
-        const pos = prim.getAttribute('POSITION')!;
+        const p = prim.getAttribute('POSITION')!;
         const e = [0, 0, 0];
-        for (let i = 0; i < pos.getCount(); i++) out.push(new Vector3(...(pos.getElement(i, e) as [number, number, number])).applyMatrix4(m));
+        for (let i = 0; i < p.getCount(); i++) out.push(new Vector3(...(p.getElement(i, e) as [number, number, number])).applyMatrix4(m));
       }
     });
     return out;
   };
+  const lattice = analyseNet(netMeshes(doc))!;
 
   it('has every contract node exactly once', () => {
     for (const n of SPORTS_NODES) expect(() => node(n), n).not.toThrow();
@@ -484,8 +496,6 @@ describe('Sports runtime GLB matches the contract', async () => {
     const size = box.max.clone().sub(box.min);
     for (const k of ['x', 'y', 'z'] as const) expect(Math.abs(size[k] / 2 - BALL_R)).toBeLessThan(0.002);
     expect(box.max.clone().add(box.min).length() / 2).toBeLessThan(0.002);
-    // A mapped contract node is an empty transform at its pivot with unit scale (quantisation's
-    // node scale/offset lands on its `_mesh` holder child), so spins and squash compose cleanly.
     const ball = node('ball_mesh');
     expect(ball.getMesh()).toBeNull();
     expect(ball.getScale()).toEqual([1, 1, 1]);
@@ -494,7 +504,7 @@ describe('Sports runtime GLB matches the contract', async () => {
     expect((node('ball_mesh_mesh').getExtras() as { noShadowCast?: boolean }).noShadowCast).toBe(true);
   });
 
-  it('both ball presets keep the master leather’s neutral base colour (the albedo carries the look)', () => {
+  it('both ball presets keep the master leather\'s neutral base colour (the albedo carries the look)', () => {
     for (const name of ['ball_leather', 'ball_leather_cream']) {
       const m = doc.getRoot().listMaterials().find((x) => x.getName() === name);
       expect(m, name).toBeDefined();
@@ -507,42 +517,38 @@ describe('Sports runtime GLB matches the contract', async () => {
     expect(webp?.isRequired()).toBe(true);
     for (const t of doc.getRoot().listTextures()) {
       expect(t.getMimeType()).toBe('image/webp');
-      const img = t.getImage()!;
-      // RIFF....WEBPVP8L = lossless bitstream, VP8 = lossy.
-      const chunk = new TextDecoder().decode(img.subarray(12, 16));
+      const chunk = new TextDecoder().decode(t.getImage()!.subarray(12, 16));
       if (listTextureSlots(t).some((s) => /normal/i.test(s))) expect(chunk, t.getName()).toBe('VP8L');
     }
   });
 
-  it('the rim ring is centred on RIM_CENTER with the contract inner radius', () => {
+  it('the rim ring is centred on RIM_CENTER with the contract inner radius (the 14.5" rim)', () => {
     const ring = vertices(node('rim')).filter((v) => Math.abs(v.y - RIM_CENTER.y) <= RIM.tube * 1.05 && v.z > RIM_CENTER.z - RIM.innerRadius - 2 * RIM.tube);
-    const radii = ring.map((v) => Math.hypot(v.x - RIM_CENTER.x, v.z - RIM_CENTER.z)).filter((r) => r > 0.3);
-    expect(Math.abs(Math.min(...radii) - RIM.innerRadius)).toBeLessThan(0.003);
-    expect(Math.abs(Math.max(...radii) - (RIM.innerRadius + 2 * RIM.tube))).toBeLessThan(0.003);
-    expect(HOOP_SCALE).toBeCloseTo(0.88692, 4);
+    const radii = ring.map((v) => Math.hypot(v.x - RIM_CENTER.x, v.z - RIM_CENTER.z)).filter((r) => r > 0.4);
+    expect(Math.abs(Math.min(...radii) - RIM.innerRadius)).toBeLessThan(0.004);
+    expect(Math.abs(Math.max(...radii) - (RIM.innerRadius + 2 * RIM.tube))).toBeLessThan(0.004);
+    expect(HOOP_SCALE).toBeCloseTo(1.13421, 4);
   });
 
   it('the net hangs in net space at RIM_LOCAL, within NET.depth, outside its measured envelope', () => {
     const net = node('net');
     expect(new Vector3(...net.getTranslation()).distanceTo(RIM_LOCAL)).toBeLessThan(1e-4);
     expect(net.listChildren().filter((c) => c.getMesh()).length).toBe(3);
-    const vs = vertices(net);
     let top = -Infinity, bottom = Infinity;
-    for (const v of vs) {
+    for (const v of vertices(net)) {
       top = Math.max(top, v.y);
       bottom = Math.min(bottom, v.y);
       const t = (RIM_CENTER.y - v.y) / NET.depth;
       if (t < 0 || t > 1) continue;
-      expect(Math.hypot(v.x - RIM_CENTER.x, v.z - RIM_CENTER.z)).toBeGreaterThan(netRestRadius(t) - 0.012);
+      expect(Math.hypot(v.x - RIM_CENTER.x, v.z - RIM_CENTER.z)).toBeGreaterThan(netRestRadius(t) - 0.015);
     }
-    expect(top).toBeLessThanOrEqual(RIM_CENTER.y + 0.005);
-    expect(Math.abs(RIM_CENTER.y - bottom - NET.depth)).toBeLessThan(0.003);
+    expect(top).toBeLessThanOrEqual(RIM_CENTER.y + 0.006);
+    expect(Math.abs(RIM_CENTER.y - bottom - NET.depth)).toBeLessThan(0.004);
   });
 
   it('the recoil pivots are the rim and backboard nodes\' origins (hoop space)', () => {
-    expect(new Vector3(...node('rim').getTranslation()).distanceTo(RIM_HINGE)).toBeLessThan(2e-4);
-    expect(new Vector3(...node('backboard').getTranslation()).distanceTo(BOARD_PIVOT)).toBeLessThan(2e-4);
-    // The hinge is the bracket plate's back-bottom edge; the pivot the centre of the board's back.
+    expect(new Vector3(...node('rim').getTranslation()).distanceTo(RIM_HINGE)).toBeLessThan(3e-4);
+    expect(new Vector3(...node('backboard').getTranslation()).distanceTo(BOARD_PIVOT)).toBeLessThan(3e-4);
     expect(RIM_HINGE.y).toBeCloseTo(RIM_BRACKET.min.y, 3);
     expect(BOARD_PIVOT.z).toBeCloseTo(BOARD.front - BOARD.thickness, 3);
   });
@@ -556,13 +562,12 @@ describe('Sports runtime GLB matches the contract', async () => {
     expect(box.max.y).toBeCloseTo(BOARD.centerY + BOARD.height / 2, 2);
     expect(box.max.z).toBeCloseTo(h.z + BOARD.front, 2);
     expect(box.min.z).toBeCloseTo(h.z + BOARD.front - BOARD.thickness, 2);
-    // The chrome back plate touches the board's back; the pole stays behind it.
     const hardware = new Box3().setFromPoints(vertices(node('hoop_hardware')));
     expect(hardware.max.z).toBeCloseTo(h.z + BOARD.front - BOARD.thickness, 2);
-    const stand = vertices(node('hoop_stand'));
+    const stand = [...vertices(node('hoop_stand')), ...vertices(node('hoop_pole'))];
     expect(Math.min(...stand.map((v) => v.y))).toBeCloseTo(0, 3);
-    // Above the base, the pole, clamp and arm stay behind the back plate.
-    expect(Math.max(...stand.filter((v) => v.y > 0.5).map((v) => v.z))).toBeLessThanOrEqual(hardware.max.z - 0.01);
+    // Everything of the stand stays behind the board's back plate.
+    expect(Math.max(...stand.map((v) => v.z))).toBeLessThanOrEqual(hardware.max.z - 0.01);
   });
 
   it('stores the cream ball as a material variant and nothing is left unbound', () => {
@@ -573,11 +578,105 @@ describe('Sports runtime GLB matches the contract', async () => {
     expect(names).toContain('ball_leather_cream');
     for (const m of doc.getRoot().listMaterials()) expect(m.getName(), 'every material is named').not.toBe('');
   });
+
+  it('reads the master net\'s cord lattice back: 10 loops, 6 rows of 10 knots, 120 cords; every strand and knot vertex bound', () => {
+    expect(lattice).not.toBeNull();
+    expect(lattice.loops).toHaveLength(10);
+    expect(lattice.rows.map((r) => r.length)).toEqual([10, 10, 10, 10, 10, 10]);
+    expect(lattice.cords).toHaveLength(120);
+    for (const [a, b] of lattice.cords) expect(lattice.nodes[a]!.y).toBeGreaterThan(lattice.nodes[b]!.y);
+    // Each knot hangs from two cords above and (above the last row) feeds two below.
+    const up = new Map<number, number>(), down = new Map<number, number>();
+    for (const [a, b] of lattice.cords) { down.set(a, (down.get(a) ?? 0) + 1); up.set(b, (up.get(b) ?? 0) + 1); }
+    for (const [r, row] of lattice.rows.entries()) for (const k of row) {
+      expect(up.get(k)).toBe(2);
+      expect(down.get(k) ?? 0).toBe(r < 5 ? 2 : 0);
+    }
+    const bones = lattice.cords.length + lattice.nodes.length;
+    for (const [, bind] of lattice.binding) for (const b of bind) expect(b).toBeLessThan(bones);
+  });
+
+  it('the net hangs at rest under gravity close to the master\'s shape and stays put without the ball', () => {
+    const sim = new NetSim(lattice);
+    let dev = 0;
+    for (let i = 0; i < lattice.nodes.length; i++) dev = Math.max(dev, lattice.nodes[i]!.distanceTo(sim.restNode(i)));
+    expect(dev).toBeLessThan(0.01);
+    for (const seq of ['host', 'decline'] as const) {
+      const { sim: s, springs } = runNet(lattice, seq, REST_AT[seq]);
+      expect(s.settled, seq).toBe(true);
+      expect(springs.settled, seq).toBe(true);
+      expect(s.maxDisplacement(), seq).toBe(0);
+    }
+  });
+
+  it('the made ball opens the net (no knot ever inside it), drags it down, and the net whips back and settles', () => {
+    let maxOpen = 0, minGap = Infinity, wake = Infinity, lift = 0, settledAt = Infinity, lateSwing = 0;
+    const bottom = lattice.rows[5]!;
+    const p = new Vector3();
+    const { sim } = runNet(lattice, 'accept', REST_AT.accept, (t, s, _springs, ball) => {
+      if (!s.settled && wake === Infinity) wake = t;
+      if (s.settled && t > CONTACT_AT + 0.2 && settledAt === Infinity) settledAt = t;
+      for (let i = 0; i < s.n; i++) {
+        s.node(i, p);
+        minGap = Math.min(minGap, p.distanceTo(ball) - BALL_R);
+        const r = Math.hypot(p.x, p.z), r0 = Math.hypot(s.restNode(i).x, s.restNode(i).z);
+        maxOpen = Math.max(maxOpen, r - r0);
+      }
+      // The whip: once the ball has left, the bottom row rises above where it hangs.
+      if (t > NET_PASSAGE.exitAt) for (const k of bottom) lift = Math.max(lift, s.node(k, p).y - s.restNode(k).y);
+      if (t > NET_PASSAGE.exitAt + 2) lateSwing = Math.max(lateSwing, s.maxDisplacement());
+    });
+    // Woken as the ball comes near the net (never before release), at the latest at contact.
+    expect(wake).toBeGreaterThan(RELEASE_AT);
+    expect(wake).toBeLessThan(CONTACT_AT + 0.02);
+    // The knots are pushed round the ball (≥ 2 cm outward), never inside it.
+    expect(maxOpen).toBeGreaterThan(0.06);
+    expect(minGap).toBeGreaterThan(NET_SIM.knotRadius - 0.006);
+    expect(lift).toBeGreaterThan(0.02);
+    // It swings for a while, is visibly still (every knot within 3.6 mm of rest) 2 s after the
+    // ball has left, and snaps to rest once its last sub-millimetre sway has died.
+    expect(lateSwing).toBeLessThan(0.01);
+    expect(settledAt - NET_PASSAGE.exitAt).toBeGreaterThan(1);
+    expect(settledAt - NET_PASSAGE.exitAt).toBeLessThan(4.5);
+    expect(sim.settled).toBe(true);
+  });
+
+  it('the rim and board answer the net\'s real pull: bounded, the rim stopped by the board, both back at rest', () => {
+    let rimMax = 0, rimMin = 0, boardMax = 0, forceMax = 0;
+    const { springs } = runNet(lattice, 'accept', REST_AT.accept, (_t, s, sp) => {
+      rimMax = Math.max(rimMax, sp.rim);
+      rimMin = Math.min(rimMin, sp.rim);
+      boardMax = Math.max(boardMax, Math.abs(sp.board));
+      forceMax = Math.max(forceMax, s.hookForce.length());
+    });
+    const deg = 180 / Math.PI;
+    // A swish pulls the hooks with a few newtons (the ball's momentum change in the net).
+    expect(forceMax).toBeGreaterThan(2);
+    expect(forceMax).toBeLessThan(15);
+    expect(rimMax * deg).toBeGreaterThan(0.3);
+    expect(rimMax * deg).toBeLessThanOrEqual(RECOIL_LIMIT.rimDeg);
+    expect(rimMin).toBeGreaterThanOrEqual(RIM_BACKSTOP - 1e-12);
+    // The board on its steel pole barely moves for a swish.
+    expect(boardMax * deg).toBeLessThan(0.2);
+    expect(springs.settled).toBe(true);
+  });
+
+  it('the net simulation is cheap: well under a millisecond per frame (two fixed steps)', () => {
+    const sim = new NetSim(lattice);
+    const contact = { center: new Vector3(0, -0.3, 0), previous: new Vector3(0, -0.25, 0) };
+    sim.step(1 / 120, contact);
+    const t0 = performance.now();
+    for (let i = 0; i < 240; i++) {
+      contact.previous.copy(contact.center);
+      contact.center.y = -0.3 - 0.4 * Math.sin(i / 20);
+      sim.step(1 / 120, contact);
+    }
+    expect((performance.now() - t0) / 120).toBeLessThan(1);
+  });
 });
 
 describe('sports look guards', () => {
   it('the hard-coded seam frame shows the classic "( + )" to the shared camera at guest-ready', () => {
-    // If the camera angles or the host pass change, SEAM_FRAME must be recomputed.
     const cam = cameraDirection();
     const toObject = pose('guest-ready').ballRot.clone().invert();
     const view = cam.clone().applyQuaternion(toObject).applyMatrix3(SEAM_FRAME);
@@ -590,8 +689,6 @@ describe('sports look guards', () => {
   });
 
   it('the ball renders as the master authored it: no runtime leather grade', () => {
-    // v1.2's LEATHER_GRADE multiplied the master's albedo to suit the v1.1 peach stage; the studio
-    // pass removed it. The GLB side (neutral base colour on both presets) is checked below.
     expect('LEATHER_GRADE' in sportsModel).toBe(false);
   });
 
@@ -609,15 +706,20 @@ describe('sports look guards', () => {
 });
 
 describe('sports staging on the studio floor', () => {
-  it('the ball, wherever it touches down or rests, and its contact shadow stay on flat floor in front of the cove', () => {
+  it('the ball, wherever it touches down or rests, its shadow and the stand stay on flat floor in front of the cove', () => {
     const coveStart = SPORTS_WALL_Z + COVE_RADIUS;
-    const shadowReach = BALL_R * 2.2 * 0.5 + 0.05; // widest contact-shadow spread behind the ball, plus margin
-    for (const seq of ['host', 'accept', 'decline'] as const) {
-      for (let t = 0; t <= DURATIONS[seq] + 1e-9; t += 0.005) {
+    const shadowReach = BALL_R * 2.2 * 0.5 + 0.05;
+    for (const seq of SEQS) {
+      for (let t = 0; t <= REST_AT[seq] + 1e-9; t += 0.005) {
         const p = at(seq, t).ballPos;
         if (p.y <= BALL_R + 0.02) expect(p.z - shadowReach).toBeGreaterThan(coveStart);
       }
     }
-    for (const p of Object.values(BALL_AT)) expect(p.z - shadowReach).toBeGreaterThan(coveStart);
+    for (const p of [BALL_AT.host, BALL_AT.guest, REST.made, REST.missed]) expect(p.z - shadowReach).toBeGreaterThan(coveStart);
+    expect(HOOP_ROOT.z + STAND.base.back - 0.15).toBeGreaterThan(coveStart);
+    // Every path stays inside the motion bounds the key light aims at.
+    const grown = SPORTS_BOUNDS.clone().expandByScalar(1e-6);
+    for (const p of sportsFramePoints()) expect(grown.containsPoint(p)).toBe(true);
   });
 });
+

@@ -1,0 +1,39 @@
+{
+  "birthday": {
+    "framing": [
+      {
+        "heroHeight": 0.5236750059790574,
+        "heroWidth": 0.5486017030422966,
+        "binding": "height",
+        "pathLimited": true,
+        "heroCenter": [
+          0,
+          -0.42517278788998897
+        ],
+        "distance": 14.019191930430395
+      },
+      {
+        "heroHeight": 0.5236750059790574,
+        "heroWidth": 0.4114512772817225,
+        "binding": "height",
+        "pathLimited": true,
+        "heroCenter": [
+          0,
+          -0.42517278788998897
+        ],
+        "distance": 14.019191930430395
+      },
+      {
+        "heroHeight": 0.5236750059790574,
+        "heroWidth": 0.2743008515211483,
+        "binding": "height",
+        "pathLimited": true,
+        "heroCenter": [
+          0,
+          -0.42517278788998897
+        ],
+        "distance": 14.019191930430395
+      }
+    ]
+  }
+}

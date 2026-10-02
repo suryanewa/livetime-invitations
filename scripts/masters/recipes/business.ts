@@ -30,14 +30,15 @@ import type { SceneRecipe } from '../types.ts';
  *   thumbnail. At 0.72 the badge holder (57 × 89 mm at the badge's real scale) meets a 70 × 104 mm
  *   reader, a real desk reader's proportions; its side clips still land on the glass (0.03 inside
  *   its edges) and the card, pressed high, overhangs the reader's top as v1.1's did, leaving the
- *   lower glass for the status tile. Aligned on the plinth's bottom centre at `scanner_root`.
+ *   lower glass for the status pictogram. Aligned on the plinth's bottom centre at `scanner_root`.
  *   `front_assembly` → `scanner_face` (its 11.6° lean is the contact plane), `glass` →
  *   `scanner_pad` (pivot: the face origin, so pad space = face space) carrying the LED
  *   (`scanner_light`), its glow quad (`scanner_glow`) and the NFC mark: the press moves them in
  *   together. `window_gasket` → `scanner_gasket` (pivot: its back plane) compresses under the
  *   glass. Body, bezel, plinth and back panel are static and joined per material.
  * - LED and glow: emissiveStrength 1 (the rig drives the status colour and intensity, starting
- *   dark); the glow quad casts no shadow. The rig adds a status tile (check / minus) on the pad.
+ *   dark); the glow quad casts no shadow. The rig keeps the LED a dark lens, hides the glow quad and
+ *   adds the status pictogram (a dead-front check / minus, v1.5) on the pad.
  * - Chrome: the master's chrome_hardware as authored (roughness 0.3, base 0.86). v1.2.1 polished it
  *   to roughness 0.1 with a 0.6 base because it read as white satin plastic in the v1.1 beige
  *   studio; the studio pass v1.3 removed that grade so it is judged under a rig with reflections.

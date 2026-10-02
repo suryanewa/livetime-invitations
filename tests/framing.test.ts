@@ -4,7 +4,7 @@ import { cameraDirection, fitPerspectiveToHero, PERSPECTIVE_FOV } from '../src/r
 import { HERO_FILL, PATH_CLEARANCE, silhouettePoints } from '../src/render/framing.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
-import { COVER_PROFILE, COVER_SEATED, DINNER_BIN_POS, DINNER_BIN_YAW, DISH_HEIGHT, PLATE, dinnerBounds } from '../models/dinnerContract.ts';
+import { COVER_PROFILE, COVER_SEATED, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DISH_HEIGHT, PLATE, dinnerBounds } from '../models/dinnerContract.ts';
 import { dinnerFramePoints } from '../src/scenes/dinner/index.ts';
 
 /**
@@ -123,10 +123,12 @@ describe('Dinner under the hero rule (recorded disposal exception)', () => {
     return { direction, get: (n: string) => cache.get(n) ?? (cache.set(n, make(n)), cache.get(n)!), unique: make, dispose() {} } as unknown as MaterialLibrary;
   }
 
-  it('the open bin sets the frame: the camera backs off, and the covered dish still fills at least 45 % of the width', () => {
-    // The hero rule would make the dish fill 75 % of the width; the open bin's flaps behind it
-    // (the bin sized against the dish) cannot fit at that size, so the camera backs off. Measured
-    // on the real silhouette: 0.496 of the width at 1:1 (v1.3: 0.434).
+  it('the open bin sets the frame: the camera backs off, and the covered dish still fills at least 34 % of the width', () => {
+    // The hero rule would make the dish fill 75 % of the width; the covered dish carried over the
+    // open bin behind it cannot fit at that size, so the camera backs off. Measured on the real
+    // silhouette at 1:1: v1.3 0.434, v1.4 0.496 (the bin scaled with the dish: 31.7 × 22 cm),
+    // v1.5 0.354 (the real 47 cm pedal bin: the dish must rise over a 44.5 cm rim; recorded
+    // trade-off, docs/spec-revisions.md).
     const hero: Vector3[] = [];
     for (let i = 0; i < 64; i++) {
       const a = (i / 64) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
@@ -134,11 +136,11 @@ describe('Dinner under the hero rule (recorded disposal exception)', () => {
       for (const [r, y] of COVER_PROFILE) hero.push(new Vector3(c * r, y, s * r).add(COVER_SEATED));
     }
     hero.push(new Vector3(0, DISH_HEIGHT, 0));
-    const paths = [...dinnerFramePoints(), ...openBinFramePoints(buildDisposalBin({ lib: plainLibrary() }), DINNER_BIN_POS, DINNER_BIN_YAW)];
+    const paths = [...dinnerFramePoints(), ...openBinFramePoints(buildDisposalBin({ lib: plainLibrary() }), DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE)];
     const camera = new PerspectiveCamera(PERSPECTIVE_FOV, 1, 0.05, 400);
     const f = fitPerspectiveToHero(camera, dinnerBounds().getCenter(new Vector3()), 1, hero, paths, HERO_FILL, PATH_CLEARANCE);
     expect(f.pathLimited).toBe(true);
-    expect(f.heroWidth).toBeGreaterThanOrEqual(0.45);
+    expect(f.heroWidth).toBeGreaterThanOrEqual(0.34);
     expect(f.heroWidth).toBeLessThan(HERO_FILL.width);
     const e = ndc(camera, paths);
     for (const v of [e.x0, e.y0]) expect(v).toBeGreaterThanOrEqual(-(1 - PATH_CLEARANCE) - 1e-3);

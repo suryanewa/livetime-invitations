@@ -279,6 +279,28 @@ describe('Dinner steam on stage (v1.5)', () => {
     expect(s.scene.steamState.tau).toBeCloseTo(0.5, 6);
   });
 
+  it('after a change back to accept, the steam follows the (possibly sped-up) reveal, then real time, with no jump', () => {
+    const s = stage();
+    s.director.setIntent('decline');
+    s.run(0.7);
+    s.director.setIntent('accept');
+    let prev: number | null = null, maxStep = 0, steps = 0;
+    s.run(DURATIONS.accept + 0.6, () => {
+      const tau = s.scene.steamState.tau;
+      if (tau !== null && prev !== null) {
+        maxStep = Math.max(maxStep, tau - prev);
+        expect(tau).toBeGreaterThanOrEqual(prev);
+        steps++;
+      }
+      prev = tau;
+    });
+    expect(steps).toBeGreaterThan(30);
+    // At most the reveal's speed-up per frame (k ≤ 1.5), never a skip.
+    expect(maxStep).toBeLessThanOrEqual((1.5 / 60) * 1.01);
+    expect(s.director.state).toBe('accepted-pose');
+    expect(s.scene.settling()).toBe(true);
+  });
+
   it('a change of mind mid-reveal lets the steam already out rise on and fade; nothing more is released', () => {
     const s = stage();
     s.director.setIntent('accept');

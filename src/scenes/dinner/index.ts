@@ -15,7 +15,7 @@ import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/se
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { smoothstep } from '../../motion/curves.ts';
 import {
-  type AnswerChange, changeTime, coverBlendSafe, DURATIONS, frameFor, newFrame, planAnswerChange, sampleAnswerChange, sampleSequence,
+  type AnswerChange, changeTime, CONTENT_END, coverBlendSafe, DURATIONS, frameFor, newFrame, planAnswerChange, sampleAnswerChange, sampleSequence,
   type DinnerFrame,
 } from './sequences.ts';
 import { STEAM_CHANGE_FADE, STEAM_END, STEAM_REST, steamPlumes, steamPuffs } from './steam.ts';
@@ -119,7 +119,7 @@ export class DinnerScene implements SceneInstance {
     this.shown = pose === 'accepted' ? { seq: 'accept', t: DURATIONS.accept, rate: 0 }
       : pose === 'declined' ? { seq: 'decline', t: DURATIONS.decline, rate: 0 } : null;
     if (revealEnded) {
-      this.steamT = Math.max(this.steamT!, DURATIONS.accept);
+      // Carry on from the last sample (within a frame of the reveal's end): never a jump.
       this.steamFree = true;
     } else if (!cutOfChange) this.steamRest();
     this.apply(frameFor(pose, this.frame));
@@ -135,7 +135,10 @@ export class DinnerScene implements SceneInstance {
     const [seq, s] = c ? changeTime(c, t) : [sequence, t];
     const revealing = seq === 'accept' && (!c || (c.next === 'accept' && t >= c.rewind));
     if (revealing) {
-      this.steamT = s;
+      // After a change of mind the reveal may play up to k× faster (the rewind took some of its
+      // time); the steam follows the reveal's own clock while the cover moves, then runs on in
+      // real time once the reveal's motion is over (changeTime holds there).
+      this.steamT = c ? revealSteamTime(c, t) : s;
       this.steamFree = this.steamFading = false;
       this.steamEmitEnd = Infinity;
       this.steamFade = 1;
@@ -265,6 +268,16 @@ export class DinnerScene implements SceneInstance {
   get steamState(): { tau: number | null; fade: number; emitEnd: number; visible: boolean } {
     return { tau: this.steamT, fade: this.steamFade, emitEnd: this.steamEmitEnd, visible: this.steam.object.visible };
   }
+}
+
+/**
+ * Steam time on a change of mind's reveal: the accept's own time while its motion plays (it may be
+ * sped up by k), real time after CONTENT_END (where changeTime holds), continuous at the switch.
+ */
+export function revealSteamTime(c: AnswerChange, t: number): number {
+  const s = c.start + (t - c.rewind) * c.k;
+  const end = CONTENT_END.accept;
+  return s <= end ? s : end + (s - end) / c.k;
 }
 
 async function fetchGlb(url: string, signal: AbortSignal): Promise<ArrayBuffer> {
