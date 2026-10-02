@@ -83,9 +83,9 @@ describe('Dinner steam plan (v1.5)', () => {
       // Where it came from: the dome, just before it shows (within its plan circle, near its height).
       const q = p.pos.clone().applyMatrix4(toCover(p.t0 - POCKET_CLEAR));
       expect(Math.hypot(q.x, q.z)).toBeLessThan(COVER.radius + 0.35);
-      // When it shows: clear of the dome by half its own size (no steam traces the dome's outline).
+      // When it shows: clear of the dome by 40 % of its size (no steam traces the dome's outline).
       expect(insideDome(p.pos, p.t0)).toBe(false);
-      expect(domeClearance(p.pos, p.t0), `pocket t0 ${p.t0.toFixed(3)}`).toBeGreaterThan(p.size * 0.5);
+      expect(domeClearance(p.pos, p.t0), `pocket t0 ${p.t0.toFixed(3)}`).toBeGreaterThan(p.size * 0.4);
     }
   });
 

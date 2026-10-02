@@ -136,7 +136,7 @@ function domeRadiusAt(y: number): number {
 }
 
 /** The pocket shows at least this long after its release (s), and only once the dome is clear of it. */
-export const POCKET_CLEAR = 0.1;
+export const POCKET_CLEAR = 0.06;
 
 /** How far a point is outside the dome's shell (su; negative inside) as the accept poses it at t. */
 export function domeClearance(p: Vector3, t: number): number {
@@ -230,7 +230,7 @@ export function buildPuffs(): Puff[] {
     p.size = 0.08 + 0.12 * Math.pow(rnd(), 1.5);
     p.grow = range(0.24, 0.32);
     p.stretch = range(1.0, 1.25);
-    p.life = range(0.4, 0.6);
+    p.life = range(0.5, 0.7);
     p.peak = range(0.2, 0.28);
     p.sway = range(0.06, 0.1);
     puffs.push(p);
@@ -255,7 +255,7 @@ export function buildPuffs(): Puff[] {
     let dt = POCKET_CLEAR;
     for (; dt < 0.4; dt += 0.01) {
       p.pos.copy(released).addScaledVector(cv, drag * dt);
-      if (domeClearance(p.pos, tr + dt) > 0.5 * p.size) break;
+      if (domeClearance(p.pos, tr + dt) > 0.4 * p.size) break;
     }
     p.t0 = tr + dt;
     // Drawn after the dome by its wake while it clears, then left behind.
@@ -268,7 +268,7 @@ export function buildPuffs(): Puff[] {
     p.grow = range(0.3, 0.4);
     p.stretch = range(1.2, 1.7);
     p.life = range(0.45, 0.7);
-    p.peak = range(0.36, 0.48);
+    p.peak = range(0.3, 0.4);
     p.sway = range(0.08, 0.14);
     puffs.push(p);
   }
