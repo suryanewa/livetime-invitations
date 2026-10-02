@@ -3,7 +3,7 @@ import { BIN, BIN_CLOSE } from '../../../models/disposalBin.ts';
 import { CAKE_TOTAL_HEIGHT } from '../../../models/birthdayContract.ts';
 import { CANDLE_COUNT, DURATIONS, FLAPS_CLOSE } from './poses.ts';
 import { extinguishedAt, flameState, litFlame } from './fire.ts';
-import { type BirthdayFrame, coolTime, litTime, newFrame, sampleSequence } from './sequences.ts';
+import { type BirthdayFrame, carriedFire, coolTime, type FireChange, litTime, newFrame, sampleSequence } from './sequences.ts';
 
 /**
  * v1.5 change of mind, declined → accept (guest-experience review: "a hard one-frame cut: the bin
@@ -12,10 +12,12 @@ import { type BirthdayFrame, coolTime, litTime, newFrame, sampleSequence } from 
  * plays backwards along its own authored path, which is clear of the stand, the rim and the flaps
  * by construction (the flaps re-open, the cake rises out of the bin, crosses back, is set down on
  * its stand, the bin slides out), then the accept plays. The candles are already placed: the host
- * beat is not replayed. The fire is never rewound: candles the snuff had reached stay out (their
- * wax goes on setting), and their melt stays where it was; a candle still burning at the change
- * burns on and the accept's breath blows it out. Pure functions of the change and the time, so
- * replay-safe and deterministic; the camera's return is pull.ts.
+ * beat is not replayed. The fire is never rewound: the fire under way at the change (the snuff, or
+ * a breath carried into the decline) goes on on its own clock (`fire`, sequences.ts carriedFire):
+ * candles it had reached stay out (their wax goes on setting), their melt stays where it was and
+ * their smoke keeps rising. Before any fire had begun, the candles burn on through the rewind and
+ * the accept's breath blows them out. Pure functions of the change and the time, so replay-safe
+ * and deterministic; the camera's return is pull.ts.
  *
  * Only declined → accept rewinds: on the way to the bin from accept the cake is on its stand and
  * nothing needs undoing (the fire carries across, fire.ts / BirthdayScene.interruptCut).
@@ -167,21 +169,26 @@ export interface AnswerChange {
   k: number;
   /** Per candle: still burning at the change (the snuff had not reached it). */
   burning: boolean[];
+  /**
+   * The fire under way at the change, on its own clock (BirthdayScene.interruptCut): it carries on
+   * through the rewind and after it. Null: none had begun (the candles burn on, then the breath).
+   */
+  fire: FireChange | null;
 }
 
 /**
  * A change of mind from the decline at time `at` (rate 1 while it plays, 0 at rest). Back to the
  * decline being rewound (from === next): it plays on from where it is.
  */
-export function planAnswerChange(from: Outcome, at: number, rate: number, next: Outcome): AnswerChange {
+export function planAnswerChange(from: Outcome, at: number, rate: number, next: Outcome, fire: FireChange | null = null): AnswerChange {
   const a = Math.min(Math.max(at, 0), CONTENT_END[from]);
   const r = a < CONTENT_END[from] ? rate : 0;
   const burning = Array.from({ length: CANDLE_COUNT }, (_, i) => from === 'accept' ? false : !flameState(i, a, 'decline').out && flameState(i, a, 'decline').intensity >= 1 - 1e-9);
-  if (from === next || from === 'accept') return { from, at: a, rate: r, length: 0, speed: 0, rewind: 0, next, start: from === next ? a : 0, k: 1, burning };
+  if (from === next || from === 'accept') return { from, at: a, rate: r, length: 0, speed: 0, rewind: 0, next, start: from === next ? a : 0, k: 1, burning, fire };
   const length = lengthAt(a), speed = r * speedAt(a);
   const rewind = rewindDuration(length, speed);
   const k = Math.max(1, CONTENT_END.accept / (DURATIONS.accept - rewind));
-  return { from, at: a, rate: r, length, speed, rewind, next, start: 0, k, burning };
+  return { from, at: a, rate: r, length, speed, rewind, next, start: 0, k, burning, fire };
 }
 
 /** Where the change is at time `t` of the new outcome's playback: [outcome, its time, its rate]. */
@@ -211,6 +218,11 @@ export function acceptClock(c: AnswerChange, t: number): number {
 export function sampleAnswerChange(c: AnswerChange, t: number, out: BirthdayFrame): BirthdayFrame {
   const [seq, s] = changeTime(c, t);
   sampleSequence(seq, s, out);
+  // The fire under way at the change goes on on its own clock: nothing relights, the smoke rises on.
+  if (c.fire) {
+    carriedFire(c.fire, t, out);
+    return out;
+  }
   if (c.from !== 'decline' || c.next !== 'accept') return out;
   // The fire is never rewound (no candle relights, no melt pops back).
   const sa = acceptClock(c, t);
@@ -238,5 +250,6 @@ export function sampleAnswerChange(c: AnswerChange, t: number, out: BirthdayFram
     }
   }
   out.smokeTime = breath ? sa : -1;
+  out.smokeKind = 'breath';
   return out;
 }

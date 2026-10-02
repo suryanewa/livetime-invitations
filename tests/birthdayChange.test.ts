@@ -230,9 +230,10 @@ describe('Birthday change of mind through the director', () => {
     expect(cake.position.distanceTo(ON_STAND)).toBeLessThan(1e-9);
     expect(bin.visible).toBe(false);
     expect(scene.framePull()).toBe(0);
-    // The snuffed candles came back out (no relit flame on the cake).
+    // The snuffed candles came back out (no relit flame on the cake; a quad still drawn is a
+    // cooling ember, its flame's radiant output 0).
     scene.beforeRender();
-    expect(rig.candles.every((c) => !c.fire.quad.visible)).toBe(true);
+    expect(rig.candles.every((c) => !c.fire.quad.visible || c.fire.material.uniforms.uState.value[2] === 0)).toBe(true);
     // Decline to the end, then from the declined pose (no playback) back to accept.
     v.setIntent('decline');
     run(3 + FRAME, 5.5);
