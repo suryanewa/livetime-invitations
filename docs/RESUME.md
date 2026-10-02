@@ -89,6 +89,34 @@ Still open:
 - The shared-code follow-ups the scene docs route to the foundation owner: a scene path for interruptions in `visualDirector.ts`, a stage-level fix for the shadow-depth texture leak, and recipe options for load-time finishes.
 - `docs/coverage.md` regenerates cleanly (`node --experimental-strip-types scripts/coverage-table.ts`, 650 rows), but the output is unchanged because `docs/coverage.json` still records the checkpoint 5 audit. Its rows were not re-audited for v1.2 (for example the 60k-triangle budget row, the three-candle rows and the Dinner food rows).
 
+## Perfection pass (v1.5)
+
+Written 2026-10-02. Surya's twelve edits on v1.4 (`docs/perfection-pass-brief.md`, verbatim, with the owner of
+each), delivered with the workflow that has worked three times before, run at a larger scale: seven owners in
+parallel worktrees (Party, Birthday cake, Birthday fire, Sports, Dinner, bin, Business; `v1.5/<owner>` branches,
+dev servers 5501–5507), each measuring first, researching the real thing, building, rendering and doing a hostile
+pass on its own frames; an integration branch (`v1.5/integration`, port 5508) merged in dependency order; a framing
+owner for the shared-stage consequence (the real bin forced a decline-only camera pull-back; then the phone DPR, the
+first-use hitch, the poster-staleness test); three independent judges on the integrated build (`docs/qualification.md`
+v1.5, Judging) whose findings went back to every owner as a polish round, with the two critical interruption bugs
+(Birthday relighting its candles, Sports teleporting the ball on a change of mind) fixed by giving both scenes a
+scene-owned `interruptCut`. Read `docs/style-reference.md` v1.5 (the table of the twelve edits), then the scene
+records `docs/scenes/<scene>-v1.5*.md` and spec revisions #37–#40.
+
+Still open:
+
+- **Owner decisions, pending:** revisions #37 (the record plays on; the deck order), #38 (the mini hoop system and
+  the physics tails), #39 (the decline pull-back), #40 (Normal at 2 device pixels) and the host beat's new length
+  (#23: 2.47 s, from the candle placement); Master §9's 2.5 MP buffer ceiling (the laptop renders at 1.65×, a full
+  2× needs 3.7 MP, about 130 MiB with MSAA).
+- **Known gaps recorded in the scene docs:** the bin body has no key-side highlight band (the rig has no light at
+  its height; a traced floor bounce stands in); the Sports decline tail runs 3.5 s past its beat at FIBA's
+  restitution; no steam reflection in the cloche; the smoke's colour is tuned to `neutral-room`; a change of mind
+  inside the snuff's first 40 ms carries the snuff to all six candles; the dish is still held by its own cover's
+  paths at rest (0.70 of the width, no longer by the bin).
+- Not re-measured: the iPhone session (the scenes are heavier again: the bin is 6.6 MB, Birthday loads 14.4 MB),
+  `docs/coverage.json` (still the checkpoint 5 audit).
+
 ## Studio pass (v1.3)
 
 Written 2026-10-01 ≈18:20 EDT. Surya, auditing v1.2: *"Why do these look so cartoonish compared to the original
@@ -115,8 +143,8 @@ re-measuring, setting `--lt-stage` to the measurement and regenerating posters a
 Still open:
 
 - **Owner decisions, pending:** the neutral `neutral-room` over the warm `livetime-warm` direction (the brief left
-  the choice to Surya; the judges chose), the perspective lens (it reverses his checkpoint 2b choice of orthographic,
-  revision #2), the removal of the CSS finish he approved on review page v1, and the new stage token. Revisions
+  the choice to Surya; the judges chose), the perspective lens (it reverses their checkpoint 2b choice of orthographic,
+  revision #2), the removal of the CSS finish they approved on review page v1, and the new stage token. Revisions
   #31–#36.
 - **The brief's last two steps are done:** the adversarial review (fresh `neutral-room` captures beside every master
   render: no longer cartoonish; pass with fixes) and a documentation-only fix pass (`docs/qualification.md` v1.3,

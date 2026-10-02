@@ -11,6 +11,8 @@ pnpm dev        # showcase at http://127.0.0.1:5199/  (?scene=party|birthday|spo
 
 Since v1.4 the showcase is fullscreen: the scene fills the viewport and the UI floats over it (a side dock on landscape screens, a bottom sheet on portrait ones). Embeds choose with `createInvitation({ layout: 'square' | 'fullscreen' })`; square stays the default (`docs/integration.md`).
 
+v1.5 (2026-10-02) is the perfection pass: the record plays on at 33⅓ rpm after acceptance, the candles are real-size flames that blow out into smoke and melt the wax, the cake is hand-finished buttercream, the ball bounces and the net is simulated, steam spills from under the cloche, the bin is a real pedal bin and the reader's status is a backlit pictogram; the camera pulls back only for the decline. `docs/style-reference.md` v1.5 has the table of the twelve edits; `docs/perfection-pass-brief.md` the brief; `docs/scenes/<scene>-v1.5*.md` each owner's record.
+
 On a local host the showcase also takes `?rig=<name>` to light the scene with another studio rig from `src/render/rigs/` (`neutral-room` is the production rig; `product-studio`, `daylight-table`, `livetime-warm` and `v1.1` are kept for comparison), and `&camera=ortho` for the v1.1 orthographic camera.
 
 Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm test` (unit) and `pnpm test:browser` (behaviour, uses the installed Google Chrome).
@@ -34,13 +36,14 @@ Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm tes
 | `docs/scenes/` | One note per scene for v1.2 (`<scene>-v1.2.md`): decisions, measured contract numbers, export report, choreography changes, known gaps |
 | `docs/new-models-brief.md` | The v1.2 brief: the owner's request, the masters, the scene mapping and the owner decisions (budgets waived; Dinner without food) |
 | `docs/studio-pass-brief.md`, `docs/rigs/` | The v1.3 studio pass: the brief (why v1.2 looked cartoonish and the five causes) and one note per rig with its reasoning, measured stage colour and iterations |
+| `docs/perfection-pass-brief.md`, `docs/scenes/*-v1.5*.md` | The v1.5 perfection pass: the twelve edits with their owners and standards, and one record per owner (Party, Birthday cake, Birthday fire, Sports, Dinner, bin, Business) with the research, the numbers, the judges' findings and what each polish round changed |
 
 ## Documentation
 
 - [Integration guide](docs/integration.md): embedding, configuration, responses (idempotency and ordering), fallbacks, lifecycle.
-- [Style reference](docs/style-reference.md): v1.3, the studio pass (the production rig, the perspective lens, the grades removed, the stage token), over v1.2 (the objects as the scan-to-CAD masters per scene), the interface (v1.1) and the palette (v1.0).
+- [Style reference](docs/style-reference.md): v1.5, the perfection pass (the twelve edits, the decline pull-back, the stage at 2 device pixels), v1.4 (one world scale, the hero framing rule), v1.3, the studio pass (the production rig, the perspective lens, the grades removed, the stage token), over v1.2 (the objects as the scan-to-CAD masters per scene), the interface (v1.1) and the palette (v1.0).
 - [Asset manifest](docs/asset-manifest.md): provenance and licence of every model, texture and dependency.
-- [Qualification record](docs/qualification.md): device coverage, measurements (v1.3 re-measured under the new studio, budgets waived), the rig judging, known limitations.
+- [Qualification record](docs/qualification.md): device coverage, measurements (v1.5 frame pacing at 2 device pixels on laptop and phone; v1.3 re-measured under the new studio, budgets waived), the v1.5 judging of the twelve edits, the rig judging, known limitations.
 - [Coverage table](docs/coverage.md): every Master and sub-spec requirement linked to a result or a recorded exception (regenerate with `node --experimental-strip-types scripts/coverage-table.ts`). It still reflects the checkpoint 5 audit; it has not been re-audited for v1.2 (the three-candle, Dinner food and triangle-budget rows are superseded by `docs/qualification.md` v1.2).
 - [Spec revisions](docs/spec-revisions.md): approved and recorded deviations to reconcile into the Master Specification.
 - [Time log](docs/time-log.md): actual effort by milestone.
