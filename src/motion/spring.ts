@@ -5,6 +5,7 @@
 
 export const FIXED_STEP = 1 / 120;
 export const MAX_STEPS_PER_FRAME = 4;
+/** Most simulated time one displayed frame may advance (a longer stall is discarded). */
 export const MAX_DEBT = 1 / 30;
 export const DEFAULT_DAMPING = 0.85;
 export const SETTLE_HOLD = 0.2;
@@ -77,27 +78,30 @@ export class Spring {
 }
 
 /**
- * Shared fixed-step accumulator: at most four steps per displayed frame, debt capped at
- * 1/30 s with excess discarded rather than caught up.
+ * Shared stepper for secondary motion: each displayed frame's clock delta, capped at MAX_DEBT
+ * (1/30 s; a longer stall is discarded rather than caught up), is split into the fewest equal steps
+ * no longer than FIXED_STEP (1/120 s), so at most MAX_STEPS_PER_FRAME.
+ *
+ * v1.5: the steps sum to the frame's delta exactly. The v1.0 stepper took whole 1/120 s steps and
+ * carried the remainder as debt, which quantised simulated time: measured on Chrome's frame
+ * timestamps at 60 Hz the debt sat on a step boundary and frames alternated 1, 2 and 3 steps, and on
+ * 120 or 144 Hz displays 0, 1 and 2, so a motion that runs on in `simulate` (a turning platter, a
+ * flame) juddered by a whole step. Springs still integrate in steps of at most 1/120 s, identical
+ * to v1.0 at 30, 60 and 120 fps.
  */
 export class FixedStepper {
-  private debt = 0;
-
   advance(frameDt: number, step: (dt: number) => void): number {
-    this.debt = Math.min(this.debt + Math.max(0, frameDt), MAX_DEBT);
-    let steps = 0;
-    while (this.debt >= FIXED_STEP && steps < MAX_STEPS_PER_FRAME) {
-      step(FIXED_STEP);
-      this.debt -= FIXED_STEP;
-      steps++;
-    }
-    if (steps === MAX_STEPS_PER_FRAME) this.debt = Math.min(this.debt, FIXED_STEP);
+    const total = Math.min(Math.max(0, frameDt), MAX_DEBT);
+    if (total <= 0) return 0;
+    // The 1e-9 keeps an exact multiple (1/60 s) from rounding up to an extra step.
+    const steps = Math.min(MAX_STEPS_PER_FRAME, Math.ceil(total / FIXED_STEP - 1e-9));
+    const h = total / steps;
+    for (let i = 0; i < steps; i++) step(h);
     return steps;
   }
 
-  reset(): void {
-    this.debt = 0;
-  }
+  /** No carried state since v1.5 (kept for the loop's pause paths). */
+  reset(): void {}
 }
 
 export const ANGLE_EPSILON = (0.1 * Math.PI) / 180;

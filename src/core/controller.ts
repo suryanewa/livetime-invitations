@@ -219,6 +219,8 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   let loadAbort: AbortController | null = null;
   let loadTimer: ReturnType<typeof setTimeout> | null = null;
   let raf = 0;
+  /** The mount intersects the viewport (see `intersection` below). */
+  let onScreen = true;
   let lastFrameAt = 0;
   let warm = false;
 
@@ -487,7 +489,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   // ── Render loop: on demand only ───────────────────────────────────────────
   let looping = false;
   function requestFrame() {
-    if (raf || disposed || document.hidden) return;
+    if (raf || disposed || document.hidden || !onScreen) return;
     // Waking from idle: reset the clock baseline so the first frame of a new sequence samples
     // t = 0 instead of jumping ahead by the clamped idle gap.
     if (!looping) clock.resume();
@@ -504,7 +506,8 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       director.update(clock.seconds);
       return;
     }
-    const dt = clock.tick();
+    // The frame's own timestamp, not the callback's start: sampled times stay on the display's cadence.
+    const dt = clock.tick(now);
     const playing = director.update(clock.seconds);
     let settling = false;
     if (scene.simulate && !reduced()) {
@@ -626,20 +629,51 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   }) : null;
   resizeObserver?.observe(root);
 
-  // ── Visibility: hidden tabs pause the visual clock ────────────────────────
+  // ── Visibility: a hidden tab or an off-screen stage pauses the visual clock ──
+  /**
+   * The loop draws nothing nobody can see. A hidden tab (visibilitychange) or a stage scrolled out
+   * of view (IntersectionObserver on the mount, v1.5) suspends it: no frame is scheduled, the visual
+   * clock pauses (a sequence or a perpetual motion resumes where it was, without debt) and the
+   * quality window is dropped. Showing it again wakes the loop if the scene still wants frames.
+   * Scenes need nothing for this: a motion that runs forever (Party's playing record, a flame) keeps
+   * `settling()` true and simply stops being stepped while unseen.
+   */
+  function suspend() {
+    clock.pause();
+    cancelAnimationFrame(raf);
+    raf = 0;
+    stepper.reset();
+    quality.pause();
+    // The first interval after waking spans the pause; it must not count as a slow frame.
+    warm = false;
+    lastFrameAt = 0;
+  }
+  function wake() {
+    if (document.hidden || !onScreen) return;
+    clock.resume();
+    requestFrame();
+  }
   function onVisibility() {
-    if (document.hidden) {
-      clock.pause();
-      cancelAnimationFrame(raf);
-      raf = 0;
-      stepper.reset();
-      quality.pause();
-    } else {
-      clock.resume();
-      requestFrame();
-    }
+    if (document.hidden) suspend();
+    else wake();
   }
   document.addEventListener('visibilitychange', onVisibility);
+  /**
+   * On screen (`onScreen`): any part of the mount inside the viewport (threshold 0). Assumed true
+   * until the observer's first report, and always where IntersectionObserver is missing. For an
+   * embed in an iframe the observer measures against the top-level viewport, so an iframe scrolled
+   * out of the host page pauses too.
+   */
+  const intersection = typeof IntersectionObserver === 'function'
+    ? new IntersectionObserver((entries) => {
+      const visible = entries[entries.length - 1]!.isIntersecting;
+      if (visible === onScreen) return;
+      onScreen = visible;
+      if (visible) wake();
+      else suspend();
+    })
+    : null;
+  intersection?.observe(root);
 
   function onMotionPreference() {
     if (explicitReduced !== undefined) return;
@@ -894,6 +928,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       freeLibraries();
       destroyStage();
       resizeObserver?.disconnect();
+      intersection?.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
       media?.removeEventListener('change', onMotionPreference);
       root.replaceChildren();
