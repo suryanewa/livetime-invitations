@@ -357,10 +357,6 @@ export const DIRECTIONS = {
     // Woven lining inside the dust cover (audio grille cloth): the open lid's tactile face. Its
     // weave is band-limited (checkpoint 4) so it never shimmers into moiré as the lid closes.
     mat_lid_fabric: { color: '#34363A', roughness: 0.92, normal: 'weave-lining', normalScale: 1, sheen: 0.5, sheenColor: '#8a8f99' },
-    // Sports v1.5 stand: a blow-moulded HDPE base (satin, no coat) and a black powder-coated steel
-    // pole (a satin coat over a dark base), as on real portable hoop systems.
-    mat_stand_plastic: { color: '#1E2023', roughness: 0.58 },
-    mat_stand_steel: { color: '#1A1C1F', roughness: 0.4, clearcoat: 0.35, clearcoatRoughness: 0.35 },
   };
   DIRECTIONS.L2 = {
     ...L,

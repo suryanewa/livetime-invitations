@@ -225,6 +225,12 @@ export interface SceneRecipe {
   variants?: string[];
   materialVariants?: MaterialVariantSpec[];
   textures?: TexturePolicy;
+  /**
+   * Deterministic edit of the composed scene document after the variants (before the contract
+   * check and the optimisation chain): for textures on builder materials no master carries (v1.5
+   * Sports: the stand's moulded-plastic and powder-coat micro-normals). Must be a pure function.
+   */
+  finish?: (doc: Document, log: (line: string) => void) => void | Promise<void>;
   /** Every node the runtime looks up by name; a missing one fails the export. */
   contract: readonly string[];
 }

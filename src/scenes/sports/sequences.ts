@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { seg, smoothstep } from '../../motion/curves.ts';
 import { CAMERA_ANGLES } from '../../render/camera.ts';
-import { BALL_AT, BALL_R, NET, netRestRadius, RIM_CENTER } from '../../../models/sportsContract.ts';
+import { BALL_AT, BALL_R, NET, netHangRadius, RIM_CENTER } from '../../../models/sportsContract.ts';
 import { BallTrack, bounceToRest, cloneState, type Contact, fly, GRAVITY, type NetDrag, throughNet, type BallState } from './ballPhysics.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 
@@ -15,16 +15,16 @@ import type { CanonicalPose, SequenceName } from '../../core/types.ts';
  * and spin coupling, the contact squash, and the roll to a stop. The tracks are integrated at
  * module load from fixed launch states, so a sequence is a pure function of t and replays exactly.
  *
- * A real ball keeps bouncing for seconds after the beat that matters (the made ball meets the
- * floor 0.5 s after the rim and dies down over about 4 s). The director's durations stay the
+ * A real ball keeps bouncing after the beat that matters. The director's durations stay the
  * approved ones; the rest of each track is the sequence's **tail**, which the scene plays in its
  * continuous channel after the director has finished (`SportsScene.simulate`, `settling()`), and
- * which `settle()` snaps to its end. So the canonical poses (posters, reduced motion, interruption
- * snaps) are the tracks' rest states: where and how the ball really comes to rest.
+ * which `settle()` snaps to its end. So the canonical poses (posters, reduced motion) are the
+ * tracks' rest states: where and how the ball really comes to rest.
  *
  * Launches are solved, not tuned by hand: the made shot leaves so it passes the rim centre at the
- * contact beat; the airball so it first lands on MISS_LAND (beside and behind the hoop); the host
- * pass so the ball comes to rest exactly on the guest spot.
+ * contact beat; the airball so it first lands on MISS_LAND (behind and beside the hoop); the host
+ * pass so the ball comes to rest exactly on the guest spot. A change of mind continues the ball's
+ * own physics (`change.ts`).
  */
 
 export const DURATIONS = { host: 1.2, accept: 1.7, decline: 1.6 } as const;
@@ -47,12 +47,12 @@ export interface SportsFrame {
 }
 
 const UP = new Vector3(0, 1, 0);
-const horiz = (from: Vector3, to: Vector3) => new Vector3(to.x - from.x, 0, to.z - from.z).normalize();
+export const horiz = (from: Vector3, to: Vector3) => new Vector3(to.x - from.x, 0, to.z - from.z).normalize();
 /** Axis for rolling (or top-spin) along horizontal direction d; backspin is a negative rate. */
-const rollAxis = (d: Vector3) => new Vector3().crossVectors(UP, d).normalize();
+export const rollAxis = (d: Vector3) => new Vector3().crossVectors(UP, d).normalize();
 
 // ── Launch states ──────────────────────────────────────────────────────────────────
-interface Launch {
+export interface Launch {
   from: Vector3;
   /** Horizontal velocity (y = 0), units per second. */
   vh: Vector3;
@@ -64,11 +64,15 @@ interface Launch {
   pullBack: number;
 }
 
+/** Height the gather lifts a shot before it leaves the hand. */
+export const LAUNCH_LIFT = 0.12;
 /** The gather ends at LAUNCH, a little above the guest spot, and the shots leave from there. */
-const LAUNCH = BALL_AT.guest.clone().add(new Vector3(0, 0.12, 0));
+const LAUNCH = BALL_AT.guest.clone().add(new Vector3(0, LAUNCH_LIFT, 0));
 
 /** Backspin of the shots in the air (rev/s): a real shot leaves the fingertips at 2–3 rev/s. */
-export const SHOT_BACKSPIN = { made: 2.5, missed: 2.2 } as const;
+export const SHOT_BACKSPIN = { made: 2.5, missed: 2.0 } as const;
+/** The made shot's apex above the rim centre (it falls into the rim at ≈ 72°). */
+export const SHOT_APEX_ABOVE_RIM = 0.71;
 
 /** Made shot: LAUNCH → rim centre in FLIGHT seconds under standard gravity (its apex follows). */
 const MADE: Launch = (() => {
@@ -80,7 +84,7 @@ const MADE: Launch = (() => {
 export const MADE_APEX = LAUNCH.y + (MADE.vy * MADE.vy) / (2 * GRAVITY);
 
 /** Time at which a ball launched at vy from y0, moving down, reaches height y. */
-const fallTime = (y0: number, vy: number, y: number) => (vy + Math.sqrt(vy * vy + 2 * GRAVITY * (y0 - y))) / GRAVITY;
+export const fallTime = (y0: number, vy: number, y: number) => (vy + Math.sqrt(vy * vy + 2 * GRAVITY * (y0 - y))) / GRAVITY;
 
 // Airball: thrown long and wide to the left, past the backboard, into the back of the court.
 /** Screen-right in the floor plane for the shared camera azimuth. */
@@ -88,11 +92,12 @@ const AZ = (CAMERA_ANGLES.azimuthDeg * Math.PI) / 180;
 const SCREEN_RIGHT = new Vector3(Math.cos(AZ), 0, -Math.sin(AZ));
 /**
  * The airball flies in the vertical plane from the guest spot to this floor point, where it first
- * lands: past the backboard's plane, left of the hoop and clear of its base. Its backspin (2.2
- * rev/s) all but cancels its run at that first bounce (angular momentum about the contact point:
- * v − α·R·ω ≈ 0), so it checks up and dies there instead of rolling away into the studio.
+ * lands: past the backboard's plane, left of the hoop and clear of its base. It lands running at
+ * 2.4 su/s with 2 rev/s of backspin: the first bounce checks most of its run, and it bounces on
+ * away from the shooter a little, then rolls to a stop (angular momentum about the contact point,
+ * v − α·R·ω, leaves it ≈ 0.2 su/s).
  */
-export const MISS_LAND = new Vector3(-1.05, BALL_R, -1.4);
+export const MISS_LAND = new Vector3(-1.07, BALL_R, -1.5);
 const MISS_DIR = horiz(LAUNCH, MISS_LAND);
 /** Its apex sits under the made arc's, so it never widens the frame upwards. */
 const MISS_APEX = MADE_APEX - 0.35;
@@ -129,7 +134,13 @@ const passLaunch = (speed: number): Launch => ({
 // ── Gathers (0 – RELEASE_AT): roll back, then rise into the release at the launch velocity ──
 /** The ball leaves the floor here; until then it rolls. */
 export const RISE_FROM = 0.1;
-interface Gather {
+/**
+ * The launch's spin is put on in the hand over the last 30 ms before release, while the hand
+ * lifts the ball off the floor (it has risen ≈ 2 mm when this starts): until then the ball only
+ * rolls with its own pull-back. A ball does not spin up on its own.
+ */
+export const SPIN_FROM = RELEASE_AT - 0.03;
+export interface Gather {
   origin: Vector3;
   launch: Launch;
   /** Height gained by the release (launch.from.y − BALL_R). */
@@ -143,9 +154,9 @@ interface Gather {
   /** Start of the pull-back window. */
   windowFrom: number;
 }
-const makeGather = (origin: Vector3, launch: Launch): Gather => {
+export const makeGather = (origin: Vector3, launch: Launch): Gather => {
   const lift = launch.from.y - BALL_R;
-  const window = Math.min(RELEASE_AT, (launch.pullBack * 27) / (4 * launch.vh.length()));
+  const window = Math.min(RELEASE_AT, (launch.pullBack * 27) / (4 * Math.max(0.05, launch.vh.length())));
   return { origin, launch, lift, exp: (launch.vy * (RELEASE_AT - RISE_FROM)) / lift, windowFrom: RELEASE_AT - window };
 };
 /**
@@ -163,9 +174,16 @@ function gatherSpeed(g: Gather, t: number): number {
   const s = seg(t, g.windowFrom, RELEASE_AT);
   return g.launch.vh.length() * (3 * s * s - 2 * s);
 }
-function gatherAt(g: Gather, t: number, out: Vector3): Vector3 {
-  out.copy(g.origin).addScaledVector(g.launch.vh.clone().normalize(), gatherAlong(g, t));
+const gatherDir = (g: Gather) => (g.launch.vh.lengthSq() > 1e-12 ? g.launch.vh.clone().normalize() : new Vector3(1, 0, 0));
+export function gatherAt(g: Gather, t: number, out: Vector3): Vector3 {
+  out.copy(g.origin).addScaledVector(gatherDir(g), gatherAlong(g, t));
   out.y = BALL_R + g.lift * seg(t, RISE_FROM, RELEASE_AT) ** g.exp;
+  return out;
+}
+export function gatherVelocity(g: Gather, t: number, out: Vector3): Vector3 {
+  out.copy(gatherDir(g)).multiplyScalar(gatherSpeed(g, t));
+  const s = seg(t, RISE_FROM, RELEASE_AT);
+  out.y = t > RISE_FROM && t < RELEASE_AT ? (g.lift * g.exp * s ** (g.exp - 1)) / (RELEASE_AT - RISE_FROM) : 0;
   return out;
 }
 
@@ -179,20 +197,20 @@ function integrate(f: (t: number) => number, a: number, b: number): number {
   return s * h;
 }
 /**
- * Gather spin rate (rad/s about the launch's roll axis): rolls with the gather on the floor, then
- * (in the air) turns into the launch's spin. Integrated exactly (Gauss–Legendre between breaks,
- * polynomial pieces), so the spin rate is continuous into the flight.
+ * Gather spin rate (rad/s about the launch's roll axis): rolls with the gather on the floor, then,
+ * as the hand lifts it off over the last 30 ms, turns into the launch's spin. Integrated exactly
+ * (Gauss–Legendre between breaks, polynomial pieces), so the spin rate is continuous into the flight.
  */
-function gatherRate(g: Gather, t: number): number {
+export function gatherRate(g: Gather, t: number): number {
   const roll = t < RELEASE_AT ? gatherSpeed(g, t) / BALL_R : 0;
-  const w = smoothstep(seg(t, RISE_FROM, RELEASE_AT));
+  const w = smoothstep(seg(t, SPIN_FROM, RELEASE_AT));
   return (1 - w) * roll + w * g.launch.spin;
 }
-function gatherAngle(g: Gather, t: number): number {
+export function gatherAngle(g: Gather, t: number): number {
   const end = Math.min(t, RELEASE_AT);
   if (end <= 0) return 0;
   let a = 0, sum = 0;
-  for (const br of [g.windowFrom, RISE_FROM].sort((x, y) => x - y)) {
+  for (const br of [g.windowFrom, RISE_FROM, SPIN_FROM].sort((x, y) => x - y)) {
     if (br <= a) continue;
     if (br >= end) break;
     sum += integrate((u) => gatherRate(g, u), a, br);
@@ -200,19 +218,20 @@ function gatherAngle(g: Gather, t: number): number {
   }
   return sum + integrate((u) => gatherRate(g, u), a, end);
 }
+export const gatherAxis = (g: Gather) => rollAxis(gatherDir(g));
 
 // ── The made ball in the net ─────────────────────────────────────────────────────────
 /**
- * The net's grip (`NetDrag`): engaged where the ball's cross-section reaches past the net's rest
- * envelope (the cords must be pushed out), full at 3 cm of overlap. The braking rate is solved so
- * the ball leaves the net falling at NET_KEEP of its entry speed (a swish through a snug net is
- * visibly checked, never stopped); its drift towards the board is handed back out as MADE_DRIFT.
+ * The net's grip (`NetDrag`): engaged where the ball's cross-section reaches past the net's hanging
+ * envelope (contract `netHangRadius`), full at 3 cm of overlap. The braking rate is solved so the
+ * ball leaves the net falling at NET_KEEP of its entry speed (a swish loses 10–20 %); its drift
+ * towards the board is handed back out (the far cords catch it).
  */
-export const NET_KEEP = 0.6;
+export const NET_KEEP = 0.85;
 /** The made ball's horizontal velocity as it leaves the net (su/s): back out, towards the camera. */
 export const MADE_DRIFT = new Vector3(0.16, 0, 0.3);
 const NET_CORD = 0.01;
-const netEngagement = (p: Vector3): number => {
+export const netEngagement = (p: Vector3): number => {
   const ox = p.x - RIM_CENTER.x, oz = p.z - RIM_CENTER.z, o = Math.hypot(ox, oz);
   const yb = p.y - RIM_CENTER.y;
   let e = 0;
@@ -221,64 +240,73 @@ const netEngagement = (p: Vector3): number => {
     const dy = -d - yb;
     if (Math.abs(dy) >= BALL_R) continue;
     const reach = o + Math.sqrt(BALL_R * BALL_R - dy * dy) + NET_CORD;
-    e = Math.max(e, (reach - netRestRadius(d / NET.depth)) / 0.03);
+    e = Math.max(e, (reach - netHangRadius(d / NET.depth)) / 0.03);
   }
   return Math.min(1, Math.max(0, e));
 };
-const netExited = (p: Vector3) => p.y + BALL_R < RIM_CENTER.y - NET.depth;
+export const netExited = (p: Vector3) => p.y + BALL_R < RIM_CENTER.y - NET.depth;
+
+/**
+ * Net drag for a ball entering the net with state `entry`: the braking rate solved so it leaves
+ * falling at NET_KEEP of its entry speed, the hand-back solved so it leaves drifting at `drift`.
+ */
+export function solveNet(entry: BallState, drift: Vector3 = MADE_DRIFT, rate?: number): NetDrag {
+  const net: NetDrag = { engagement: netEngagement, rate: rate ?? 0, exitDrift: drift.clone(), spinRate: 30, exited: netExited };
+  const run = () => {
+    const st = cloneState(entry);
+    throughNet(new BallTrack(false), st, net);
+    return st;
+  };
+  if (rate === undefined) {
+    let lo = 0, hi = 400;
+    for (let i = 0; i < 40; i++) {
+      net.rate = (lo + hi) / 2;
+      if (-run().v.y > NET_KEEP * -entry.v.y) lo = net.rate;
+      else hi = net.rate;
+    }
+    net.rate = (lo + hi) / 2;
+  }
+  // The horizontal relaxation leaves a little of the entry drift: aim past the target so the
+  // exit velocity is exactly `drift`.
+  for (let i = 0; i < 6; i++) {
+    const out = run().v.setY(0);
+    net.exitDrift.add(drift.clone().sub(out));
+  }
+  return net;
+}
 
 // ── Tracks ─────────────────────────────────────────────────────────────────────────
 interface Built {
   gather: Gather;
-  /** The physics from RELEASE_AT to rest (knots at absolute sequence times). */
+  /** The physics from RELEASE_AT to rest (knots at absolute sequence times, orientation relative to `start`). */
   track: BallTrack;
   /** World orientation at t = 0: the track's (and the gather's) rotations compose in front of it. */
   start: Quaternion;
 }
 
 /** Launch state at RELEASE_AT (orientation: the gather's turn, relative to the start). */
-function launchState(g: Gather): BallState {
+export function launchState(g: Gather, start = new Quaternion()): BallState {
   const l = g.launch;
-  const axis = rollAxis(l.vh.clone().normalize());
+  const axis = gatherAxis(g);
   return {
     t: RELEASE_AT,
     p: l.from.clone(),
     v: l.vh.clone().setY(l.vy),
     w: axis.clone().multiplyScalar(l.spin),
-    q: new Quaternion().setFromAxisAngle(axis, gatherAngle(g, RELEASE_AT)),
+    q: new Quaternion().setFromAxisAngle(axis, gatherAngle(g, RELEASE_AT)).multiply(start),
   };
 }
 
-/** Made-shot net drag, solved for NET_KEEP and MADE_DRIFT. */
-function solveNet(entry: BallState): NetDrag {
-  const net: NetDrag = { engagement: netEngagement, rate: 0, exitDrift: MADE_DRIFT.clone(), spinRate: 30, exited: netExited };
-  const run = () => {
-    const st = cloneState(entry);
-    throughNet(new BallTrack(), st, net);
-    return st;
-  };
-  let lo = 0, hi = 400;
-  for (let i = 0; i < 50; i++) {
-    net.rate = (lo + hi) / 2;
-    if (-run().v.y > NET_KEEP * -entry.v.y) lo = net.rate;
-    else hi = net.rate;
-  }
-  net.rate = (lo + hi) / 2;
-  // The horizontal relaxation leaves a little of the entry drift: aim past the target so the
-  // exit velocity is exactly MADE_DRIFT.
-  for (let i = 0; i < 6; i++) {
-    const out = run().v.setY(0);
-    net.exitDrift.add(MADE_DRIFT.clone().sub(out));
-  }
-  return net;
-}
-
+/** The canonical made shot's net braking rate (1/s at full engagement), reused by a change of mind's shots. */
+export let NET_RATE = 0;
 function buildMade(): Built {
   const gather = makeGather(BALL_AT.guest, MADE);
   const track = new BallTrack();
   const st = launchState(gather);
   fly(track, st, CONTACT_AT);
-  throughNet(track, st, solveNet(cloneState(st)));
+  const net = solveNet(cloneState(st));
+  NET_RATE = net.rate;
+  throughNet(track, st, net);
   bounceToRest(track, st);
   return { gather, track, start: GUEST_ROT };
 }
@@ -335,18 +363,20 @@ export const REST_AT: Record<SequenceName, number> = {
 const _q = new Quaternion();
 /**
  * The ball at time t of a sequence's physics, past its duration too (the tail), clamped to
- * [0, REST_AT]. Pure.
+ * [0, REST_AT]. Pure. `vel` and `ang` (optional) receive its velocity and angular velocity.
  */
-export function sampleTrack(sequence: SequenceName, t: number, out: SportsFrame): SportsFrame {
+export function sampleTrack(sequence: SequenceName, t: number, out: SportsFrame, vel?: Vector3, ang?: Vector3): SportsFrame {
   const b = BUILT[sequence];
   const tc = Math.min(Math.max(t, 0), REST_AT[sequence]);
   if (tc < RELEASE_AT) {
     gatherAt(b.gather, tc, out.ballPos);
-    out.ballRot.setFromAxisAngle(rollAxis(b.gather.launch.vh.clone().normalize()), gatherAngle(b.gather, tc)).multiply(b.start);
+    out.ballRot.setFromAxisAngle(gatherAxis(b.gather), gatherAngle(b.gather, tc)).multiply(b.start);
     out.squash = 0;
+    if (vel) gatherVelocity(b.gather, tc, vel);
+    if (ang) ang.copy(gatherAxis(b.gather)).multiplyScalar(gatherRate(b.gather, tc));
     return out;
   }
-  out.squash = b.track.sample(tc, out.ballPos, _q);
+  out.squash = b.track.sample(tc, out.ballPos, _q, vel, ang);
   out.ballRot.copy(_q).multiply(b.start);
   return out;
 }
@@ -356,11 +386,11 @@ export function sampleSequence(sequence: SequenceName, t: number, out: SportsFra
   return sampleTrack(sequence, Math.min(Math.max(t, 0), DURATIONS[sequence]), out);
 }
 
-const blank = (): SportsFrame => ({ ballPos: new Vector3(), ballRot: new Quaternion(), squash: 0 });
+export const blankFrame = (): SportsFrame => ({ ballPos: new Vector3(), ballRot: new Quaternion(), squash: 0 });
 
 /** Canonical poses are the rest states at the ends of the tracks (orientation included). */
 const HOST_READY = { pos: BALL_AT.host.clone(), rot: BUILT.host.start.clone() };
-const ends = (seq: SequenceName) => sampleTrack(seq, REST_AT[seq], blank());
+const ends = (seq: SequenceName) => sampleTrack(seq, REST_AT[seq], blankFrame());
 const GUEST_END = ends('host');
 const MADE_END = ends('accept');
 const MISSED_END = ends('decline');
@@ -379,10 +409,10 @@ export function frameFor(pose: CanonicalPose, out: SportsFrame): SportsFrame {
 }
 
 export function newFrame(): SportsFrame {
-  return frameFor('guest-ready', blank());
+  return frameFor('guest-ready', blankFrame());
 }
 
-/** Diagnostics for tests and docs. */
+/** Diagnostics for tests and docs (and the change planner). */
 export const TRACKS: Readonly<Record<SequenceName, BallTrack>> = { host: BUILT.host.track, accept: BUILT.accept.track, decline: BUILT.decline.track };
 export const CONTACTS: Readonly<Record<SequenceName, readonly Contact[]>> = { host: BUILT.host.track.contacts, accept: BUILT.accept.track.contacts, decline: BUILT.decline.track.contacts };
 export const LAUNCHES = { accept: MADE, decline: MISSED, host: BUILT.host.gather.launch } as const;
@@ -392,7 +422,7 @@ export const SHOT_AXES = { accept: rollAxis(MADE.vh.clone().normalize()), declin
 export const REST = { guest: GUEST_END.ballPos.clone(), made: MADE_END.ballPos.clone(), missed: MISSED_END.ballPos.clone() } as const;
 /** The made ball's speed entering and leaving the net (diagnostics). */
 export const NET_PASSAGE = (() => {
-  const f = blank(), v = new Vector3(), q = new Quaternion();
+  const f = blankFrame(), v = new Vector3(), q = new Quaternion();
   const tr = BUILT.accept.track;
   tr.sample(CONTACT_AT, f.ballPos, q, v);
   const entry = v.clone();
