@@ -17,13 +17,15 @@ import {
   type AnswerChange, changeTime, coverBlendSafe, DURATIONS, frameFor, newFrame, planAnswerChange, sampleAnswerChange, sampleSequence,
   type DinnerFrame,
 } from './sequences.ts';
+import { dinnerPull } from './pull.ts';
 
 /**
  * Silhouette samples of every Dinner path: the plate, the cover along the host and accept paths
  * (its measured profile, tilted and placed exactly as rendered), the resting cover and the carry.
- * The scene adds the open bin from its geometry (openBinFramePoints).
+ * The scene adds the open bin from its geometry (openBinFramePoints). `'rest'` (v1.5 decline
+ * pull-back): the host and accept paths only, without the carry.
  */
-export function dinnerFramePoints(): Vector3[] {
+export function dinnerFramePoints(paths: 'all' | 'rest' = 'all'): Vector3[] {
   const pts: Vector3[] = [];
   const ring = (cx: number, cz: number, r: number, y: number, n = 16) => {
     for (let i = 0; i < n; i++) {
@@ -52,7 +54,7 @@ export function dinnerFramePoints(): Vector3[] {
   for (const seq of ['host', 'accept'] as const) {
     for (let t = 0; t <= DURATIONS[seq] + 1e-9; t += 0.02) cover(sampleSequence(seq, t, f));
   }
-  for (let t = 0.25; t <= DURATIONS.decline; t += 0.025) {
+  for (let t = 0.25; paths === 'all' && t <= DURATIONS.decline; t += 0.025) {
     const p = sampleSequence('decline', t, f).platePos;
     ring(p.x, p.z, PLATE.radius, p.y, 12);
     ring(p.x, p.z, COVER.radius * 0.35, p.y + DISH_HEIGHT, 6);
@@ -71,6 +73,8 @@ export class DinnerScene implements SceneInstance {
   readonly animatedNodes: Object3D[];
   readonly studio = { wallZ: DINNER_WALL_Z };
   readonly framePoints: Vector3[];
+  /** v1.5 decline pull-back: at rest the frame holds the dish and the cover's host and accept paths. */
+  readonly restFramePoints = dinnerFramePoints('rest');
 
   private readonly frame = newFrame();
 
@@ -126,6 +130,11 @@ export class DinnerScene implements SceneInstance {
     this.change = planAnswerChange(from, at, rate, next);
     this.changeArmed = true;
     return true;
+  }
+
+  /** v1.5 decline pull-back (pull.ts): from what is showing, the change of mind's rewind included. */
+  framePull(): number {
+    return dinnerPull(this.shown, this.change);
   }
 
   /** Low tier for the imported plate and cloche materials (the library handles the bin). */

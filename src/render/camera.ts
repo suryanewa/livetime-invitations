@@ -197,7 +197,65 @@ export interface HeroFraming {
   heroCenter: [number, number];
   /** Camera distance from the aim point (scene units). */
   distance: number;
+  /** The slide (view offset) in NDC of the fitted square (or aspect) frame: what is moved to its centre. */
+  offset: [number, number];
+  /** NDC extents [x0, x1, y0, y1] of the hero and every path this fit holds, after the slide. */
+  pathExtents: [number, number, number, number];
 }
+
+/**
+ * The two fits of a scene whose decline needs more room than its rest (v1.5, the decline
+ * pull-back; docs/style-reference.md): `rest` holds the hero and the paths of host and accept,
+ * `decline` the hero and every path (the carry over the bin's rim and the open bin). A scene
+ * without a bin has one fit: both are the same.
+ */
+export interface FramingPair {
+  rest: HeroFraming;
+  decline: HeroFraming;
+}
+
+/**
+ * Place the product camera for a fitted view: `distance` from `aim` along the shared direction, the
+ * view slid by `offset` (NDC of the fitted square, or of the `aspect` frame), and in fullscreen
+ * extended from the frame square to the whole stage (v1.4).
+ */
+export function placeHeroView(camera: PerspectiveCamera, aim: Vector3, aspect: number, distance: number, offset: readonly [number, number], frame?: FrameRect): void {
+  if (frame) aspect = 1;
+  camera.clearViewOffset();
+  camera.aspect = aspect;
+  camera.position.copy(aim).addScaledVector(cameraDirection(), distance);
+  camera.lookAt(aim);
+  camera.updateMatrixWorld();
+  const [ox, oy] = offset;
+  if (frame) {
+    // Same camera position and lens over the frame square; the rest of the stage extends the view.
+    const S = frame.size;
+    camera.setViewOffset(S, S, (ox * S) / 2 - frame.x, (-oy * S) / 2 - frame.y, frame.width, frame.height);
+  } else camera.setViewOffset(1000 * aspect, 1000, (ox * 1000 * aspect) / 2, (-oy * 1000) / 2, 1000 * aspect, 1000);
+  camera.updateProjectionMatrix();
+}
+
+/**
+ * The view at pull `k` (0 rest, 1 decline) between two fits of the same aim (v1.5 decline
+ * pull-back): a dolly along the shared view direction. The distance moves geometrically
+ * (d_rest · (d_decline / d_rest)^k: equal steps of `k` are equal ratios of size on screen, the
+ * perceptually even zoom of van Wijk and Nuij 2003), and the slide moves linearly in the zoom's
+ * progress s (1/d, which is how far the image has scaled): a point at the aim's depth then travels on
+ * a straight line across the screen, so the hero slides calmly from its rest composition to its
+ * decline composition, never swinging out and back. Exact at k = 0 and k = 1.
+ */
+export function pulledView(rest: HeroFraming, decline: HeroFraming, k: number): { distance: number; offset: [number, number] } {
+  const kk = Math.min(1, Math.max(0, k));
+  const d0 = rest.distance, d1 = decline.distance;
+  if (kk <= 0) return { distance: d0, offset: [rest.offset[0], rest.offset[1]] };
+  if (kk >= 1) return { distance: d1, offset: [decline.offset[0], decline.offset[1]] };
+  // Same distance (a slide only, e.g. the paths differ across but not in size): linear in k.
+  const same = Math.abs(d1 - d0) < 1e-9 * d0;
+  const d = same ? d0 : d0 * Math.pow(d1 / d0, kk);
+  const s = same ? kk : (1 / d - 1 / d0) / (1 / d1 - 1 / d0);
+  return { distance: d, offset: [lerpN(rest.offset[0], decline.offset[0], s), lerpN(rest.offset[1], decline.offset[1], s)] };
+}
+const lerpN = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /**
  * The v1.4 framing rule (src/render/framing.ts): same lens, azimuth and elevation for every scene;
@@ -218,6 +276,27 @@ export function fitPerspectiveToHero(
   clearance: number,
   frame?: FrameRect,
 ): HeroFraming {
+  const f = solveHeroFits(camera, aim, aspect, hero, [paths], fill, clearance, frame)[0]!;
+  placeHeroView(camera, aim, aspect, f.distance, f.offset, frame);
+  return f;
+}
+
+/**
+ * The hero rule solved for several path sets at once (v1.5: a scene's rest and decline paths),
+ * the hero's own distance found once. Each result is the fit `fitPerspectiveToHero` would make with
+ * that path set; nothing is applied (the camera is left at the last trial: place it with
+ * `placeHeroView`).
+ */
+export function solveHeroFits(
+  camera: PerspectiveCamera,
+  aim: Vector3,
+  aspect: number,
+  hero: readonly Vector3[],
+  pathSets: readonly (readonly Vector3[])[],
+  fill: { readonly height: number; readonly width: number },
+  clearance: number,
+  frame?: FrameRect,
+): HeroFraming[] {
   // Fullscreen (v1.4): fit the frame square exactly as the square stage, then extend the view.
   if (frame) aspect = 1;
   const dir = cameraDirection();
@@ -242,12 +321,6 @@ export function fitPerspectiveToHero(
     camera.updateMatrixWorld();
   };
   const heroFits = (e: ReturnType<typeof extents>) => (e.y1 - e.y0) / 2 <= fill.height && (e.x1 - e.x0) / 2 <= fill.width;
-  const all = [...hero, ...paths];
-  const pathsFit = (d: number) => {
-    place(d);
-    const e = extents(all);
-    return !e.behind && e.x1 - e.x0 <= 2 * limit && e.y1 - e.y0 <= 2 * limit;
-  };
   // Distance at which the hero fills `fill` (fill falls monotonically with distance).
   let lo = 0.05, hi = 400;
   for (let i = 0; i < 60; i++) {
@@ -257,38 +330,43 @@ export function fitPerspectiveToHero(
     if (!e.behind && heroFits(e)) hi = mid;
     else lo = mid;
   }
-  let d = hi;
-  let pathLimited = false;
-  if (!pathsFit(d)) {
-    pathLimited = true;
-    lo = d; hi = 400;
-    for (let i = 0; i < 60; i++) {
-      const mid = (lo + hi) / 2;
-      if (pathsFit(mid)) hi = mid;
-      else lo = mid;
+  const heroDistance = hi;
+  return pathSets.map((paths) => {
+    const all = [...hero, ...paths];
+    const pathsFit = (d: number) => {
+      place(d);
+      const e = extents(all);
+      return !e.behind && e.x1 - e.x0 <= 2 * limit && e.y1 - e.y0 <= 2 * limit;
+    };
+    let d = heroDistance;
+    let pathLimited = false;
+    if (!pathsFit(d)) {
+      pathLimited = true;
+      let a = d, b = 400;
+      for (let i = 0; i < 60; i++) {
+        const mid = (a + b) / 2;
+        if (pathsFit(mid)) b = mid;
+        else a = mid;
+      }
+      d = b;
     }
-    d = hi;
-  }
-  place(d);
-  const h = extents(hero), a = extents(all);
-  // Slide: across, the hero sits centred, clamped so every path stays inside the clearance; up and
-  // down, the frame centres the whole action (hero and paths), so a scene whose action rises above
-  // its hero (the carry to the bin) keeps that headroom, as the v1.3 fit did.
-  const slide = (c: number, lo: number, hi: number) => Math.min(Math.max(c, hi - limit), lo + limit);
-  const ox = slide((h.x0 + h.x1) / 2, a.x0, a.x1);
-  const oy = (a.y0 + a.y1) / 2;
-  if (frame) {
-    // Same camera position and lens over the frame square; the rest of the stage extends the view.
-    const S = frame.size;
-    camera.setViewOffset(S, S, (ox * S) / 2 - frame.x, (-oy * S) / 2 - frame.y, frame.width, frame.height);
-  } else camera.setViewOffset(1000 * aspect, 1000, (ox * 1000 * aspect) / 2, (-oy * 1000) / 2, 1000 * aspect, 1000);
-  camera.updateProjectionMatrix();
-  return {
-    heroHeight: (h.y1 - h.y0) / 2,
-    heroWidth: (h.x1 - h.x0) / 2,
-    binding: (h.x1 - h.x0) / 2 / fill.width > (h.y1 - h.y0) / 2 / fill.height ? 'width' : 'height',
-    pathLimited,
-    heroCenter: [(h.x0 + h.x1) / 2 - ox, (h.y0 + h.y1) / 2 - oy],
-    distance: d,
-  };
+    place(d);
+    const h = extents(hero), a = extents(all);
+    // Slide: across, the hero sits centred, clamped so every path stays inside the clearance; up
+    // and down, the frame centres the whole action (hero and paths), so a scene whose action rises
+    // above its hero (the carry to the bin) keeps that headroom, as the v1.3 fit did.
+    const slide = (c: number, l: number, u: number) => Math.min(Math.max(c, u - limit), l + limit);
+    const ox = slide((h.x0 + h.x1) / 2, a.x0, a.x1);
+    const oy = (a.y0 + a.y1) / 2;
+    return {
+      heroHeight: (h.y1 - h.y0) / 2,
+      heroWidth: (h.x1 - h.x0) / 2,
+      binding: (h.x1 - h.x0) / 2 / fill.width > (h.y1 - h.y0) / 2 / fill.height ? 'width' : 'height',
+      pathLimited,
+      heroCenter: [(h.x0 + h.x1) / 2 - ox, (h.y0 + h.y1) / 2 - oy],
+      distance: d,
+      offset: [ox, oy],
+      pathExtents: [a.x0 - ox, a.x1 - ox, a.y0 - oy, a.y1 - oy],
+    } satisfies HeroFraming;
+  });
 }
