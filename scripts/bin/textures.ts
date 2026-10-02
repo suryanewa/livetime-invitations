@@ -144,12 +144,23 @@ export function powderNormal(size: number, tile: number): Image {
 
 /**
  * Moulded PP with an EDM (spark-eroded) mould finish, VDI 3400 ≈ Ref 27: a fine, even matte grain
- * of 0.1–0.4 mm pits, RMS slope about 5°. `soft` lowers it for the glossier inner bucket.
+ * of 0.1–0.4 mm pits, RMS slope about 5°. `soft` lowers it for the glossier inner bucket. `cell`
+ * (cm) and `macro` (the weight of a broad undulation 8 cells across) default to the inner
+ * bucket's; the visible PP parts use `ppNormal`.
  */
-export function edmNormal(size: number, tile: number, soft = 1): Image {
-  const cells = Math.round(tile / 0.045);
-  const grain = field(size, size, (u, v) => fbm(u, v, cells, cells, 2, 0.55, 23) + 0.25 * fbm(u, v, Math.round(cells / 8), Math.round(cells / 8), 2, 0.5, 29));
+export function edmNormal(size: number, tile: number, soft = 1, cell = 0.045, macro = 0.25): Image {
+  const cells = Math.round(tile / cell);
+  const grain = field(size, size, (u, v) => fbm(u, v, cells, cells, 2, 0.55, 23) + macro * fbm(u, v, Math.round(cells / 8), Math.round(cells / 8), 2, 0.5, 29));
   return heightToNormal(grain, size, size, tile, tile, { rmsSlopeDeg: 5 * soft });
+}
+
+/**
+ * The visible PP parts (lid ring, base cup, hinge knuckles, pedal housing), v1.5 polish: the same
+ * EDM finish, finer and even (0.3 mm cells, no broad undulation, RMS slope 3°). At 0.45 mm with
+ * the undulation and 5° the lid ring read as pebbled leather in close-up.
+ */
+export function ppNormal(size: number, tile: number): Image {
+  return edmNormal(size, tile, 0.6, 0.03, 0);
 }
 
 /** Rubber: a soft matte grain (0.3 mm), RMS slope 4°. */

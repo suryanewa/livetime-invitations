@@ -61,13 +61,15 @@ Built in code (`buildDisposalBin`), every part as the real product is made, ever
   the undersides are the same coil), each a half-disc (r 15.65 cm) whose outer extreme is cut by a straight 9 cm
   **hinge chord**; a gentle dome (2.5 cm crown at the split), a rolled 5.5 mm edge (2.6 mm top fillet, 1.2 mm bottom
   fillet, a 4.2 mm hem with a return) and a recessed underside; the halves are 2 mm apart at the split, with 3 mm
-  corners. They open 100°.
+  corners. They open 90°, upright, as a butterfly lid's halves stand (v1.5 polish; they opened 100°, leaning out).
 - **Hinges**: three-knuckle hinges inside the lid ring's footprint (nothing stands outside the silhouette, nothing
   above the lid's edge): two black PP knuckle leaves on tabs under each half's chord, the ring's moulded knuckle
   between them, a black-oxide pin through all three.
 - **Pedal**: under the lid's split (the front), as on a butterfly step can: a PP housing moulded round the base cup's
   curve, a dark slot, a stainless lever with a front edge curved round the bin's axis on a pin hinge between two lugs,
-  and a ribbed **coral elastomer tread** (the bin's one coloured insert, the brand accent). The pedal is linked to
+  and a ribbed **black polystyrene tread** (v1.5 polish: the coral elastomer insert, v1.1's brand accent, was the
+  most saturated thing in the Dinner declined frame and read as a toy sticker next to the masters; real pedals are
+  black polystyrene or stainless). The pedal is linked to
   the lid: as the flaps open it goes down 11° (the tread about 1 cm) and comes back as they close (`attachBin` sets
   it from the flap's own rotation, so every scene path, the rewinds included, moves it). In Birthday the cake stand
   stands in front of it (moving the bin left to show it would drop the 3:4 portrait fill to about 0.45–0.5); in Dinner
@@ -88,13 +90,13 @@ exports give byte-identical GLBs), and go through the masters' texture policy (W
 | Material | Finish | Maps |
 | --- | --- | --- |
 | `bin_powder` (body) | warm-neutral graphite `#4A4846`, satin 0.29 ± 0.04 over 20–40 cm | orange-peel micro-normal (2.2 mm cells and a finer octave, 0.55° RMS slope, sparse dust inclusions), 512² per 5.76 cm tile (89 px/cm); occlusion + roughness 2048 × 1024 on UV1 |
-| `bin_base`, `bin_ring` | satin black PP `#1D1D1D` 0.56 / 0.52 | EDM mould grain (VDI 3400 ≈ Ref 27: 0.1–0.4 mm, 5° RMS), 512² per 3 cm (171 px/cm); occlusion + roughness 1024 × 256 on UV1 |
+| `bin_base`, `bin_ring` | satin black PP `#1D1D1D` 0.56 / 0.52 | EDM mould grain (VDI 3400 ≈ Ref 27), v1.5 polish: 0.3 mm cells, even, 3° RMS (was 0.45 mm with a broad undulation, 5°: the lid ring read as pebbled leather in close-up), 512² per 3 cm (171 px/cm); occlusion + roughness 1024 × 256 on UV1 |
 | `bin_liner` | mid-grey PP `#7C7C7B`, 0.45 | a softer grain (3°); occlusion + roughness 1024 × 1024 on UV1 (0.14 deep in the bucket) |
-| `bin_plastic` | satin black PP (hinge knuckles, pedal housing) | the EDM grain |
+| `bin_plastic` | satin black PP (hinge knuckles, pedal housing) | the same EDM grain |
 | `bin_steel` (lid top and underside, lever) | brushed stainless, metal 1, KHR_materials_anisotropy 0.6 across the grain | brushed grooves (0.12 mm cells, belt scratches; 2.5° RMS across the grain), 1024² per 6 cm (171 px/cm); roughness 0.17 along the grain with streaks at 0.4 / 1 / 2.5 mm; tangents in the mesh (the grain follows UV0's u: across the lid, along its rolled edge) |
 | `bin_pin` | black-oxide steel 0.42 | |
 | `bin_rubber` | matte rubber 0.86 | grain 256² per 3 cm |
-| `bin_tread` | coral elastomer `#FF714A` 0.64 | ribs (4 mm pitch, 0.5 mm crowns), 256² per 1.2 cm |
+| `bin_tread` | black polystyrene `#1B1B1C` 0.5 (v1.5 polish; was coral elastomer `#FF714A`) | ribs (4 mm pitch, 0.5 mm crowns), 256² per 1.2 cm |
 | `bin_slot` | near-black 0.9 | |
 
 **Baked occlusion** (`scripts/bin/ao.ts`): the turned parts are surfaces of revolution, so occlusion depends only on
@@ -103,21 +105,46 @@ revolved analytically (cones, cylinders, annuli: exact intersections), with the 
 the inner wall under the lip 0.5, the seam under the lid ring 0.6, the outer wall 1.
 
 Texel density, against the masters (15–100 px/cm; the hoop's tiled maps 50 px/cm): the micro-normals 89–200 px/cm,
-the unique occlusion/roughness 10–26 px/cm. GLB 6592.8 KiB raw, 3288.7 KiB gzip.
+the unique occlusion/roughness 10–26 px/cm. GLB 6564.6 KiB raw, 3412.2 KiB gzip (the export's own report).
 
 **Contact shadow** (`BIN_CONTACT`): footprint the base's diameter, a tight line at 0.85 reaching 7 % past the base and
 a short spread: about half the floor's light at contact, as under the stand and the plate.
 
+**The set in the bin's reflections** (`patchBinFloor`, on the body, the base cup and the lid ring; v1.5 polish): the
+room's environment is a map at infinity, and below the horizon it holds the room's table and the dark runner on the
+camera side (strokes for polished metal). A vertical shell seen from the camera's 15° reflects exactly that band
+(−12° to −21°), so the satin body reflected near-black and read as a dead-flat cylinder. What a real bin standing on
+the set reflects there is the set: each reflected ray that goes down is traced to the floor plane, or to the cove's
+back wall if it reaches it first (the rig's `studio_sweep`), and takes the lit cove's radiance (`BIN_FLOOR`, measured
+under the production rig without tone mapping: 0.515 / 0.497 / 0.468), at 0.69 of it where that point is in the
+bin's own shadow (the footprint swept towards the key, below the crown: the floor without the key's share). The
+lobe's share below the horizon widens with the roughness. The key is found in the scene each time the bin draws
+(its first spot or directional light), so the shadow follows any rig.
+
 **Light inside the bin** (`patchBinVisibility`, on the cake's materials in Birthday, replacing v1.2's dimmer, and on
-the plate and cloche in Dinner): below the rim a point sees the room only through the mouth. Its indirect diffuse
-light is the mouth's cosine-weighted share of the sky, R² / (R² + d²) at depth d (0.96 at 3 cm, 0.69 at 10 cm, 0.13
-on the floor); its indirect specular reflects the room only when the reflected ray leaves through the mouth (an exact
-per-pixel test against the rim's plane), else the grey bucket wall (an eighth of the room). The direct light needs nothing: the shadow map has the walls. It applies inside the mouth's cylinder
-only and fades in over the last 2 cm above the rim, so switching it on over the opening changes no pixel. In Birthday
-it is the last link on every cake material (frosting of both presets, piping, pearls, each candle's own melting wax):
-after the cake's own patches (`models/cakeShaders.ts`: subsurface, press, ridges, melt) and the flames' light
-(`models/birthdayFire.ts patchFlameLight`), each chaining the one before; the cake's v1.2.1 darkening ramp
-(`binShadePatch`) is gone from that chain, `BIN_SHADE.above` and the `binShade.on` gate stay.
+the plate and cloche in Dinner; v1.5 polish: the form factor). Below the rim a point sees the room only through the
+mouth and the bucket's wall with the rest of its hemisphere. Its indirect diffuse light is the mouth's form factor
+for the point's own normal: the exact vector form factor of the mouth (a 16-gon on the rim circle, three's LTC edge
+integral) with the standard horizon-clipped sphere approximation (Hill and Heitz 2016), the rest of the hemisphere
+at 0.06 of the room (the grey bucket wall, itself lit only through the mouth: `BIN_WALL`). An upward face on the axis
+keeps R² / (R² + d²) (0.96 at 3 cm, 0.69 at 10 cm, 0.13 on the floor); a face turned to the wall gets far less, about
+half just under the rim (the first version applied the upward value to every face, so the sides of the cake and the
+cloche inside stayed lit as if outside). Its indirect specular reflects the room only when the reflected ray leaves
+through the mouth (an exact per-pixel test against the rim's plane, its edge softened by the roughness), else the
+wall (0.07); a rough surface's reflection tends to its diffuse visibility. The direct light needs nothing: the shadow
+map has the walls. It applies inside the mouth's cylinder only and fades in over the last 2 cm above the rim, so
+switching it on over the opening changes no pixel. Only standard materials are patched (Dinner's steam is a shader
+material of its own). In Birthday it is the last link on every cake material (frosting of both presets, piping,
+pearls, each candle's own melting wax): after the cake's own patches (`models/cakeShaders.ts`: subsurface, press,
+ridges, melt) and the flames' light (`models/birthdayFire.ts patchFlameLight`), each chaining the one before; the
+cake's v1.2.1 darkening ramp (`binShadePatch`) is gone from that chain, `BIN_SHADE.above` and the `binShade.on` gate
+stay.
+
+**The open flaps' shadow** (v1.5 polish): the flaps cast through a depth material of their own that discards above
+the closed lid's crown (`attachBin`; `detachBin` frees it with the scene). Open, each flap stands 16 cm over the rim,
+and under the low window key the two threw "rabbit ears" larger than the bin onto the cove behind it through
+0.3–0.9 s of both declines (the spot's throw magnifies them). The rig's key is shared, so the measure is the bin's
+own: the closed bin's shadow is unchanged, and the open bin's is the closed one's.
 
 ## The decline, re-timed for the deeper bin
 
@@ -182,3 +209,32 @@ so the brushed highlight stretched sideways into the dim wall; now it runs acros
 as above. Not changed, and why: the height (framing; the owner's call), the Birthday pedal behind the stand (3:4
 framing), the open flaps' shadows on the cove (the shared rig's key), the frame-edge clearance (the shared framing
 rule's 4 % of the half-frame), the cake not shadowed inside the bin by the rim (the shared rig's shadow map).
+
+## Polish round (independent judge on the integrated build, 7/10)
+
+"Proportions right; the brushed lid, hinge and pedal hardware are as good as the masters; the body is not." Each
+finding, what it turned out to be, and the change (frames: `evidence/v1.5/bin/polish/`):
+
+1. **The body read as a dead-flat dark cylinder** (Dinner declined, a brightness profile across it at mid-height fell
+   from `#3d3b3b` to `#1f1c19` with no highlight). Measured in the production frame, none of the suspected material
+   causes is it: without the micro-normal, without the occlusion map, without the roughness map the profile is the
+   same to a level (the orange peel is 0.55° RMS, too gentle to spread anything), and roughness 0.2–0.6 or a broad
+   haze lobe only lift or flatten it. The cause is where the body's reflections point: a vertical shell seen from 15°
+   above reflects the band 12–21° below the horizon, which in the environment map is the room's table and the dark
+   runner on the camera side; the window (7–53° up) and the key (44° up) can reach a vertical surface only from a
+   camera at its own height, as product photographs are lit. So the body now reflects the set it stands on
+   (`patchBinFloor`, above): the lit cove floor and back wall, its own shadow on them. Profile at mid-height (sRGB
+   luma, left edge to right edge, 13 samples): before 82 60 59 57 53 47 42 38 34 30 28 32 66; after 100 68 63 61 58
+   55 52 48 44 41 39 44 99: the key side lighter, the silhouette catching the lit cove at grazing angles, the far
+   side in its own shadow. A distinct vertical highlight band (a strip light at the bin's height on the key side) is
+   a rig decision (the shared light and environment), not done here (`compare-body.webp`).
+2. **The coral pedal tread** was the most saturated thing in the Dinner declined frame: now black polystyrene.
+3. **The open flaps' "rabbit-ear" shadows** on the cove: the flaps open upright (90°, was 100°) and cast nothing above
+   the closed lid's crown (above); both decline strips show the open bin's shadow as the closed bin's.
+4. **The object inside the open bin lit as if outside**: the in-bin light is now the mouth's form factor for each
+   face's own normal (above), so the faces turned to the wall darken below the rim and the reflections that hit the
+   wall go to 0.07. What shows over the front rim from the camera's 15° is the top of the object and the far side
+   near the rim, which a real bin leaves lit too; deeper (the cake's candles on the floor at 1.0 s, the cloche on the
+   bucket floor) it darkens.
+5. **The lid ring's grain read as pebbled leather** in macro: the visible PP parts' EDM grain is finer and even
+   (0.3 mm cells, 3° RMS, no broad undulation).
