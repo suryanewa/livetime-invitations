@@ -15,3 +15,11 @@ for (const [path, url] of Object.entries(files)) {
 export function posterUrl(category: Category, preset: string, pose: CanonicalPose): string | null {
   return table.get(`${category}/${preset}/${pose}`) ?? table.get(`${category}/shared/${pose}`) ?? null;
 }
+
+/** Fullscreen backdrop stills (bare studio, BACKDROP_FIELD = 7 × the frame): assets/scenes/<category>/backdrop.webp */
+const backdrops = import.meta.glob('../../assets/scenes/*/backdrop.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+
+export function backdropUrl(category: Category): string | null {
+  const hit = Object.entries(backdrops).find(([path]) => path.endsWith(`/scenes/${category}/backdrop.webp`));
+  return hit ? hit[1] : null;
+}

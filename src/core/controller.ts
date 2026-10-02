@@ -6,6 +6,7 @@ import type {
   CanonicalPose,
   Category,
   CreateInvitationOptions,
+  FrameInsets,
   InvitationController,
   Mode,
   Response,
@@ -22,6 +23,7 @@ import { QualityMonitor, TIER_DPR, type Tier } from '../render/quality.ts';
 import { DEFAULT_RIG } from '../render/rigRegistry.ts';
 import { Stage, type StageOptions } from '../render/stage.ts';
 import type { HeroFraming } from '../render/camera.ts';
+import { type FrameRect, frameSquare, NO_INSETS } from '../render/camera.ts';
 
 /**
  * Embeddable invitation controller (Master §7). Three independent dimensions — resource,
@@ -42,6 +44,12 @@ export interface InvitationOptions extends CreateInvitationOptions {
    */
   stage?: Omit<StageOptions, 'canvas' | 'preserveDrawingBuffer'>;
   posterFor?: PosterResolver;
+  /**
+   * Fullscreen layout: a still of the bare studio at BACKDROP_FIELD × the frame field, centred on
+   * the same framing (`pnpm capture backdrops`). It extends the square poster to the whole stage,
+   * so a poster covers any aspect with the canvas's framing. Omitted, the stage colour does.
+   */
+  backdropFor?: (category: Category) => string | null;
   /** Human-readable description of each pose for the text fallback when a poster fails. */
   describePose?: (category: Category, pose: CanonicalPose) => string;
   onStateChange?: (state: InvitationState) => void;
@@ -63,13 +71,15 @@ export interface InvitationState {
 export interface InvitationHandle extends InvitationController {
   readonly element: HTMLElement;
   getState(): InvitationState;
+  /** Fullscreen layout: the frame square in mount CSS px (null for the square layout). */
+  getFrame(): FrameRect | null;
   retryGraphics(): void;
   setQualityTier(tier: Tier): void;
   /**
    * Tooling only (posters, review captures): render the current pose to an image URL. `empty`
    * renders the bare stage (content hidden for that frame) for the stage-colour measurement.
    */
-  captureStill(size: number, dpr?: number, type?: string, quality?: number, options?: { empty?: boolean }): string | null;
+  captureStill(size: number, dpr?: number, type?: string, quality?: number, options?: { empty?: boolean; field?: number }): string | null;
   /** Tooling only (resource checks): live GPU object counts, or null without a stage. */
   renderInfo(): { geometries: number; textures: number; programs: number } | null;
   /** Tooling only (framing checks): the hero fit at `aspect` (width / height), or null. */
@@ -77,6 +87,8 @@ export interface InvitationHandle extends InvitationController {
 }
 
 export const LOAD_TIMEOUT_MS = 6000;
+/** The backdrop still's field, in frame squares (it is this many frame sizes wide and tall). */
+export const BACKDROP_FIELD = 7;
 const ENTRANCE_MS = 220;
 const LATE_LOAD_MS = 1200;
 
@@ -141,7 +153,11 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
 
   // ── DOM ────────────────────────────────────────────────────────────────────
   const root = options.mount;
+  const fullscreen = options.layout === 'fullscreen';
+  let insets: FrameInsets = { ...NO_INSETS, ...options.frameInsets };
+  let frameRect: FrameRect | null = null;
   root.classList.add('lt-stage');
+  root.classList.toggle('lt-stage--fullscreen', fullscreen);
   root.dataset.resource = resource;
   const poster = document.createElement('img');
   poster.className = 'lt-stage__poster';
@@ -155,6 +171,12 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   const canvasHost = document.createElement('div');
   canvasHost.className = 'lt-stage__canvas';
   canvasHost.setAttribute('aria-hidden', 'true');
+  /** Fullscreen: the bare studio around the square poster, at the canvas's framing. */
+  const backdrop = document.createElement('div');
+  backdrop.className = 'lt-stage__backdrop';
+  backdrop.setAttribute('aria-hidden', 'true');
+  backdrop.style.setProperty('--lt-backdrop-field', String(BACKDROP_FIELD));
+  if (fullscreen) root.append(backdrop);
   root.append(poster, posterText, canvasHost);
 
   poster.addEventListener('error', () => {
@@ -251,6 +273,12 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       posterText.hidden = !posterText.textContent;
     }
     if (!showPoster) posterText.hidden = true;
+    if (fullscreen) {
+      const bg = options.backdropFor?.(config.category) ?? null;
+      const css = bg ? `url("${bg}")` : 'none';
+      if (backdrop.style.backgroundImage !== css) backdrop.style.backgroundImage = css;
+      backdrop.classList.toggle('is-hidden', !showPoster);
+    }
     poster.classList.toggle('is-hidden', !showPoster);
     canvasHost.classList.toggle('is-visible', !showPoster);
   }
@@ -569,10 +597,25 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     stage.render();
   }
 
+  /**
+   * Fullscreen: the frame square for the mount's current size and insets. The poster (a square
+   * still of the same framing) is laid over it through CSS variables, so poster, text fallback and
+   * canvas show the object in the same place at every aspect.
+   */
+  function updateFrame() {
+    if (!fullscreen) return;
+    const f = (frameRect = frameSquare(root.clientWidth || 1, root.clientHeight || 1, insets));
+    root.style.setProperty('--lt-frame-x', `${f.x}px`);
+    root.style.setProperty('--lt-frame-y', `${f.y}px`);
+    root.style.setProperty('--lt-frame-size', `${f.size}px`);
+  }
+
   function resize() {
+    updateFrame();
     if (!stage) return;
     const w = root.clientWidth || 1;
     const h = root.clientHeight || w;
+    stage.setFrameInsets(fullscreen ? insets : null);
     stage.resize(w, h, TIER_DPR[quality.tier]);
   }
 
@@ -764,6 +807,20 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       requestFrame();
     },
 
+    setFrameInsets(next: Partial<FrameInsets>) {
+      if (disposed || !fullscreen) return;
+      const merged = { ...NO_INSETS, ...next };
+      if (merged.top === insets.top && merged.right === insets.right && merged.bottom === insets.bottom && merged.left === insets.left) return;
+      insets = merged;
+      resize();
+      redraw();
+      requestFrame();
+    },
+
+    getFrame() {
+      return frameRect ? { ...frameRect } : null;
+    },
+
     setReducedMotion(enabled: boolean) {
       if (disposed) return;
       explicitReduced = enabled;
@@ -816,10 +873,10 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       return stage.measureFraming(aspect);
     },
 
-    captureStill(size: number, dpr = 2, type = 'image/png', quality?: number, captureOptions?: { empty?: boolean }) {
+    captureStill(size: number, dpr = 2, type = 'image/png', quality?: number, captureOptions?: { empty?: boolean; field?: number }) {
       if (!stage || !scene || resource !== 'ready') return null;
       scene.beforeRender?.();
-      const url = stage.snapshot(size, size, dpr, type, quality, captureOptions?.empty);
+      const url = stage.snapshot(size, size, dpr, type, quality, captureOptions?.empty, captureOptions?.field);
       resize();
       requestFrame();
       return url;
@@ -840,11 +897,13 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       document.removeEventListener('visibilitychange', onVisibility);
       media?.removeEventListener('change', onMotionPreference);
       root.replaceChildren();
-      root.classList.remove('lt-stage');
+      root.classList.remove('lt-stage', 'lt-stage--fullscreen');
+      for (const v of ['--lt-frame-x', '--lt-frame-y', '--lt-frame-size']) root.style.removeProperty(v);
       setResource('disposed', 'disposed');
     },
   };
 
+  updateFrame();
   updatePoster();
   emit();
   void loadScene();

@@ -195,8 +195,16 @@ export function plasterTextures(size = 512): { normal: Texture; albedo: Texture 
 /** Radius of the backdrop cove: the floor starts curving up at z = wallZ + COVE_RADIUS. */
 export const COVE_RADIUS = 1.6;
 
+/**
+ * Sweep extents. v1.4 (fullscreen layout): 64 wide, 40 deep, 32 tall (was 16 × 7 × 8, sized for
+ * the square stage): a wide or tall viewport, and the 7× backdrop still, look well past the square
+ * frame and must still see cove, never its edges. The cove itself (radius, wall) is unchanged.
+ */
+export const SWEEP_EXTENT = { width: 64, depth: 40, height: 32 } as const;
+
 export function sweepGeometry(wallZ: number = DEFAULT_WALL_Z): BufferGeometry {
-  const width = 16, depth = 7, height = 8, radius = COVE_RADIUS, segs = 24;
+  const { width, depth, height } = SWEEP_EXTENT;
+  const radius = COVE_RADIUS, segs = 24;
   // Profile in (z, y): front edge → floor → cove arc → wall top.
   const profile: [number, number][] = [];
   profile.push([depth, 0], [wallZ + radius, 0]);

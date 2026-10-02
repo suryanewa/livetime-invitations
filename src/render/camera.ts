@@ -1,4 +1,5 @@
 import { Box3, MathUtils, OrthographicCamera, type PerspectiveCamera, Vector3 } from 'three';
+import type { FrameInsets } from '../core/types.ts';
 
 /**
  * Shared three-quarter camera angle (Master §5). One angle for all five scenes; scenes never
@@ -27,6 +28,41 @@ export function createStageCamera(): OrthographicCamera {
 const corner = new Vector3();
 
 /**
+ * Fullscreen layout (v1.4): the space an overlay UI leaves free, in CSS px from each edge of the
+ * stage. Every scene is framed exactly as on the square stage inside the largest square that fits
+ * this free area (the "frame square"); the rest of the viewport extends the same view, so a wide
+ * or tall viewport adds studio around the object, never a different composition.
+ */
+export type { FrameInsets } from '../core/types.ts';
+
+/** The frame square inside a `width` × `height` stage (CSS px), and that stage's size. */
+export interface FrameRect {
+  x: number;
+  y: number;
+  size: number;
+  width: number;
+  height: number;
+}
+
+export const NO_INSETS: FrameInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/**
+ * The largest square that fits inside the free area, centred in it. Insets that would leave less
+ * than a quarter of the stage's shorter side are scaled back, so the object never collapses.
+ */
+export function frameSquare(width: number, height: number, insets: FrameInsets = NO_INSETS): FrameRect {
+  const w = Math.max(1, width), h = Math.max(1, height);
+  let { top, right, bottom, left } = insets;
+  const floor = Math.min(w, h) / 4;
+  const fw = w - left - right, fh = h - top - bottom;
+  if (fw < floor) { const k = Math.max(0, w - floor) / Math.max(1e-6, left + right); left *= k; right *= k; }
+  if (fh < floor) { const k = Math.max(0, h - floor) / Math.max(1e-6, top + bottom); top *= k; bottom *= k; }
+  const freeW = w - left - right, freeH = h - top - bottom;
+  const size = Math.max(1, Math.min(freeW, freeH));
+  return { x: left + (freeW - size) / 2, y: top + (freeH - size) / 2, size, width: w, height: h };
+}
+
+/**
  * Fit complete motion bounds into the stage with clearance on every side, preserving
  * the shared camera angle. Bounds must cover every authored path, not just the ready pose.
  */
@@ -36,7 +72,9 @@ export function fitCameraToBounds(
   aspect: number,
   clearance = FRAMING_CLEARANCE,
   points?: readonly Vector3[],
+  frame?: FrameRect,
 ): void {
+  if (frame) aspect = 1;
   const center = bounds.getCenter(new Vector3());
   const dir = cameraDirection();
   camera.position.copy(center).addScaledVector(dir, DISTANCE);
@@ -70,6 +108,14 @@ export function fitCameraToBounds(
   camera.right = cx + halfW;
   camera.top = cy + halfH;
   camera.bottom = cy - halfH;
+  if (frame) {
+    // Extend the square view to the whole stage: same scale, the square at its frame rect.
+    const unit = (2 * halfW) / frame.size;
+    camera.left -= frame.x * unit;
+    camera.right = camera.left + frame.width * unit;
+    camera.top += frame.y * unit;
+    camera.bottom = camera.top - frame.height * unit;
+  }
   camera.updateProjectionMatrix();
 }
 
@@ -91,7 +137,10 @@ export function fitPerspectiveToBounds(
   aspect: number,
   clearance = FRAMING_CLEARANCE,
   points?: readonly Vector3[],
+  frame?: FrameRect,
 ): void {
+  // Fullscreen: fit the frame square exactly as the square stage, then extend the view (below).
+  if (frame) aspect = 1;
   const center = bounds.getCenter(new Vector3());
   const dir = cameraDirection();
   camera.clearViewOffset();
@@ -123,7 +172,15 @@ export function fitPerspectiveToBounds(
   }
   const r = fits(hi);
   // Recentre: shift the view so the projected samples sit in the middle of the frame.
-  camera.setViewOffset(1000 * aspect, 1000, (r.cx * 1000 * aspect) / 2, (-r.cy * 1000) / 2, 1000 * aspect, 1000);
+  if (frame) {
+    // Fullscreen (v1.4): the recentred square view becomes a window of the whole stage, the square
+    // at its frame rect. Same camera position and lens over the square, so the object is framed
+    // exactly as on the square stage (and in the square posters); the margins show more studio.
+    const S = frame.size;
+    camera.setViewOffset(S, S, (r.cx * S) / 2 - frame.x, (-r.cy * S) / 2 - frame.y, frame.width, frame.height);
+  } else {
+    camera.setViewOffset(1000 * aspect, 1000, (r.cx * 1000 * aspect) / 2, (-r.cy * 1000) / 2, 1000 * aspect, 1000);
+  }
   camera.updateProjectionMatrix();
 }
 
@@ -159,7 +216,10 @@ export function fitPerspectiveToHero(
   paths: readonly Vector3[],
   fill: { readonly height: number; readonly width: number },
   clearance: number,
+  frame?: FrameRect,
 ): HeroFraming {
+  // Fullscreen (v1.4): fit the frame square exactly as the square stage, then extend the view.
+  if (frame) aspect = 1;
   const dir = cameraDirection();
   camera.clearViewOffset();
   camera.aspect = aspect;
@@ -217,7 +277,11 @@ export function fitPerspectiveToHero(
   const slide = (c: number, lo: number, hi: number) => Math.min(Math.max(c, hi - limit), lo + limit);
   const ox = slide((h.x0 + h.x1) / 2, a.x0, a.x1);
   const oy = (a.y0 + a.y1) / 2;
-  camera.setViewOffset(1000 * aspect, 1000, (ox * 1000 * aspect) / 2, (-oy * 1000) / 2, 1000 * aspect, 1000);
+  if (frame) {
+    // Same camera position and lens over the frame square; the rest of the stage extends the view.
+    const S = frame.size;
+    camera.setViewOffset(S, S, (ox * S) / 2 - frame.x, (-oy * S) / 2 - frame.y, frame.width, frame.height);
+  } else camera.setViewOffset(1000 * aspect, 1000, (ox * 1000 * aspect) / 2, (-oy * 1000) / 2, 1000 * aspect, 1000);
   camera.updateProjectionMatrix();
   return {
     heroHeight: (h.y1 - h.y0) / 2,

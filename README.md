@@ -9,6 +9,8 @@ pnpm install
 pnpm dev        # showcase at http://127.0.0.1:5199/  (?scene=party|birthday|sports|dinner|business); /gallery.html compares all five
 ```
 
+Since v1.4 the showcase is fullscreen: the scene fills the viewport and the UI floats over it (a side dock on landscape screens, a bottom sheet on portrait ones). Embeds choose with `createInvitation({ layout: 'square' | 'fullscreen' })`; square stays the default (`docs/integration.md`).
+
 On a local host the showcase also takes `?rig=<name>` to light the scene with another studio rig from `src/render/rigs/` (`neutral-room` is the production rig; `product-studio`, `daylight-table`, `livetime-warm` and `v1.1` are kept for comparison), and `&camera=ortho` for the v1.1 orthographic camera.
 
 Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm test` (unit) and `pnpm test:browser` (behaviour, uses the installed Google Chrome).

@@ -1,5 +1,5 @@
 import { Box3, Color, type Material, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PCFShadowMap, PerspectiveCamera, Scene, type Texture, Vector3, VSMShadowMap, type WebGLRenderer } from 'three';
-import { createStageCamera, fitCameraToBounds, fitPerspectiveToBounds, fitPerspectiveToHero, type HeroFraming, PERSPECTIVE_FOV } from './camera.ts';
+import { createStageCamera, type FrameInsets, type FrameRect, frameSquare, fitCameraToBounds, fitPerspectiveToBounds, fitPerspectiveToHero, type HeroFraming, PERSPECTIVE_FOV } from './camera.ts';
 import { HERO_FILL, PATH_CLEARANCE } from './framing.ts';
 import { createRenderer, sizeRenderer } from './createRenderer.ts';
 import { releaseShadowTextureGpu } from './contactShadow.ts';
@@ -258,17 +258,33 @@ export class Stage {
   private heroPoints: readonly Vector3[] | undefined;
   /** The last hero fit (null when the camera fitted bounds instead). */
   framing: HeroFraming | null = null;
+  /** Fullscreen layout: the overlay insets; null frames the whole canvas (square layout). */
+  private insets: FrameInsets | null = null;
+  /** Snapshot override: null renders the plain square fit (posters); a rect, that framing. */
+  private snapshotFrame: FrameRect | null | undefined = undefined;
+
+  /**
+   * Fullscreen layout (v1.4): frame the object in the largest square left free by `insets` and
+   * extend the view to the whole canvas. `null` restores the plain fit (square stage).
+   */
+  setFrameInsets(insets: FrameInsets | null): void {
+    this.insets = insets;
+    this.fit();
+  }
 
   private fit(): void {
     if (this.bounds.isEmpty()) return;
     const aspect = this.cssWidth / this.cssHeight;
+    const frame = this.snapshotFrame !== undefined
+      ? this.snapshotFrame ?? undefined
+      : this.insets ? frameSquare(this.cssWidth, this.cssHeight, this.insets) : undefined;
     this.framing = null;
     if (this.camera instanceof PerspectiveCamera) {
       if (this.heroPoints?.length) {
         const paths = this.framePoints?.length ? this.framePoints : boxCorners(this.bounds);
-        this.framing = fitPerspectiveToHero(this.camera, this.bounds.getCenter(aimPoint), aspect, this.heroPoints, paths, HERO_FILL, PATH_CLEARANCE);
-      } else fitPerspectiveToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints);
-    } else fitCameraToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints);
+        this.framing = fitPerspectiveToHero(this.camera, this.bounds.getCenter(aimPoint), aspect, this.heroPoints, paths, HERO_FILL, PATH_CLEARANCE, frame);
+      } else fitPerspectiveToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints, frame);
+    } else fitCameraToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints, frame);
   }
 
   render(): void {
@@ -278,22 +294,26 @@ export class Stage {
   /**
    * Render at an explicit size and return an image URL (capture tooling and posters). `empty`
    * hides the content for the frame: the bare backdrop under the same light and camera, which
-   * is what the stage colour is measured from.
+   * is what the stage colour is measured from. The still is the plain square fit (as the posters
+   * are); `field` > 1 widens it to `field` × the frame square around the same framing (the
+   * fullscreen backdrop still, v1.4), so the square fit sits in its middle at 1/`field` the size.
    */
   /** The hero fit at another aspect (tooling), leaving the live fit as it was. */
   measureFraming(aspect: number): HeroFraming | null {
-    const prev = { w: this.cssWidth, h: this.cssHeight };
+    const prev = { w: this.cssWidth, h: this.cssHeight, frame: this.snapshotFrame };
     this.cssWidth = aspect * 1000;
     this.cssHeight = 1000;
+    this.snapshotFrame = null;
     this.fit();
     const r = this.framing;
     this.cssWidth = prev.w;
     this.cssHeight = prev.h;
+    this.snapshotFrame = prev.frame;
     this.fit();
     return r;
   }
 
-  snapshot(cssWidth: number, cssHeight: number, dpr: number, type = 'image/png', quality?: number, empty = false): string {
+  snapshot(cssWidth: number, cssHeight: number, dpr: number, type = 'image/png', quality?: number, empty = false, field = 1): string {
     const hidden = empty && this.content?.visible ? this.content : null;
     if (hidden) {
       hidden.visible = false;
@@ -305,8 +325,11 @@ export class Stage {
     this.renderer.setSize(cssWidth, cssHeight, false);
     this.cssWidth = cssWidth;
     this.cssHeight = cssHeight;
+    const size = Math.min(cssWidth, cssHeight) / field;
+    this.snapshotFrame = field > 1 ? { x: (cssWidth - size) / 2, y: (cssHeight - size) / 2, size, width: cssWidth, height: cssHeight } : null;
     this.fit();
     this.render();
+    this.snapshotFrame = undefined;
     const url = this.canvas.toDataURL(type, quality);
     if (hidden) {
       hidden.visible = true;
