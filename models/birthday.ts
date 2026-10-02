@@ -4,7 +4,7 @@ import { ContactShadow } from '../src/render/contactShadow.ts';
 import { BIN_POS, BIN_YAW, birthdayBounds, STAND } from './birthdayContract.ts';
 import { BIRTHDAY_GLB_NODES } from './birthdayParts.ts';
 import { buildCakeGeometry, type CakePreset } from './cake.ts';
-import { attachBin, BIN, buildDisposalBin } from './disposalBin.ts';
+import { attachBin, BIN, binLight, buildDisposalBin, patchBinVisibility } from './disposalBin.ts';
 import type { MaterialVariants } from './imported.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
@@ -52,15 +52,15 @@ export interface BirthdayRig {
 export type BirthdayModel = BirthdayRig & BuiltModel;
 
 /**
- * Bin shade: inside the shared bin, below its rim, the ink liner blocks the key and most of the
- * fill, so whatever of the dropped cake still shows through the opening (the candle tips, the
- * crown rosettes) darkens with depth instead of staying key-lit on the black interior. A
- * world-height ramp on the cake's own materials: full light BIN_SHADE.above the rim (in the
- * mouth of the bin), BIN_SHADE.floor of it BIN_SHADE.depth below, so the seated candle tips (4 cm
- * under the rim) sink into the dark with the cake instead of reading as confetti. `uBinShadeOn` gates it to the cake over the bin (set only while the
- * whole cake is above the rim, so switching it never changes a pixel).
+ * Bin shade: inside the shared bin the cake sees the room only through the bin's mouth. Since
+ * v1.5 this is the physically based visibility of `patchBinVisibility` (models/disposalBin.ts:
+ * the indirect diffuse and specular light a point at depth d under the mouth still gets; the
+ * walls' shadow does the direct light), on the cake's own materials, switched on (`uBinShadeOn`)
+ * once the cake is over the opening with all of it above the rim plus BIN_SHADE.above, so
+ * switching it never changes a pixel. (v1.2–v1.4: a ramp to 6 % within 1 cm of the rim, which
+ * read as a dimmer in the 36 cm-deep bin.)
  */
-export const BIN_SHADE = { above: 0.02, depth: 0.05, floor: 0.06 } as const;
+export const BIN_SHADE = { above: 0.02 } as const;
 
 export interface BinShade {
   /** World height of the bin's rim top. */
@@ -68,24 +68,10 @@ export interface BinShade {
   readonly on: { value: number };
 }
 
-function patchBinShade(material: Material, shade: BinShade): void {
+function patchBinShade(material: Material, shade: BinShade, binRoot: Object3D): void {
   if (material.userData.binShade) return;
   material.userData.binShade = true;
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uBinRimY = shade.rimY;
-    shader.uniforms.uBinShadeOn = shade.on;
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vBinY;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\n  vBinY = (modelMatrix * vec4(transformed, 1.0)).y;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vBinY;\nuniform float uBinRimY;\nuniform float uBinShadeOn;')
-      .replace(
-        '#include <opaque_fragment>',
-        `outgoingLight *= mix(1.0, ${BIN_SHADE.floor.toFixed(3)}, uBinShadeOn * (1.0 - smoothstep(uBinRimY - ${BIN_SHADE.depth.toFixed(3)}, uBinRimY + ${BIN_SHADE.above.toFixed(3)}, vBinY)));\n#include <opaque_fragment>`,
-      );
-  };
-  material.customProgramCacheKey = () => 'birthday-bin-shade-v1';
-  material.needsUpdate = true;
+  patchBinVisibility(material, binLight(binRoot), shade.on);
 }
 
 /** A soft curl of smoke: one quad, low opacity, dissolves upward. */
@@ -160,7 +146,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     if ((o as Mesh).isMesh && !o.userData.shadowProxy) for (const x of Array.isArray(m) ? m : [m]) if (isCake(x)) cakeMaterials.add(x);
   });
   for (const m of variants?.materials ?? []) if (isCake(m)) cakeMaterials.add(m);
-  for (const m of cakeMaterials) patchBinShade(m, binShade);
+  for (const m of cakeMaterials) patchBinShade(m, binShade, binRoot);
 
   const texture = wispTexture();
   // Warm grey, a step darker than v1.1's #A39B91: a pale wisp vanished against the peach studio.

@@ -6,7 +6,7 @@ import {
   CARRY_TO, DROPPED, DURATIONS, FLAME_FLUTTER, FLAME_RISE, FLAME_START, FLAPS_CLOSE, HOVER_OVER_BIN, LEAN, LEAN_FADE, LEAN_MAX, LIFT_TO, ON_STAND, OUT_LEN, OUT_START,
   PRESENT_YAW, WICK_LEAN, WISP_GROW_FROM, WISP_LEN, WISP_OPACITY, WISP_RISE, WISP_START,
 } from './poses.ts';
-import { dropHeight } from '../../../models/disposalBin.ts';
+import { BIN_CLOSE, dropHeight, flapsClosing } from '../../../models/disposalBin.ts';
 
 /**
  * Pure authored choreography for Birthday: every value is a function of time (the carry lean is
@@ -155,23 +155,17 @@ const FLAP_OPEN = cubicBezier(0.3, 0, 0.2, 1);
  * carry's settle to the hover height. The bedded shell border rises before it moves across.
  */
 const LIFT = (u: number) => u * u * u * (u * (6 * u - 15) + 10);
-/** Soft close: the flaps swing shut to the damper's last sliver, which it then takes up slowly. */
-const FLAP_GAP = 0.03;
-/** Flap speed (fraction/s) as the damper catches them: the handover between the two closing pieces. */
-const FLAP_CATCH = 0.25;
-
 /** Cubic Hermite on u ∈ [0, 1] from p0 (tangent m0) to p1 (tangent m1), tangents per unit u. */
 const hermite = (u: number, p0: number, m0: number, p1: number, m1: number) => {
   const u2 = u * u, u3 = u2 * u;
   return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
 };
 
-/** Flaps: open as the bin arrives; from FLAPS_CLOSE (the cake is below the rim) the soft close. */
-const FLAPS_GAP_AT = FLAPS_CLOSE + 0.25;
+/** Flaps: open as the bin arrives; from FLAPS_CLOSE (the cake is below the rim) the bin's soft close. */
+const FLAPS_GAP_AT = FLAPS_CLOSE + BIN_CLOSE.toGap;
 function flaps(t: number): number {
   if (t < FLAPS_CLOSE) return FLAP_OPEN(seg(t, 0.08, 0.25));
-  if (t < FLAPS_GAP_AT) return hermite(seg(t, FLAPS_CLOSE, FLAPS_GAP_AT), 1, 0, FLAP_GAP, -FLAP_CATCH * 0.25);
-  return hermite(seg(t, FLAPS_GAP_AT, FLAPS_GAP_AT + 0.2), FLAP_GAP, -FLAP_CATCH * 0.2, 0, 0);
+  return flapsClosing(t - FLAPS_CLOSE);
 }
 
 /** Plan carry (fraction of the stand → bin distance): smootherstep, so it sets off and arrives with zero acceleration. */

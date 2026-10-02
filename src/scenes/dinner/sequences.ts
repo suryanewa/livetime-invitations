@@ -6,7 +6,7 @@ import {
   DISH_HEIGHT, DISH_IN_BIN, PLATE,
 } from '../../../models/dinnerContract.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
-import { dropHeight, GRAVITY } from '../../../models/disposalBin.ts';
+import { BIN_CLOSE, dropHeight, flapsClosing, GRAVITY } from '../../../models/disposalBin.ts';
 
 /**
  * Pure authored choreography for Dinner (Dinner sub-spec): cover the dish, reveal the plate, or
@@ -215,10 +215,12 @@ function accept(t: number, out: DinnerFrame): void {
 
 // ── Decline: 1.5 s ────────────────────────────────────────────────────────────
 const FLAP_OPEN = cubicBezier(0.3, 0, 0.2, 1);
-const FLAP_CLOSE = cubicBezier(0.45, 0, 0.35, 1);
-/** One continuous move along the transfer path: eases off the floor, travels, comes to rest over the opening. */
-const TRANSFER = cubicBezier(0.33, 0, 0.3, 1);
-const FLAP_GAP = 0.03;
+/**
+ * One continuous move along the transfer path: eases off the floor, travels, comes to rest over
+ * the opening (v1.5: a shorter settle than v1.4's (0.33, 0, 0.3, 1), whose long tail held the dish
+ * still over the bin for a quarter-second before it was let go).
+ */
+const TRANSFER = cubicBezier(0.33, 0, 0.45, 1);
 /**
  * v1.5 (the real 45 cm bin): the dish is carried up and across to rest over the opening by
  * RELEASE, then let go: it falls into the bin under gravity (9.81 m/s² in Dinner's units).
@@ -227,8 +229,9 @@ export const RELEASE = 0.74;
 const DROP_G = GRAVITY * DINNER_BIN_SCALE;
 /** The dish's handle is below the rim (out of sight) by 0.93 s: the flaps begin to close. */
 export const FLAP_CLOSE_AT = 0.94;
-/** Flaps nearly shut (the damper's last gap) and closed. */
-const FLAP_GAP_AT = 1.15;
+/** Flaps nearly shut (the damper's last gap), and closed (the bin's soft close, shared with Birthday). */
+const FLAP_GAP_AT = FLAP_CLOSE_AT + BIN_CLOSE.toGap;
+const FLAPS_SHUT = FLAP_GAP_AT + BIN_CLOSE.last;
 /** Bin entrance: eases in from off-frame and decelerates into place (no full-speed first frame). */
 const BIN_ENTER = cubicBezier(0.25, 0.25, 0.2, 1);
 
@@ -311,10 +314,9 @@ function decline(t: number, out: DinnerFrame, tBin = t): void {
   // slamming across the frame in a few frames).
   out.binPos.lerpVectors(DINNER_BIN_START, DINNER_BIN_POS, BIN_ENTER(seg(tBin, 0, 0.34)));
   // Flaps open as it arrives, and start closing as soon as the dish is out of sight (no frozen
-  // frames): nearly shut by 1.15 s, the last gap settles by 1.30 s.
+  // frames): the bin's soft close, nearly shut by 1.27 s, the last gap taken up by 1.42 s.
   if (t < FLAP_CLOSE_AT) out.flaps = FLAP_OPEN(seg(tBin, 0.14, 0.36));
-  else if (t < FLAP_GAP_AT) out.flaps = lerp(1, FLAP_GAP, FLAP_CLOSE(seg(t, FLAP_CLOSE_AT, FLAP_GAP_AT)));
-  else out.flaps = lerp(FLAP_GAP, 0, EASE.land(seg(t, FLAP_GAP_AT, 1.3)));
+  else out.flaps = flapsClosing(t - FLAP_CLOSE_AT);
   // 0.25–0.74: the covered dish, as one unit, rises clear and crosses over the rim between the
   // open flaps to rest over the opening, in one continuous move; then it is let go and falls in.
   const [d, y] = PATH(TRANSFER(seg(t, 0.25, RELEASE)));
@@ -348,7 +350,7 @@ export function sampleSequence(sequence: SequenceName, t: number, out: DinnerFra
 // ── Change of mind (v1.2.1) ───────────────────────────────────────────────────
 type Outcome = 'accept' | 'decline';
 /** When each outcome's motion is over (it holds its final pose from here to its duration). */
-export const CONTENT_END: Readonly<Record<Outcome, number>> = { accept: ACCEPT.settled, decline: 1.3 };
+export const CONTENT_END: Readonly<Record<Outcome, number>> = { accept: ACCEPT.settled, decline: FLAPS_SHUT };
 /** The decline's first 0.25 s only bring the bin in: they may run during the rewind. */
 const DECLINE_LEAD = 0.25;
 /** Plan clearance between the returning cover and the bin coming in (bin rim + bead + margin). */
@@ -404,10 +406,20 @@ export function hiddenInBin(f: DinnerFrame): boolean {
  * Per-frame visible move of the dish (cover position + lean, plate) and of the bin (position +
  * flaps). The dish's fall to the bucket floor, out of sight, does not count.
  */
+const seenA = new Vector3(), seenB = new Vector3();
+/** Where the dish is seen to be: inside the bin, never deeper than the line of sight (HIDDEN_DEPTH). */
+function seen(f: DinnerFrame, out: Vector3): Vector3 {
+  out.copy(f.platePos);
+  if (Math.hypot(f.platePos.x - f.binPos.x, f.platePos.z - f.binPos.z) < 0.05) out.y = Math.max(out.y, DINNER_BIN.rimTop - HIDDEN_DEPTH - DISH_HEIGHT);
+  return out;
+}
 export function dishStep(a: DinnerFrame, b: DinnerFrame): number {
   if (hiddenInBin(a) && hiddenInBin(b)) return 0;
   const lean = Math.abs(Math.hypot(b.coverTilt, b.coverTiltX) - Math.hypot(a.coverTilt, a.coverTiltX));
-  return Math.max(a.coverPos.distanceTo(b.coverPos) + lean, a.platePos.distanceTo(b.platePos));
+  // The cover rides on the plate in the bin (the decline carries the dish as one unit).
+  const plate = seen(a, seenA).distanceTo(seen(b, seenB));
+  const cover = hiddenInBin(a) || hiddenInBin(b) ? plate : a.coverPos.distanceTo(b.coverPos);
+  return Math.max(cover + lean, plate);
 }
 export const binStep = (a: DinnerFrame, b: DinnerFrame) => a.binPos.distanceTo(b.binPos) + Math.abs(a.flaps - b.flaps);
 /**

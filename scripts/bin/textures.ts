@@ -129,16 +129,17 @@ function specks(width: number, height: number, count: number, r: number, seed: n
 // ── Finishes ─────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Powder coat (charcoal, satin): orange peel — smooth isotropic undulation with a 2–3 mm
- * wavelength and about 1° RMS slope (what makes a powder-coated panel's reflections ripple
- * softly) — plus a sparse dust inclusion every few square centimetres. One tile is `tile` cm.
+ * Powder coat (graphite, satin): orange peel — smooth isotropic undulation with a 2–3 mm
+ * wavelength and about 0.5° RMS slope (what makes a powder-coated panel's reflections ripple
+ * softly; at 1° it read as hammertone) — plus a sparse dust inclusion every few square
+ * centimetres. One tile is `tile` cm.
  */
 export function powderNormal(size: number, tile: number): Image {
-  const cells = Math.round(tile / 0.26); // ≈ 2.6 mm peel cells
-  const peel = field(size, size, (u, v) => fbm(u, v, cells, cells, 3, 0.42, 11));
-  const grit = specks(size, size, Math.round(tile * tile * 0.35), 0.022 / tile, 17);
-  for (let i = 0; i < peel.length; i++) peel[i] = peel[i]! + 0.35 * grit[i]!;
-  return heightToNormal(peel, size, size, tile, tile, { rmsSlopeDeg: 1.1 });
+  const cells = Math.round(tile / 0.22); // ≈ 2.2 mm peel cells, and a finer octave under them
+  const peel = field(size, size, (u, v) => fbm(u, v, cells, cells, 3, 0.4, 11) + 0.18 * fbm(u, v, cells * 4, cells * 4, 2, 0.5, 13));
+  const grit = specks(size, size, Math.round(tile * tile * 0.25), 0.02 / tile, 17);
+  for (let i = 0; i < peel.length; i++) peel[i] = peel[i]! + 0.3 * grit[i]!;
+  return heightToNormal(peel, size, size, tile, tile, { rmsSlopeDeg: 0.55 });
 }
 
 /**

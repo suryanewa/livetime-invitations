@@ -33,7 +33,8 @@ export type DinnerModel = DinnerRig & BuiltModel;
 
 export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['lib']): DinnerRig {
   const dir = lib.direction;
-  attachBin(root, binRoot, lib, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE);
+  // The covered dish sees the bin's walls once it is inside (models/disposalBin.ts patchBinVisibility).
+  attachBin(root, binRoot, lib, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE, { shade: () => true });
   applyShadowProxies(root);
   const nodes = collectNodes(root, DINNER_NODES);
   const replace = (name: string, shadow: ContactShadow) => {

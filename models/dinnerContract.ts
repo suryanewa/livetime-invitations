@@ -127,19 +127,20 @@ export const COVER_POISED = new Vector3(-0.95, 0.62, -0.75);
 export const COVER_POISED_TILT = 0.32;
 
 /**
- * Bin placement (same approved treatment as Birthday): behind-left of the dish, clear of the
- * plate by at least 4 cm (plate 0.8 + bin 1.003 + 0.04 = 1.843; this is 1.921, so the plate is
- * up at the carry height before its rim reaches over the bin's), turned so the
- * dish enters between the flaps. The covered dish rising over the real bin's rim, not the dish,
- * sets the fixed frame (recorded exception in docs/spec-revisions.md). v1.5: a placement search
- * over the real bin (scratch framing exploration, every plan position from −3 to 3) found the
- * hero fill flat within 1 % behind and beside the dish: the height of the carry over a 42.4 cm
+ * Bin placement (same approved treatment as Birthday): behind-left of the dish, turned so the
+ * dish enters between the flaps, and far enough that the bin's pedal (under the lid's seam, so it
+ * points at the dish; it reaches 23.45 cm = 1.39 units out) clears the plate and the cloche's
+ * skirt by 2 cm while the bin slides in beside the resting dish: 2.32 units from the dish. (The
+ * lathe body alone needs 0.8 + 1.003 + 0.04 = 1.843.) The covered dish rising over the real
+ * bin's rim, not the dish, sets the fixed frame (recorded exception in docs/spec-revisions.md).
+ * v1.5: a placement search over the real bin (every plan position from −6 to 6 by −8 to 4) found
+ * the hero fill flat within 1 % behind and beside the dish: the height of the carry over a 42.4 cm
  * rim sets the frame, not where the bin stands.
  */
-export const DINNER_BIN_POS = new Vector3(-0.77, 0, -1.76);
+export const DINNER_BIN_POS = new Vector3(-0.93, 0, -2.125);
 export const DINNER_BIN_YAW = Math.atan2(-DINNER_BIN_POS.x, -DINNER_BIN_POS.z);
 /** Off-frame start: the bin slides in from the left margin. */
-export const DINNER_BIN_START = new Vector3(-4.3, 0, -1.76);
+export const DINNER_BIN_START = new Vector3(-4.5, 0, -2.125);
 export const DINNER_WALL_Z = -4.2;
 /** Underside clearance over the rim while the dish crosses it, and the carry height. */
 export const DINNER_RIM_CLEARANCE = 0.06;

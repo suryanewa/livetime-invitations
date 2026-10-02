@@ -130,7 +130,8 @@ export function screenX(x: number, z: number): number {
 
 /**
  * Carry height of the cake's underside at the top of the lift off the stand (v1.5: over the real
- * bin's 42.4 cm rim, 1.5 cm above the hover height it then settles to over the opening).
+ * bin's 42.4 cm rim, 1.5 cm above the hover height it then settles to over the opening, so it is
+ * clear of the rim with its lean before it reaches over it).
  */
 export const CARRY_HEIGHT = 2.255;
 
@@ -138,8 +139,9 @@ export const CARRY_HEIGHT = 2.255;
  * Bin resting position (bin_root origin), behind-left of the stand, clear of the plate by more
  * than 4 cm (stand 0.838 + bin 0.846 + 0.04 = 1.724; this is 2.01). It is turned to face the
  * stand so the cake enters between the butterfly flaps (they hinge along the bin's local z axis).
- * v1.5: the placement search over the real 45 cm bin (scratch framing exploration) found the
- * hero fill flat at 0.58–0.60 across the behind-left arc; this place keeps the v1.2 layout.
+ * v1.5: a placement search over the real 45 cm bin found this v1.2 place the best at every
+ * aspect (0.581 of the frame height at 3:4, 1:1 and 3:2); further left the 1:1 fill reaches 0.59
+ * but the 3:4 one falls to 0.45 (the bin then sets the width).
  */
 export const BIN_POS = new Vector3(-1.04, 0, -1.72);
 export const BIN_YAW = Math.atan2(-BIN_POS.x, -BIN_POS.z);

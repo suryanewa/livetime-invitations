@@ -55,7 +55,7 @@ export async function finishBin(doc: Document, log: ComposeLog): Promise<void> {
   // finish's own roughness with a soft mottle (periodic round the part).
   const turnedORM = async (part: string, width: number, height: number, rough: number, spread: number, seed: number) => {
     const ao = occlusionProfile(part, height);
-    const mottle = T.roughnessMottle(width, height, 8, 4, seed);
+    const mottle = T.roughnessMottle(width, height, 3, 2, seed);
     const aoField = T.field(width, height, (_u, _v, _c, row) => ao[row]!);
     const r = T.field(width, height, (_u, _v, c, row) => rough + spread * mottle[row * width + c]!);
     return texture(`${part}_orm`, T.orm(width, height, aoField, r, 0));
@@ -73,23 +73,24 @@ export async function finishBin(doc: Document, log: ComposeLog): Promise<void> {
     m.getNormalTextureInfo()!.setTexCoord(0);
   };
 
-  // Body: satin charcoal powder coat (roughness 0.46 ± 0.03), orange peel.
+  // Body: satin graphite powder coat (roughness 0.34 ± 0.04 over 20–40 cm), orange peel.
   const body = material('bin_powder');
   setNormal(body, powderN);
-  setORM(body, await turnedORM('bin_body', 2048, 1024, 0.46, 0.035, 101), 1, true);
+  setORM(body, await turnedORM('bin_body', 2048, 1024, 0.34, 0.045, 101), 1, true);
   // Base cup and lid ring: EDM-textured PP (0.56 / 0.52 ± 0.025).
   for (const [name, part, rough, seed] of [['bin_base', 'bin_base', 0.56, 103], ['bin_ring', 'bin_lid_ring', 0.52, 107]] as const) {
     const m = material(name);
     setNormal(m, edmN);
     setORM(m, await turnedORM(part, 1024, 256, rough, 0.025, seed), 1, true);
   }
-  // Inner bucket: a glossier PP (0.5 ± 0.03), deep occlusion inside.
+  // Inner bucket: mid-grey PP (0.45 ± 0.03), deep occlusion inside.
   const liner = material('bin_liner');
   setNormal(liner, linerN);
-  setORM(liner, await turnedORM('bin_liner', 1024, 1024, 0.5, 0.03, 109), 1, true);
-  // Small PP parts (hinge housings, pedal housing, the lid's underside panels).
+  setORM(liner, await turnedORM('bin_liner', 1024, 1024, 0.45, 0.03, 109), 1, true);
+  // Small PP parts (hinge knuckles, pedal housing).
   setNormal(material('bin_plastic'), edmN);
-  setNormal(material('bin_lid_under'), edmN);
+  // The lid's pressed underside: mill-finish stainless (a faint even grain).
+  setNormal(material('bin_lid_under'), await texture('bin_mill_normal', T.edmNormal(512, TILE.plastic, 0.3)));
   setNormal(material('bin_rubber'), rubberN);
   setNormal(material('bin_tread'), treadN);
   // Brushed stainless: grain along u, anisotropic highlight across it.
