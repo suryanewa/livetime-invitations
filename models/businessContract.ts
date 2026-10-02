@@ -197,13 +197,14 @@ export const SCAN_SPOT = { u: 0, v: 0.265 } as const;
  * units. `grid` is the size of the shell's 20-unit icon grid on the glass: strokes of 0.0231 (1.8 mm
  * at the card's real scale), a hair under the printed NFC mark's 0.0236, so the face carries one
  * stroke weight (a lit stroke reads a little bolder than a printed one); the check is 0.116 wide
- * (8.8 mm). `extent` is the light's carrying quad in grid units (the halo has faded to nothing
- * before its edge). Centred across the glass at `v`: in the clear lower glass, 0.04 below the
- * pressed card's lowest point counting the glow, its halo inside the window; at rest it sits just
- * below the middle of the glass between the NFC mark and the window's lower edge.
+ * (8.8 mm). `extent` is the side of the light's texture in grid units, mapped onto the glass in
+ * face space (the halo has faded to nothing before its edge). Centred across the glass at `v`: in
+ * the clear lower glass, 0.03 below the pressed card's lowest point counting the glow, its halo
+ * inside the window; at rest it sits just below the middle of the glass between the NFC mark and
+ * the window's lower edge.
  */
-export const STATUS_PICTOGRAM = { v: -0.43, grid: 0.21, extent: 30 } as const;
-/** The pictogram's carrying quad (face space, stage units): extent × grid / 20 on a side. */
+export const STATUS_PICTOGRAM = { v: -0.43, grid: 0.21, extent: 36 } as const;
+/** The pictogram's texture on the glass (face space, stage units): extent × grid / 20 on a side. */
 export const STATUS_PICTOGRAM_SIZE = (STATUS_PICTOGRAM.extent * STATUS_PICTOGRAM.grid) / 20;
 /** Face space z of the card centre when its clips touch the glass. */
 export const SCAN_CONTACT_W = FACE.glass + HOLDER_CLIPS.halfDepth;

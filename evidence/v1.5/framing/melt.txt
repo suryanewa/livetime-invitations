@@ -1,0 +1,17 @@
+band = the poster square's feathered border (outer 9 % of its side), where it melts into the backdrop
+desktop birthday host-ready  |poster - backdrop| in band: median  0.0 mean  0.7 p90   0.7
+desktop birthday guest-ready |poster - backdrop| in band: median  0.0 mean  0.7 p90   0.7
+desktop birthday accepted    |poster - backdrop| in band: median  0.0 mean  0.7 p90   0.7
+desktop birthday declined    |poster - backdrop| in band: median  0.0 mean  2.7 p90   8.7   control (the rest backdrop under it): median  0.7 mean  2.9 p90  10.3
+desktop dinner   host-ready  |poster - backdrop| in band: median  0.0 mean  8.7 p90  34.0
+desktop dinner   guest-ready |poster - backdrop| in band: median  0.0 mean  7.9 p90  30.3
+desktop dinner   accepted    |poster - backdrop| in band: median  0.0 mean  9.4 p90  35.0
+desktop dinner   declined    |poster - backdrop| in band: median  0.0 mean  0.7 p90   0.7   control (the rest backdrop under it): median  2.3 mean  7.1 p90  21.7
+phone   birthday host-ready  |poster - backdrop| in band: median  0.0 mean  0.7 p90   1.0
+phone   birthday guest-ready |poster - backdrop| in band: median  0.0 mean  0.7 p90   0.7
+phone   birthday accepted    |poster - backdrop| in band: median  0.0 mean  0.7 p90   0.7
+phone   birthday declined    |poster - backdrop| in band: median  0.0 mean  2.5 p90   8.0   control (the rest backdrop under it): median  0.7 mean  2.9 p90  10.7
+phone   dinner   host-ready  |poster - backdrop| in band: median  0.0 mean  8.5 p90  33.0
+phone   dinner   guest-ready |poster - backdrop| in band: median  0.0 mean  7.6 p90  28.7
+phone   dinner   accepted    |poster - backdrop| in band: median  0.0 mean  9.1 p90  33.7
+phone   dinner   declined    |poster - backdrop| in band: median  0.0 mean  0.6 p90   0.7   control (the rest backdrop under it): median  2.3 mean  6.9 p90  21.0

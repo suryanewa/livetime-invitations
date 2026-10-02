@@ -1,6 +1,6 @@
 import {
-  Box3, BufferAttribute, BufferGeometry, Color, type Euler, type Material, Matrix4, type Mesh, MeshPhysicalMaterial, MeshStandardMaterial,
-  type Object3D, Quaternion, Vector2, Vector3,
+  Box3, BufferAttribute, BufferGeometry, Color, type DirectionalLight, type Euler, type Material, Matrix4, type Mesh, MeshDepthMaterial, MeshPhysicalMaterial,
+  MeshStandardMaterial, type Object3D, Quaternion, type SpotLight, Vector2, Vector3,
 } from 'three';
 import { beveledPlate, group, mesh } from './geometry.ts';
 import { ExtrudeGeometry, Shape } from 'three';
@@ -28,8 +28,9 @@ import type { ModelContext } from './types.ts';
  *   straight chord at its outer edge: three-knuckle hinges (two PP leaves on the lid, the ring's
  *   moulded knuckle between them, a black-oxide pin) inside the lid ring's silhouette;
  * - pedal: under the split, a brushed-stainless lever with a curved tip on a pin hinge at the
- *   front of a PP housing moulded round the base, with a coral elastomer tread (the bin's one
- *   coloured insert). It is linked to the lid: it goes down as the flaps open (`attachBin`).
+ *   front of a PP housing moulded round the base, with a black polystyrene tread (v1.5 polish:
+ *   was a coral elastomer insert, v1.1's brand accent, which read as a toy sticker next to the
+ *   masters). It is linked to the lid: it goes down as the flaps open (`attachBin`).
  *
  * Every edge that catches light is filleted (0.1–1 cm radii); every surface is a named PBR
  * material whose textures (micro-normal, roughness, baked occlusion) are generated at export by
@@ -90,8 +91,11 @@ export const BIN = {
   /** Flap hinge pin: x = ±hingeX at hingeY above the rim top, axis along z. */
   hingeX: BIN_CM.hingeX * U,
   hingeY: BIN_CM.hingeY * U,
-  /** Flap opening angle (each flap rotates about its hinge; 0 closed). ≈ 100°. */
-  flapOpen: 1.75,
+  /**
+   * Flap opening angle (each flap rotates about its hinge; 0 closed): 90°, upright, as a butterfly
+   * lid's halves stand open (v1.5 polish; was 100°, leaning out like ears).
+   */
+  flapOpen: Math.PI / 2,
   /** Pedal position around the base, from the bin's local +z (radians). */
   pedalAngle: 0,
   /** Pedal travel (rotation about its hinge, radians): the tread goes down about 1 cm. */
@@ -142,8 +146,8 @@ export function binIn(k: number): { readonly radius: number; readonly rimTop: nu
 export const BIN_NODES = ['bin_root', 'bin_body', 'bin_lid', 'bin_flap_l', 'bin_flap_r', 'bin_pedal'] as const;
 
 /**
- * Bin bounds in bin_root space (world units) with the flaps fully open: the open flaps lean out
- * past their hinges and stand 59.5 cm high; the pedal reaches 23.2 cm from the axis.
+ * Bin bounds in bin_root space (world units) with the flaps fully open: the open flaps stand upright
+ * on their hinges, 60 cm high; the pedal reaches 22.8 cm from the axis.
  * tests/birthday.test.ts checks the built geometry stays inside.
  */
 export const BIN_BOUNDS = new Box3(new Vector3(-1.1, -0.001, -1.15), new Vector3(1.1, 3.05, 1.15));
@@ -215,6 +219,18 @@ export function attachBin(
   prepareImported(root, lib);
   linkPedal(binRoot);
   const light = binLight(binRoot);
+  // Its own outer shells reflect the floor it stands on (patchBinFloor).
+  binRoot.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if (BIN_FLOOR.materials.includes(m.name as never)) patchBinFloor(m, light);
+  });
+  // The open flaps cast no shadow above the closed lid's crown (flapShadowMaterial).
+  const depth = flapShadowMaterial(light);
+  binRoot.userData.flapDepth = depth;
+  for (const name of ['bin_flap_l', 'bin_flap_r']) binRoot.getObjectByName(name)?.traverse((o) => {
+    if ((o as Mesh).isMesh) o.customDepthMaterial = depth;
+  });
   // The scene's own surfaces that can go into the bin see its walls instead of the room.
   if (options.shade) {
     const on = { value: 1 };
@@ -226,49 +242,205 @@ export function attachBin(
   }
 }
 
+/** Frees what `attachBin` made for this bin (the flaps' shadow material); the scene frees the rest. */
+export function detachBin(binRoot: Object3D): void {
+  (binRoot.userData.flapDepth as Material | undefined)?.dispose();
+  delete binRoot.userData.flapDepth;
+}
+
 function isInside(o: Object3D, ancestor: Object3D): boolean {
   for (let p: Object3D | null = o; p; p = p.parent) if (p === ancestor) return true;
   return false;
 }
 
-/** World-space uniforms of the bin's mouth (kept current while the bin is drawn). */
+/** World-space uniforms of the bin's mouth, its floor and the key (kept current while the bin is drawn). */
 export interface BinLight {
   readonly rimY: { value: number };
   readonly axis: { value: Vector2 };
   readonly radius: { value: number };
+  /** World height of the floor the bin stands on; its footprint radius and closed height (crown). */
+  readonly floorY: { value: number };
+  readonly footR: { value: number };
+  readonly crownY: { value: number };
+  /** World direction towards the scene's key light (the first spot or directional light; up if none). */
+  readonly keyDir: { value: Vector3 };
+  /** World z of the cove's back wall (the rig's `studio_sweep`; far behind when there is none). */
+  readonly wallZ: { value: number };
 }
 
-/** The bin's mouth uniforms, created once per bin and updated before its body draws. */
+/** The scene's key: its first spot or directional light (the rigs' shadow-casting key). */
+function findKey(scene: Object3D): SpotLight | DirectionalLight | null {
+  let key: SpotLight | DirectionalLight | null = null;
+  scene.traverse((o) => {
+    const l = o as SpotLight & DirectionalLight;
+    if (!key && (l.isSpotLight || l.isDirectionalLight)) key = l;
+  });
+  return key;
+}
+
+/** The bin's uniforms, created once per bin and updated before its body draws. */
 export function binLight(binRoot: Object3D): BinLight {
   const existing = binRoot.userData.binLight as BinLight | undefined;
   if (existing) return existing;
-  const light: BinLight = { rimY: { value: BIN.rimTop }, axis: { value: new Vector2() }, radius: { value: BIN.opening } };
+  const light: BinLight = {
+    rimY: { value: BIN.rimTop }, axis: { value: new Vector2() }, radius: { value: BIN.opening },
+    floorY: { value: 0 }, footR: { value: BIN.radius }, crownY: { value: BIN.height }, keyDir: { value: new Vector3(0, 1, 0) },
+    wallZ: { value: -1e4 },
+  };
   binRoot.userData.binLight = light;
   const body = binRoot.getObjectByName('bin_body');
-  const p = new Vector3(), q = new Quaternion(), k = new Vector3();
-  const update = () => {
+  const p = new Vector3(), q = new Quaternion(), k = new Vector3(), kp = new Vector3(), kt = new Vector3();
+  let key: SpotLight | DirectionalLight | null = null;
+  let searched: Object3D | null = null;
+  const update = (_r?: unknown, scene?: Object3D) => {
     binRoot.updateWorldMatrix(true, false);
     binRoot.matrixWorld.decompose(p, q, k);
     light.axis.value.set(p.x, p.z);
+    light.floorY.value = p.y;
     light.rimY.value = p.y + BIN.rimTop * k.y;
+    light.crownY.value = p.y + BIN.height * k.y;
     light.radius.value = BIN.opening * k.x;
+    light.footR.value = BIN.radius * k.x;
+    if (scene && (searched !== scene || (key && !key.parent))) {
+      searched = scene;
+      key = findKey(scene);
+      // The cove's back wall: the lowest z of the rig's sweep (its vertical part), if it has one.
+      const sweep = scene.getObjectByName('studio_sweep') as Mesh | undefined;
+      if (sweep?.isMesh) light.wallZ.value = new Box3().setFromObject(sweep).min.z;
+    }
+    if (key) {
+      key.getWorldPosition(kp);
+      if ((key as DirectionalLight).isDirectionalLight) kp.sub(key.target.getWorldPosition(kt));
+      else kp.sub(p);
+      if (kp.lengthSq() > 1e-12) light.keyDir.value.copy(kp).normalize();
+    }
   };
   update();
-  if (body) body.onBeforeRender = update;
+  if (body) body.onBeforeRender = update as NonNullable<Object3D['onBeforeRender']>;
   return light;
 }
 
 /**
- * Light inside the bin, for anything that goes into it (v1.5; physically based, replacing the
- * v1.2 dimmer). Below the rim a point sees the room only through the mouth: its indirect
- * diffuse light is the opening's cosine-weighted share of the sky, R² / (R² + d²) at depth d
- * under a mouth of radius R (0.96 at 3 cm, 0.7 at 10 cm, 0.13 on the floor), and its indirect
- * specular reflects the room only if the reflected ray leaves through the mouth (an exact
- * per-pixel test against the rim's plane), else the grey bucket wall. Direct light needs nothing: the shadow map already has the walls. `on` gates it
- * (Birthday: once the cake is over the opening); it also applies only inside the mouth's cylinder.
+ * The floor in the bin's own reflections (v1.5 polish). The room's environment is a map at
+ * infinity: below the horizon it holds the room's table and the dark runner on the camera side
+ * (strokes for polished metal), and a vertical shell seen from the camera's 15° reflects exactly
+ * that band (−12° to −21°), so the satin body reflected near-black and read as a flat dark
+ * cylinder (v1.5 review: no highlight anywhere). What a real bin standing on the set reflects
+ * there is the floor it stands on, the lit greige cove, within a metre of it. So each reflected
+ * ray that goes down is traced to the floor plane: the lit floor's radiance (BIN_FLOOR, measured
+ * under the production rig, scene-linear), darker inside the bin's own shadow (the footprint swept
+ * away from the key), the lobe's share below the horizon softened by the roughness. The body
+ * then carries a soft reflection of the floor that is brightest where the floor is lit (the key's
+ * side) and at grazing angles, and falls into its own shadow on the far side.
  */
+export const BIN_FLOOR = {
+  /** The neutral-room cove floor's radiance near the bins, lit (scene-linear, pre-exposure). */
+  radiance: [0.515, 0.497, 0.468],
+  /** Inside the bin's own shadow: the floor without the key (environment only), 2.18 of 3.14. */
+  shadow: 0.69,
+  /** The bin's outer shells that see the floor. */
+  materials: ['bin_powder', 'bin_base', 'bin_ring'],
+} as const;
+
+export function patchBinFloor(material: Material, light: BinLight): void {
+  if (material.userData.binFloor || !(material as MeshStandardMaterial).isMeshStandardMaterial) return;
+  material.userData.binFloor = true;
+  const prev = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey;
+  const floorL = new Vector3(...BIN_FLOOR.radiance);
+  material.onBeforeCompile = (shader, renderer) => {
+    prev?.call(material, shader, renderer);
+    Object.assign(shader.uniforms, {
+      uBinFloorY: light.floorY, uBinFootR: light.footR, uBinCrownY: light.crownY, uBinKeyDir: light.keyDir, uBinFloorAxis: light.axis, uBinWallZ: light.wallZ,
+      uBinFloorL: { value: floorL },
+    });
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vBinFloorW;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n  vBinFloorW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    const floorMix = (v: string) => `${v} = mix(${v}, uBinFloorL * binLit, binBelow);`;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vBinFloorW;\nuniform float uBinFloorY;\nuniform float uBinFootR;\nuniform float uBinCrownY;\nuniform vec3 uBinKeyDir;\nuniform vec2 uBinFloorAxis;\nuniform vec3 uBinFloorL;\nuniform float uBinWallZ;')
+      .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
+  #if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )
+  {
+    vec3 binR = inverseTransformDirection(reflect(-geometryViewDir, normal), viewMatrix);
+    // The lobe's share below the horizon (wider for a rougher surface).
+    float binW = 0.06 + 0.8 * material.roughness * material.roughness;
+    float binBelow = smoothstep(-binW, binW, -binR.y);
+    // Where the ray meets the set: the floor, or the cove's back wall if it reaches that first.
+    float binTF = max(vBinFloorW.y - uBinFloorY, 0.0) / max(-binR.y, 0.04);
+    float binTW = binR.z < -1e-3 ? (uBinWallZ - vBinFloorW.z) / binR.z : 1e9;
+    vec3 binQ = vBinFloorW + binR * min(binTF, binTW);
+    binQ.y = max(binQ.y, uBinFloorY);
+    // Is that point in the bin's own shadow? Towards the key, does it pass the bin (its footprint
+    // radius, below its crown)?
+    float binKh = max(length(uBinKeyDir.xz), 1e-4);
+    vec2 binK = uBinKeyDir.xz / binKh;
+    vec2 binToAxis = uBinFloorAxis - binQ.xz;
+    float binAlong = dot(binToAxis, binK);
+    float binPerp = length(binToAxis - binK * binAlong);
+    float binYAt = binQ.y + max(binAlong, 0.0) * uBinKeyDir.y / binKh;
+    float binOcc = step(0.0, binAlong) * (1.0 - smoothstep(uBinFootR * 0.8, uBinFootR * 1.2, binPerp))
+      * (1.0 - smoothstep(uBinCrownY - 0.05, uBinCrownY + 0.05, binYAt));
+    float binLit = mix(1.0, ${BIN_FLOOR.shadow.toFixed(3)}, binOcc);
+    ${floorMix('radiance')}
+    #ifdef USE_CLEARCOAT
+      ${floorMix('clearcoatRadiance')}
+    #endif
+  }
+  #endif`);
+  };
+  material.customProgramCacheKey = () => `${prevKey?.call(material) ?? ''}|bin-floor-v1`;
+  material.needsUpdate = true;
+}
+
+/**
+ * The flaps' shadow material (v1.5 polish): the flaps cast as usual up to the closed lid's crown,
+ * and not above it. Open, each flap stands 16 cm over the rim; under the low window key the two
+ * threw "rabbit ears" larger than the bin onto the cove behind it (the spot's throw magnifies
+ * them) through the whole carry. The lid, the hinges and the rest of the bin keep their shadows,
+ * so the closed bin's is unchanged and the open bin's is the closed one's. One per bin (a shared
+ * material would collect every renderer's dispose listener): `detachBin` frees it.
+ */
+function flapShadowMaterial(light: BinLight): MeshDepthMaterial {
+  const m = new MeshDepthMaterial({ name: 'fx_bin_flap_shadow' });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uBinCrownY = light.crownY;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vBinFlapY;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n  vBinFlapY = (modelMatrix * vec4(transformed, 1.0)).y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vBinFlapY;\nuniform float uBinCrownY;')
+      .replace('#include <clipping_planes_fragment>', 'if (vBinFlapY > uBinCrownY + 0.004) discard;\n#include <clipping_planes_fragment>');
+  };
+  m.customProgramCacheKey = () => 'bin-flap-shadow-v1';
+  return m;
+}
+
+/**
+ * Light inside the bin, for anything that goes into it (v1.5; physically based, replacing the
+ * v1.2 dimmer). Below the rim a point sees the room only through the mouth, and the rest of its
+ * hemisphere sees the bucket's wall.
+ *
+ * - Indirect diffuse: the mouth's form factor from the point, for its own normal: the exact
+ *   vector form factor of the mouth (a 16-gon on the rim circle, three's LTC edge integral) with
+ *   the standard horizon-clipped sphere approximation (Hill & Heitz 2016), the rest of the
+ *   hemisphere at BIN_WALL.diffuse (the grey bucket wall, itself lit only through the mouth). An
+ *   upward face on the axis keeps R² / (R² + d²) (0.96 at 3 cm, 0.7 at 10 cm, 0.13 on the
+ *   floor); a face turned to the wall gets far less (a vertical face just under the rim already
+ *   about half): the falloff that reads as being inside (v1.5 review: "lit as if outside").
+ * - Indirect specular: the room only if the reflected ray leaves through the mouth (an exact
+ *   per-pixel test against the rim's plane, its edge softened by the roughness), else the wall
+ *   (BIN_WALL.specular); a rough surface's reflection tends to its diffuse visibility.
+ * - Direct light needs nothing: the shadow map already has the walls.
+ *
+ * `on` gates it (Birthday: once the cake is over the opening); it applies only inside the mouth's
+ * cylinder, fading in over the last 2 cm above the rim (so switching it on never changes a pixel).
+ */
+export const BIN_WALL = { diffuse: 0.06, specular: 0.07 } as const;
+
 export function patchBinVisibility(material: Material, light: BinLight, on: { value: number }): void {
-  if (material.userData.binVisibility) return;
+  if (material.userData.binVisibility || !(material as MeshStandardMaterial).isMeshStandardMaterial) return;
   material.userData.binVisibility = true;
   const prev = material.onBeforeCompile;
   const prevKey = material.customProgramCacheKey;
@@ -285,30 +457,45 @@ export function patchBinVisibility(material: Material, light: BinLight, on: { va
       .replace('#include <common>', '#include <common>\nvarying vec3 vBinW;\nuniform float uBinRimY;\nuniform vec2 uBinAxis;\nuniform float uBinR;\nuniform float uBinOn;')
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
   {
-    // Inside the mouth's cylinder, fading in over the last 2 cm above the rim (so switching it on
-    // over the opening never changes a pixel).
     float binIn = uBinOn * (1.0 - smoothstep(uBinR * 0.92, uBinR * 1.08, length(vBinW.xz - uBinAxis)))
       * (1.0 - smoothstep(0.0, 0.1 * uBinR / ${BIN.opening.toFixed(4)}, vBinW.y - uBinRimY));
-    float binD = max(uBinRimY - vBinW.y, 0.0);
-    float binR2 = uBinR * uBinR;
-    float binDiff = binR2 / (binR2 + binD * binD);
-    // The reflected ray reaches the room only if it leaves through the mouth: intersect it with
-    // the rim's plane; elsewhere it sees the bucket's wall (a dim grey, about an eighth of the room).
-    vec3 binRefl = inverseTransformDirection(reflect(-geometryViewDir, normal), viewMatrix);
-    vec2 binHit = vBinW.xz + binRefl.xz * (binD / max(binRefl.y, 1e-3)) - uBinAxis;
-    float binOut = binRefl.y > 0.0 ? 1.0 - smoothstep(uBinR * 0.96, uBinR * 1.04, length(binHit)) : 0.0;
-    float binSpec = mix(0.12, 1.0, binOut);
-    reflectedLight.indirectDiffuse *= mix(1.0, binDiff, binIn);
-    reflectedLight.indirectSpecular *= mix(1.0, binSpec, binIn);
-    #ifdef USE_CLEARCOAT
-      clearcoatSpecularIndirect *= mix(1.0, binSpec, binIn);
-    #endif
-    #ifdef USE_SHEEN
-      sheenSpecularIndirect *= mix(1.0, binDiff, binIn);
-    #endif
+    if (binIn > 0.0) {
+      vec3 binN = inverseTransformDirection(normal, viewMatrix);
+      // Vector form factor of the mouth seen from this point (at most at the rim's plane).
+      vec3 binP = vec3(vBinW.x, min(vBinW.y, uBinRimY - 1e-4), vBinW.z);
+      vec3 binFirst = normalize(vec3(uBinAxis.x + uBinR, uBinRimY, uBinAxis.y) - binP);
+      vec3 binPrev = binFirst;
+      vec3 binF = vec3(0.0);
+      for (int i = 1; i < 16; i++) {
+        float a = float(i) * 0.39269908;
+        vec3 binV = normalize(vec3(uBinAxis.x + uBinR * cos(a), uBinRimY, uBinAxis.y + uBinR * sin(a)) - binP);
+        binF += LTC_EdgeVectorFormFactor(binPrev, binV);
+        binPrev = binV;
+      }
+      binF += LTC_EdgeVectorFormFactor(binPrev, binFirst);
+      binF *= binF.y < 0.0 ? -1.0 : 1.0;
+      float binL = length(binF);
+      float binVis = clamp((binL * binL + dot(binF, binN)) / (binL + 1.0), 0.0, 1.0);
+      float binDiff = binVis + (1.0 - binVis) * ${BIN_WALL.diffuse.toFixed(3)};
+      // The reflected ray reaches the room only if it leaves through the mouth.
+      float binD = max(uBinRimY - vBinW.y, 0.0);
+      vec3 binRefl = inverseTransformDirection(reflect(-geometryViewDir, normal), viewMatrix);
+      vec2 binHit = vBinW.xz + binRefl.xz * (binD / max(binRefl.y, 1e-3)) - uBinAxis;
+      float binEdge = 0.04 + 0.5 * material.roughness * material.roughness;
+      float binOut = binRefl.y > 0.0 ? 1.0 - smoothstep(uBinR * (1.0 - binEdge), uBinR * (1.0 + binEdge), length(binHit)) : 0.0;
+      float binSpec = mix(mix(${BIN_WALL.specular.toFixed(3)}, 1.0, binOut), binDiff, smoothstep(0.25, 0.8, material.roughness));
+      reflectedLight.indirectDiffuse *= mix(1.0, binDiff, binIn);
+      reflectedLight.indirectSpecular *= mix(1.0, binSpec, binIn);
+      #ifdef USE_CLEARCOAT
+        clearcoatSpecularIndirect *= mix(1.0, mix(${BIN_WALL.specular.toFixed(3)}, 1.0, binOut), binIn);
+      #endif
+      #ifdef USE_SHEEN
+        sheenSpecularIndirect *= mix(1.0, binDiff, binIn);
+      #endif
+    }
   }`);
   };
-  material.customProgramCacheKey = () => `${prevKey?.call(material) ?? ''}|bin-visibility-v1`;
+  material.customProgramCacheKey = () => `${prevKey?.call(material) ?? ''}|bin-visibility-v2`;
   material.needsUpdate = true;
 }
 
@@ -345,7 +532,7 @@ export const BIN_MATERIALS = {
   bin_slot: { color: '#060607', roughness: 0.9 },
   bin_steel: { color: '#CBC9C4', roughness: 0.17, metalness: 1, anisotropy: 0.6 },
   bin_pin: { color: '#2E2F31', roughness: 0.42, metalness: 1 },
-  bin_tread: { color: '#FF714A', roughness: 0.64 },
+  bin_tread: { color: '#1B1B1C', roughness: 0.5 },
 } as const;
 export type BinMaterialName = keyof typeof BIN_MATERIALS;
 

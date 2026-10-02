@@ -1,5 +1,8 @@
 import { Box3, Color, type Material, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PCFShadowMap, PerspectiveCamera, Scene, type Texture, Vector3, VSMShadowMap, type WebGLRenderer } from 'three';
-import { createStageCamera, type FrameInsets, type FrameRect, frameSquare, fitCameraToBounds, fitPerspectiveToBounds, fitPerspectiveToHero, type HeroFraming, PERSPECTIVE_FOV } from './camera.ts';
+import {
+  createStageCamera, type FrameInsets, type FrameRect, type FramingPair, frameSquare, fitCameraToBounds, fitPerspectiveToBounds, framingHull, PERSPECTIVE_FOV, placeHeroView,
+  pulledView, solveHeroFits,
+} from './camera.ts';
 import { HERO_FILL, PATH_CLEARANCE } from './framing.ts';
 import { createRenderer, sizeRenderer } from './createRenderer.ts';
 import { releaseShadowTextureGpu } from './contactShadow.ts';
@@ -45,6 +48,19 @@ function releaseDfgLUT(renderer: WebGLRenderer, scene: Scene): void {
     }
   });
   dfgLUT?.dispose();
+}
+
+/**
+ * What `InvitationHandle.framing()` reports (tooling and tests, v1.5): the two fits at an aspect,
+ * where the live camera is between them, and the fit's cost guards.
+ */
+export interface FramingReport extends FramingPair {
+  /** The live pull (0 rest, 1 decline). */
+  pull: number;
+  /** Hero fits solved since the stage was made (the render loop never solves one). */
+  solves: number;
+  /** Points the fit works on, after framingHull. */
+  points: { hero: number; rest: number; decline: number };
 }
 
 export interface StageOptions {
@@ -169,20 +185,32 @@ export class Stage {
    * `heroPoints` (v1.4): silhouette samples of the objects on stage at guest-ready. With them the
    * perspective camera follows the hero framing rule (src/render/framing.ts); without them it fits
    * the motion bounds or `framePoints` as before (study, lookdev, the orthographic camera).
-   * `bounds`, `framePoints` and `heroPoints` are in the content's own space (its scene units): the
-   * stage carries them into the world through the content's transform (v1.4: a scene root may
-   * carry its world scale, models/worldScale.ts). `studio.wallZ` is in world units.
+   * `restFramePoints` (v1.5, the decline pull-back): the paths that must be in frame at rest (host
+   * and accept); with them the stage keeps two fits, `rest` (hero + these) and `decline` (hero +
+   * `framePoints`, every path), and `setPull` moves the camera between them. Without them the two
+   * are one.
+   * `bounds`, `framePoints`, `heroPoints` and `restFramePoints` are in the content's own space (its
+   * scene units): the stage carries them into the world through the content's transform (v1.4: a
+   * scene root may carry its world scale, models/worldScale.ts). `studio.wallZ` is in world units.
    */
-  setContent(object: Object3D | null, bounds?: Box3, studio?: { wallZ?: number; scale?: number }, framePoints?: readonly Vector3[], heroPoints?: readonly Vector3[]): void {
+  setContent(
+    object: Object3D | null, bounds?: Box3, studio?: { wallZ?: number; scale?: number }, framePoints?: readonly Vector3[], heroPoints?: readonly Vector3[],
+    restFramePoints?: readonly Vector3[],
+  ): void {
     if (this.content) this.scene.remove(this.content);
     this.content = object;
-    this.framePoints = this.heroPoints = undefined;
+    this.framePoints = this.heroPoints = this.restPoints = undefined;
+    this.pull = 0;
+    this.fits.clear();
     if (object) {
       this.scene.add(object);
       object.updateMatrixWorld(true);
       const toWorld = object.matrixWorld;
-      this.framePoints = framePoints?.map((p) => p.clone().applyMatrix4(toWorld));
-      this.heroPoints = heroPoints?.map((p) => p.clone().applyMatrix4(toWorld));
+      // Only the points that can set a framing at the shared angle (exact; framingHull).
+      const world = (pts?: readonly Vector3[]) => (pts ? framingHull(pts.map((p) => p.clone().applyMatrix4(toWorld))) : undefined);
+      this.framePoints = world(framePoints);
+      this.heroPoints = world(heroPoints);
+      this.restPoints = world(restFramePoints);
       if (bounds) this.bounds.copy(bounds).applyMatrix4(toWorld);
       this.assignOwnEnvironment(object);
       // v1.4: the set scales with the scene's world scale (rig.ts setWall): the cove and the key's
@@ -240,6 +268,7 @@ export class Stage {
 
   /** Motion bounds in the content's own space (see setContent). */
   setBounds(bounds: Box3): void {
+    this.fits.clear();
     this.bounds.copy(bounds);
     if (this.content) this.bounds.applyMatrix4(this.content.matrixWorld);
     this.studio.setContent?.(this.bounds, this.studioScale);
@@ -256,8 +285,53 @@ export class Stage {
 
   private framePoints: readonly Vector3[] | undefined;
   private heroPoints: readonly Vector3[] | undefined;
-  /** The last hero fit (null when the camera fitted bounds instead). */
-  framing: HeroFraming | null = null;
+  private restPoints: readonly Vector3[] | undefined;
+  /**
+   * The last hero fits (null when the camera fitted bounds instead): `rest` and `decline`, the same
+   * fit for content without `restFramePoints`.
+   */
+  framing: FramingPair | null = null;
+  /** The decline pull-back (v1.5): 0 the rest fit, 1 the decline fit (`setPull`). */
+  private pull = 0;
+  /**
+   * Solved hero fits by aspect (v1.5). A fit depends on the content and the aspect only (the
+   * fullscreen frame square is always fitted square, then placed), so a resize, an inset change,
+   * a still or a pull only places the camera; a fit is solved once per content and aspect.
+   */
+  private readonly fits = new Map<number, FramingPair>();
+  /** Tooling (guard tests): hero fits solved since the stage was made. */
+  fitSolves = 0;
+
+  /** Tooling (guard tests): how many points the hero fit works on, after framingHull. */
+  get framingPointCounts(): { hero: number; rest: number; decline: number } {
+    return { hero: this.heroPoints?.length ?? 0, rest: this.restPoints?.length ?? this.framePoints?.length ?? 0, decline: this.framePoints?.length ?? 0 };
+  }
+  /** What the last hero fit was made for, so `setPull` can place the camera without refitting. */
+  private view: { aim: Vector3; aspect: number; frame: FrameRect | undefined } | null = null;
+
+  /**
+   * The decline pull-back (v1.5; docs/style-reference.md): 0 shows the rest fit, 1 the decline fit,
+   * in between the dolly of `pulledView`. The controller sets it every frame from the scene's
+   * `framePull()`; it holds across resizes and stills. Cheap: no fit is solved, the camera moves.
+   */
+  setPull(k: number): void {
+    const next = Math.min(1, Math.max(0, Number.isFinite(k) ? k : 0));
+    if (next === this.pull) return;
+    this.pull = next;
+    this.placeView();
+  }
+
+  get currentPull(): number {
+    return this.pull;
+  }
+
+  private placeView(): void {
+    const f = this.framing, v = this.view;
+    if (!f || !v || !(this.camera instanceof PerspectiveCamera)) return;
+    const { distance, offset } = pulledView(f.rest, f.decline, this.pull);
+    placeHeroView(this.camera, v.aim, v.aspect, distance, offset, v.frame);
+  }
+
   /** Fullscreen layout: the overlay insets; null frames the whole canvas (square layout). */
   private insets: FrameInsets | null = null;
   /** Snapshot override: null renders the plain square fit (posters); a rect, that framing. */
@@ -279,10 +353,24 @@ export class Stage {
       ? this.snapshotFrame ?? undefined
       : this.insets ? frameSquare(this.cssWidth, this.cssHeight, this.insets) : undefined;
     this.framing = null;
+    this.view = null;
     if (this.camera instanceof PerspectiveCamera) {
       if (this.heroPoints?.length) {
-        const paths = this.framePoints?.length ? this.framePoints : boxCorners(this.bounds);
-        this.framing = fitPerspectiveToHero(this.camera, this.bounds.getCenter(aimPoint), aspect, this.heroPoints, paths, HERO_FILL, PATH_CLEARANCE, frame);
+        const aim = this.bounds.getCenter(aimPoint).clone();
+        const key = Math.round((frame ? 1 : aspect) * 1e6);
+        let pair = this.fits.get(key);
+        if (!pair) {
+          const paths = this.framePoints?.length ? this.framePoints : boxCorners(this.bounds);
+          // Two fits when the rest needs less room than the decline (v1.5), else one.
+          const sets = this.restPoints?.length ? [this.restPoints, paths] : [paths];
+          const fits = solveHeroFits(this.camera, aim, aspect, this.heroPoints, sets, HERO_FILL, PATH_CLEARANCE, frame);
+          pair = { rest: fits[0]!, decline: fits[fits.length - 1]! };
+          this.fits.set(key, pair);
+          this.fitSolves++;
+        }
+        this.framing = pair;
+        this.view = { aim, aspect, frame };
+        this.placeView();
       } else fitPerspectiveToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints, frame);
     } else fitCameraToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints, frame);
   }
@@ -291,15 +379,8 @@ export class Stage {
     this.renderer.render(this.scene, this.camera);
   }
 
-  /**
-   * Render at an explicit size and return an image URL (capture tooling and posters). `empty`
-   * hides the content for the frame: the bare backdrop under the same light and camera, which
-   * is what the stage colour is measured from. The still is the plain square fit (as the posters
-   * are); `field` > 1 widens it to `field` × the frame square around the same framing (the
-   * fullscreen backdrop still, v1.4), so the square fit sits in its middle at 1/`field` the size.
-   */
-  /** The hero fit at another aspect (tooling), leaving the live fit as it was. */
-  measureFraming(aspect: number): HeroFraming | null {
+  /** The hero fits (rest and decline) at another aspect (tooling), leaving the live fit as it was. */
+  measureFraming(aspect: number): FramingPair | null {
     const prev = { w: this.cssWidth, h: this.cssHeight, frame: this.snapshotFrame };
     this.cssWidth = aspect * 1000;
     this.cssHeight = 1000;
@@ -313,6 +394,14 @@ export class Stage {
     return r;
   }
 
+  /**
+   * Render at an explicit size and return an image URL (capture tooling and posters). `empty`
+   * hides the content for the frame: the bare backdrop under the same light and camera, which
+   * is what the stage colour is measured from. The still is the plain square fit (as the posters
+   * are); `field` > 1 widens it to `field` × the frame square around the same framing (the
+   * fullscreen backdrop still, v1.4), so the square fit sits in its middle at 1/`field` the size.
+   * The still is taken at the current pull (v1.5): the declined pose's at the decline fit.
+   */
   snapshot(cssWidth: number, cssHeight: number, dpr: number, type = 'image/png', quality?: number, empty = false, field = 1): string {
     const hidden = empty && this.content?.visible ? this.content : null;
     if (hidden) {

@@ -44,7 +44,7 @@ export async function finishBin(doc: Document, log: ComposeLog): Promise<void> {
 
   // Tiled micro-detail (UV0).
   const powderN = await texture('bin_powder_normal', T.powderNormal(512, TILE.powder));
-  const edmN = await texture('bin_pp_normal', T.edmNormal(512, TILE.plastic));
+  const edmN = await texture('bin_pp_normal', T.ppNormal(512, TILE.plastic));
   const linerN = await texture('bin_liner_normal', T.edmNormal(512, TILE.plastic, 0.6));
   const rubberN = await texture('bin_rubber_normal', T.rubberNormal(256, TILE.rubber));
   const steelN = await texture('bin_steel_normal', T.brushedNormal(1024, TILE.steel));

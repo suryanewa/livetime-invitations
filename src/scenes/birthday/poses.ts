@@ -63,6 +63,15 @@ export const CAKE_LOAD = { hz: 9, zeta: 0.22, dip: 0.0026, tilt: 0.0016, release
  */
 export { IGNITE, IGNITE_START } from './fire.ts';
 
+/**
+ * v1.5 decline pull-back (src/render/framing.ts DECLINE_PULL): the camera starts easing back on
+ * the tap, and the bin's entrance (its slide and its flaps, shape and length unchanged) waits
+ * this long for it, so it glides into room the camera has already made: at the rest framing its
+ * open flaps would rise through the frame's top edge (measured: none clipped from 0.12 s on). It
+ * is settled, flaps open, at 0.37 s, before the carry across sets off (ACROSS_FROM).
+ */
+export const BIN_DELAY = 0.12;
+
 /** Decline path keys. */
 export const BIN_AT = BIN_POS;
 export const BIN_FROM = BIN_START;

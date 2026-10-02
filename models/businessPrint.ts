@@ -99,17 +99,28 @@ export const STATUS_DIFFUSION = {
   /** Edge of the printed mask seen through the glass and diffuser: half-width of the soft edge. */
   edge: 0.07,
   /**
-   * Near halo: light scattered in the diffuser right round the stroke (Gaussian σ, weight). Kept
-   * light, so the lit stroke reads at its drawn weight (v1.5's first cut, 0.45 at σ 0.5, made it
-   * look 1.3–1.5× the NFC mark's strokes: a neon tube, not a lit icon).
+   * Near halo: light scattered in the diffuser right round the stroke (Gaussian σ, weight). Its
+   * absolute level, with the core's peak (GLOW in models/business.ts), is what keeps the stroke at
+   * its drawn weight: v1.5's first cut (0.45 at σ 0.5 on a 4.2 peak) read 1.3–1.5× the NFC mark's
+   * strokes, a neon tube; the core now sits lower (so its hue holds) and the halo is a little wider
+   * and relatively stronger, about the same light round the stroke as the second cut's.
    */
-  near: { sigma: 0.4, weight: 0.22 },
+  near: { sigma: 0.55, weight: 0.32 },
   /**
    * Far halo: the smoked cover glass's own scatter, a faint wider glow (Gaussian σ, weight). Its
    * scale is the glass's thickness (2–3 mm; the stroke is 1.8 mm), so it has faded long before
-   * the window's edge.
+   * the window's edge and the field's own.
    */
-  far: { sigma: 1.3, weight: 0.08 },
+  far: { sigma: 1.4, weight: 0.1 },
+  /**
+   * The halos' weight per glyph (× near and far). The core cannot go brighter without washing
+   * towards white in the tone curve, so the halo carries the glyph's presence at small sizes; red
+   * has 0.37 of green's luminance and the minus 0.63 of the check's stroke, so the minus's diffuser
+   * glow is much the stronger. Lowering the cores for hue alone took 37 % of the minus's light; the
+   * halo gives most of it back (−13 % against the earlier build, lit area +2 %) as light that stays
+   * below the tone curve's shoulder and saturated: the "backlit" read.
+   */
+  haloGain: { accept: 1.4, decline: 3.0 },
   /**
    * Hotspot: the LED sits behind the middle of the light guide, so the stroke is brightest there
    * and falls to `floor` at the glyph's ends (Gaussian over `radius` grid units).
@@ -231,7 +242,7 @@ function diffuseLight(
  * `extent` icon-grid units (centred on the grid's centre, 10, 10). Linear, 1 = the stroke core at
  * the hotspot.
  */
-export function statusGlyphField(kind: 'accept' | 'decline', size = 512, extent = 30): EmissionField {
+export function statusGlyphField(kind: 'accept' | 'decline', size = 512, extent = 36): EmissionField {
   const pts = STATUS_ICON[kind];
   const half = STATUS_ICON.stroke / 2, c = STATUS_ICON.grid / 2;
   const unitsPerTexel = extent / size;
@@ -243,7 +254,10 @@ export function statusGlyphField(kind: 'accept' | 'decline', size = 512, extent 
   };
   const { radius, floor } = STATUS_DIFFUSION.hotspot;
   const gain = (x: number, y: number) => floor + (1 - floor) * Math.exp(-((x - c) ** 2 + (y - c) ** 2) / (2 * radius * radius));
-  return diffuseLight(size, size, unitsPerTexel, distance, STATUS_ICON.stroke, gain, 0.12, toUnits);
+  const h = STATUS_DIFFUSION.haloGain[kind], { edge, near, far } = STATUS_DIFFUSION;
+  return diffuseLight(size, size, unitsPerTexel, distance, STATUS_ICON.stroke, gain, 0.12, toUnits, {
+    edge, near: { sigma: near.sigma, weight: near.weight * h }, far: { sigma: far.sigma, weight: far.weight * h },
+  });
 }
 
 /** 8 × 8 Bayer matrix (0–63). */

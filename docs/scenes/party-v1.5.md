@@ -74,41 +74,70 @@ with no drop (the v1.2 creep).
   print (the square, dashes and dots) move ≈ 10° every 50 ms, clearly turning, at the speed people
   know. A mild exaggeration was rendered too (`accept-45-rpm/`, 45 rpm, itself a 12" single's
   speed): it reads hurried for an LP and gains nothing in legibility. The print's asymmetry is what makes the spin legible (the vinyl's grooves are symmetric).
-- **Spin-up: belt drive, a = 4.75/s** (95 % of speed 1.0 s after the motor starts at 0.3 s). The
-  critically damped lag is kept; its rate is a DC-servo belt drive's (DJ belt decks quote "< 1 s",
-  low-torque hi-fi decks 2–5 s; v1.2's 0.35 s was a direct drive's). The clip ends at 97 % of speed,
-  still gaining; the scene keeps evaluating the same closed form, so nothing is handed over but time.
-- **No brake.** The canonical `accepted` pose is the record at its display angle, **3.081 rad**
-  (where the clip leaves it), arm on the lead-in, key lit, playing. Posters show it; under reduced
-  motion it is the still (the controller never steps `simulate` there).
-- **Lead-in:** the arm follows the record's angle from the cue to `played` and stops there (the
-  music groove's pitch moves it 0.05 mm a second, which no frame shows).
+- **A real deck's order (polish round).** The key is pressed at 0.05 s: it lights and the motor
+  starts. The hand reaches the cue lever (0.15 s), the lever lifts the arm (0.15–0.35 s), the hand
+  swings it to the lead-in at a hand's pace (0.35–0.9 s, peak 1.41 rad/s = 81°/s; v1.2's swing
+  peaked at 5.3 rad/s, ~300°/s, in 0.21 s), and the damper lowers the stylus over 0.75 s
+  (0.9–1.65 s) onto a record already at **99.6 % of speed** (v1.2's stylus landed at 5 %). The clip
+  is **1.85 s** (was 1.6): it ends 0.2 s after the touch.
+- **Spin-up: belt drive, a = 4.75/s** (95 % of speed 1.0 s after the motor starts). The critically
+  damped lag is kept; its rate is a DC-servo belt drive's (DJ belt decks quote "< 1 s", low-torque
+  hi-fi decks 2–5 s; v1.2's 0.35 s was a direct drive's). The clip ends at 99.8 % of speed, still
+  gaining; the scene keeps evaluating the same closed form, so nothing is handed over but time.
+- **Lead-in:** after the touch the groove draws the stylus from the cue to `played` over 1.5 turns
+  of the record (2.7 s at 33⅓), eased to rest there (the music groove's pitch then moves it
+  0.05 mm a second, which no frame shows). It carries on after the clip, while the record plays.
+- **No brake.** The canonical `accepted` pose is that play once the lead-in is done (`ACCEPTED_AT`,
+  4.35 s into acceptance): the record at its display angle **0.977 rad**, the stylus at `played`,
+  key lit. Posters show it; under reduced motion it is the still (the controller never steps
+  `simulate` there).
 - **How it runs (`index.ts`):** at the director's end of the clip, `pose('accepted')` keeps the
-  clip's own platter model and sets `since = t_last − 1.6` (negative); `simulate(dt)` adds the
+  clip's own platter model and sets `since = t_last − 1.85` (negative); `simulate(dt)` adds the
   frame's steps (they sum to the frame's clock delta), `beforeRender` draws the closed form at
-  1.6 + `since`. So the first frame after the clip shows the angle for its own time, and so does
+  1.85 + `since` (record and lead-in). So the first frame after the clip shows the angle for its own time, and so does
   every later one: under the real `VisualDirector` and `FixedStepper` at 60, 120 and 144 Hz with
   ±0.4 ms of jitter, every frame's angle equals the closed form to 1e-9 rad (unit test).
-  `settling()` is true while it plays; `settle()` re-bases it on the display angle; any new
-  sequence or pose ends it, so replays never accumulate angle.
+  `settling()` is true while it plays; `settle()` re-bases it on the canonical pose (`ACCEPTED_AT`);
+  any new sequence or pose ends it, so replays never accumulate angle.
 - **Change of mind (decline while it plays, or during the clip).** `interruptCut()` always answers
   true and records the pose on screen with its velocities (as Business, #25); the decline clip
   starts from it: the motor is cut and the platter **coasts** (dω/dt = −(c + k·ω), k = 0.5/s,
   c = 0.5 rad/s²: from 33⅓ it is at 62 % when the closing cover hides the label, 0.7 s later, and
   stops 3.0 s after the cut; research: bearing friction alone lets a belt-drive platter coast
   10–15 s, the stopped motor and belt drag it harder), the key goes dark at once (a stop button's
-  lamp), the cue lever lifts the stylus clear (0.12 s, the yaw held) before the arm swings home
-  (0.62 s for the whole swing, from its own velocity if it was moving) and is lowered onto its
-  rest, and the cover closes as authored. The director's 150 ms straight blend would have spun the
-  record backwards by up to half a turn and whipped the arm home (v1.2's known gap; #10's one-frame
-  lift step is gone too). **Accept after a decline began:** the cover is lifted back open from
-  where it was (it carries its closing momentum briefly, then rises: 0.5 s), the arm hands over to
-  the authored lift and swing before the cue descends, and a platter still coasting is picked up by
-  the belt when the motor starts. When the decline clip ends the cover is shut and opaque; the
+  lamp), and the arm goes home along the same planner as the authored arm (`planArm`, below), and
+  the cover closes as authored. The director's 150 ms straight blend would have spun the record
+  backwards by up to half a turn and whipped the arm home (v1.2's known gap; #10's one-frame lift
+  step is gone too). **Accept after a decline began:** the cover is lifted back open from where it
+  was (it carries its closing momentum briefly, then rises: 0.5 s), the arm goes to the cue along
+  the planner and is lowered at the authored time (the stylus still lands at 1.65 s), and a
+  platter still coasting is picked up by the belt when the motor starts.
+- **One arm planner (`planArm`, polish round)** for the authored accept and every hand-over: with
+  the stylus in the groove, the tube on the rest or the arm more than half lowered, the cue lever
+  first lifts it (0.2 s for the whole travel, from its own rate) while the yaw holds; an arm in the
+  air keeps its velocity. Moving away from where it now has to go, the hand brakes it to rest
+  (quartic, ≤ 12 rad/s², never past the mechanism's ends); moving towards it, it swings on with its
+  speed when that cannot overshoot (a quintic carrying v0 is monotone while v0·T ≤ 2.55·d,
+  measured; the planner keeps 2.4) or else is braked to rest exactly on the target. Then it swings
+  (0.55 s for the whole swing, ∝ √distance) and is lowered: by the damper at the cue (from 0.9 s),
+  into the cradle at the rest (0.25 s). Yaw stays within [`played`, `parked`], pitch within
+  [lifted, contact], and each movement turns round at most once.
+- **The judge's defects, fixed.** (1) The stylus landed on a nearly still record (5 % of speed):
+  the motor now starts first (99.6 % at the touch). (2) The arm swung at ~300°/s: now ≤ 81°/s, the
+  lift 0.2 s, the damper 0.75 s. (3) A decline during the lead-in popped the pitch (+0.0029 →
+  −0.0084 rad in one frame, `blendLift`'s ceiling at yaws between the cue and `played`): the
+  hand-over no longer uses that ceiling; the decline's first frame is the frame on screen to 1e-12
+  and the pitch then moves at most 0.4 rad/s (tested at 40 change times, in the clip and while
+  playing). (4) Rapid reversals threw the arm to −0.537 rad (0.13 past `played`), lifted it 1.85× the
+  cue lift and made the yaw wobble: the planner's limits and braking keep it in range and turning
+  round at most once per movement (tested over 133 reversal schedules). (5) The coin precession
+  is kept: a single rock onto the other side would lift the centre again (the hop removed in
+  edit #2) and kink at the edge switch; at ≤ 2 px it stays the tiny settle a real LP makes. When the decline clip ends the cover is shut and opaque; the
   platter (still coasting) takes the canonical declined pose under it unseen.
 - **Clearances:** the closing cover never cuts the returning arm and the reopening cover never cuts
   the cueing arm; nothing but the stylus reaches the vinyl (geometry tests on the exported GLB for
-  ten change times, the stylus down, lowering, in the air, and the cover open, closing and shut).
+  thirteen change times, the stylus down, lowering, in the air, at `played`, and the cover open,
+  closing and shut).
 
 ## The render loop (shared: Birthday flames and Dinner steam rely on the same mechanism)
 
@@ -136,29 +165,41 @@ with no drop (the v1.2 creep).
 - `host/`: v1.5's host at 120 fps: `host-strip.jpg` (every 33 ms), `host-landing-zoom.jpg` (every
   60 fps frame 0.55–1.05 s, the platter zoomed), `host-120fps.mp4`, `host-120fps-zoom.mp4`.
 - `beats/beats.jpg`: stills at every host beat (0, 0.08, 0.26, 0.52, release 0.652, tilt peak
-  0.687, touch 0.722, 0.8, still 1.002), accept 0.25/0.4/1.0/1.6, decline 0.7/1.4.
-- `accept/`: the accept clip plus 3.2 s of play at 60 fps (`accept-strip.jpg`, `label-zoom.jpg`
-  every 0.1 s, `label-zoom-33rpm-per-50ms.jpg`, clips) and `handover-label-62fps.jpg`, the label
-  every frame across the hand-over in the real render loop. `accept-v1.2-speed/`: the
-  same at v1.2's 2.2× speed, for the decision.
-- `loop/` (the real controller and render loop on a virtual clock, 62.5 fps): `accept-play`,
-  `change-while-playing` (+ `change-while-playing-zoom.jpg`, every other frame across the change),
-  `change-mid-clip`, `change-back` (decline, then accept at 0.6 s), `reversals`: strips and clips.
+  0.687, touch 0.722, 0.8, still 1.002), accept 0.05 (key) / 0.25 (lift) / 0.6 (swing) / 0.9 (cue) /
+  1.3 / 1.65 (touch) / 1.85 (clip end), decline 0.7 / 1.4.
+- `accept/` (polish round): the 1.85 s accept clip plus 3.2 s of play at 60 fps: `accept-strip.jpg`,
+  `label-zoom.jpg` (every 0.1 s: the platter starts with the key), `arm-zoom.jpg` (every 50 ms:
+  lift, the swing at a hand's pace, the damper), clips, and `handover-label-62fps.jpg` (the label
+  every frame across the hand-over at 1.85 s in the real render loop). `accept-v1.2-speed/` and
+  `accept-45-rpm/`: the first pass's speed comparison (its old clip timing).
+- `loop/` (polish round; the real controller and render loop on a virtual clock, 62.5 fps), each
+  with a strip, an arm zoom (`*-arm-zoom.jpg`, every other frame from 0.2 s before the last
+  change) and clips: `accept-play`, `change-while-playing` (decline at 3 s), `change-mid-clip`
+  (decline mid-swing at 0.6 s), `change-lead-in` (decline at 1.75 s, the stylus in the lead-in:
+  the judge's pop), `change-back` (decline, then accept at 0.6 s), `reversals` (five choices
+  120 ms apart).
 
 Tools: `scripts/party-motion-audit.ts` (240 Hz sampling, beats, kinks), `scripts/party-lab/` (the
 production stage driven at exact times, dev server only), `scripts/party-evidence.ts`
 (`host`, `beats`, `accept`, `loop`).
 
+The polish round followed an independent motion judge's review of the integrated build (spin 8,
+placement 8.5; 33⅓ rpm exact, no step at the hand-over, replays identical, the coast-down and the
+landing confirmed) and fixed its four arm defects (Edit #1, "The judge's defects").
+
 ## Tests
 
-`tests/party.test.ts` 54 (was 41): the v1.2 invariants kept (canonical ends, 1 ms continuity, C1,
+`tests/party.test.ts` 58 (was 41): the v1.2 invariants kept (canonical ends, 1 ms continuity, C1,
 status, presentation tilt, level before the spindle, never below the mat, the hole, one gesture,
 stylus, lifted swings, lid) and new ones: host C2, monotonic descent, a single speed peak under
 0.4 g, the seat-and-settle (low rim at rest, rides on it, tilt never grows back, precession,
 still), belt drive at 33⅓ with no brake, the C2 hand-over to the playing pose, the coast, the
 cover never cutting the arm in a change of mind, and the scene under the real director and stepper
 (exact angle at 60/120/144 Hz with jitter, the stepper's sum, replays, reduced motion, decline while
-playing, an arm turned back from its own velocity and the cover lifted back, rapid reversals).
+playing, an arm turned back from its own velocity and the cover lifted back, rapid reversals), and
+for the polish round: the deck's order (the platter first, the stylus landing at ≥ 99 % of
+speed), the hand's pace (≤ 90°/s, the damper ≥ 0.6 s), no pop at 40 change times, and the
+mechanism's limits with at most one turn per movement over 133 reversal schedules.
 `tests/clock.test.ts`: the frame timestamp and the exact stepper. Browser: `party.spec.ts` (the
 label keeps turning after the clip; rapid reversals settle to the canonical pose),
 `idle.spec.ts` (idle on Business; Party runs while seen, stops off-screen and hidden, resumes; a

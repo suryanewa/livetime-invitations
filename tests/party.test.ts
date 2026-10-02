@@ -14,10 +14,10 @@ import { fitCameraToBounds } from '../src/render/camera.ts';
 import { PartyScene, partyFramePoints } from '../src/scenes/party/index.ts';
 import { VisualDirector } from '../src/core/visualDirector.ts';
 import { FixedStepper } from '../src/motion/spring.ts';
-import { ARM, COAST, DURATIONS, HOVER, LEVEL_BY, LID_CLOSED, LID_OPEN, PLAY_AT, RPM_33, SPIN, TILT_MAX_SHEEN } from '../src/scenes/party/poses.ts';
+import { ACCEPT_ARM, ARM, COAST, DURATIONS, HOVER, LEVEL_BY, LID_CLOSED, LID_OPEN, PLAY_AT, RPM_33, SPIN, TILT_MAX_SHEEN } from '../src/scenes/party/poses.ts';
 import { labelPrint } from '../scripts/masters/recipes/party.ts';
 import {
-  ACCEPT_PLATTER, blendLift, type Change, CONTACT_AT, DISPLAY_ANGLE, frameFor, newFrame, platterAt, platterFor, playingFrame, RELEASE_AT, sampleSequence, SETTLE, settleTilt, STEADY,
+  ACCEPT_PLATTER, ACCEPTED_AT, blendLift, type Change, CONTACT_AT, DISPLAY_ANGLE, STYLUS_DOWN, frameFor, newFrame, platterAt, platterFor, playingFrame, RELEASE_AT, sampleSequence, SETTLE, settleTilt, STEADY,
   type PartyFrame,
 } from '../src/scenes/party/sequences.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
@@ -51,8 +51,11 @@ describe('Party choreography', () => {
   it('accept and decline start at guest-ready and end at their canonical poses', () => {
     close(at('accept', 0), pose('guest-ready'));
     close(at('decline', 0), pose('guest-ready'));
-    close(at('accept', DURATIONS.accept), pose('accepted'));
     close(at('decline', DURATIONS.decline), pose('declined'));
+    // Accept hands over to the record playing on (the lead-in still drawing the arm in); the
+    // canonical accepted pose is that play once the lead-in is done.
+    close(at('accept', DURATIONS.accept), playingFrame(ACCEPT_PLATTER, DURATIONS.accept, newFrame()));
+    close(playingFrame(ACCEPT_PLATTER, ACCEPTED_AT, newFrame()), pose('accepted'));
   });
 
   it('has no discontinuities: consecutive 1 ms samples never jump', () => {
@@ -211,17 +214,59 @@ describe('Party choreography', () => {
     expect(SETTLE.end).toBeLessThan(DURATIONS.host - 0.1);
   });
 
-  it('the record turns only after the motor starts, monotonically, and the clip ends at the display angle', () => {
+  it('the record turns only after the motor starts with the key, monotonically, and the canonical pose shows it at the display angle', () => {
     let prev = 0;
-    for (let i = 0; i <= 1600; i++) {
+    for (let i = 0; i <= DURATIONS.accept * 1000; i++) {
       const s = at('accept', i / 1000).spin;
       expect(s).toBeLessThanOrEqual(prev + 1e-9);
       prev = s;
     }
-    expect(at('accept', 1.6).spin).toBeCloseTo(-DISPLAY_ANGLE, 9);
+    expect(SPIN.start).toBe(PLAY_AT);
     expect(Math.abs(at('accept', SPIN.start).spin)).toBe(0);
     for (const p of ['guest-ready', 'declined', 'host-ready'] as const) expect(pose(p).spin).toBe(0);
     expect(pose('accepted').spin).toBe(-DISPLAY_ANGLE);
+    expect(DISPLAY_ANGLE).toBeCloseTo(platterAt(ACCEPT_PLATTER, ACCEPTED_AT).angle % (2 * Math.PI), 12);
+    // The lead-in (1.5 turns) is done ACCEPTED_AT into acceptance, after the clip.
+    expect(ACCEPTED_AT).toBeGreaterThan(DURATIONS.accept);
+    expect(platterAt(ACCEPT_PLATTER, ACCEPTED_AT).angle - platterAt(ACCEPT_PLATTER, STYLUS_DOWN).angle).toBeCloseTo(3 * Math.PI, 9);
+  });
+
+  it('a real deck’s order (v1.5 polish): the key starts the platter first, and the stylus lands on a record at 99 % of speed', () => {
+    const f0 = at('accept', PLAY_AT);
+    expect(f0.status).toBe('lit');
+    expect(f0.armYaw).toBe(ARM.parked);
+    expect(f0.armPitch).toBe(0);
+    // The arm leaves its rest only once the motor runs.
+    for (let t = 0; t <= ACCEPT_ARM.reach; t += 0.001) {
+      expect(at('accept', t).armYaw).toBe(ARM.parked);
+      expect(at('accept', t).armPitch).toBe(0);
+    }
+    // Lift, swing, then the damper: the stylus touches the vinyl first at STYLUS_DOWN, the record at speed.
+    const tipY = (t: number) => { const f = at('accept', t); return stylusAt(f.armYaw, f.armPitch).y; };
+    for (let t = 0.1; t < STYLUS_DOWN; t += 0.001) {
+      expect(tipY(t), `${t.toFixed(3)} s`).toBeGreaterThanOrEqual(RECORD_TOP - 1e-12);
+      if (t < STYLUS_DOWN - 0.1) expect(tipY(t), `${t.toFixed(3)} s`).toBeGreaterThan(RECORD_TOP + 1e-4);
+    }
+    expect(tipY(STYLUS_DOWN)).toBeCloseTo(RECORD_TOP, 9);
+    expect(platterAt(ACCEPT_PLATTER, STYLUS_DOWN).speed / STEADY.omega).toBeGreaterThan(0.99);
+    expect(STYLUS_DOWN).toBeLessThanOrEqual(DURATIONS.accept - 0.15);
+  });
+
+  it('the arm moves at a hand’s pace (≤ 90°/s), the cue lever lifts it in 0.2 s and the damper lowers it over 0.75 s', () => {
+    let peak = 0;
+    for (let t = 0; t < DURATIONS.accept; t += 0.001) peak = Math.max(peak, Math.abs(at('accept', t + 0.001).armYaw - at('accept', t).armYaw) / 0.001);
+    expect((peak * 180) / Math.PI).toBeLessThan(90);
+    expect((peak * 180) / Math.PI).toBeGreaterThan(60);
+    // The damper: from fully lifted to the vinyl over ACCEPT_ARM.cue, monotonic, landing at rest.
+    let prev = at('accept', ACCEPT_ARM.cueAt).armPitch;
+    expect(prev).toBe(ARM.lifted);
+    for (let t = ACCEPT_ARM.cueAt + 0.005; t <= STYLUS_DOWN; t += 0.005) {
+      const p = at('accept', t).armPitch;
+      expect(p).toBeGreaterThanOrEqual(prev - 1e-12);
+      prev = p;
+    }
+    expect(ACCEPT_ARM.cue).toBeGreaterThanOrEqual(0.6);
+    expect(Math.abs(at('accept', STYLUS_DOWN).armPitch - at('accept', STYLUS_DOWN - 0.01).armPitch) / 0.01).toBeLessThan(0.01);
   });
 
   it('belt drive: the platter lags the motor and runs at the real 33⅓ rpm, with no brake', () => {
@@ -230,27 +275,30 @@ describe('Party choreography', () => {
     expect(omega(SPIN.start + 0.02)).toBeLessThan(0.1 * STEADY.omega);
     // ≥ 95 % of speed 1.05 s after the motor starts (a DC-servo belt drive), never above steady speed.
     expect(omega(SPIN.start + 1.05)).toBeGreaterThan(0.95 * STEADY.omega);
-    for (let t = SPIN.start; t < 1.6; t += 0.01) expect(omega(t)).toBeLessThanOrEqual(STEADY.omega * (1 + 1e-6));
+    for (let t = SPIN.start; t < DURATIONS.accept; t += 0.01) expect(omega(t)).toBeLessThanOrEqual(STEADY.omega * (1 + 1e-6));
     // Steady state is the real 33⅓ rpm: 1.8 s a turn.
     expect(STEADY.omega).toBe(RPM_33);
     expect(STEADY.beatScale).toBe(1);
     expect((2 * Math.PI) / STEADY.omega).toBeCloseTo(1.8, 9);
-    // No brake: at the end of the clip it is at 97 % of speed and still gaining.
-    expect(omega(1.6 - 0.001)).toBeGreaterThan(0.97 * STEADY.omega);
-    expect(platterAt(ACCEPT_PLATTER, 1.6).accel).toBeGreaterThan(0);
+    // No brake: at the end of the clip it is at 99.8 % of speed and still gaining.
+    expect(omega(DURATIONS.accept - 0.001)).toBeGreaterThan(0.998 * STEADY.omega);
+    expect(platterAt(ACCEPT_PLATTER, DURATIONS.accept).accel).toBeGreaterThan(0);
     expect(platterAt(ACCEPT_PLATTER, 30).speed).toBeCloseTo(STEADY.omega, 9);
   });
 
   it('the record plays on: the clip hands over to the playing pose with no step in angle, speed or acceleration', () => {
-    const angle = (t: number) => (t <= 1.6 ? -at('accept', t).spin : platterAt(ACCEPT_PLATTER, t).angle);
+    const T = DURATIONS.accept;
+    const angle = (t: number) => (t <= T ? -at('accept', t).spin : platterAt(ACCEPT_PLATTER, t).angle);
     const h = 0.002;
     const v = (t: number) => (angle(t + h / 2) - angle(t - h / 2)) / h;
     const a = (t: number) => (angle(t + h) - 2 * angle(t) + angle(t - h)) / (h * h);
-    expect(angle(1.6)).toBeCloseTo(DISPLAY_ANGLE, 12);
-    expect(Math.abs(v(1.6 - h) - v(1.6 + h))).toBeLessThan(1e-3);
-    expect(Math.abs(a(1.6 - h) - a(1.6 + h))).toBeLessThan(0.05);
+    expect(Math.abs(v(T - h) - v(T + h))).toBeLessThan(1e-3);
+    expect(Math.abs(a(T - h) - a(T + h))).toBeLessThan(0.05);
+    // The arm too: the lead-in goes on through the hand-over.
+    const yaw = (t: number) => (t <= T ? at('accept', t) : playingFrame(ACCEPT_PLATTER, t, newFrame())).armYaw;
+    expect(Math.abs((yaw(T) - yaw(T - h)) / h - (yaw(T + h) - yaw(T)) / h)).toBeLessThan(1e-3);
     // The playing pose is the accepted pose with the record turned on; at the clip's end it is the clip's last frame.
-    close(playingFrame(ACCEPT_PLATTER, 1.6, newFrame()), at('accept', 1.6));
+    close(playingFrame(ACCEPT_PLATTER, T, newFrame()), at('accept', T));
     const later = playingFrame(ACCEPT_PLATTER, 61.6, newFrame());
     close(later, { ...pose('accepted'), spin: later.spin });
     expect(later.spin).toBeGreaterThan(-2 * Math.PI);
@@ -277,8 +325,8 @@ describe('Party choreography', () => {
   });
 
   it('the stylus lands on the groove and stays on the record; parked it is clear of the record', () => {
-    for (let i = 400; i <= 1600; i++) {
-      const f = at('accept', i / 1000);
+    for (let i = Math.round(STYLUS_DOWN * 1000); i <= DURATIONS.accept * 1000 + 3000; i++) {
+      const f = i <= DURATIONS.accept * 1000 ? at('accept', i / 1000) : playingFrame(ACCEPT_PLATTER, i / 1000, newFrame());
       const tip = stylusAt(f.armYaw, f.armPitch);
       expect(tip.y).toBeCloseTo(RECORD_TOP, 6);
       const r = Math.hypot(tip.x - PLATTER.x, tip.z - PLATTER.z);
@@ -293,7 +341,7 @@ describe('Party choreography', () => {
   });
 
   it('the arm is lifted whenever it swings over the record (sequence and interruption blends)', () => {
-    for (let i = 0; i <= 250; i++) {
+    for (let i = 0; i <= STYLUS_DOWN * 1000; i++) {
       const f = at('accept', i / 1000);
       const tip = stylusAt(f.armYaw, f.armPitch);
       const r = Math.hypot(tip.x - PLATTER.x, tip.z - PLATTER.z);
@@ -767,12 +815,16 @@ describe('Party model clearances on the exported geometry', () => {
   it('a change of mind never cuts the cover through the arm: decline after acceptance (the arm swings home under the closing cover) and accept after a decline began (the cover lifts back over the cueing arm)', () => {
     const arm = () => surfacePoints(get('tonearm_lift'), 0.01);
     const cases: [SequenceName, number, SequenceName][] = [
-      ['accept', 0.06, 'decline'], ['accept', 0.2, 'decline'], ['accept', 0.3, 'decline'], ['accept', 0.36, 'decline'], ['accept', 0.45, 'decline'], ['accept', 1.6, 'decline'],
+      ['accept', 0.1, 'decline'], ['accept', 0.25, 'decline'], ['accept', 0.5, 'decline'], ['accept', 0.75, 'decline'], ['accept', 1.0, 'decline'],
+      ['accept', 1.4, 'decline'], ['accept', 1.7, 'decline'], ['accept', DURATIONS.accept, 'decline'],
       ['decline', 0.3, 'accept'], ['decline', 0.7, 'accept'], ['decline', 1.0, 'accept'], ['decline', 1.4, 'accept'],
+      // Playing on, the lead-in done (the arm at `played`): decline.
+      ['accept', ACCEPTED_AT + 1, 'decline'],
     ];
     for (const [first, at, next] of cases) {
-      const f = sampleSequence(first, at, newFrame());
-      const h = 1 / 240, b = sampleSequence(first, Math.max(0, at - h), newFrame());
+      const frameAt = (t: number) => (first === 'accept' && t > DURATIONS.accept ? playingFrame(ACCEPT_PLATTER, t, newFrame()) : sampleSequence(first, t, newFrame()));
+      const f = frameAt(at);
+      const h = 1 / 240, b = frameAt(Math.max(0, at - h));
       const p = platterAt(platterFor(first, null), at);
       const change: Change = {
         armYaw: f.armYaw, armYawRate: (f.armYaw - b.armYaw) / h, armPitch: f.armPitch, armPitchRate: (f.armPitch - b.armPitch) / h,
@@ -889,7 +941,7 @@ describe('Party plays on and changes its mind (scene, VisualDirector and FixedSt
     director.setReducedMotion(true);
     const f = frame(0);
     expect(f.spin).toBeCloseTo(-DISPLAY_ANGLE, 12);
-    close(sampleSequence('accept', DURATIONS.accept, newFrame()), pose('accepted'));
+    close(playingFrame(ACCEPT_PLATTER, ACCEPTED_AT, newFrame()), pose('accepted'));
     // The controller does not step `simulate` under reduced motion: the pose stays put.
     scene.beforeRender();
     expect(f.spin).toBe(frame(0).spin);
@@ -906,6 +958,7 @@ describe('Party plays on and changes its mind (scene, VisualDirector and FixedSt
     for (const dt of dts.slice(1)) prev = frame(dt);
     const before = -prev.spin, step0 = wrap(-frame(1 / 60).spin - before);
     prev = frame(0);
+    const yawAtChange = prev.yaw;
     director.setIntent('decline');
     let last = prev, lastStep = step0, t = 0;
     for (let i = 0; i < 90; i++) {
@@ -926,7 +979,7 @@ describe('Party plays on and changes its mind (scene, VisualDirector and FixedSt
       expect(Math.abs(f.lid - last.lid), `lid ${t.toFixed(3)} s`).toBeLessThan(0.08);
       // The stylus is clear of the vinyl whenever the arm has left the groove.
       const tip = stylusAt(f.yaw, f.pitch);
-      if (Math.abs(f.yaw - ARM.played) > 0.004 && Math.hypot(tip.x - PLATTER.x, tip.z - PLATTER.z) < RECORD.radius) expect(tip.y).toBeGreaterThan(RECORD_TOP + 0.003);
+      if (Math.abs(f.yaw - yawAtChange) > 0.004 && Math.hypot(tip.x - PLATTER.x, tip.z - PLATTER.z) < RECORD.radius) expect(tip.y).toBeGreaterThan(RECORD_TOP + 0.003);
       last = f;
       lastStep = step;
     }
@@ -941,7 +994,7 @@ describe('Party plays on and changes its mind (scene, VisualDirector and FixedSt
     const { director, frame } = harness();
     director.setIntent('accept');
     let prev = frame(0);
-    for (let i = 0; i < 9; i++) prev = frame(1 / 60);
+    for (let i = 0; i < 36; i++) prev = frame(1 / 60); // mid-swing (0.35–0.9 s)
     const before = frame(1 / 60);
     const rate = before.yaw - prev.yaw;
     expect(rate).toBeLessThan(0); // swinging towards the record
@@ -955,7 +1008,7 @@ describe('Party plays on and changes its mind (scene, VisualDirector and FixedSt
     expect(f.lid).toBeGreaterThan(LID_OPEN + 0.05);
     director.setIntent('accept');
     let last = frame(1 / 60);
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 300; i++) { // past the lead-in
       const g = frame(1 / 60);
       expect(g.lid).toBeGreaterThanOrEqual(LID_OPEN - 1e-12);
       expect(Math.abs(g.lid - last.lid)).toBeLessThan(0.08);
@@ -967,6 +1020,72 @@ describe('Party plays on and changes its mind (scene, VisualDirector and FixedSt
     expect(last.settling).toBe(true);
   });
 
+  it('a change of mind never pops the arm (v1.5 polish): at every moment of the clip and while it plays, the next clip starts exactly from the pose on screen and the pitch moves no faster than the cue lever', () => {
+    const times = [...Array.from({ length: 37 }, (_, i) => i * 0.05), 2.5, 4.0, 6.0];
+    for (const at0 of times) {
+      const { director, frame } = harness();
+      director.setIntent('accept');
+      let before = frame(0);
+      for (let t = 0; t < at0 - 1e-9; t += 1 / 120) before = frame(1 / 120);
+      director.setIntent('decline');
+      let prev = frame(0);
+      // The cut is never seen: the decline's first frame is the frame that was showing.
+      expect(Math.abs(prev.yaw - before.yaw), `${at0} s yaw`).toBeLessThan(1e-12);
+      expect(Math.abs(prev.pitch - before.pitch), `${at0} s pitch`).toBeLessThan(1e-12);
+      for (let i = 0; i < 60; i++) {
+        const f = frame(1 / 120);
+        // The lift's peak rate is 0.36 rad/s; anything faster is a pop.
+        expect(Math.abs(f.pitch - prev.pitch) * 120, `${at0} s + ${i} frames`).toBeLessThan(0.4);
+        prev = f;
+      }
+    }
+  });
+
+  it('rapid reversals keep the arm inside its mechanism and never make it wobble (v1.5 polish)', () => {
+    const YAW_IN = Math.min(ARM.played, ARM.parked), YAW_OUT = Math.max(ARM.played, ARM.parked);
+    for (let t1 = 0.05; t1 < 1.9; t1 += 0.1) {
+      for (let d2 = 0.05; d2 < 0.7; d2 += 0.1) {
+        const { director, frame } = harness();
+        director.setIntent('accept');
+        let f = frame(0);
+        for (let t = 0; t < t1; t += 1 / 60) f = frame(1 / 60);
+        const segments: number[][] = [];
+        for (const [choice, hold] of [['decline', d2], ['accept', DURATIONS.accept + 0.2]] as const) {
+          director.setIntent(choice);
+          const yaws = [frame(0).yaw];
+          for (let t = 0; t < hold; t += 1 / 60) {
+            f = frame(1 / 60);
+            const label = `accept → decline at ${t1.toFixed(2)} s → accept ${d2.toFixed(2)} s later`;
+            expect(f.yaw, label).toBeGreaterThanOrEqual(YAW_IN - 1e-12);
+            expect(f.yaw, label).toBeLessThanOrEqual(YAW_OUT + 1e-12);
+            expect(f.pitch, label).toBeGreaterThanOrEqual(ARM.lifted - 1e-12);
+            expect(f.pitch, label).toBeLessThanOrEqual(ARM.contact + 1e-12);
+            yaws.push(f.yaw);
+          }
+          segments.push(yaws);
+        }
+        // Critically damped: within each movement (a run of frames without a pause) the yaw turns
+        // round at most once (the hand's brake). A pause (the cue's descent) ends a movement: the
+        // groove's lead-in that follows is the next one.
+        for (const yaws of segments) {
+          let turns = 0, dir = 0, still = 0;
+          for (let i = 1; i < yaws.length; i++) {
+            const d = yaws[i]! - yaws[i - 1]!;
+            if (Math.abs(d) < 1e-7) {
+              if (++still >= 6) { dir = 0; turns = 0; }
+              continue;
+            }
+            still = 0;
+            const s = Math.sign(d);
+            if (dir !== 0 && s !== dir) turns++;
+            dir = s;
+            expect(turns, `accept → decline at ${t1.toFixed(2)} s → accept ${d2.toFixed(2)} s later`).toBeLessThanOrEqual(1);
+          }
+        }
+      }
+    }
+  });
+
   it('rapid reversals end on the accepted pose with the record playing, and a snap then shows exactly the canonical pose', () => {
     const { director, frame } = harness();
     for (const choice of ['accept', 'decline', 'accept', 'decline', 'accept'] as const) {
@@ -974,7 +1093,7 @@ describe('Party plays on and changes its mind (scene, VisualDirector and FixedSt
       for (let i = 0; i < 7; i++) frame(1 / 60);
     }
     let f = frame(1 / 60);
-    for (let i = 0; i < 150; i++) f = frame(1 / 60);
+    for (let i = 0; i < 300; i++) f = frame(1 / 60); // past the lead-in (ACCEPTED_AT)
     expect(f.settling).toBe(true);
     expect(f.yaw).toBeCloseTo(ARM.played, 12);
     expect(f.pitch).toBeCloseTo(ARM.contact, 12);

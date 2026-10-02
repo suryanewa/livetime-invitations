@@ -4,7 +4,7 @@ import { BIN_POS, BIN_YAW, birthdayBounds, STAND } from './birthdayContract.ts';
 import { createFlameLights, type FlameLights, type FlameRig, patchFlameLight, rigCandleFire, SmokeRig } from './birthdayFire.ts';
 import { BIRTHDAY_GLB_NODES } from './birthdayParts.ts';
 import { buildCakeGeometry, type CakePreset } from './cake.ts';
-import { attachBin, BIN, BIN_CONTACT, binLight, buildDisposalBin, patchBinVisibility } from './disposalBin.ts';
+import { attachBin, BIN, BIN_CONTACT, binLight, buildDisposalBin, detachBin, patchBinVisibility } from './disposalBin.ts';
 import type { MaterialVariants } from './imported.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import { BIN_SHADE, type BinShade, type CakePress, type CandleMelt, contactPatch, meltPatch, newCakePress, patchMaterial, type PlateContact, plateContactPatch, poolGeometry, poolPatch, pressPatch, ridgePatch, runGeometry, runPatch, subsurfacePatch } from './cakeShaders.ts';
@@ -295,6 +295,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     dispose() {
       cakeShadow.dispose();
       binShadow.dispose();
+      detachBin(binRoot);
       disposeShadowProxies(root);
       for (const m of waxClones) m.dispose();
       for (const c of candles) for (const mesh of [c.run, c.pool]) if (mesh) { mesh.geometry.dispose(); mesh.removeFromParent(); }

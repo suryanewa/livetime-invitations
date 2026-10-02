@@ -54,6 +54,22 @@ export interface SceneInstance {
    * src/render/framing.ts): the camera distance makes them fill HERO_FILL of the frame.
    */
   readonly heroPoints?: readonly Vector3[];
+  /**
+   * v1.5 decline pull-back (docs/style-reference.md): the subset of `framePoints` that must be in
+   * frame at rest, the host and accept paths. A scene whose decline needs more room (the carry
+   * over the bin) gives it, and the stage keeps two fits: `rest` (hero + these) and `decline`
+   * (hero + every path). Omitted, the two are one (`framePull` then changes nothing).
+   */
+  readonly restFramePoints?: readonly Vector3[];
+
+  /**
+   * v1.5 decline pull-back: where the camera is between the rest fit (0) and the decline fit (1),
+   * read by the controller every frame before drawing. A pure function of what the scene shows:
+   * its current sequence and time (the decline's dolly out and, on a change of mind, its rewind),
+   * 1 at the declined pose, 0 at every other pose; so it is deterministic, replay-safe and the same
+   * under reduced motion (which shows poses only: the camera cuts with the pose). Omitted: 0.
+   */
+  framePull?(): number;
 
   /** Swap preset materials/visibility. Called only at canonical poses. */
   setConfig(config: SceneConfig): void;

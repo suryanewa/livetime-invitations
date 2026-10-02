@@ -9,10 +9,10 @@ import type { CakePreset } from '../../../models/cake.ts';
 import { BIN, flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
-import { silhouettePoints } from '../../render/framing.ts';
+import { declinePull, silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
-import { birthdayFramePoints } from './framing.ts';
+import { birthdayFramePoints, birthdayRestFramePoints } from './framing.ts';
 import { MELT_CAP, meltState, newMeltState, SET_AFTER, solidify } from './melt.ts';
 import { runGroove } from '../../../models/cakeShaders.ts';
 import { CANDLE_LEAN, DURATIONS, ON_STAND } from './poses.ts';
@@ -33,8 +33,12 @@ export class BirthdayScene implements SceneInstance {
   readonly animatedNodes: Object3D[];
   readonly studio = { wallZ: WALL_Z };
   readonly framePoints: Vector3[];
+  /** v1.5 decline pull-back: at rest the frame holds the hero and the host's candles only. */
+  readonly restFramePoints = birthdayRestFramePoints();
 
   private readonly frame = newFrame();
+  /** v1.5 decline pull-back: the camera's place between the rest (0) and decline (1) fits. */
+  private pull = 0;
   private preset: CakePreset;
   private readonly qYaw = new Quaternion();
   private readonly qTilt = new Quaternion();
@@ -134,6 +138,7 @@ export class BirthdayScene implements SceneInstance {
     // The wax goes on setting on the live clock only where the guest watched the blow-out (as the
     // smoke); a canonical 'accepted' reached any other way is still.
     this.restingOut = this.tail !== null;
+    this.pull = pose === 'declined' ? 1 : 0;
     this.apply(frameFor(pose, this.frame));
   }
 
@@ -142,7 +147,17 @@ export class BirthdayScene implements SceneInstance {
     this.last = { sequence, t };
     this.restingLit = false;
     this.restingOut = false;
+    this.pull = sequence === 'decline' ? declinePull(t) : 0;
     this.apply(sampleSequence(sequence, t, this.frame));
+  }
+
+  /**
+   * v1.5 decline pull-back: the camera eases out as the bin comes in and the cake is lifted
+   * (src/render/framing.ts DECLINE_PULL), at the decline fit before the carry crests the rim; a change of mind
+   * (the director's cut to guest-ready) cuts the camera with the scene.
+   */
+  framePull(): number {
+    return this.pull;
   }
 
   /**
