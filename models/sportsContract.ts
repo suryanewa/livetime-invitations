@@ -1,11 +1,11 @@
 import { Box3, Vector3 } from 'three';
-import { cm, REFERENCE_CM } from './worldScale.ts';
+import { cm, REFERENCE_CM, WORLD_UNIT_CM } from './worldScale.ts';
 
 /**
  * Sports (basketball) contract — shared by the model (`sportsPremium.ts`), the rig
- * (`sports.ts`) and the choreography (`src/scenes/sports`). Everything the sequences touch is
- * fixed here, so geometry can be refined without breaking the made shot, the airball, rim
- * occlusion or the motion bounds.
+ * (`sports.ts`, `sportsNet.ts`) and the choreography (`src/scenes/sports`). Everything the
+ * sequences touch is fixed here, so geometry can be refined without breaking the made shot, the
+ * airball, the net or the motion bounds.
  */
 
 export type BallPreset = 'orange' | 'cream';
@@ -15,65 +15,165 @@ export const SPORTS_NODES = [
   'ball_shadow', 'hoop_shadow',
 ] as const;
 
-/**
- * Ball radius (scene units). The rim's inner diameter is 1.6 × the ball's. The ball is the
- * basketball master (sphere r 0.9436 scan units) at BALL_R / 0.9436.
- */
+/** Ball radius (scene units): the basketball master (sphere r 0.9436 scan units) at BALL_R / 0.9436. */
 export const BALL_R = 0.25;
 /**
  * World units per Sports scene unit (v1.4, models/worldScale.ts): the ball is a mini (size 3)
- * basketball, 18 cm, so BALL_R (0.25) is 9 cm = 0.45 world units: 1.8. The hoop master is a
- * wall-mount mini hoop, and the rim's 1.6 × ball inner diameter (28.8 cm) gives its real board
- * (58.6 × 46 cm); the rim stands 62 cm above the floor on the code-authored stand. The whole scene
- * (arcs, net, pivots, rest spots) scales together, so every number here stays in scene units and
- * the beats hold; the scene root carries the scale.
+ * basketball, 18 cm, so BALL_R (0.25) is 9 cm = 0.45 world units: 1.8. The whole scene (arcs,
+ * net, pivots, rest spots) scales together, so every number here stays in scene units; the scene
+ * root carries the scale.
  */
 export const SPORTS_WORLD_SCALE = cm(REFERENCE_CM.miniBall / 2) / BALL_R;
+/** Centimetres per Sports scene unit (36). */
+export const SPORTS_CM_PER_UNIT = WORLD_UNIT_CM * SPORTS_WORLD_SCALE;
+const su = (centimetres: number) => centimetres / SPORTS_CM_PER_UNIT;
 
 /**
- * Hoop: `hoop_root` sits on the floor behind and right of the ball. The board, rim and net are the
- * scan-to-CAD hoop master (`models/masters/basketball-hoop.glb`, a wall-mount mini hoop) imported by
- * `scripts/masters/recipes/sports.ts` at HOOP_SCALE, placed so its rim-ring centre lands exactly on
- * RIM_LOCAL; the pole, base, arm and back plate are code-authored (`sportsPremium.ts`, stand mode).
- * Every number below was measured from the master at that scale (scripts/masters/README.md,
- * "Measuring a master"); `tests/sports.test.ts` re-measures the exported GLB against them.
+ * v1.5 proportions: one real product. The scene shows a **mini hoop system** of the SKLZ Pro Mini
+ * Hoop System class (sklz.com: a 7" mini ball, a 14.5" spring-action rim, a 33 × 23" board on a
+ * steel pole that adjusts from 3.5 to 7 ft, a weighted base), set at 4 ft. Before v1.5 the rim
+ * was 1.6 × the ball (28.8 cm: the ball looked too big for it) and stood 62 cm above the floor on
+ * a short pole with a round lamp base, its board nearly as wide as the rim was high: a toddler's
+ * toy. Now:
+ * - ball / rim inner diameter 18 / 36.8 = 0.49 (regulation 23.9 / 45.7 = 0.52; the product 0.48);
+ * - the board is the master's (its width is 2.03 × the rim, as on every mini hoop: SKLZ 2.28,
+ *   18"/9" door hoops 2.0; regulation's 4.0 is a court's), so at this rim it is 74.9 × 58.9 cm;
+ * - the rim stands at 4 ft (121.9 cm), one of the product's settings, chosen so the system has a
+ *   regulation hoop's silhouette: rim height / board width 1.63 (regulation 3.05 / 1.83 = 1.67);
+ *   the pole below the board is 1.85 × the board's height (regulation 2.7, the old stand 1.13);
+ * - the net hangs 31.5 cm (0.855 × the rim; regulation 40 / 45.7 = 0.875).
  */
-export const HOOP_ROOT = new Vector3(0.55, 0, -0.75);
-/** Rim ring: inner radius 1.6 × BALL_R; the master's tube (0.021 scan units) at HOOP_SCALE. */
-export const RIM = { innerRadius: 0.4, tube: 0.0186 } as const;
-/** Scan units → scene units for the hoop master: its rim's inner radius (0.451) becomes RIM.innerRadius. */
-export const HOOP_SCALE = RIM.innerRadius / 0.451;
-/**
- * Board (hoop space): `front` is the front of the wood frame's proud lip, `face` the grey laminate
- * face inside it, `front − thickness` the flat back the arm's back plate meets. The frame's outline
- * is width × height about (0, centerY).
- */
-export const BOARD = { width: 1.6264, height: 1.2788, thickness: 0.183, centerY: 2.0818, front: 0.0581, face: -0.0086 } as const;
-export const POLE = { z: -0.3, top: 2.3, radius: 0.045, baseRadius: 0.3 } as const;
-/** Rim centre in hoop space (unchanged from v1.1, so every authored arc still meets it). */
-export const RIM_LOCAL = new Vector3(0, 1.72, 0.44);
-/** Rim centre in world (sports_root) space: the made shot passes exactly through it. */
-export const RIM_CENTER = HOOP_ROOT.clone().add(RIM_LOCAL);
-/** The master's rim bracket (plate, saddle and arms) in hoop space: the ring's mount on the board face. */
-export const RIM_BRACKET = new Box3(new Vector3(-0.2177, 1.5299, -0.007), new Vector3(0.2177, 1.7455, 0.0865));
-/**
- * Net: 20 twisted-rope strands from 10 rim hooks, 6 knot rows, hanging NET.depth below the rim
- * centre. `profile` is its inner envelope: [depth fraction, smallest radius of any cord, knot or
- * loop vertex in that band] (horizontal, from the rim axis). The mini hoop's net is narrow: at rest
- * its waist (0.18) is smaller than the ball, so the made shot bulges it round the ball (`netOpening`).
- */
-export const NET = {
-  depth: 0.6837,
-  bottomRadius: 0.2,
-  strands: 20,
-  rows: 6,
-  profile: [
-    [0, 0.401], [0.083, 0.367], [0.167, 0.337], [0.25, 0.306], [0.333, 0.27], [0.417, 0.231], [0.5, 0.226],
-    [0.583, 0.201], [0.667, 0.185], [0.75, 0.191], [0.833, 0.177], [0.917, 0.182], [1, 0.2],
-  ] as readonly (readonly [number, number])[],
+export const HOOP_PRODUCT_CM = {
+  /** 14.5" rim (inner diameter). */
+  rimInner: 36.83,
+  /** The 4 ft setting (rim top plane above the floor). */
+  rimHeight: 121.92,
 } as const;
 
-/** Rest inner radius of the net at depth fraction t ∈ [0, 1] (linear between profile samples). */
+/**
+ * The hoop master's own measurements (scan units, `node --experimental-transform-types
+ * scripts/masters/inspect.ts models/masters/basketball-hoop.glb`). Every hoop number below is one
+ * of these at HOOP_SCALE, placed so the rim ring's centre lands on RIM_LOCAL; tests/sports.test.ts
+ * re-measures the exported GLB against them.
+ */
+export const HOOP_MASTER = {
+  /** Rim ring: centre, inner radius and tube radius. */
+  ring: { x: 0, y: -0.1797, z: 0.0917, inner: 0.451, tube: 0.021 },
+  /** Board frame (the wood frame's outline): half width, bottom, top, flat back and proud front lip. */
+  frame: { halfWidth: 0.9169, bottom: -0.4927, top: 0.9492, back: -0.5453, front: -0.3389 },
+  /** The grey laminate face inside the frame. */
+  face: -0.4141,
+  /** Centre of the board's flat back (`board-back`). */
+  backCenterY: 0.2315,
+  /** Rim bracket (plate, saddle and arms): the ring's mount on the board face. */
+  bracket: { halfWidth: 0.2455, bottom: -0.394, top: -0.151, back: -0.4123, front: -0.3069 },
+  /** Lowest net vertex (the tails). */
+  netBottom: -0.9506,
+} as const;
+
+/** Rim ring: inner radius (the 14.5" rim) and tube (the master's, at HOOP_SCALE: 17 mm stock). */
+const RIM_INNER = su(HOOP_PRODUCT_CM.rimInner / 2);
+/** Scan units → scene units for the hoop master: its rim's inner radius becomes RIM.innerRadius. */
+export const HOOP_SCALE = RIM_INNER / HOOP_MASTER.ring.inner;
+export const RIM = { innerRadius: RIM_INNER, tube: HOOP_MASTER.ring.tube * HOOP_SCALE } as const;
+
+/**
+ * The stand (hoop space: origin on the floor below the arms' sleeve, +z towards the player),
+ * code-authored in `sportsPremium.ts` as a portable system: a weighted, fillable base (51 cm wide,
+ * 65 deep, 13 tall, two wheels at the back) entirely behind the board; a telescoping steel pole
+ * (2" lower section, 1¾" upper section with a clamp collar and pin knob at the joint) rising from
+ * the base's front and leaning forward 14° like every portable hoop's, so the rim overhangs the
+ * base by 47 cm and the ball comes down well clear of it; a sleeve at its top carrying two
+ * parallel box-section arms (a parallelogram, as on adjustable systems) to the plate on the
+ * board's back.
+ */
+export const STAND = {
+  base: { halfWidth: su(25.5), front: su(-25), back: su(-90), height: su(13), corner: su(9) },
+  pole: { lower: su(5.08 / 2), upper: su(4.45 / 2), collarRadius: su(3.4), collarHeight: su(7) },
+  /** The two box-section arms from the sleeve to the board's back plate. */
+  arms: { width: su(3.2), height: su(1.9) },
+} as const;
+
+/** Hoop-space z of the board's flat back (the arms reach it 15 cm in front of the pole's axis). */
+const BOARD_BACK_Z = su(15);
+/**
+ * Rim centre in hoop space: the 4 ft setting (rim height is measured to the top of the ring, as on
+ * a court), the ring's centre where the master puts it in front of its board.
+ */
+export const RIM_LOCAL = new Vector3(0, su(HOOP_PRODUCT_CM.rimHeight) - RIM.tube, BOARD_BACK_Z + (HOOP_MASTER.ring.z - HOOP_MASTER.frame.back) * HOOP_SCALE);
+
+/** A master point (scan units) in hoop space. */
+export function hoopFromMaster(x: number, y: number, z: number, out = new Vector3()): Vector3 {
+  const r = HOOP_MASTER.ring;
+  return out.set(x - r.x, y - r.y, z - r.z).multiplyScalar(HOOP_SCALE).add(RIM_LOCAL);
+}
+
+/**
+ * Board (hoop space): `front` is the front of the wood frame's proud lip, `face` the grey laminate
+ * face inside it, `front − thickness` the flat back the arms' plate meets. The frame's outline is
+ * width × height about (0, centerY).
+ */
+export const BOARD = (() => {
+  const f = HOOP_MASTER.frame;
+  const lo = hoopFromMaster(0, f.bottom, f.back), hi = hoopFromMaster(0, f.top, f.front);
+  return {
+    width: 2 * f.halfWidth * HOOP_SCALE,
+    height: hi.y - lo.y,
+    thickness: hi.z - lo.z,
+    centerY: (lo.y + hi.y) / 2,
+    front: hi.z,
+    face: hoopFromMaster(0, 0, HOOP_MASTER.face).z,
+  } as const;
+})();
+
+/**
+ * Pole (hoop space): its axis runs from `foot` (on the base's top, near its front) to `head` (the
+ * top of the sleeve, just above the upper arm), leaning forward; `collar` is the telescoping
+ * joint's height fraction along it. `baseRadius` is the base's footprint as a disc (contact shadow).
+ */
+export const POLE = (() => {
+  const head = new Vector3(0, BOARD.centerY + su(14), 0);
+  const foot = new Vector3(0, STAND.base.height, su(-34));
+  return {
+    foot,
+    head,
+    lean: Math.atan2(head.z - foot.z, head.y - foot.y),
+    collar: 0.42,
+    radius: STAND.pole.lower,
+    top: head.y,
+    baseRadius: su(30),
+  } as const;
+})();
+
+/** Rim centre in world (sports_root space): the made shot passes exactly through it. */
+export const HOOP_ROOT = new Vector3(0.62, 0, -1.0);
+export const RIM_CENTER = HOOP_ROOT.clone().add(RIM_LOCAL);
+/** The master's rim bracket (plate, saddle and arms) in hoop space: the ring's mount on the board face. */
+export const RIM_BRACKET = (() => {
+  const b = HOOP_MASTER.bracket;
+  return new Box3(hoopFromMaster(-b.halfWidth, b.bottom, b.back), hoopFromMaster(b.halfWidth, b.top, b.front));
+})();
+
+/**
+ * Net: the master's knotted net (10 loops on 10 rim hooks, 6 knot rows of 10 knots: a diamond
+ * lattice, each knot joined to two knots on the row above and two below), hanging NET.depth below
+ * the rim centre. `profile` is its inner envelope at HOOP_SCALE (master scan: [depth fraction,
+ * smallest radius of any cord, knot or loop vertex in that band], horizontal from the rim axis).
+ * Since v1.5 the net is a simulated cord lattice (`sportsNet.ts`); these numbers describe the
+ * master's bind pose.
+ */
+const NET_PROFILE_SCAN: readonly (readonly [number, number])[] = [
+  [0, 0.4521], [0.083, 0.4138], [0.167, 0.38], [0.25, 0.345], [0.333, 0.3044], [0.417, 0.2605], [0.5, 0.2548],
+  [0.583, 0.2266], [0.667, 0.2086], [0.75, 0.2154], [0.833, 0.1996], [0.917, 0.2052], [1, 0.2255],
+];
+export const NET = {
+  depth: (HOOP_MASTER.ring.y - HOOP_MASTER.netBottom) * HOOP_SCALE,
+  loops: 10,
+  rows: 6,
+  profile: NET_PROFILE_SCAN.map(([t, r]) => [t, r * HOOP_SCALE] as const),
+} as const;
+
+/** Rest inner radius of the master net at depth fraction t ∈ [0, 1] (linear between profile samples). */
 export function netRestRadius(t: number): number {
   const p = NET.profile;
   const x = Math.min(1, Math.max(0, t));
@@ -87,113 +187,31 @@ export function netRestRadius(t: number): number {
   return p[p.length - 1]![1];
 }
 
-/**
- * The made shot's swish (v1.2 fidelity pass): a bulge that travels down the net with the ball.
- *
- * The net is deformed in net space (origin at the rim centre, y = 0 at the rim, negative down,
- * axes parallel to hoop space). Every vertex moves as a function of its rest depth fraction t
- * and its radial direction u only, so the cords, loops and knots at one place move together:
- *
- * - **Bulge** (radial, outwards): the row at rest depth y must clear the ball's cross-section in
- *   direction u, i.e. reach the support o·u + c(dy) of the ball's disc at that height (o: the
- *   ball's horizontal offset from the rim axis, c: its half-chord). The bulge uses a Gaussian
- *   stand-in for c, (BALL_R + margin)·exp(−dy²/2σ²) with σ ≥ BALL_R + margin, which is ≥ c
- *   everywhere and falls off smoothly above and below the ball. Rows already wider than that do
- *   not move (a C1 soft ramp, so a row starts and stops moving without a kink). The side the
- *   ball drifts towards bulges most; the far side stays put.
- * - **Stretch**: the net lengthens while the ball drags its lower rows (y' = y · (1 + stretch)).
- * - **Snap**: once the ball has left, the lower rows pull in past rest and settle (the rebound).
- *
- * Clearance is by construction: a vertex at radius ≥ netRestRadius(t) − NET_ENVELOPE_SLACK moves
- * out by the bulge, so it ends at ≥ o·u + c + (margin − slack − ramp/2). The ball follows its
- * authored path; the net follows the ball. Shared by the rig (`netDeform`) and the tests.
- */
-export interface NetPose {
-  /** False: exactly at rest (the rig skips the net). */
-  active: boolean;
-  /** Ball centre in net space (deformed frame: y as the ball really is, below the rim < 0). */
-  ball: Vector3;
-  /** Lengthening fraction of the rows below the rim (0 at rest). */
-  stretch: number;
-  /** Inward pull of the lower rows in scene units (the rebound; 0 at rest, may be negative). */
-  snap: number;
-}
-
-export const newNetPose = (): NetPose => ({ active: false, ball: new Vector3(), stretch: 0, snap: 0 });
-
-/** How far inside the profile a master net vertex may sit (the GLB test's tolerance). */
-export const NET_ENVELOPE_SLACK = 0.012;
-/**
- * Bulge shape: `margin` = slack + ramp/2 + a 0.008 gap the ball always keeps from the cords;
- * `sigma` ≥ BALL_R + margin so the Gaussian covers the ball's half-chord; `ramp` = width of the
- * soft start of each row's movement.
- */
-export const NET_BULGE = { margin: 0.03, sigma: 0.3, ramp: 0.02 } as const;
-/** Top rows (above this depth fraction) never snap: they hang from the hooks. */
-const SNAP_FROM = 0.25;
-
-/** C1 ramp: 0 below 0, a parabola over [0, ε], then x − ε/2. */
-const softRamp = (x: number, eps: number) => (x <= 0 ? 0 : x < eps ? (x * x) / (2 * eps) : x - eps / 2);
-
-/** Rest depth (net space, ≤ 0) of the deformed height y under a stretch. */
-export const netRestY = (y: number, stretch: number) => (y < 0 ? y / (1 + stretch) : y);
-
-/** Bulge reach before the soft ramp: the Gaussian cover of the ball at rest-space distance dy. */
-export function netBulgeCover(dy: number): number {
-  const { margin, sigma } = NET_BULGE;
-  return (BALL_R + margin) * Math.exp(-(dy * dy) / (2 * sigma * sigma));
-}
-
-/**
- * Weight of the ball's horizontal drift in the bulge at rest-space distance dy: 1 wherever the
- * ball has a cross-section (|dy| ≤ BALL_R, where clearance needs it), fading to 0 a quarter unit
- * beyond, so rows far from the ball never feel its drift.
- */
-export function netOffsetWeight(dy: number): number {
-  const s = Math.min(1, Math.max(0, (Math.abs(dy) - BALL_R) / 0.25));
-  return 1 - s * s * (3 - 2 * s);
-}
-
-/** Weight of the snap at depth fraction t (0 for the top rows, 1 at the bottom). */
-export function netSnapWeight(t: number): number {
-  const s = Math.min(1, Math.max(0, (t - SNAP_FROM) / (1 - SNAP_FROM)));
-  return s * s * (3 - 2 * s);
-}
-
-/**
- * Radial displacement (scene units, + outwards) of the net row at rest depth fraction t
- * (0 rim … 1 bottom) in horizontal unit direction (ux, uz), for a net pose.
- */
-export function netOpening(t: number, ux: number, uz: number, pose: NetPose): number {
-  if (!pose.active || t <= 0) return 0;
-  const tc = Math.min(1, t);
-  const dy = -tc * NET.depth - netRestY(pose.ball.y, pose.stretch);
-  const need = (pose.ball.x * ux + pose.ball.z * uz) * netOffsetWeight(dy) + netBulgeCover(dy);
-  return softRamp(need - netRestRadius(tc), NET_BULGE.ramp) - pose.snap * netSnapWeight(tc);
-}
-
-/** The net's deformed inner radius at rest depth fraction t in direction (ux, uz). */
-export function netInnerRadius(t: number, ux: number, uz: number, pose: NetPose): number {
-  return netRestRadius(t) + netOpening(t, ux, uz, pose);
-}
-
-// ── Hoop recoil: the rim on its bracket and the board on the arm answer the net's tug ──
+// ── Hoop recoil: the rim on its bracket and the board on its arms answer the net's pull ──
 /**
  * Pivots in hoop space, measured from the master at HOOP_SCALE (the `rim` and `backboard` nodes'
  * origins in the exported GLB; tests/sports.test.ts checks them). Both pitch about +x: positive
  * tips the front (+z) down. The rim hinges on the bracket plate's back-bottom edge (the edge it
- * bears on, 1.5 mm proud of the board face), the board on the centre of its flat back (where the
- * stand's back plate holds it).
+ * bears on, proud of the board face), the board on the centre of its flat back (where the arms'
+ * plate holds it).
  */
-export const RIM_HINGE = new Vector3(0, 1.53, -0.0071);
-export const BOARD_PIVOT = new Vector3(0, 2.0847, -0.1249);
-/** Recoil limits (degrees). */
+export const RIM_HINGE = hoopFromMaster(0, HOOP_MASTER.bracket.bottom, HOOP_MASTER.bracket.back);
+export const BOARD_PIVOT = hoopFromMaster(0, HOOP_MASTER.backCenterY, HOOP_MASTER.frame.back);
+/** Recoil limits (degrees): the spring-action rim's travel before it bottoms out, the board's play on its arms. */
 export const RECOIL_LIMIT = { rimDeg: 3, boardDeg: 0.8 } as const;
+/**
+ * The rim's back stop (radians, < 0): tipping back about its hinge, the bracket plate's top edge
+ * meets the board face (the plate stands 2 mm proud of the face, 27.6 cm tall: −0.42°).
+ */
+export const RIM_BACKSTOP = -Math.atan2(
+  (HOOP_MASTER.bracket.back - HOOP_MASTER.face) * HOOP_SCALE,
+  (HOOP_MASTER.bracket.top - HOOP_MASTER.bracket.bottom) * HOOP_SCALE,
+);
 
 const _q = new Vector3();
 /**
  * Hoop-space point p carried by the recoil: the rim's hinge pitch, then the board's (the rim is
- * mounted on the board face). Pure; used by the rig (nodes) and the choreography (net space).
+ * mounted on the board face). Pure; used by the rig (nodes) and the scene (net space).
  */
 export function recoilPoint(p: Vector3, boardPitch: number, rimPitch: number, out = new Vector3()): Vector3 {
   _q.copy(p).sub(RIM_HINGE);
@@ -203,40 +221,22 @@ export function recoilPoint(p: Vector3, boardPitch: number, rimPitch: number, ou
   return out.set(out.x, out.y * c2 - out.z * s2, out.y * s2 + out.z * c2).add(BOARD_PIVOT);
 }
 
-/** Ball rest positions (ball centre, sports_root space). */
+/** Ball rest positions the choreography aims for (ball centre, sports_root space). */
 export const BALL_AT = {
   /** Host staging: the far side, from where the ball is passed to the guest. */
-  host: new Vector3(1.45, BALL_R, 0.05),
+  host: new Vector3(1.95, BALL_R, 0.35),
   /** Guest-ready presentation: foreground left, resting on the floor. */
-  guest: new Vector3(-0.55, BALL_R, 0.75),
-  /** Made shot: settles below and slightly in front of the hoop. */
-  made: new Vector3(0.3, BALL_R, 0.12),
-  /**
-   * Airball: rolled out past the hoop's left side, behind the backboard's plane, so the
-   * declined still sits clearly apart from guest-ready and made (≥1.2 ball diameters on
-   * screen). The airball flies in the vertical plane from the guest spot towards this spot.
-   */
-  missed: new Vector3(-0.77, BALL_R, -1.75),
+  guest: new Vector3(-0.72, BALL_R, 0.92),
 } as const;
 
-/** Descending through rim height, the airball is this far screen-left of the rim centre. */
-export const MISS_OFFSET = 0.95;
-
-/** Net deformation hook (the model builds the net; the rig drives it with a NetPose). */
-export interface NetDeform {
-  update(pose: NetPose): void;
-}
-
 /**
- * Motion bounds box: the key light aims at its centre and box-framed tools (lookdev) fit it, so
- * it stays fixed with the approved look. The scene frames the camera with silhouette points of
- * every path; the declined rest lies behind this box but well inside its framed view.
+ * Motion bounds box: the key light aims at its centre and box-framed tools (lookdev) fit it. The
+ * scene frames the camera with silhouette points of every path (tails to rest included).
  */
-export const SPORTS_BOUNDS = new Box3(new Vector3(-1.2, 0, -1.2), new Vector3(1.8, 2.9, 1.1));
+export const SPORTS_BOUNDS = new Box3(new Vector3(-1.4, -0.05, -3.7), new Vector3(2.4, 4.8, 1.4));
 
 /**
  * Backdrop wall for this scene (studio sweep wall z), pushed back like Birthday's and Dinner's so
- * the airball's landing and the declined rest spot sit on flat floor, clear of the cove: on the
- * default wall the cove rose under the resting ball and sliced its contact shadow.
+ * the airball's bounces and the declined rest spot sit on flat floor, clear of the cove.
  */
-export const SPORTS_WALL_Z = -4.2;
+export const SPORTS_WALL_Z = -5.4;

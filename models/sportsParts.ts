@@ -1,7 +1,10 @@
 import { BufferAttribute, BufferGeometry, ExtrudeGeometry, Path, Shape, Vector2, Vector3 } from 'three';
 import { mergeParts, roundedRectPath, roundedRectShape, type ProfilePoint } from './geometry.ts';
 import { cap, place, planContour, planRoundedRect, profile, sweep, turned } from './recordParts.ts';
-import { NET, RIM } from './sportsContract.ts';
+import { NET as MASTER_NET, RIM } from './sportsContract.ts';
+
+/** The v1.1 code-authored net (lookdev model only; the runtime net is the master's). */
+const NET = { depth: MASTER_NET.depth, strands: 20, rows: 6, bottomRadius: 0.2 * (MASTER_NET.depth / 0.6837) } as const;
 
 /**
  * Parametric parts for the premium basketball hoop (Sports, direction L2): the knotted cotton
