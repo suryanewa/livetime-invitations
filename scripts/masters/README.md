@@ -58,6 +58,9 @@ A recipe with `masters: []` (the stubs) exports exactly as before: builder only,
 4. **Each master, in array order**:
    1. `drop`: master subtrees deleted.
    2. `materials`: policies and renames (an unknown key fails the export).
+      Then `transform(doc, log)` if given: the recipe's own deterministic edit of the master
+      document in scan units (geometry, generated textures; v1.5 Birthday's hand-finished frosting).
+      It must not add or rename nodes the recipe keys refer to.
    3. `decimate`: weld, then meshoptimizer `simplify` per named mesh node.
    4. merge into the scene document inside a temporary placement node under `anchor`:
       `scale` (uniform), then `rotation` (quaternion), then `offset`; or `align` instead of `offset`.

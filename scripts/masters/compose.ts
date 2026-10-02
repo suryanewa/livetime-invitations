@@ -268,6 +268,9 @@ async function importMaster(doc: Document, m: MasterRecipe, keep: Keep, holders:
   });
   for (const key of Object.keys(m.materials ?? {})) if (!used.has(key)) throw new Error(`${m.file}: no material "${key}" (names: ${materials.map((x, i) => x.getName() || `#${i}`).join(', ')})`);
 
+  // 2b. The recipe's own deterministic edit of the master (geometry, generated textures).
+  if (m.transform) await m.transform(src, log);
+
   // 3. Decimation (after a weld, so the simplifier sees connected topology).
   if (m.decimate && Object.keys(m.decimate).length) {
     await src.transform(weld());
