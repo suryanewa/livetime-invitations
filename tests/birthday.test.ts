@@ -15,20 +15,20 @@ import { BIRTHDAY_GLB_NODES, buildBirthdayGeometry } from '../models/birthdayPar
 import { BIN, BIN_CLOSE, buildDisposalBin } from '../models/disposalBin.ts';
 import { BIN_SHADE } from '../models/birthday.ts';
 import {
-  CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_DESCENT, CANDLE_HOVER, CANDLE_LEAN, CANDLE_PRESS, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAPS_CLOSE, IGNITE, IGNITE_START,
+  CAKE_LOAD, CANDLE_CONTACT_SPEED, CANDLE_DESCENTS, CANDLE_HOVER, CANDLE_LEAN, CANDLE_PRESS, CANDLE_SEATED, CANDLE_START, CARRY_FROM, DURATIONS, FLAPS_CLOSE, IGNITE, IGNITE_START,
   LEAN_FADE, LIFT_TO,
 } from '../src/scenes/birthday/poses.ts';
 import { BREATH_AT, burnRate, extinguishedAt, type FlameState } from '../src/scenes/birthday/fire.ts';
 import {
-  ACCEPTED_LIT, cakeLoad, candleDrop, carryLean, DECLINED_LIT, flameScaleOf, frameFor, GUEST_READY_LIT, LEAN_AXIS, litTime, newFrame, pressOf, sampleSequence, type BirthdayFrame,
+  ACCEPTED_LIT, cakeLoad, candleDrop, carryLean, coolTime, DECLINED_LIT, flameScaleOf, frameFor, GUEST_READY_LIT, LEAN_AXIS, litTime, newFrame, OUT_ACCEPT, pressOf, sampleSequence, type BirthdayFrame,
 } from '../src/scenes/birthday/sequences.ts';
-import { candleShortening, MELT_CANDLE, MELT_CAP, MELT_TIME_SCALE, meltAmount, meltState } from '../src/scenes/birthday/melt.ts';
+import { candleShortening, MELT_CANDLE, MELT_CAP, MELT_TIME_SCALE, meltAmount, meltState, SET_AFTER, solidify } from '../src/scenes/birthday/melt.ts';
 import { birthdayFramePoints } from '../src/scenes/birthday/framing.ts';
 import type { CanonicalPose, SequenceName } from '../src/core/types.ts';
 
 const at = (seq: SequenceName, t: number) => sampleSequence(seq, t, newFrame());
 const pose = (p: CanonicalPose) => frameFor(p, newFrame());
-const ARRAYS = ['drop', 'press', 'lean', 'litTime'] as const;
+const ARRAYS = ['drop', 'press', 'lean', 'litTime', 'cool'] as const;
 const SCALARS = ['cakeYaw', 'cakeLean', 'cakeDip', 'cakeTiltX', 'cakeTiltZ', 'flaps'] as const;
 /** A flame's drawn channels (the lean as a plan vector, so its direction is moot when upright). */
 const FLAME_KEYS = ['lit', 'height', 'width', 'leanX', 'leanZ', 'bend', 'neck', 'lift', 'cut', 'cool', 'intensity'] as const;
@@ -123,7 +123,9 @@ describe('Birthday choreography', () => {
           // Contact: the buttercream starts moving with the candle the instant it is touched (the
           // candle itself is C1 through it; its push-in progress starts at the candle's speed).
           const p = /^press\[(\d)\]$/.exec(names[k]!);
-          if (p && Math.abs(i * h - (CANDLE_START[+p[1]!]! + CANDLE_DESCENT)) < 2 * h) continue;
+          if (p && Math.abs(i * h - (CANDLE_START[+p[1]!]! + CANDLE_DESCENTS[+p[1]!]!)) < 2 * h) continue;
+          // The setting clock starts as a flame goes out (a kink by nature, not motion).
+          if (/^cool\[/.test(names[k]!)) continue;
           const d2 = Math.abs(ca[k]! - 2 * cb[k]! + cc[k]!);
           // Positions: the bin's 2.8-unit slide-in peaks near 1100 units/s²; allow 3000 (jumps > 0.3 units/s).
           const limit = k < 6 ? 3e-5 : flame >= 0 ? 1e-4 : 1e-5;
@@ -142,47 +144,65 @@ describe('Birthday choreography', () => {
     }
   });
 
-  it('six candles lower 55 ms apart, meet the buttercream at a careful speed and are pushed in, slowing, to the seat', () => {
+  it('six candles are lowered by a careful hand at uneven intervals and pushed 10 mm in: the buttercream yields, then drags harder with depth', () => {
     expect(CANDLE_START).toHaveLength(6);
-    for (let i = 1; i < CANDLE_COUNT; i++) expect(CANDLE_START[i]! - CANDLE_START[i - 1]!).toBeCloseTo(0.055, 9);
+    // Not a metronome: gaps of 60–115 ms, not all equal; approaches 0.6–0.74 s, not all equal.
+    const gaps = CANDLE_START.slice(1).map((s, i) => s - CANDLE_START[i]!);
+    for (const g of gaps) { expect(g).toBeGreaterThanOrEqual(0.06 - 1e-9); expect(g).toBeLessThanOrEqual(0.115 + 1e-9); }
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeGreaterThan(0.015);
+    expect(Math.max(...CANDLE_DESCENTS) - Math.min(...CANDLE_DESCENTS)).toBeGreaterThan(0.03);
+    // Real candles stand ≈ 10 mm deep in buttercream.
+    expect(CANDLE.insert).toBeGreaterThan(0.045);
+    expect(CANDLE.insert).toBeLessThan(0.06);
     for (let i = 0; i < CANDLE_COUNT; i++) {
       expect(at('host', CANDLE_START[i]! - 0.001).drop[i]).toBe(CANDLE_HOVER);
       expect(at('host', CANDLE_START[i]! + 0.05).drop[i]).toBeLessThan(CANDLE_HOVER);
       expect(at('host', CANDLE_SEATED[i]!).drop[i]).toBe(0);
       expect(CANDLE_SEATED[i]).toBeLessThan(IGNITE_START[i]!);
+      const T = CANDLE_DESCENTS[i]!;
+      const d = (t: number) => candleDrop(t, i);
+      const v = (t: number) => (d(t + 1e-5) - d(t - 1e-5)) / 2e-5;
+      const a = (t: number) => (d(t + 1e-4) - 2 * d(t) + d(t - 1e-4)) / 1e-8;
+      // Monotone all the way down, never below the seat (frosting does not spring back).
+      let prev = Infinity;
+      for (let us = 0; us <= (T + CANDLE_PRESS + 0.1) * 1e6; us += 500) {
+        const h = d(us / 1e6);
+        expect(h).toBeLessThanOrEqual(prev + 1e-12);
+        expect(h).toBeGreaterThanOrEqual(0);
+        prev = h;
+      }
+      // A careful hand: C² from rest (no jolt), a speed bell peaking at 10–15 cm/s, under 1 m/s².
+      expect(Math.abs(a(1e-4))).toBeLessThan(0.5);
+      let peak = 0, accel = 0;
+      for (let t = 0.001; t < T; t += 0.001) { peak = Math.max(peak, -v(t)); accel = Math.max(accel, Math.abs(a(t))); }
+      expect(peak * 20).toBeGreaterThan(10);
+      expect(peak * 20).toBeLessThan(15);
+      expect(accel * 0.2).toBeLessThan(1);
+      // Contact: the base at the surface at a steady, slow speed (5 cm/s), no acceleration (C²).
+      expect(d(T)).toBeCloseTo(CANDLE.insert, 9);
+      expect(v(T)).toBeCloseTo(-CANDLE_CONTACT_SPEED, 3);
+      expect(Math.abs(a(T - 2e-4))).toBeLessThan(0.05);
+      // In the buttercream: it slows all the way to the seat. The skin's yield is the first, sharper
+      // drop in speed; then the drag grows with depth (the deceleration rises over the last 60 %).
+      let last = Infinity;
+      for (let k = 1; k < 40; k++) {
+        const sp = -v(T + (k / 40) * CANDLE_PRESS);
+        expect(sp).toBeLessThan(last);
+        last = sp;
+      }
+      const decel = (u: number) => (v(T + (u + 0.01) * CANDLE_PRESS) - v(T + (u - 0.01) * CANDLE_PRESS)) / (0.02 * CANDLE_PRESS);
+      expect(decel(0.08)).toBeGreaterThan(decel(0.3));
+      expect(decel(0.95)).toBeGreaterThan(decel(0.5));
+      expect(decel(0.5)).toBeGreaterThan(decel(0.3));
+      expect(Math.abs(v(T + CANDLE_PRESS - 1e-5))).toBeLessThan(1e-3);
     }
-    // Monotone all the way down, never below the seat (buttercream is plastic: no rebound).
-    let prev = Infinity;
-    for (let us = 0; us <= 600_000; us += 250) {
-      const d = candleDrop(us / 1e6);
-      expect(d).toBeLessThanOrEqual(prev + 1e-12);
-      expect(d).toBeGreaterThanOrEqual(0);
-      prev = d;
-    }
-    // Contact: the base reaches the surface (CANDLE.insert above the seat) at CANDLE_CONTACT_SPEED.
-    expect(candleDrop(CANDLE_DESCENT)).toBeCloseTo(CANDLE.insert, 9);
-    const v = (t: number) => (candleDrop(t + 1e-6) - candleDrop(t - 1e-6)) / 2e-6;
-    expect(v(CANDLE_DESCENT)).toBeCloseTo(-CANDLE_CONTACT_SPEED, 3);
-    expect(CANDLE_CONTACT_SPEED).toBeLessThan(0.3); // ≤ 6 cm/s: placed, not dropped
-    // Push-in: the candle slows all the way, harder the deeper it goes, and stops at the seat.
-    let lastSpeed = Infinity, lastDecel = -Infinity;
-    for (let k = 1; k < 40; k++) {
-      const t = CANDLE_DESCENT + (k / 40) * CANDLE_PRESS;
-      const speed = -v(t);
-      const decel = (v(t + 1e-4) - v(t - 1e-4)) / 2e-4;
-      expect(speed).toBeLessThan(lastSpeed);
-      expect(decel).toBeGreaterThan(lastDecel - 1e-6);
-      lastSpeed = speed;
-      lastDecel = decel;
-    }
-    expect(Math.abs(v(CANDLE_DESCENT + CANDLE_PRESS - 1e-5))).toBeLessThan(1e-3);
-    expect(CANDLE_PRESS).toBeGreaterThan(0.08);
-    expect(CANDLE_PRESS).toBeLessThan(0.2);
+    expect(CANDLE_PRESS).toBeGreaterThan(0.25);
+    expect(CANDLE_PRESS).toBeLessThan(0.6);
   });
 
   it('the press: no collar before contact, a full collar once seated; each candle takes its own fixed lean (≤ 2°)', () => {
     for (let i = 0; i < CANDLE_COUNT; i++) {
-      const contact = CANDLE_START[i]! + CANDLE_DESCENT;
+      const contact = CANDLE_START[i]! + CANDLE_DESCENTS[i]!;
       expect(at('host', contact - 0.002).press[i]).toBe(0);
       expect(at('host', contact - 0.002).lean[i]).toBe(0);
       expect(at('host', contact + CANDLE_PRESS / 2).press[i]).toBeGreaterThan(0.3);
@@ -199,21 +219,44 @@ describe('Birthday choreography', () => {
     expect(pose('guest-ready').lean.every((p) => p === 1)).toBe(true);
   });
 
-  it('the cake takes each push: a sub-millimetre dip and tilt that rings down to exactly 0 before guest-ready', () => {
+  it('the cake gives under the pushes: a 1–2 mm squash that rings down, visibly, to exactly 0 before guest-ready', () => {
     let dip = 0, tilt = 0;
     const load: [number, number, number] = [0, 0, 0];
+    const series: number[] = [];
     for (let ms = 0; ms <= DURATIONS.host * 1000; ms++) {
       cakeLoad(ms / 1000, load);
+      series.push(load[0]);
       dip = Math.min(dip, load[0]);
       tilt = Math.max(tilt, Math.hypot(load[1], load[2]));
-      if (ms < (CANDLE_START[0]! + CANDLE_DESCENT) * 1000) expect(load).toEqual([0, 0, 0]);
+      if (ms < (CANDLE_START[0]! + CANDLE_DESCENTS[0]!) * 1000) expect(load).toEqual([0, 0, 0]);
     }
-    expect(-dip).toBeGreaterThan(0.0005); // ≥ 0.1 mm: it gives
-    expect(-dip).toBeLessThan(0.005); // < 1 mm
-    expect(tilt).toBeLessThan(0.5 * DEG);
-    expect(tilt * 0.62).toBeLessThan(0.005); // the rim moves < 1 mm
-    expect(cakeLoad(1.25)).toEqual([0, 0, 0]);
-    expect(CAKE_LOAD.hz).toBeGreaterThan(8);
+    // A soft sponge: the top tier dips 1–2 mm at the peak (5–10 units × 1e-3).
+    expect(-dip * 200).toBeGreaterThan(1);
+    expect(-dip * 200).toBeLessThan(2.2);
+    expect(tilt).toBeLessThan(0.6 * DEG);
+    // It rings down: after the last push the dip overshoots past its rest at least once.
+    const after = series.slice(Math.round((Math.max(...CANDLE_SEATED) + 0.06) * 1000));
+    expect(Math.max(...after)).toBeGreaterThan(0.0001);
+    expect(cakeLoad(DURATIONS.host - 0.01)).toEqual([0, 0, 0]);
+    expect(CAKE_LOAD.hz).toBeGreaterThan(6);
+  });
+
+  it('the molten wax sets after the blow: clear to opaque in 10–30 s of real time, on the melt\'s clock', () => {
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      expect(coolTime('host', i, 1)).toBe(0);
+      expect(coolTime('accept', i, OUT_ACCEPT[i]! - 0.01)).toBe(0);
+      expect(coolTime('accept', i, DURATIONS.accept)).toBeCloseTo(DURATIONS.accept - OUT_ACCEPT[i]!, 9);
+      expect(pose('accepted').cool[i]).toBeCloseTo(DURATIONS.accept - OUT_ACCEPT[i]!, 9);
+      expect(pose('guest-ready').cool[i]).toBe(0);
+    }
+    expect(solidify(0)).toBe(0);
+    expect(solidify(10 / MELT_TIME_SCALE)).toBeGreaterThan(0.2);
+    expect(solidify(10 / MELT_TIME_SCALE)).toBeLessThan(0.8);
+    expect(solidify(30 / MELT_TIME_SCALE)).toBe(1);
+    // Set within 10–30 s of real time; on screen, before the accept's smoke has cleared.
+    expect(SET_AFTER * MELT_TIME_SCALE).toBeGreaterThanOrEqual(10);
+    expect(SET_AFTER * MELT_TIME_SCALE).toBeLessThanOrEqual(30);
+    expect(solidify(SET_AFTER)).toBe(1);
   });
 
   it('lit time (the melt\'s clock): 0 until a flame lights, grows with the fire\'s burn rate, freezes once it is out', () => {
@@ -242,11 +285,12 @@ describe('Birthday choreography', () => {
     }
   });
 
-  it('flames catch only once their candle has seated (0.84 s on) and grow to steady by 1.28 s, never a flash', () => {
+  it('flames catch only once every candle is in (the lighter after the placing hand) and are steady before the host beat ends, never a flash', () => {
     const end = IGNITE_START[CANDLE_COUNT - 1]! + IGNITE;
-    expect(end).toBeLessThanOrEqual(1.28 + 1e-9);
+    expect(end).toBeLessThanOrEqual(DURATIONS.host - 0.1);
+    expect(IGNITE_START[0]).toBeGreaterThan(Math.max(...CANDLE_SEATED));
     let prev = Array.from({ length: CANDLE_COUNT }, () => 0);
-    for (let i = 0; i <= 1300; i++) {
+    for (let i = 0; i <= Math.round(DURATIONS.host * 1000); i++) {
       const t = i / 1000;
       const f = at('host', t);
       for (let k = 0; k < CANDLE_COUNT; k++) {
@@ -559,7 +603,7 @@ describe('Birthday runtime GLB matches the contract', async () => {
       expect((f.getExtras() as { noShadowCast?: boolean }).noShadowCast, f.getName()).toBe(true);
     }
     expect(Math.abs(minY)).toBeLessThan(3e-4);
-    expect(Math.abs(maxR - CAKE_RADIUS)).toBeLessThan(2e-3);
+    expect(Math.abs(maxR - CAKE_RADIUS)).toBeLessThan(1e-3);
     expect(Math.abs(maxY - (MASTER.cakeTop - MASTER.cakeBottom) * CAKE_SCALE)).toBeLessThan(2e-3);
   });
 
@@ -615,7 +659,7 @@ describe('Birthday runtime GLB matches the contract', async () => {
     for (const n of ['cake_candle_pink', 'cake_candle_blue']) expect(mat(n).getBaseColorTexture()?.getSize()).toEqual([256, 4]);
   });
 
-  it('the default (\'vanilla\' key) is the owner’s blue theme; buttercream, not plastic (v1.5): no clearcoat, a generated relief, roughness 0.45–0.70', async () => {
+  it('the default (\'vanilla\' key) is the owner’s blue theme; buttercream, not plastic (v1.5): no clearcoat, a generated relief, roughness 0.40 (satin crests) – 0.66 (matte troughs)', async () => {
     // v1.2.1 darkened the body to #E0D3BF at roughness 0.58 for the v1.1 peach stage; removed in v1.3.
     expect(PALETTE.vanilla).toMatchObject({ body: '#B0CBFF', piping: '#FFFDFA', rosette: '#88B0F7' });
     const mat = (n: string) => doc.getRoot().listMaterials().find((m) => m.getName() === n)!;
@@ -638,11 +682,13 @@ describe('Birthday runtime GLB matches the contract', async () => {
       const r = data[i + 1]! / 255;
       lo = Math.min(lo, r); hi = Math.max(hi, r); sum += r; n++;
     }
-    expect(lo).toBeGreaterThanOrEqual(0.44);
-    expect(hi).toBeLessThanOrEqual(0.71);
-    expect(hi - lo).toBeGreaterThan(0.15);
-    expect(sum / n).toBeGreaterThan(0.55);
-    expect(sum / n).toBeLessThan(0.62);
+    // v1.5 polish: satin on the crests (≈ 0.40, a broad visible highlight), matte in the troughs.
+    expect(lo).toBeGreaterThanOrEqual(0.39);
+    expect(lo).toBeLessThanOrEqual(0.42);
+    expect(hi).toBeLessThanOrEqual(0.67);
+    expect(hi - lo).toBeGreaterThan(0.2);
+    expect(sum / n).toBeGreaterThan(0.49);
+    expect(sum / n).toBeLessThan(0.55);
     // A faint albedo finish (scraped lows and pockets a shade deeper), averaging the palette colour.
     const finish = await loadSharp()(body.getBaseColorTexture()!.getImage()!).raw().toBuffer({ resolveWithObject: true });
     let fs = 0, fmin = 1, fn = 0;
@@ -659,13 +705,15 @@ describe('Birthday runtime GLB matches the contract', async () => {
       const ridge = node(name).getMesh()!.listPrimitives()[0]!.getAttribute('_RIDGE');
       expect(ridge, name).not.toBeNull();
       const a = ridge!.getArray()!;
-      expect(Math.min(...a)).toBeLessThan(-0.3);
-      expect(Math.max(...a)).toBeGreaterThan(0.3);
+      let lo = Infinity, hi = -Infinity;
+      for (const v of a) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+      expect(lo).toBeLessThan(-0.3);
+      expect(hi).toBeGreaterThan(0.3);
     }
     expect(mat('cake_buttercream').getExtras()).toMatchObject({ frosting: 'body' });
   });
 
-  it('the finished tiers are not perfect cylinders: radius drifts 1–2 % at low frequency, the top is uneven by under a millimetre', () => {
+  it('the finished tiers are not perfect cylinders: the top tier 2–3 mm off centre, its side 1–2 % out of round at low frequency, the top uneven by under a millimetre', () => {
     const body = node('frosting_cake_buttercream');
     const toCs = worldOf(node('cake_secondary')).invert().multiply(worldOf(body));
     const pos = body.getMesh()!.listPrimitives()[0]!.getAttribute('POSITION')!;
@@ -686,7 +734,15 @@ describe('Birthday runtime GLB matches the contract', async () => {
     }
     const radii = bins.map((b, k) => b / counts[k]!);
     const mean = radii.reduce((a, b) => a + b, 0) / radii.length;
-    const drift = Math.max(...radii.map((r) => Math.abs(r / mean - 1)));
+    // v1.5 polish: the tier is stacked by hand, 2–3 mm off the lower tier's centre (the m = 1
+    // term, read on the silhouette); with that taken out, the scraped side is 1–2 % out of round.
+    const ang = (k: number) => ((k + 0.5) / 72) * 2 * Math.PI - Math.PI;
+    const c1 = (2 / 72) * radii.reduce((a, r, k) => a + r * Math.cos(ang(k)), 0);
+    const s1 = (2 / 72) * radii.reduce((a, r, k) => a + r * Math.sin(ang(k)), 0);
+    const offCentreMm = Math.hypot(c1, s1) / 0.005;
+    expect(offCentreMm).toBeGreaterThan(1.8);
+    expect(offCentreMm).toBeLessThan(3.2);
+    const drift = Math.max(...radii.map((r, k) => Math.abs((r - c1 * Math.cos(ang(k)) - s1 * Math.sin(ang(k))) / mean - 1)));
     expect(drift).toBeGreaterThan(0.008);
     expect(drift).toBeLessThan(0.02);
     // Low frequency: neighbouring 5° bins differ by far less than the drift.

@@ -8,14 +8,14 @@ import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
-import { DURATIONS } from '../src/scenes/birthday/poses.ts';
+import { DURATIONS, IGNITE_START } from '../src/scenes/birthday/poses.ts';
 import {
   BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, flameAxis, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokePuffs, newSmokeStrand, plumeRise,
   POOL_Y, PUFF_COUNT, SMOKE, SMOKE_POINT_COUNT, smokePuffs, smokeRate, smokeStrand, WICK_TIP_Y,
 } from '../src/scenes/birthday/fire.ts';
 
 /** Wick tip of candle i in cake_secondary space (seated, nominal). */
-const IGNITE_START_OF = (i: number) => 0.84 + 0.02 * i;
+const IGNITE_START_OF = (i: number) => IGNITE_START[i]!;
 const wick = (i: number): [number, number, number] => [CANDLE_SOCKETS[i]![0], CANDLE.seat + WICK_TIP_Y, CANDLE_SOCKETS[i]![1]];
 const MPS = 5;
 
@@ -72,7 +72,7 @@ describe('Birthday fire: the flame', () => {
   it('gives the melt its burn rate: 0 unlit, 1 for the steady flame, never more for a stretched one, 0 once out', () => {
     for (let i = 0; i < CANDLE_COUNT; i++) {
       expect(burnRate(i, IGNITE_START_OF(i) - 0.001, 'host')).toBe(0);
-      expect(burnRate(i, 1.3, 'host')).toBe(1);
+      expect(burnRate(i, DURATIONS.host, 'host')).toBe(1);
       expect(burnRate(i, 0.01, 'accept')).toBe(1);
       for (let t = 0; t < 1.4; t += 0.005) expect(burnRate(i, t, 'accept')).toBeLessThanOrEqual(1);
       expect(burnRate(i, extinguishedAt(i) + 0.001, 'accept')).toBe(0);

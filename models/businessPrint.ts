@@ -77,21 +77,20 @@ export interface EmissionField {
 }
 
 /**
- * The shell's own status glyphs, exactly (src/ui/guestControls.ts, DESIGN.md "check for Accept, minus
- * for Decline"): the check `M4.5 10.5 l3.5 3.5 7.5 −8` and the minus `M5 10 h10` on the 20-unit grid
- * (y down), stroke 2.2, round caps and joins. The reader draws the product's iconography, not a
- * second set.
+ * The shell's own status glyphs (src/ui/guestControls.ts, DESIGN.md "check for Accept, minus for
+ * Decline"): the check `M4.5 10.5 l3.5 3.5 7.5 −8` and the minus on the 20-unit grid (y down),
+ * stroke 2.2, round caps and joins. The reader draws the product's iconography, not a second set.
  *
  * Optical weight: one stroke weight for both, both centred on the grid by their boxes, as the shell
- * centres them. The minus keeps the shell's 10 units against the check's 11-unit span: one unbroken
- * lit bar reads longer and heavier than the two angled strokes of the check, so the shell's own
- * proportion is the balanced one (v1.5's first cut stretched it to 11 and it outweighed the check).
+ * centres them. The minus spans the check's 11 units (the shell's is 10, beside a word): on the
+ * reader it stands alone, and at phone size the shorter red bar read as "a red LED", lighter than the
+ * check (polish 2, the guest-experience judge on a 390 px phone).
  */
 export const STATUS_ICON = {
   grid: 20,
   stroke: 2.2,
   accept: [[4.5, 10.5], [8, 14], [15.5, 6]] as readonly (readonly [number, number])[],
-  decline: [[5, 10], [15, 10]] as readonly (readonly [number, number])[],
+  decline: [[4.5, 10], [15.5, 10]] as readonly (readonly [number, number])[],
 } as const;
 
 /** Diffusion of the status light (fractions of the icon's stroke width unless noted). */
@@ -99,17 +98,27 @@ export const STATUS_DIFFUSION = {
   /** Edge of the printed mask seen through the glass and diffuser: half-width of the soft edge. */
   edge: 0.07,
   /**
-   * Near halo: light scattered in the diffuser right round the stroke (Gaussian σ, weight). Kept
-   * light, so the lit stroke reads at its drawn weight (v1.5's first cut, 0.45 at σ 0.5, made it
-   * look 1.3–1.5× the NFC mark's strokes: a neon tube, not a lit icon).
+   * Near halo: light scattered in the diffuser right round the stroke (Gaussian σ, weight). Its
+   * absolute level, with the core's peak (GLOW in models/business.ts), is what keeps the stroke at
+   * its drawn weight: v1.5's first cut (0.45 at σ 0.5 on a 4.2 peak) read 1.3–1.5× the NFC mark's
+   * strokes, a neon tube; the core now sits lower (so its hue holds) and the halo is a little wider
+   * and relatively stronger, about the same light round the stroke as the second cut's.
    */
-  near: { sigma: 0.4, weight: 0.22 },
+  near: { sigma: 0.55, weight: 0.32 },
   /**
    * Far halo: the smoked cover glass's own scatter, a faint wider glow (Gaussian σ, weight). Its
    * scale is the glass's thickness (2–3 mm; the stroke is 1.8 mm), so it has faded long before
-   * the window's edge.
+   * the window's edge and the field's own.
    */
-  far: { sigma: 1.3, weight: 0.08 },
+  far: { sigma: 1.4, weight: 0.1 },
+  /**
+   * The halos' weight per glyph (× near and far). The core cannot go brighter without washing
+   * towards white in the tone curve, so the halo adds to the glyph's presence; red has 0.37 of
+   * green's luminance and the minus 0.69 of the check's stroke, so the minus's diffuser glow is the
+   * stronger: enough that the pair read alike, not so much that the red bloom reads wider than the
+   * green (3.0 did, by about 12 %, once the glyph grew 1.5× in polish 2).
+   */
+  haloGain: { accept: 1.4, decline: 2.6 },
   /**
    * Hotspot: the LED sits behind the middle of the light guide, so the stroke is brightest there
    * and falls to `floor` at the glyph's ends (Gaussian over `radius` grid units).
@@ -231,7 +240,7 @@ function diffuseLight(
  * `extent` icon-grid units (centred on the grid's centre, 10, 10). Linear, 1 = the stroke core at
  * the hotspot.
  */
-export function statusGlyphField(kind: 'accept' | 'decline', size = 512, extent = 30): EmissionField {
+export function statusGlyphField(kind: 'accept' | 'decline', size = 512, extent = 36): EmissionField {
   const pts = STATUS_ICON[kind];
   const half = STATUS_ICON.stroke / 2, c = STATUS_ICON.grid / 2;
   const unitsPerTexel = extent / size;
@@ -243,7 +252,10 @@ export function statusGlyphField(kind: 'accept' | 'decline', size = 512, extent 
   };
   const { radius, floor } = STATUS_DIFFUSION.hotspot;
   const gain = (x: number, y: number) => floor + (1 - floor) * Math.exp(-((x - c) ** 2 + (y - c) ** 2) / (2 * radius * radius));
-  return diffuseLight(size, size, unitsPerTexel, distance, STATUS_ICON.stroke, gain, 0.12, toUnits);
+  const h = STATUS_DIFFUSION.haloGain[kind], { edge, near, far } = STATUS_DIFFUSION;
+  return diffuseLight(size, size, unitsPerTexel, distance, STATUS_ICON.stroke, gain, 0.12, toUnits, {
+    edge, near: { sigma: near.sigma, weight: near.weight * h }, far: { sigma: far.sigma, weight: far.weight * h },
+  });
 }
 
 /** 8 × 8 Bayer matrix (0–63). */

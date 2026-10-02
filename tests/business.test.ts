@@ -1,10 +1,10 @@
 import { join } from 'node:path';
 import type { Node } from '@gltf-transform/core';
 import { describe, expect, it } from 'vitest';
-import { Box3, BoxGeometry, Color, Euler, Matrix4, Mesh, Object3D, PointLight, Quaternion, SRGBColorSpace, Vector3 } from 'three';
+import { Box3, BoxGeometry, Color, Euler, Matrix3, Matrix4, Mesh, Object3D, PointLight, Quaternion, SRGBColorSpace, Vector3 } from 'three';
 import {
   BUSINESS_BOUNDS, BUSINESS_NODES, CARD, CARD_OFFSET_Y, FACE, GLOW, HOLDER_CLIPS, HOOK, hookCentreline, MM_PER_UNIT, PENDULUM, PRESS_DEPTH, READER, RIDE, SCANNER_POS,
-  SLOT, STATUS_COLOURS, STATUS_PICTOGRAM, STATUS_PICTOGRAM_SIZE, STRAP_TUCK, STRAP_TAB_TOP, D_RING, type BusinessRig, type StatusLit,
+  flattenGlassEdge, SLOT, STATUS_COLOURS, STATUS_PICTOGRAM, STATUS_PICTOGRAM_SIZE, STRAP_TUCK, STRAP_TAB_TOP, D_RING, type BusinessRig, type StatusLit,
 } from '../models/business.ts';
 import { darkPrint, DARK_PRINT, encodeEmission, PRINT_COBALT, STATUS_DIFFUSION, STATUS_ICON, statusGlyphField } from '../models/businessPrint.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
@@ -18,6 +18,7 @@ import {
   STATUS_TIMING, statusEnvelope, type BusinessFrame, type Recovery,
 } from '../src/scenes/business/sequences.ts';
 import type { SequenceName } from '../src/core/types.ts';
+import { threeFromDoc } from './partyGlb.ts';
 
 const close = (a: BusinessFrame, b: BusinessFrame, eps = 1e-6) => {
   expect(a.pivot.distanceTo(b.pivot)).toBeLessThan(eps);
@@ -84,7 +85,7 @@ describe('Business choreography', () => {
       expect(at(seq, SCAN_AT - 0.001).statusLevel, seq).toBe(0);
       expect(at(seq, SCAN_AT).status, seq).toBe('lit');
       // v1.5: the glyph never pops: the level starts from 0 and the first 16 ms frame after the
-      // contact stays under 6 % of full (the HDR core reaches the tone curve's shoulder by 40 %).
+      // contact stays under 6 % of full (the HDR core reaches the tone curve's shoulder by half of full).
       expect(at(seq, SCAN_AT).statusLevel, seq).toBe(0);
       expect(at(seq, SCAN_AT + 0.016).statusLevel, seq).toBeLessThan(0.06);
       expect(at(seq, DURATIONS[seq]).statusLevel, seq).toBe(1);
@@ -339,16 +340,17 @@ describe('Business at the reader', () => {
     // Below the NFC mark's arcs (the icon quad is 0.6 R square; its arcs fill the middle half).
     expect(top + glow).toBeLessThan(FACE.icon.y - 0.15);
     // Inside the window: the glyph and its near glow clear the glass's edges.
-    expect(bottom - glow - FACE.glassY0).toBeGreaterThan(0.04);
+    expect(bottom - glow - FACE.glassY0).toBeGreaterThan(0.025);
     expect(FACE.glassHalfWidth - Math.max(...xs.map(Math.abs)) - half * unit - glow).toBeGreaterThan(0.2);
     // The light's carrying quad stays within the glass's width.
     expect(STATUS_PICTOGRAM_SIZE / 2).toBeLessThan(FACE.glassHalfWidth);
-    // Through the press and hold the card's lowest point stays above the glyph and its glow, with
-    // a margin for the camera's slant (the card sits a few mm proud of the glass).
+    // Through the press and hold the card's lowest point stays above the whole glyph, with a margin
+    // for the camera's slant (the card sits a few mm proud of the glass). Since the glyph grew 1.5×
+    // for phone legibility (polish 2), the upper edge of its near glow tucks under the card's edge.
     for (let t = OUTCOME_BEATS.contact; t <= OUTCOME_BEATS.depart; t += 0.01) {
       const f = at('accept', t);
       const low = Math.min(...cardBack().map((p) => faceUV(cardPoint(f, p)).v));
-      expect(low - (top + glow), `t=${t.toFixed(2)}`).toBeGreaterThan(0.02);
+      expect(low - top, `t=${t.toFixed(2)}`).toBeGreaterThan(0.02);
     }
   });
 
@@ -676,32 +678,54 @@ describe('Business physics and status', () => {
     expect((deutLum(STATUS_COLOURS.accept) + 0.05) / (deutLum(STATUS_COLOURS.decline) + 0.05)).toBeGreaterThanOrEqual(1.75);
   });
 
-  it('the pictogram’s light is HDR: the stroke core rolls off in the tone curve, the halo keeps the token', () => {
-    // Neutral tone mapping starts compressing at 0.76 (three's NeutralToneMapping); the rig's
-    // exposure is 1.15 (neutral-room). The core passes the shoulder at full level (it rolls off a
-    // little towards white: the hotspot) but not by so much that it clips flat (v1.5's first cut,
-    // 4.2 and 5, pinned the whole stroke at one near-white value), and it reaches the shoulder by
-    // 40 % of full, which is why the ramps are perceptual (STATUS_TIMING). One stroke out from the
-    // glyph the halo sits under it (it keeps the token's colour); two strokes out it has nearly gone.
+  it('the pictogram’s light is HDR, and its core holds its hue through the tone curve', () => {
+    // three's NeutralToneMapping (r186), at the neutral-room rig's exposure 1.15.
     const exposure = 1.15, shoulder = 0.76;
+    const neutral = ([r, g, b]: number[]) => {
+      let c = [r!, g!, b!].map((v) => v * exposure);
+      const x = Math.min(...c), offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+      c = c.map((v) => v - offset);
+      const peak = Math.max(...c);
+      if (peak < shoulder) return { c, desat: 0 };
+      const d = 1 - shoulder, newPeak = 1 - (d * d) / (peak + d - shoulder);
+      c = c.map((v) => (v * newPeak) / peak);
+      const g2 = 1 - 1 / (0.15 * (peak - newPeak) + 1);
+      return { c: c.map((v) => v + (newPeak - v) * g2), desat: g2 };
+    };
     for (const k of ['accept', 'decline'] as const) {
       const c = new Color(STATUS_COLOURS[k]);
-      const peak = Math.max(c.r, c.g, c.b) * GLOW.glyph[k] * exposure;
-      expect(peak, k).toBeGreaterThan(2.5 * shoulder);
-      expect(peak, k).toBeLessThan(5 * shoulder);
-      expect(peak * 0.4, k).toBeGreaterThan(shoulder);
       const f = statusGlyphField(k, 512, STATUS_PICTOGRAM.extent);
-      // Sample along the vertical through the glyph's centre column, outward from the stroke.
+      // The rendered brightest point (the field is normalised to 1 there): the colour × GLOW.
+      const core = [c.r, c.g, c.b].map((v) => v * GLOW.glyph[k]);
+      // HDR: the core passes the shoulder two- to two-and-a-half-fold (a gentle roll-off, the bloom)…
+      const peak = Math.max(...core) * exposure;
+      expect(peak, k).toBeGreaterThan(1.8 * shoulder);
+      expect(peak, k).toBeLessThan(2.5 * shoulder);
+      // …and reaches it by 55 % of full level, which is why the ramps are perceptual (STATUS_TIMING).
+      expect(peak * 0.55, k).toBeGreaterThan(shoulder);
+      // The hue holds: the curve's path to white takes under an eighth (v1.5's 2.7 decline took a
+      // quarter and its core rendered salmon), and the core's weakest channel stays under a fifth
+      // of its strongest (an LED's colour, not a white filament).
+      const tm = neutral(core);
+      expect(tm.desat, k).toBeLessThan(0.125);
+      expect(Math.min(...tm.c) / Math.max(...tm.c), k).toBeLessThan(0.2);
+      // One stroke out from the glyph the halo sits under the shoulder (it keeps the token's
+      // colour); three strokes out it has nearly gone.
       const texel = STATUS_PICTOGRAM.extent / 512;
       const at1 = (units: number) => f.data[Math.round((STATUS_PICTOGRAM.extent / 2 + units) / texel) * 512 + 256]!;
-      // The minus's stroke is the row y = 10; the check passes x = 10 at y ≈ 12.
+      // Along the vertical through the glyph's centre column: the minus's stroke is the row y = 10;
+      // the check passes x = 10 at y ≈ 12.
       const y0 = k === 'decline' ? 0 : 1.9;
-      const out1 = at1(y0 + STATUS_ICON.stroke * 1.5), out2 = at1(y0 + STATUS_ICON.stroke * 2.5);
-      expect(Math.max(c.r, c.g, c.b) * GLOW.glyph[k] * exposure * out1, `${k} halo`).toBeLessThan(shoulder);
-      expect(out2 / f.peak, `${k} far`).toBeLessThan(0.05);
+      expect((peak / f.peak) * at1(y0 + STATUS_ICON.stroke * 1.5), `${k} halo`).toBeLessThan(shoulder);
+      expect(at1(y0 + STATUS_ICON.stroke * 3.5) / f.peak, `${k} far`).toBeLessThan(0.05);
     }
-    // Decline runs higher: the minus has less stroke and red less luminance.
-    expect(GLOW.glyph.decline).toBeGreaterThan(GLOW.glyph.accept);
+    // The minus's diffuser glow is the stronger (red's luminance and the minus's shorter stroke).
+    expect(STATUS_DIFFUSION.haloGain.decline).toBeGreaterThan(STATUS_DIFFUSION.haloGain.accept);
+    // The red runs a shade hotter in its strongest channel (it has 0.37 of the green's luminance),
+    // within 15 %: neither answer is the alarm.
+    const strongest = (k: 'accept' | 'decline') => { const c = new Color(STATUS_COLOURS[k]); return Math.max(c.r, c.g, c.b) * GLOW.glyph[k]; };
+    expect(strongest('decline')).toBeGreaterThanOrEqual(strongest('accept'));
+    expect(strongest('decline') / strongest('accept')).toBeLessThan(1.15);
   });
 
   it('the scene drives the rig status, rise and press from the authored frame', () => {
@@ -774,29 +798,33 @@ describe('Business physics and status', () => {
     expect(STATUS_ICON.stroke).toBe(w);
     const minus = /minus: '[^']*d="M([\d.]+) ([\d.]+)h([\d.]+)"[^']*stroke-width="([\d.]+)"/.exec(ui)!;
     const [mx, my, mh, mw] = minus.slice(1).map(Number) as [number, number, number, number];
-    expect(STATUS_ICON.decline).toEqual([[mx, my], [mx + mh, my]]);
     expect(mw).toBe(w);
-    // One envelope: the minus (the shell's 10 units) within 10 % of the check's span, on the grid's
-    // centre line; both are centred on the grid by their boxes.
+    // The shell's minus, on its own centre line, lengthened from its 10 units to the check's 11-unit
+    // span: on the reader it stands alone, and at phone size a shorter bar read as an LED.
+    expect(STATUS_ICON.decline[0]![1]).toBe(my);
+    expect((STATUS_ICON.decline[0]![0] + STATUS_ICON.decline[1]![0]) / 2).toBe(mx + mh / 2);
+    // One envelope: the minus spans the check's width, on the grid's centre line; both are centred
+    // on the grid by their boxes.
     const box = (pts: readonly (readonly [number, number])[]) => {
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
       return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
     };
     const a = box(STATUS_ICON.accept), d = box(STATUS_ICON.decline);
-    expect(Math.abs(d.x1 - d.x0 - (a.x1 - a.x0)) / (a.x1 - a.x0)).toBeLessThan(0.1);
+    expect([d.x0, d.x1]).toEqual([a.x0, a.x1]);
     expect((d.x0 + d.x1) / 2).toBe(STATUS_ICON.grid / 2);
     expect((a.x0 + a.x1) / 2).toBe(STATUS_ICON.grid / 2);
     expect((a.y0 + a.y1) / 2).toBe(STATUS_ICON.grid / 2);
     expect(d.y0).toBe(STATUS_ICON.grid / 2);
     // Shape without colour: the check stands several times the minus's height (stroke included).
     expect(a.y1 - a.y0 + STATUS_ICON.stroke).toBeGreaterThan(4 * (d.y1 - d.y0 + STATUS_ICON.stroke));
-    // On the glass: 1.8 mm strokes at the card's real scale, a hair under the NFC mark's printed
-    // 0.0236 (one stroke weight on the face; a lit stroke reads a little bolder).
+    // On the glass (polish 2): 2.6 mm strokes at the card's real scale, about 1.5× the printed NFC
+    // mark's 0.0236: sized to read at phone size (the check 19 CSS px wide, the minus 18 × 5 on a
+    // 390 px phone), as a lit status mark bolder than the print.
     const stroke = (STATUS_ICON.stroke * STATUS_PICTOGRAM.grid) / STATUS_ICON.grid;
-    expect(stroke * MM_PER_UNIT).toBeGreaterThan(1.6);
-    expect(stroke * MM_PER_UNIT).toBeLessThan(2);
-    expect(stroke).toBeLessThan(0.0236);
-    expect(stroke).toBeGreaterThan(0.0236 * 0.95);
+    expect(stroke * MM_PER_UNIT).toBeGreaterThan(2.4);
+    expect(stroke * MM_PER_UNIT).toBeLessThan(2.9);
+    expect(stroke / 0.0236).toBeGreaterThan(1.3);
+    expect(stroke / 0.0236).toBeLessThan(1.6);
   });
 
   it('the glyph field is crisp, soft-edged and deterministic, and fades to nothing at its quad’s edge', () => {
@@ -928,6 +956,26 @@ describe('Business runtime GLB matches the contract', async () => {
     expect(led.min.y).toBeCloseTo(FACE.ledY0, 3);
     expect(led.max.y).toBeCloseTo(FACE.ledY1, 3);
     expect(local(node('scanner_glow')).elements[13]).toBeCloseTo(FACE.led.y, 4);
+  });
+
+  it('the cover glass’s edge round-over is shaded as its face, so it throws no row of specks', () => {
+    // v1.5 polish: the 0.2 mm round-over where the glass meets the gasket faced the bright floor at
+    // grazing angles; sub-pixel at stage scale, MSAA resolved it into evenly spaced light specks.
+    const root = threeFromDoc(doc, 'business_root');
+    const pad = root.getObjectByName('scanner_pad')!, glass = root.getObjectByName('scanner_pad_mesh') as Mesh;
+    root.updateMatrixWorld(true);
+    const toFace = new Matrix4().copy(pad.matrixWorld).invert().multiply(glass.matrixWorld);
+    const normalToFace = new Matrix3().getNormalMatrix(toFace);
+    const nor = glass.geometry.getAttribute('normal');
+    const faceZ = (i: number) => new Vector3().fromBufferAttribute(nor, i).applyMatrix3(normalToFace).normalize().z;
+    let bevel = 0;
+    for (let i = 0; i < nor.count; i++) if (faceZ(i) > 0.2 && faceZ(i) < 0.999) bevel++;
+    expect(bevel).toBeGreaterThan(50);
+    expect(flattenGlassEdge(glass, toFace)).toBe(bevel);
+    for (let i = 0; i < nor.count; i++) {
+      const z = faceZ(i);
+      expect(z > 0.2 && z < 0.999, `vertex ${i}`).toBe(false);
+    }
   });
 
   it('carries the templates as material variants and the print at source size', () => {

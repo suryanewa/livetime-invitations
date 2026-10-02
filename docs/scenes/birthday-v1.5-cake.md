@@ -30,64 +30,138 @@ Photos looked at (Wikimedia Commons) and what they show, against which the frame
 
 ## Decisions
 
+The first pass (commits `af60354`, `0fee10c`) was judged at 6/10 (cake) and 6.5/10 (melt) by a still-frame judge and 4/10
+(placement) by a motion judge; the polish round answers both. Numbers below are the polish round's.
+
 **Material (#3).** The frosting's "plastic" was the master's clearcoat (0.25 at 0.35) over a single roughness: removed
 from body, piping and rosettes (the sugar pearls keep theirs: dragées are glossy candy). The body gets generated maps on
 a new UV atlas (sides v 0.02–0.48, ≈ 20 cm a UV unit, three repeats round each tier; tops planar in v 0.52–0.98):
-relief (normal, lossless 2048²: a soft 1–4 cm waviness of ±0.25 mm, discrete scraper lines in ≈ 1 in 3 slots of
-2.4 mm, sparse air pockets 0.4–1.4 mm, and on the tops 56 offset-spatula arcs with 80 µm lifted edges), roughness
-0.45–0.70 (1024², mean 0.585; highs a touch glossier than lows, pockets matt; lossless so the range holds) and a faint
-albedo finish (1024², sRGB mean ≈ 0.99, lows and pockets ≤ 3 % deeper). All three maps are shared by vanilla and cocoa
-(GLB 4.3 → 7.7 MiB, 32 MiB of textures as RGBA8 + mips; budgets are waived). Piping and
-rosettes: roughness 0.52, a very slight sheen (0.1 at 0.45), and a per-vertex convexity `_RIDGE` with which the runtime
-makes crests up to 12 % glossier and grooves 12 % matter and keeps the sheen on the crests. Subsurface: a wrapped
-diffuse on the key light only (body wrap 0.35 tinted by its own deepened colour × 0.7; piping 0.4 × a butter cream),
-judged as an A/B under `neutral-room` (frames `wip4/hero-sss.png` vs `hero-nosss.png`): it softens and slightly
-saturates the shadow side, nothing more.
+
+- relief (normal, lossless 2048²): a soft 1–4 cm waviness of ±0.25 mm, discrete scraper lines in ≈ 1 in 3 slots of
+  2.4 mm, and on the tops 26 broad palette-knife swooshes per tier (arcs 2.5–5 cm wide, a 0.1–0.25 mm scoop with a soft
+  3–5 mm lip on the outer side, laid over one another). Polish: these replace 56 narrow spatula arcs whose 80 µm
+  lifted edges read as cracks;
+- air pockets, sparse and irregular: a jittered grid (7 % of 6 mm cells on the sides, 8 % of 9 mm cells on the tops),
+  sizes on a steep power law (mostly 0.3 mm pinholes, now and then a 2 mm bubble), elongated and lobed, half of them
+  open. Polish: the first pass's pockets were evenly spaced and all alike;
+- roughness 0.40–0.66 (1024², mean 0.517; lossless so the range holds): satin on the scraped highs (≈ 0.42, a broad
+  visible highlight), matte in the lows and pockets (≈ 0.62). The first pass was 0.45–0.70 (mean 0.585) and read
+  flat;
+- a faint albedo finish (1024², sRGB mean ≈ 0.99; lows and pockets ≤ 3 % deeper).
+
+All three maps are shared by vanilla and cocoa (GLB 12.3 MiB raw, 7.0 MiB gzip; budgets are waived). Piping and
+rosettes: roughness from a per-vertex convexity `_RIDGE`, 0.62 in the grooves to 0.36 on the crests (polish: was
+±12 % about 0.52, invisible); a very slight sheen (0.1 at 0.45) kept on the crests; a fine grain (≈ 0.6 mm, ±8 µm,
+faded where a pixel covers it) breaks the moulded read of shells and rosettes. Subsurface: a wrapped diffuse on the
+key light only (body wrap 0.35 tinted by its own deepened colour × 0.7; piping 0.4 × a butter cream). Contact: the
+bead border and the frosting's foot lose most of the room's light within ≈ 3 mm of the plate (floor 0.45), and the
+plate darkens under the border (polish: the cake read as set onto the plate).
 
 **Imperfection (#3).** Deterministic, in the GLB (the finish field moves every frosting part, so what sits on a
-surface rides it): tiers drift ±1.1 % from round at mid-height (2θ, 3θ, 4θ terms that lean with height, plus a 0.2 %
-barrel; faded out before the candle annulus so the sockets stay put), each top is uneven by ≈ ±0.7 mm (a tilt plus two
-soft bumps; at the six sockets −0.31…+0.22 mm, so the candles stand at slightly different depths), the side piping
-carries a hand wobble (±0.8 mm along, ±0.55 mm up and down at ≈ 2 cm), and 273 beads, shells, dots, pearls and
-rosettes vary in size (shells ±6 %, dots ±9 %, pearls ±5 %, rosettes ±4–5 % and up to ±10–12° in twist) about the point
-they touch the cake. Two rosettes are softened (Taubin-relaxed ridges, 8 % slump, a slight droop; their pearls ride
-down with them). The coarse twisted ropes are relaxed a little. Re-measured: widest radius 0.63424 scan (was 0.628963),
-crown 0.64334 (was 0.639565); `CAKE_RADIUS` follows; every bin clearance test still passes.
+surface rides it):
 
-**Candles into the cake (#5).** Each candle is brought down from rest (cubic Hermite, 0.3 s), meets the surface at
-4.4 cm/s, then is pushed 3.7 mm in over 0.128 s with v = −v₀(1 − u²): its deceleration rises with depth (the
-buttercream's resistance grows with the length of candle in contact) and it stops at the seat: no spring, no rebound
-(frosting is plastic). This supersedes the v1.2 "presses ≈ 5 mm and settles on a spring" (spec revision #23). As it goes
-in, the plug it pushes aside rises as a collar round the socket (runtime displacement of the dense top annulus: a
-0.44 mm dimple against the candle, a ≈ 0.6 mm, ≈ 1 mm wide collar 1.4 mm out, lumpy (3, 5, 9, 14 lobes, fixed per
-candle) and fuller on the side it leans to). Each candle takes its own seeded lean (0.73–1.62°, six directions) as it
-seats; flames are counter-rotated so they stay vertical. The cake takes the pushes as a 14 Hz, ζ 0.35 oscillator driven
-by them: peak dip 0.53 mm, tilt 0.11°, rung down to exactly 0 by 1.2 s.
+- tiers drift ±1.4 % from round at mid-height (2θ, 3θ, 4θ terms that lean with height, plus a 0.2 % barrel; faded
+  out before the candle annulus so the sockets stay put). Polish: the top tier sits 2.4 mm off the lower tier's
+  centre (stacked by hand; it reads on the silhouette), the lower tier 0.5 mm off the stand's;
+- the bays are uneven (polish, judged at laptop size where 1 mm ≈ 1.45 px): each bay's decorations shifted ±2.3 mm
+  along the side (neighbours differ by up to ±4 mm), the columns leaning ±2.5°, the swags dropping ±4 mm;
+- each top is uneven by ≈ ±0.7 mm (a tilt plus two soft bumps; at the six sockets −0.31…+0.22 mm, so the candles
+  stand at slightly different depths); the side piping carries a hand wobble (±0.8 mm along, ±0.55 mm up and down);
+- 273 shells, dots, pearls and rosettes vary in size about the point they touch the cake (polish: shells ±10 %,
+  rosettes ±9–10 % and ±15° in twist, dots ±12 %, pearls ±7 %; the first pass's ±4–6 % did not read). Two rosettes
+  are softened (Taubin-relaxed ridges, 8 % slump, a slight droop);
+- geometry (polish): the swag ropes are rebuilt as closed 16-sided tubes (40 rings a strand, Catmull-Rom), their
+  tails flattened and tucked under the side; dots, pearls and rosette centres refitted as 24 × 16 spheres; the open
+  edges of columns, tassels, shells and rosettes tucked 1.3 mm into the frosting (never below the cake's underside);
+- the cake's reach is eased (tanh, over its outer 3.5 mm) to clear the bin's mouth by 8 mm: one large bottom shell on
+  a bulge of the side would otherwise reach 0.5 mm past it.
+
+Re-measured: widest radius 0.635837 scan (13.99 cm; the master's 0.628963), crown 0.647391 (the master's 0.639565);
+`CAKE_RADIUS` follows; every bin clearance test passes.
+
+**Candles into the cake (#5).** `src/scenes/birthday/placement.ts` (polish: the first pass dropped each candle in
+0.3 s and pushed it 3.7 mm in 0.128 s, which read as a stamp). A hand places six candles left to right:
+
+- seeded starts (gaps 60–115 ms: 0.16–0.62 s) and approaches (0.60–0.74 s each);
+- each is lowered 6 cm from rest on a minimum-jerk (C²) bell: peak 12.8 cm/s, acceleration ≤ 0.57 m/s², slowed to a
+  steady 5 cm/s with zero acceleration as its base meets the buttercream;
+- it is then pushed 10 mm in (`CANDLE.insert`, ≈ 0.43 s): the skin yields first (speed dips 35 % over the first
+  18 %), then the drag grows with the length of candle in it (v ∝ 1 − u²) until the hand stops at the seat. No
+  rebound: buttercream is viscoplastic. Seated at 1.22–1.77 s; the lighter starts 0.12 s after the last;
+- the plug it pushes aside rises as a collar round the socket (runtime displacement of the dense top annulus):
+  ≈ 1.6 mm high, ≈ 2.2 mm out, ≈ 1.8 mm wide, ≈ 210 mm³ (40 % of the 500 mm³ displaced, the rest compressed into
+  the crumb), lumpy (3, 5, 9, 14 lobes per candle) and fuller on the side it leans to; a 0.6 mm dimple against the
+  candle; contact occlusion at the foot (1.4 mm reach);
+- each candle takes its own seeded lean (0.73–1.62°) as it seats; flames are counter-rotated so they stay vertical;
+- the cake takes the pushes as a 9 Hz, ζ 0.22 oscillator: the top tier dips 1.9 mm at the peak, tilts ≤ 0.17°, and
+  rings down (one 0.19 mm overshoot) to exactly 0 before the beat ends.
+
+The host beat is 2.465 s (was 1.3 s): the time the slower hand needs. This supersedes the v1.2 "presses ≈ 5 mm and
+settles on a spring" (spec revision #23) and the first pass's timing.
 
 **Melt (#6).** `src/scenes/birthday/melt.ts`: pure functions of flame-weighted lit time. Real paraffin, compressed
 7.5× (`MELT_TIME_SCALE`): rim rounds (τ 10 s real), pool across the top (1.5–12 s), bead on the low side (10 s → run),
-a run leaving the rim at 22–38 s real (the candles that lean more first; 2.9–5.1 s on screen) and lengthening to
-9.5–16 mm (63 % in 14 s real), the top burning down by ≤ 0.8 mm (0.07 mm/s real, capped), the frosting round the socket
-glossing (roughness −35 % at most) and the collar slumping (τ 45 s). Capped at 20 s on screen (150 s real): never
-grotesque. Lit time comes from the clip (∫ flameScale, so a flame drives the melt in proportion to its size and the
-melt freezes after the blow) plus the live seconds at rest at guest-ready (`BirthdayScene.simulate`, reset by
-`settle()`; reduced motion never advances it, so canonical poses stay exact). Canonical guest-ready is nearly fresh
-(round 0.26, pool 0.06); after a 10 s look, four runs show on the camera's side.
+a run leaving the rim at 22–38 s real (2.9–5.1 s on screen) and lengthening to 9.5–16 mm, the top burning down by
+≤ 0.8 mm. Capped at 20 s on screen (150 s real): never grotesque. Polish:
+
+- molten wax is its own surfaces (`models/cakeShaders.ts`, `runPatch`, `poolPatch`; first pass: a drip pushed out of
+  the candle surface stretched the stripes, creased under the bead and notched the rim): a rivulet of body wax
+  (≈ 1.8 mm wide, 0.7 mm proud) leaves the pool over the lip on the low side, runs down the twist's groove and ends
+  in a 2.9 mm bead (roughness 0.16, a little clearcoat, translucent); the pool is a glossy disc (roughness 0.05,
+  clearcoat 1) with a meniscus that domes as it overfills. The rim is no longer notched;
+- after the blow-out the wax sets: liquid → opaque satin over 22 s real (`solidify`, `SET_AFTER` ≈ 2.9 s on screen),
+  on the live clock where the guest watched the blow-out (the director's hand-over, as for the smoke); a canonical
+  `accepted` reached any other way is still;
+- the buttercream round a burning candle glosses visibly: within ≈ 5 mm, roughness halved, 7 % darker, slumped
+  0.3 mm (the first pass's 2.4 mm, −35 % read as nothing);
+- a change of mind keeps the melt: `interruptCut()` marks the interruption and the following `settle()` keeps the
+  live lit seconds instead of resetting them (no pop-back). Load, replay and reduced motion still return to the
+  canonical pose's melt.
+
+Lit time comes from the clip (∫ flameScale, so a flame drives the melt in proportion to its size and the melt freezes
+after the blow) plus the live seconds at rest at guest-ready (`BirthdayScene.simulate`; reduced motion never
+advances it, so canonical poses stay exact).
+
+**Change of mind, declined → accept (guest-experience review).** It was a hard one-frame cut: the bin vanished, the
+cake jumped back onto its stand, lit, and the camera reframed. Now, as Dinner does, the decline rewinds along its own
+path (`src/scenes/birthday/change.ts`): the flaps re-open, the cake rises out of the bin, crosses back and is set on
+its stand, the bin slides out; then the accept plays (the candles are already placed; the host beat is not replayed).
+
+- Paced by path length (the cake's seen move plus the bin's, each in units of the decline's own fastest frame; the
+  cake's fall out of sight below the rim and the camera-only first 0.12 s cost nothing), leaving at the decline's
+  own speed and landing softly; no frame faster than 1.6 × the decline's own (the cake ≤ 3.9 m/s against its fall's
+  2.5 m/s). Rewind 0.15 s (bin only) to 0.57 s (mid-drop); 0.52 s from the declined pose.
+- The camera comes home on its own C1 curve (`src/scenes/birthday/pull.ts`, Dinner's rule): from the interrupted pull
+  at its own speed, never tighter than the decline at the same scene state, at home 0–0.11 s after the scene's rewind.
+- The fire is never rewound: candles the snuff had reached stay out (their wax goes on setting), their melt stays
+  where it was; a candle still burning at the change (the first 20–60 ms) burns on and the accept's breath blows it
+  out. The accepted pose after a change keeps that fire state (the canonical pose would pop the melt).
+- Back to decline mid-rewind: it plays on from where it is. Reduced motion still cuts with the pose.
 
 ## Hand-off to the fire owner (`v1.5/birthday-fire`)
 
 - `src/scenes/birthday/melt.ts`: `meltState(candle, tLit, out?)`, `candleShortening(candle, tLit)` (scene units; lower
   the flame base and the wick by it: `applyMeltTo` in `index.ts` already does both), `meltAmount(candle, tLit)`,
-  `MELT_TIME_SCALE`, `MELT_CAP`.
+  `solidify(tCool)`, `SET_AFTER`, `MELT_TIME_SCALE`, `MELT_CAP`.
+- `src/scenes/birthday/placement.ts`: `LIGHT_FROM` (0.12 s after the last candle seats); `fire.ts` keys
+  `IGNITE_START[i] = LIGHT_FROM + 0.02·i` on it (the only edit to `fire.ts`), and `DURATIONS.host` is
+  `IGNITE_START[5] + IGNITE + 0.14` (≈ 2.465 s). `tests/birthdayFire.test.ts` reads `IGNITE_START` and
+  `DURATIONS.host` instead of fixed times.
 - `src/scenes/birthday/sequences.ts`: `flameScaleOf(sequence, i, t)` is the one place the flame-size curves live; lit
-  time (`litTime(sequence, i, t)`, `frame.litTime[i]`, `GUEST_READY_LIT`/`ACCEPTED_LIT`/`DECLINED_LIT`) integrates it.
-  If the blow changes how a flame dies, change `flameScaleOf('accept', …)` and the melt follows.
-- `src/scenes/birthday/index.ts`: `simulate(dt)` advances `liveLit` at guest-ready; `settling()` is true until
-  `MELT_CAP`; `settle()` zeroes it. Live flames merge into these three methods (OR the settling conditions). The flame
-  node is counter-rotated against the candle's lean (`c.flame.quaternion = lean⁻¹ · breath`).
+  time (`litTime`, `frame.litTime[i]`, `GUEST_READY_LIT`/`ACCEPTED_LIT`/`DECLINED_LIT`) integrates it; `frame.cool[i]`
+  (`coolTime`, `OUT_ACCEPT`/`OUT_DECLINE`) is the seconds since each flame went out.
+- `src/scenes/birthday/index.ts`: `simulate(dt)` advances `liveLit` at guest-ready and `liveCool` after a watched
+  blow-out; `settling()` ORs both; `interruptCut()` sets `interrupting`, so the next `settle()` keeps `liveLit`.
+  If the fire branch carries the live lit time its own way, keep one of the two and make `applyMeltTo` read it.
+- Change of mind (`change.ts`, `pull.ts`, `index.ts` `interruptCut`/`pose`/`sample`/`settle`/`framePull`): from the
+  decline (playing or declined) `interruptCut` plans the rewind and arms it; the director's settle and guest-ready
+  pass through; the accept's samples come from `sampleAnswerChange`. It sets the fire in its frames by a simple rule
+  (snuffed candles continue the decline's snuff forward and stay out; burning ones burn on, then meet the breath). The
+  fire branch's `FireChange` (carried smoke) should take over the fire fields there: keep `sampleAnswerChange`'s
+  motion and replace its fire loop with `carriedFire`. Accept → decline is untouched (the cake is on its stand).
 
 ## Evidence
 
 `evidence/v1.5/birthday-cake/` (worktree, not committed): `baseline/` (v1.4 master), `final/` and `final-cocoa/`
-(close-ups and heroes), `sheet-placement.png`, `sheet-melt.png`, `wip4/hero-sss.png` vs `hero-nosss.png`, and the
-production capture in `outputs/birthday/` (stills per pose, frame strips, mp4s).
+(first pass), `polish/` (this round: laptop and phone crops, macros against the judge's views, placement and melt
+strips), and the production capture in `outputs/birthday/` (stills per pose, frames, mp4s).

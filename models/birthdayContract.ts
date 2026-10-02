@@ -25,16 +25,17 @@ export const MASTER = {
   cakeBottom: -0.251947,
   /**
    * Widest point of the tiers and piping (the bottom tier's rosettes). v1.5: re-measured after the
-   * hand finish (scripts/masters/recipes/birthdayFinish.ts: ±1.4 % drift, ±4 % rosette sizes); the
-   * master's own was 0.628963.
+   * hand finish (scripts/masters/recipes/birthdayFinish.ts: ±1.4 % drift, the top tier 2.4 mm off centre,
+   * ±8–10 % shell and rosette sizes, eased to clear the bin's mouth by 8 mm); the master's own was
+   * 0.628963.
    */
-  cakeRadius: 0.63424,
+  cakeRadius: 0.635837,
   /**
    * Top-tier surface where the candles stand (the master's; v1.5 the finished top is uneven by
    * ±0.7 mm about it), and the crown rosettes' tips (v1.5 re-measured; the master's 0.639565).
    */
   tierTop: 0.603,
-  cakeTop: 0.64334,
+  cakeTop: 0.647391,
   /** Candles (all six identical): base, top, radius; they bed 0.017 into the top tier. */
   candleBase: 0.586,
   candleTop: 0.8028,
@@ -104,17 +105,24 @@ export const STAND_TOP = (MASTER.cakeBottom - MASTER.standBottom) * s;
 /** Widest part of the cake with its piping, about cake_secondary's axis. */
 export const CAKE_RADIUS = MASTER.cakeRadius * s;
 
+/**
+ * v1.5 polish: how much deeper than the master the candles stand (scene units). The master beds
+ * them 3.7 mm into the top tier; a real candle needs ≈ 10 mm of buttercream and sponge to stand,
+ * so each is pushed 6.3 mm further in (the recipe sinks the master candles by as much).
+ */
+export const CANDLE_SINK = 0.0313;
+
 /** Cake + candles + wicks, from the cake's underside to the wick tips (flames out). */
-export const CAKE_TOTAL_HEIGHT = (MASTER.wickTop - MASTER.cakeBottom) * s;
+export const CAKE_TOTAL_HEIGHT = (MASTER.wickTop - MASTER.cakeBottom) * s - CANDLE_SINK;
 
 /** Candle geometry in candle_NN space (origin: the candle's base centre, seated). */
 export const CANDLE = {
-  /** Seated base height in cake_secondary space. */
-  seat: (MASTER.candleBase - MASTER.cakeBottom) * s,
+  /** Seated base height in cake_secondary space (v1.5: CANDLE_SINK under the master's). */
+  seat: (MASTER.candleBase - MASTER.cakeBottom) * s - CANDLE_SINK,
   height: (MASTER.candleTop - MASTER.candleBase) * s,
   radius: MASTER.candleRadius * s,
-  /** Depth the seated candle beds into the top tier. */
-  insert: (MASTER.tierTop - MASTER.candleBase) * s,
+  /** Depth the seated candle beds into the top tier (10 mm since v1.5; the master's 3.7). */
+  insert: (MASTER.tierTop - MASTER.candleBase) * s + CANDLE_SINK,
   wickBase: (MASTER.wickBase - MASTER.candleBase) * s,
   wickHeight: (MASTER.wickTop - MASTER.wickBase) * s,
   wickRadius: MASTER.wickRadius * s,
@@ -165,8 +173,11 @@ export const WALL_Z = -4.3;
 /** Cake underside when resting on the bin liner floor. */
 export const IN_BIN = new Vector3(BIN_POS.x, BIN.floor, BIN_POS.z);
 
-/** Candle hover height above its seated position before the host places it. */
-export const CANDLE_HOVER = 0.5;
+/**
+ * Candle hover height above its seated position before the host places it (v1.5 polish: 6 cm, a
+ * hand's careful lowering; v1.2–v1.5 10 cm in 0.3 s was a lurch).
+ */
+export const CANDLE_HOVER = 0.3;
 
 /** Largest pendulum lean of the carried cake (radians): 1.8°, under the brief's 2°. */
 export const LEAN_MAX = (1.8 * Math.PI) / 180;
