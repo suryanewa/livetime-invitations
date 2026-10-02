@@ -1,4 +1,5 @@
 import { Box3, Vector3 } from 'three';
+import { cm, REFERENCE_CM } from './worldScale.ts';
 
 /**
  * Business contract (v1.2): the all-access badge and RFID/NFC reader masters
@@ -34,6 +35,14 @@ export const READER_SCALE = 0.72;
  * 54 mm wide, so one stage unit is 54 / (0.472 × BADGE_SCALE) ≈ 76.3 mm.
  */
 export const MM_PER_UNIT = 54 / (0.472 * BADGE_SCALE);
+/**
+ * World units per Business scene unit (v1.4, models/worldScale.ts): the card is a CR80 card,
+ * 5.4 cm on its short side, so one scene unit (MM_PER_UNIT, 76.3 mm) is 0.381 world units. The
+ * holder is then 5.7 × 8.9 cm and the reader 7.0 × 10.4 × 5.9 cm. The whole scene (the hang, the
+ * hook, the card's swing and press) scales together; the pendulum was already computed at the
+ * card's real size. The scene root carries the scale.
+ */
+export const BUSINESS_WORLD_SCALE = cm(REFERENCE_CM.cardShortSide) / (0.472 * BADGE_SCALE);
 
 const B = BADGE_SCALE;
 /** The swivel eye's origin in the badge master (scan units): the hang pivot. */

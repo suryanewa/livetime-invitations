@@ -2,10 +2,11 @@ import { Box3, type Camera, type Object3D, Vector3, type WebGLRenderer } from 't
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
-  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netInnerRadius, netRestRadius, newNetPose, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, type BallPreset, type SportsRig,
+  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netInnerRadius, netRestRadius, newNetPose, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, SPORTS_WORLD_SCALE, type BallPreset, type SportsRig,
 } from '../../../models/sports.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
+import { silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { CONTACT_AT, DURATIONS, frameFor, newFrame, sampleSequence, type SportsFrame } from './sequences.ts';
@@ -117,6 +118,8 @@ export class SportsScene implements SceneInstance {
   readonly category = 'sports' as const;
   readonly root: Object3D;
   readonly bounds: Box3;
+  /** Silhouette of the objects on stage at guest-ready: the v1.4 framing rule's hero. */
+  readonly heroPoints: Vector3[];
   readonly durations = DURATIONS;
   readonly animatedNodes: Object3D[];
   readonly studio = { wallZ: SPORTS_WALL_Z };
@@ -143,6 +146,7 @@ export class SportsScene implements SceneInstance {
       if (renderer.shadowMap.enabled) this.shadeBlob(BLOB_FALLOFF.withKeyShadow);
     };
     this.pose('guest-ready');
+    this.heroPoints = silhouettePoints(this.root);
   }
 
   setConfig(config: SceneConfig): void {
@@ -243,6 +247,8 @@ export const sportsScene: SceneModule = {
     root.removeFromParent();
     bindMaterialsByName(root, library);
     prepareImported(root, library, variants.materials);
+    // v1.4: the scene stands in the world at its real size (models/worldScale.ts).
+    root.scale.setScalar(SPORTS_WORLD_SCALE);
     return new SportsScene(rigSports(root, library, config.ball, variants), config);
   },
 };

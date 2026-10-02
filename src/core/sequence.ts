@@ -41,10 +41,19 @@ export interface SceneInstance {
   readonly durations: Readonly<Record<SequenceName, number>>;
   /** Nodes whose local transforms the interruption blend may interpolate. */
   readonly animatedNodes: readonly Object3D[];
-  /** Optional studio adjustments (premium stage), e.g. a deeper backdrop for far-back motion. */
-  readonly studio?: { wallZ?: number };
+  /**
+   * Optional studio adjustments (premium stage), e.g. a deeper backdrop for far-back motion.
+   * `wallZ` in the scene's units; `scale` the set's scale (default: the root's scale, the scene's
+   * world scale, v1.4): the cove and the key's throw scale with the scene (src/render/rig.ts).
+   */
+  readonly studio?: { wallZ?: number; scale?: number };
   /** Optional silhouette samples of every authored path for a tighter camera fit than the box. */
   readonly framePoints?: readonly Vector3[];
+  /**
+   * Silhouette samples of the objects on stage at guest-ready (v1.4 framing rule,
+   * src/render/framing.ts): the camera distance makes them fill HERO_FILL of the frame.
+   */
+  readonly heroPoints?: readonly Vector3[];
 
   /** Swap preset materials/visibility. Called only at canonical poses. */
   setConfig(config: SceneConfig): void;

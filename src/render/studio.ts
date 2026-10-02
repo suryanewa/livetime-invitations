@@ -279,8 +279,12 @@ export interface SweepOptions {
 
 export interface SweepBackdrop {
   mesh: Mesh;
-  /** Rebuilds the geometry only when the wall moves. */
-  setWall(wallZ?: number): void;
+  /**
+   * Rebuilds the geometry only when the wall moves or the set's scale changes. `wallZ` is in the
+   * scene's units; the whole sweep (floor, cove, wall) is scaled by `scale` about the origin, the
+   * scene's world scale (v1.4), so the cove sits where it sat in v1.3 relative to the scene.
+   */
+  setWall(wallZ?: number, scale?: number): void;
   /** Low tier: drop the plaster relief (GPU copy freed; the canvas stays, so it returns). */
   setLowDetail(enabled: boolean): void;
   dispose(): void;
@@ -304,17 +308,20 @@ export function createSweepBackdrop(renderer: WebGLRenderer, options: SweepOptio
   });
   const scale = options.normalScale ?? 0.55;
   material.normalScale.set(scale, scale);
+  let setScale = 1;
   const mesh = new Mesh(sweepGeometry(wall), material);
   mesh.name = 'studio_sweep';
   mesh.receiveShadow = true;
   let lowDetail = false;
   return {
     mesh,
-    setWall(wallZ = DEFAULT_WALL_Z) {
-      if (wallZ === wall) return;
+    setWall(wallZ = DEFAULT_WALL_Z, scale = 1) {
+      if (wallZ === wall && scale === setScale) return;
       wall = wallZ;
+      setScale = scale;
       mesh.geometry.dispose();
       mesh.geometry = sweepGeometry(wallZ);
+      if (scale !== 1) mesh.geometry.scale(scale, scale, scale);
       renderer.shadowMap.needsUpdate = true;
     },
     setLowDetail(enabled) {

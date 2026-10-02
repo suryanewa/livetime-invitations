@@ -6,6 +6,7 @@ import {
 } from '../../../models/recordPlayer.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
+import { silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import type { MaterialLibrary } from '../../render/materials.ts';
@@ -55,6 +56,8 @@ export class PartyScene implements SceneInstance {
   readonly category = 'party' as const;
   readonly root: Object3D;
   readonly bounds: Box3;
+  /** Silhouette of the objects on stage at guest-ready: the v1.4 framing rule's hero. */
+  readonly heroPoints: Vector3[];
   readonly durations = DURATIONS;
   readonly animatedNodes: Object3D[];
   readonly framePoints = partyFramePoints();
@@ -71,6 +74,7 @@ export class PartyScene implements SceneInstance {
     const n = rig.nodes;
     this.animatedNodes = [n.record_authored!, n.record_secondary!, n.platter!, n.tonearm_pivot!, n.tonearm_lift!, n.lid_hinge!];
     this.pose('guest-ready');
+    this.heroPoints = silhouettePoints(this.root);
   }
 
   setConfig(config: SceneConfig): void {

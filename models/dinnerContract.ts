@@ -1,5 +1,6 @@
 import { Box3, Vector3 } from 'three';
 import { BIN, BIN_BOUNDS } from './disposalBin.ts';
+import { cm, REFERENCE_CM } from './worldScale.ts';
 
 /**
  * Dinner (covered dish) contract — shared by the recipe (`scripts/masters/recipes/dinner.ts`),
@@ -18,6 +19,16 @@ export type DishPreset = 'pasta' | 'vegetables';
 
 /** Scan units → scene units for both masters: the plate keeps the v1.1 plate's diameter (1.6). */
 export const DISH_SCALE = 0.8 / 0.9525;
+/**
+ * World units per Dinner scene unit (v1.4, models/worldScale.ts): the plate is a 27 cm dinner
+ * plate, so PLATE.radius (0.8) is 13.5 cm = 0.675 world units: 0.84375. The cloche keeps its real
+ * size against it (dome 21.9 cm across, 14.3 cm to the handle top). The scene root carries the
+ * scale, and the whole scene scales together, the bin included: the shared bin is sized against
+ * what it receives, and here that is the dish (31.7 cm across the rim, a 30 cm opening for the
+ * 27 cm plate, 20.3 cm deep for the 15.9 cm covered dish), where Birthday's is sized against the
+ * cake (37.6 cm, 24 cm deep). Every Dinner number stays in scene units and the beats hold.
+ */
+export const DINNER_WORLD_SCALE = cm(REFERENCE_CM.plate / 2) / 0.8;
 
 /** Nodes the rig and the choreography look up (the GLB and the tooling stand-in both have them). */
 export const DINNER_NODES = [

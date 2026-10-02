@@ -8,6 +8,7 @@ import type { CakePreset } from '../../../models/cake.ts';
 import { BIN, flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
+import { silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { birthdayFramePoints } from './framing.ts';
@@ -20,6 +21,8 @@ export class BirthdayScene implements SceneInstance {
   readonly category = 'birthday' as const;
   readonly root: Object3D;
   readonly bounds: Box3;
+  /** Silhouette of the objects on stage at guest-ready: the v1.4 framing rule's hero. */
+  readonly heroPoints: Vector3[];
   readonly durations = DURATIONS;
   readonly animatedNodes: Object3D[];
   readonly studio = { wallZ: WALL_Z };
@@ -41,6 +44,7 @@ export class BirthdayScene implements SceneInstance {
     ];
     this.framePoints = [...birthdayFramePoints(), ...openBinFramePoints(n.bin_root!, BIN_POS, BIN_YAW)];
     this.pose('guest-ready');
+    this.heroPoints = silhouettePoints(this.root);
   }
 
   setConfig(config: SceneConfig): void {

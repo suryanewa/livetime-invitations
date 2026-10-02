@@ -271,10 +271,12 @@ export default defineRig({
       shadowKey: key,
       backdrop: sweep.mesh,
       setWall: sweep.setWall,
-      setContent(bounds) {
-        // The key keeps its direction from the window and follows the content's centre.
+      setContent(bounds, scale = 1) {
+        // The key keeps its direction from the window and follows the content's centre, at a throw
+        // in proportion to the scene (v1.4: the set scales with the subject, rig.ts setWall).
         const c = bounds.getCenter(key.position.clone());
-        key.position.set(c.x + dx * P.key.distance, c.y + dy * P.key.distance, c.z + dz * P.key.distance);
+        const d = P.key.distance * scale;
+        key.position.set(c.x + dx * d, c.y + dy * d, c.z + dz * d);
       },
       setLowDetail(enabled) {
         sweep.setLowDetail(enabled);

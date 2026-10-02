@@ -21,6 +21,7 @@ import { type DirectionId, LOCKED_DIRECTION, MaterialLibrary } from '../render/m
 import { QualityMonitor, TIER_DPR, type Tier } from '../render/quality.ts';
 import { DEFAULT_RIG } from '../render/rigRegistry.ts';
 import { Stage, type StageOptions } from '../render/stage.ts';
+import type { HeroFraming } from '../render/camera.ts';
 
 /**
  * Embeddable invitation controller (Master §7). Three independent dimensions — resource,
@@ -71,6 +72,8 @@ export interface InvitationHandle extends InvitationController {
   captureStill(size: number, dpr?: number, type?: string, quality?: number, options?: { empty?: boolean }): string | null;
   /** Tooling only (resource checks): live GPU object counts, or null without a stage. */
   renderInfo(): { geometries: number; textures: number; programs: number } | null;
+  /** Tooling only (framing checks): the hero fit at `aspect` (width / height), or null. */
+  framing(aspect?: number): HeroFraming | null;
 }
 
 export const LOAD_TIMEOUT_MS = 6000;
@@ -332,7 +335,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       scene = instance;
       // A preset chosen while the asset was loading wins over the one the load started with.
       instance.setConfig(config);
-      s.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints);
+      s.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints, instance.heroPoints);
       resize();
       applyTierDetail(quality.tier);
       let shaderError = false;
@@ -806,6 +809,11 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       if (!stage) return null;
       const info = stage.renderer.info;
       return { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 };
+    },
+
+    framing(aspect = 1) {
+      if (!stage || !scene || resource !== 'ready') return null;
+      return stage.measureFraming(aspect);
     },
 
     captureStill(size: number, dpr = 2, type = 'image/png', quality?: number, captureOptions?: { empty?: boolean }) {

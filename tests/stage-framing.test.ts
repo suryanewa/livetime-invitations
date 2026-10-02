@@ -14,8 +14,11 @@ import { dinnerFramePoints } from '../src/scenes/dinner/index.ts';
 import { birthdayFramePoints } from '../src/scenes/birthday/framing.ts';
 
 /**
- * The product lens (studio pass v1.3): perspective at PERSPECTIVE_FOV, fitted to each scene's
+ * The bounds fit (studio pass v1.3): perspective at PERSPECTIVE_FOV, fitted to each scene's
  * silhouette samples of every authored path with the shared 8 % clearance, at the shared angle.
+ * Since v1.4 the product camera follows the hero framing rule instead (tests/framing.test.ts,
+ * tests/browser/framing.spec.ts); this fit remains for the study and lookdev pages and for any
+ * content without hero silhouettes.
  */
 
 function plainLibrary(): MaterialLibrary {
@@ -52,7 +55,7 @@ function ndcExtents(camera: PerspectiveCamera | OrthographicCamera, pts: Vector3
   return { x0, x1, y0, y1 };
 }
 
-describe('Stage framing through the perspective product lens', () => {
+describe('Bounds fit through the perspective lens (study, lookdev, fallback)', () => {
   const limit = 1 - 2 * FRAMING_CLEARANCE;
   for (const [name, scene] of Object.entries(SCENES)) {
     it(`${name}: every frame point stays inside the 8 % clearance, snugly and centred, at every aspect`, () => {

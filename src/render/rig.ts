@@ -71,16 +71,23 @@ export interface RigBuild {
   setShadows?(enabled: boolean): void;
   /** Low/Static tier: drop expensive detail (gobo resolution, backdrop relief); reversible. */
   setLowDetail?(enabled: boolean): void;
-  /** Move the backdrop wall back for scenes whose motion reaches far back (`scene.studio.wallZ`). */
-  setWall?(wallZ?: number): void;
+  /**
+   * Move the backdrop wall back for scenes whose motion reaches far back (`scene.studio.wallZ`, in
+   * the scene's own units), and scale the set to the scene: `scale` is the scene's world scale
+   * (v1.4, models/worldScale.ts; 1 unless the scene's root carries one). A photographer sizes the
+   * set to the subject, so the cove, like the key's throw, scales with it: the badge is shot on a
+   * small cove close to the light, the hoop on a large one, and every scene keeps one look.
+   */
+  setWall?(wallZ?: number, scale?: number): void;
   /**
    * The content's motion bounds (world space), on every setContent and setBounds, after
    * `ctx.target` has moved to their centre. Use it to size what depends on the scene's extent:
    * a DirectionalLight key's orthographic shadow camera (left/right/top/bottom, then
    * `shadow.camera.updateProjectionMatrix()`), a backdrop's reach. The scenes differ in size
-   * (Business is tall, Sports wide and deep).
+   * (Business is tall, Sports wide and deep). `scale` is the scene's world scale (see setWall):
+   * a key that follows the content keeps its throw in proportion (distance × scale).
    */
-  setContent?(bounds: Box3): void;
+  setContent?(bounds: Box3, scale?: number): void;
   /** Free everything the build allocated (environment target, textures, geometries, materials). */
   dispose(): void;
 }

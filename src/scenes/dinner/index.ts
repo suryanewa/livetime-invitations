@@ -3,12 +3,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/dinner/dinner.glb?url';
 import binUrl from '../../../assets/shared/disposal-bin.glb?url';
 import {
-  COVER, COVER_PROFILE, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
+  COVER, COVER_PROFILE, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_WORLD_SCALE, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
   type DinnerRig,
 } from '../../../models/dinner.ts';
 import { flapAngles, openBinFramePoints } from '../../../models/disposalBin.ts';
 import { disposeImported, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
+import { silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { smoothstep } from '../../motion/curves.ts';
@@ -64,6 +65,8 @@ export class DinnerScene implements SceneInstance {
   readonly category = 'dinner' as const;
   readonly root: Object3D;
   readonly bounds: Box3;
+  /** Silhouette of the objects on stage at guest-ready: the v1.4 framing rule's hero. */
+  readonly heroPoints: Vector3[];
   readonly durations = DURATIONS;
   readonly animatedNodes: Object3D[];
   readonly studio = { wallZ: DINNER_WALL_Z };
@@ -78,6 +81,7 @@ export class DinnerScene implements SceneInstance {
     this.animatedNodes = [n.plate_authored!, n.cover_authored!, n.bin_root!, rig.flapL, rig.flapR];
     this.framePoints = [...dinnerFramePoints(), ...openBinFramePoints(n.bin_root!, DINNER_BIN_POS, DINNER_BIN_YAW)];
     this.pose('guest-ready');
+    this.heroPoints = silhouettePoints(this.root);
   }
 
   /** v1.2 has no food: `dish` stays in SceneConfig for integration compatibility and selects nothing. */
@@ -195,6 +199,8 @@ export const dinnerScene: SceneModule = {
     // The plate and cloche masters keep their own PBR materials as authored: own environment for
     // the silver and the gilt, the Low tier's registry (models/imported.ts).
     prepareImported(root, library);
+    // v1.4: the scene stands in the world at its real size (models/worldScale.ts).
+    root.scale.setScalar(DINNER_WORLD_SCALE);
     return new DinnerScene(rigDinner(root, binRoot, library), config);
   },
 };

@@ -314,7 +314,11 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
   haloMesh.renderOrder = 1;
   haloMesh.userData.noShadowCast = true;
   ledMesh.userData.noShadowCast = true;
-  const spill = new PointLight('#ffffff', 0, STATUS_SPILL.distance, 2);
+  // A light's range and inverse-square falloff are in world units: under the root's world scale
+  // (v1.4) the same spill reaches the same scene-unit distance with the same strength.
+  const worldScale = root.getWorldScale(new Vector3()).x;
+  const spillGain = worldScale * worldScale;
+  const spill = new PointLight('#ffffff', 0, STATUS_SPILL.distance * worldScale, 2);
   spill.name = 'scanner_spill';
   spill.position.set(0, STATUS_SPILL.v, STATUS_SPILL.out);
   nodes.scanner_face!.add(spill);
@@ -365,7 +369,7 @@ export function rigBusiness(root: Object3D, lib: ModelContext['lib'], template: 
     halo.emissiveIntensity = GLOW.halo.intensity * GLOW.led[lit];
     halo.opacity = GLOW.halo.opacity * k;
     spill.color.set(colour);
-    spill.intensity = GLOW.spill * k;
+    spill.intensity = GLOW.spill * k * spillGain;
   };
 
   // ── Gasket press: the glass and what is printed on it give; the gasket under it compresses ──

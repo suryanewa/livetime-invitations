@@ -1,10 +1,11 @@
-import { Box3, type Camera, Plane, Quaternion, Raycaster, Vector2, Vector3, type Object3D, type WebGLRenderer } from 'three';
+import { Box3, type Camera, Matrix4, Plane, Quaternion, Raycaster, Vector2, Vector3, type Object3D, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/business/business.glb?url';
-import { CARD, PENDULUM, rigBusiness, type BusinessRig, type CardTemplate, type StatusLit } from '../../../models/business.ts';
+import { BUSINESS_WORLD_SCALE, CARD, PENDULUM, rigBusiness, type BusinessRig, type CardTemplate, type StatusLit } from '../../../models/business.ts';
 import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { keycardBusinessRig, type KeycardRig } from '../../../models/keycard.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
+import { silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule, ScenePointer } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { ANGLE_EPSILON, Spring } from '../../motion/spring.ts';
@@ -31,6 +32,8 @@ export class BusinessScene implements SceneInstance {
   readonly category = 'business' as const;
   readonly root: Object3D;
   readonly bounds: Box3;
+  /** Silhouette of the objects on stage at guest-ready: the v1.4 framing rule's hero. */
+  readonly heroPoints: Vector3[];
   readonly durations = DURATIONS;
   readonly animatedNodes: Object3D[];
   readonly pointer: ScenePointer;
@@ -79,6 +82,7 @@ export class BusinessScene implements SceneInstance {
     this.animatedNodes = [n.card_authored!, n.clip_pivot!, n.card_mesh!, n.lanyard_anchor!, ...(this.rig.gate ? [this.rig.gate] : [])];
     this.pointer = this.createPointer();
     this.pose('guest-ready');
+    this.heroPoints = silhouettePoints(this.root, (o) => o.name.startsWith('lanyard'));
   }
 
   setConfig(config: SceneConfig): void {
@@ -321,10 +325,14 @@ export class BusinessScene implements SceneInstance {
     const corner = new Vector3();
     const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
 
+    // The drag plane and its hit are in business_root space (the root carries the world scale).
+    const toRoot = new Matrix4();
     const project = (x: number, y: number, camera: Camera, out: Vector3) => {
       ndc.set(x, y);
       this.raycaster.setFromCamera(ndc, camera);
-      return this.raycaster.ray.intersectPlane(this.plane, out);
+      this.root.updateWorldMatrix(true, false);
+      const ray = this.raycaster.ray.clone().applyMatrix4(toRoot.copy(this.root.matrixWorld).invert());
+      return ray.intersectPlane(this.plane, out);
     };
 
     return {
@@ -410,6 +418,8 @@ export const businessScene: SceneModule = {
     root.removeFromParent();
     bindMaterialsByName(root, library);
     prepareImported(root, library, variants.materials);
+    // v1.4: the scene stands in the world at its real size (models/worldScale.ts).
+    root.scale.setScalar(BUSINESS_WORLD_SCALE);
     return new BusinessScene(rigBusiness(root, library, config.template, variants), library, config);
   },
 };

@@ -11,6 +11,38 @@ numbers), `models/businessFrame.ts` (the recipe's builder: empty contract nodes 
 `src/scenes/business/{poses,sequences,drag,index}.ts`, `tests/business.test.ts`,
 `tests/browser/business.spec.ts`.
 
+## v1.4 scale (2026-10-02)
+
+Owner: *"the RFID reader is taller than the badge"* (brief: `docs/scale-fullscreen-brief.md`, Scale part). One world
+scale, 1 unit = 20 cm (`models/worldScale.ts`).
+
+- **Reference size: the printed card is a CR80 card, 5.4 cm on its short side** (as the v1.2 physics already assumed:
+  one scene unit is `MM_PER_UNIT`, 76.3 mm). `BUSINESS_WORLD_SCALE` = 0.381. The holder is then 5.7 × 8.9 cm (the brief's
+  "≈ 7 × 10 cm" is a larger holder than the master's, which is cut close round its card), the strap 1.7 cm wide, the
+  reader 7.0 cm wide, 10.4 cm tall and 5.9 cm deep.
+- **The reader keeps its v1.2.1 size against the badge**, not the brief's 9–10 cm width: the master is a standing wedge,
+  1.49 times as tall as it is wide, so at 9–10 cm wide it would stand 13.4–14.9 cm, 1.5–1.7× the holder, which is
+  exactly what the owner flagged. At 7.0 cm its glass takes the holder with the side clips on the glass, as a reader's
+  window takes a card, and it stands 1.18× the holder. That ratio is functional (the scan press lands the card flat on
+  the glass) and unchanged, so the choreography is too.
+- **How it is applied:** the whole scene scales together, so `business_root` carries the scale at runtime and every
+  contract number, the hang, the hook threading, the pendulum (already computed at the card's real size, 1.78 Hz), the
+  press and the drag limits stay in scene units; the beats, durations and GLB are unchanged. Two runtime details follow
+  the root: the optional card drag intersects its plane in `business_root` space, and the status spill light's range
+  and inverse-square strength are carried into world units. The set (cove, key throw, shadow camera) scales with the
+  scene, so the badge's shadows keep their v1.3 softness and the shadow map its density over the card.
+- **Framing (shared rule, `src/render/framing.ts`).** Same 18° lens, azimuth 20° and elevation 15° as every scene. The
+  camera distance is set by the **hero**, the objects on stage at guest-ready, measured as their real silhouette
+  (`silhouettePoints`, contact shadows and shadow proxies excluded): its height fills 60 % of the frame, or its width
+  75 % when it is wide and low. Across, the hero sits centred unless a path needs the room; up and down, the frame
+  centres the whole action; every authored path (`framePoints`) stays 4 % inside the edges. Checked in
+  `tests/framing.test.ts` and on the real silhouettes in `tests/browser/framing.spec.ts`. Here the hero is the badge (holder, hardware, D-ring) and the reader; the
+  strap, which leaves the top of the frame by design, is not part of it.
+- **Measured hero, 1:1 stage:** v1.3 0.817 of the height, 0.646 of the width; v1.4 **0.600 / 0.480**, held by its
+  height, not path-limited. The cove at the frame's centre measures `#D7D4CF`.
+- **Known gaps:** the reader still stands taller than the holder (10.4 against 8.9 cm), by the reasoning above. The
+  lanyard's long shadow on the cove (v1.3 gap) is unchanged.
+
 ## v1.3: the studio pass (2026-10-01)
 
 - **Grade removed.** The chrome polish (`badge_chrome` at roughness 0.1, base 0.6) is gone: the D-ring, swivel and

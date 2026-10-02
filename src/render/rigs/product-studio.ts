@@ -189,6 +189,12 @@ export default defineRig({
       shadowKey: key,
       backdrop: sweep.mesh,
       setWall: sweep.setWall,
+      setContent(_bounds, scale = 1) {
+        // v1.4: the set scales with the scene (rig.ts setWall), the lights' places with it.
+        key.position.set(...S.key.position).multiplyScalar(scale);
+        rim.position.set(...S.rim.position).multiplyScalar(scale);
+        fill.position.set(...S.fill.position).multiplyScalar(scale);
+      },
       // Low/Static: the Stage drops the 2048² shadow map (the only expensive part of this rig;
       // the scenes' contact shadows keep the objects grounded). The painted cove has no relief, so
       // there is nothing else to drop; the call stays for symmetry with the plaster sweep.

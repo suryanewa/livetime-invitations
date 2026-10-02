@@ -5,6 +5,36 @@ porcelain plate with its gilt rim (`dinner-plate.glb`) and the silver cloche's d
 minus its tray). Recipe: `scripts/masters/recipes/dinner.ts`; contract: `models/dinnerContract.ts`; rig:
 `models/dinner.ts`; choreography: `src/scenes/dinner/sequences.ts`.
 
+## v1.4 scale (2026-10-02)
+
+Owner: *"the dish is tiny next to the huge turntable"* (brief: `docs/scale-fullscreen-brief.md`, Scale part). One
+world scale, 1 unit = 20 cm (`models/worldScale.ts`).
+
+- **Reference size: a 27 cm dinner plate.** `DINNER_WORLD_SCALE` = 0.84375 (the plate's 1.6 scene units are 27 cm).
+  The cloche keeps its real size against it, as the masters were built (the dome 22 cm across its bead, the covered
+  dish 15.9 cm from the plate's foot to the handle).
+- **The bin is sized against the dish.** At Dinner's scale the shared bin design is 31.7 cm across its rim, with a
+  30 cm opening for the 27 cm plate and 20 cm of depth for the 15.9 cm dish, as the v1.2 layout already had it in
+  scene units. (Keeping Birthday's 37.6 cm bin here was tried: in Dinner's units it is 1.185× larger, its open flaps
+  stand 47 cm high behind a 16 cm dish, and the dish fell to 0.446 of the frame width; the carry and the bin had to be
+  moved out to keep their clearances.) So the whole scene scales together: `dinner_root` carries the scale at runtime,
+  every contract number, the transfer path, the rock and the clearances stay in scene units, the beats and durations
+  are unchanged and the GLB is unchanged. The set (cove, key, shadow camera) scales with the scene.
+- **Framing (shared rule, `src/render/framing.ts`).** Same 18° lens, azimuth 20° and elevation 15° as every scene. The
+  camera distance is set by the **hero**, the objects on stage at guest-ready, measured as their real silhouette
+  (`silhouettePoints`, contact shadows and shadow proxies excluded): its height fills 60 % of the frame, or its width
+  75 % when it is wide and low. Across, the hero sits centred unless a path needs the room; up and down, the frame
+  centres the whole action; every authored path (`framePoints`) stays 4 % inside the edges. Checked in
+  `tests/framing.test.ts` and on the real silhouettes in `tests/browser/framing.spec.ts`.
+- **Measured hero (the covered dish), 1:1 stage:** v1.3 0.306 of the height, 0.434 of the width; v1.4 **0.355 /
+  0.496**. Dinner is the one **path-limited** scene, the recorded disposal exception: held by its width the dish would
+  fill 75 %, but the open bin's flaps behind it cannot then fit, so the camera backs off until they sit 4 % inside the
+  top edge; the dish sits low (0.54 below centre) under the room the carry needs. At 3:4 0.337 / 0.630, at 3:2 0.355 /
+  0.331. Unit test: `tests/framing.test.ts` ("Dinner under the hero rule"). The cove at the frame's centre measures
+  `#D4D0CB`.
+- **Known gaps:** the dish is still the smallest hero of the five (about 0.6 of the others' height share at 1:1). Only a
+  lower bin would change that: the open flaps rise about one bin radius above the rim, whatever the flap angle.
+
 ## v1.3: the studio pass (2026-10-01)
 
 - **Grades removed.** `finishDish` (the dome's uniform roughness 0.2 and anisotropy 0.3 along the meridians) and the

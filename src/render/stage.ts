@@ -1,5 +1,6 @@
-import { Box3, Color, type Material, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PCFShadowMap, PerspectiveCamera, Scene, type Texture, type Vector3, VSMShadowMap, type WebGLRenderer } from 'three';
-import { createStageCamera, fitCameraToBounds, fitPerspectiveToBounds, PERSPECTIVE_FOV } from './camera.ts';
+import { Box3, Color, type Material, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PCFShadowMap, PerspectiveCamera, Scene, type Texture, Vector3, VSMShadowMap, type WebGLRenderer } from 'three';
+import { createStageCamera, fitCameraToBounds, fitPerspectiveToBounds, fitPerspectiveToHero, type HeroFraming, PERSPECTIVE_FOV } from './camera.ts';
+import { HERO_FILL, PATH_CLEARANCE } from './framing.ts';
 import { createRenderer, sizeRenderer } from './createRenderer.ts';
 import { releaseShadowTextureGpu } from './contactShadow.ts';
 import { STUDY_RIG } from './lighting.ts';
@@ -10,6 +11,8 @@ import { releaseCachedTextureGpu } from './textures.ts';
 import { shadowProxyMaterial } from '../../models/shadowProxy.ts';
 
 const extent = new Box3();
+const aimPoint = new Vector3();
+const boxCorners = (b: Box3) => Array.from({ length: 8 }, (_, i) => new Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
 /**
  * Draw-call economy for the shadow pass: flat decals (printed rings, status window, symbols,
  * hole floors) and tiny parts cast nothing visible under the soft filter, so they skip it.
@@ -112,6 +115,21 @@ export class Stage {
     }
   }
 
+  /** The scene's world scale the set is sized to (v1.4; rig.ts setWall). */
+  private studioScale = 1;
+
+  /** The rig's shadow camera range and normal bias, in proportion to the set (v1.4). */
+  private scaleShadow(): void {
+    const sh = this.rig.shadows, key = this.studio.shadowKey;
+    if (!sh || !key) return;
+    const s = this.studioScale;
+    key.shadow.normalBias = sh.normalBias * s;
+    if (sh.near !== undefined) key.shadow.camera.near = sh.near * s;
+    if (sh.far !== undefined) key.shadow.camera.far = sh.far * s;
+    key.shadow.camera.updateProjectionMatrix();
+    this.renderer.shadowMap.needsUpdate = true;
+  }
+
   /** Whether this rig casts real-time shadows onto its backdrop. */
   get shadowed(): boolean {
     return !!(this.rig.shadows && this.studio.shadowKey);
@@ -147,15 +165,31 @@ export class Stage {
     return this.renderer.domElement;
   }
 
-  setContent(object: Object3D | null, bounds?: Box3, studio?: { wallZ?: number }, framePoints?: readonly Vector3[]): void {
-    this.framePoints = framePoints;
+  /**
+   * `heroPoints` (v1.4): silhouette samples of the objects on stage at guest-ready. With them the
+   * perspective camera follows the hero framing rule (src/render/framing.ts); without them it fits
+   * the motion bounds or `framePoints` as before (study, lookdev, the orthographic camera).
+   * `bounds`, `framePoints` and `heroPoints` are in the content's own space (its scene units): the
+   * stage carries them into the world through the content's transform (v1.4: a scene root may
+   * carry its world scale, models/worldScale.ts). `studio.wallZ` is in world units.
+   */
+  setContent(object: Object3D | null, bounds?: Box3, studio?: { wallZ?: number; scale?: number }, framePoints?: readonly Vector3[], heroPoints?: readonly Vector3[]): void {
     if (this.content) this.scene.remove(this.content);
     this.content = object;
+    this.framePoints = this.heroPoints = undefined;
     if (object) {
       this.scene.add(object);
-      if (bounds) this.bounds.copy(bounds);
+      object.updateMatrixWorld(true);
+      const toWorld = object.matrixWorld;
+      this.framePoints = framePoints?.map((p) => p.clone().applyMatrix4(toWorld));
+      this.heroPoints = heroPoints?.map((p) => p.clone().applyMatrix4(toWorld));
+      if (bounds) this.bounds.copy(bounds).applyMatrix4(toWorld);
       this.assignOwnEnvironment(object);
-      this.studio.setWall?.(studio?.wallZ);
+      // v1.4: the set scales with the scene's world scale (rig.ts setWall): the cove and the key's
+      // throw here, the shadow camera's range and normal bias below.
+      this.studioScale = studio?.scale ?? object.scale.x;
+      this.studio.setWall?.(studio?.wallZ, this.studioScale);
+      this.scaleShadow();
       if (this.shadowed) {
         object.traverse((o) => {
           const m = o as Mesh;
@@ -173,7 +207,7 @@ export class Stage {
       }
       this.bounds.getCenter(this.aim.position);
       this.aim.updateMatrixWorld();
-      this.studio.setContent?.(this.bounds);
+      this.studio.setContent?.(this.bounds, this.studioScale);
       this.fit();
     }
   }
@@ -204,9 +238,11 @@ export class Stage {
     });
   }
 
+  /** Motion bounds in the content's own space (see setContent). */
   setBounds(bounds: Box3): void {
     this.bounds.copy(bounds);
-    this.studio.setContent?.(this.bounds);
+    if (this.content) this.bounds.applyMatrix4(this.content.matrixWorld);
+    this.studio.setContent?.(this.bounds, this.studioScale);
     this.fit();
   }
 
@@ -219,12 +255,20 @@ export class Stage {
   }
 
   private framePoints: readonly Vector3[] | undefined;
+  private heroPoints: readonly Vector3[] | undefined;
+  /** The last hero fit (null when the camera fitted bounds instead). */
+  framing: HeroFraming | null = null;
 
   private fit(): void {
     if (this.bounds.isEmpty()) return;
     const aspect = this.cssWidth / this.cssHeight;
-    if (this.camera instanceof PerspectiveCamera) fitPerspectiveToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints);
-    else fitCameraToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints);
+    this.framing = null;
+    if (this.camera instanceof PerspectiveCamera) {
+      if (this.heroPoints?.length) {
+        const paths = this.framePoints?.length ? this.framePoints : boxCorners(this.bounds);
+        this.framing = fitPerspectiveToHero(this.camera, this.bounds.getCenter(aimPoint), aspect, this.heroPoints, paths, HERO_FILL, PATH_CLEARANCE);
+      } else fitPerspectiveToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints);
+    } else fitCameraToBounds(this.camera, this.bounds, aspect, undefined, this.framePoints);
   }
 
   render(): void {
@@ -236,6 +280,19 @@ export class Stage {
    * hides the content for the frame: the bare backdrop under the same light and camera, which
    * is what the stage colour is measured from.
    */
+  /** The hero fit at another aspect (tooling), leaving the live fit as it was. */
+  measureFraming(aspect: number): HeroFraming | null {
+    const prev = { w: this.cssWidth, h: this.cssHeight };
+    this.cssWidth = aspect * 1000;
+    this.cssHeight = 1000;
+    this.fit();
+    const r = this.framing;
+    this.cssWidth = prev.w;
+    this.cssHeight = prev.h;
+    this.fit();
+    return r;
+  }
+
   snapshot(cssWidth: number, cssHeight: number, dpr: number, type = 'image/png', quality?: number, empty = false): string {
     const hidden = empty && this.content?.visible ? this.content : null;
     if (hidden) {

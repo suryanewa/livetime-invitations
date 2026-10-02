@@ -22,6 +22,12 @@ export const PARTY_NODES = [
 // ── Master → scene ────────────────────────────────────────────────────────────────
 /** Scan → scene units: the master plinth's 1.855 width becomes 2.1, the v1.1 player width. */
 export const TT_SCALE = 2.1 / 1.855;
+/**
+ * World units per Party scene unit (v1.4, models/worldScale.ts): 1. Party was already authored at
+ * the world scale: the record (2 × RECORD.radius = 1.5216) is 30.43 cm, a 12-inch LP (30.48 cm)
+ * to 0.16 %, and the plinth 42.1 × 32.4 cm.
+ */
+export const PARTY_WORLD_SCALE = 1;
 /** Master point (scan units) that lands on the scene origin: the plinth's x/z centre, the feet's soles. */
 export const TT_ORIGIN = [0.0125, -0.701, 0.115] as const;
 /** A master point (scan units, the master's own frame) in party_root space. */

@@ -1,4 +1,5 @@
 import { Box3, Vector3 } from 'three';
+import { cm, REFERENCE_CM } from './worldScale.ts';
 
 /**
  * Sports (basketball) contract — shared by the model (`sportsPremium.ts`), the rig
@@ -19,6 +20,15 @@ export const SPORTS_NODES = [
  * basketball master (sphere r 0.9436 scan units) at BALL_R / 0.9436.
  */
 export const BALL_R = 0.25;
+/**
+ * World units per Sports scene unit (v1.4, models/worldScale.ts): the ball is a mini (size 3)
+ * basketball, 18 cm, so BALL_R (0.25) is 9 cm = 0.45 world units: 1.8. The hoop master is a
+ * wall-mount mini hoop, and the rim's 1.6 × ball inner diameter (28.8 cm) gives its real board
+ * (58.6 × 46 cm); the rim stands 62 cm above the floor on the code-authored stand. The whole scene
+ * (arcs, net, pivots, rest spots) scales together, so every number here stays in scene units and
+ * the beats hold; the scene root carries the scale.
+ */
+export const SPORTS_WORLD_SCALE = cm(REFERENCE_CM.miniBall / 2) / BALL_R;
 
 /**
  * Hoop: `hoop_root` sits on the floor behind and right of the ball. The board, rim and net are the

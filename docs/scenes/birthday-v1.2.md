@@ -10,6 +10,31 @@ Files: `scripts/masters/recipes/birthday.ts` (the recipe, with a Decisions block
 (runtime rig), `src/scenes/birthday/{poses,sequences,framing,index}.ts`, `tests/birthday.test.ts`,
 `tests/browser/birthday.spec.ts`.
 
+## v1.4 scale (2026-10-02)
+
+Owner: *"the sense of scale with the models is pretty poor. Make it feel more consistent."* (brief:
+`docs/scale-fullscreen-brief.md`, Scale part). One world scale, 1 unit = 20 cm (`models/worldScale.ts`).
+
+- **Reference size: the two-tier cake on its stand, 35 cm** (foot of the stand to the top tier's rosettes, candles
+  excluded). Birthday was already authored at the world scale: `BIRTHDAY_WORLD_SCALE` = 1, and `CAKE_SCALE` 1.1 gives
+  34.9 cm. The stand is 33.5 cm across, the cake 27.7 cm across its piping, a candle 4.8 cm, the cake with its candles
+  23.6 cm tall. No contract number, choreography constant or GLB changed.
+- **The bin is sized against the cake** (unchanged): 37.6 cm across its rim, a 35.6 cm opening and 24 cm of depth, so
+  the cake with its candles sinks below the 26 cm rim before the flaps close (`tests/world-scale.test.ts`). The same
+  bin design is sized against the dish in Dinner (31.7 cm there).
+- **Framing (shared rule, `src/render/framing.ts`).** Same 18° lens, azimuth 20° and elevation 15° as every scene. The
+  camera distance is set by the **hero**, the objects on stage at guest-ready, measured as their real silhouette
+  (`silhouettePoints`, contact shadows and shadow proxies excluded): its height fills 60 % of the frame, or its width
+  75 % when it is wide and low. Across, the hero sits centred unless a path needs the room; up and down, the frame
+  centres the whole action; every authored path (`framePoints`) stays 4 % inside the edges. Checked in
+  `tests/framing.test.ts` and on the real silhouettes in `tests/browser/framing.spec.ts`.
+- **Measured hero (the cake on its stand, candles lit), 1:1 stage:** v1.3 0.640 of the height, 0.467 of the width;
+  v1.4 **0.600 / 0.439**, held by its height, not path-limited. The carry to the bin rises above the cake, so the
+  frame keeps that headroom (the cake sits 0.18 below centre). At 3:4 the bin slides the cake 0.12 right of centre.
+  The cove at the frame's centre measures `#D6D3CE`.
+- **Set scale 1.**
+- **Known gaps:** none new.
+
 ## v1.3: the studio pass (2026-10-01)
 
 - **Grade removed.** The v1.2.1 vanilla darkening (body `#E0D3BF` at roughness 0.58) is gone: vanilla is the ivory

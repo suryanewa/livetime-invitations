@@ -38,8 +38,8 @@ export default defineRig({
     objects: Object3D[],         // lights, light targets, backdrop meshes: the Stage adds and removes them
     shadowKey?: SpotLight | DirectionalLight | null,  // the Stage applies `shadows` to it
     backdrop?: Mesh | null,
-    setShadows?(enabled), setLowDetail?(enabled), setWall?(wallZ?),
-    setContent?(bounds: Box3),   // the content's motion bounds: size a DirectionalLight's shadow camera
+    setShadows?(enabled), setLowDetail?(enabled), setWall?(wallZ?, scale?),
+    setContent?(bounds: Box3, scale?),  // the content's motion bounds: size a DirectionalLight's shadow camera
     dispose(),                   // free everything build() allocated
   },
 });
@@ -55,6 +55,16 @@ and marks content meshes as casters/receivers (thin decals and transparent parts
 `ownEnv` materials the environment as their own map (with `metalEnvIntensity`, below), and calls
 `setContent(bounds)` with the content's motion bounds (also on `setBounds`). A rig that declares
 `shadows` but returns no `shadowKey` gets a console warning and no shadow map.
+
+**Set scale (v1.4).** Every object stands in the world at its real size (1 unit = 20 cm,
+`models/worldScale.ts`), so the scenes range from a 9 cm badge to a 60 cm hoop. A photographer sizes the
+set and the light to the subject, and so does the Stage: `scale` (the content root's scale, the scene's
+world scale) reaches `setWall(wallZ, scale)` (`wallZ` is in the scene's units; `createSweepBackdrop` scales
+the whole cove about the origin) and `setContent(bounds, scale)` (put the key and any fixed light at
+`position × scale`, or its throw at `distance × scale`), and the Stage multiplies the declared shadow
+`near`, `far` and `normalBias` by it. Party and Birthday are at 1, Sports 1.8, Dinner 0.844, Business 0.381.
+A rig that ignores `scale` keeps world-size lights while its shadow camera range follows the scene: on a
+small scene its key may then sit past `far` and cast nothing.
 
 **Metals (`metalEnvIntensity`).** Polished and imported metals carry their own copy of the environment
 (`userData.ownEnv`: the cloche, the Dinner silver, dome and gilt, the Business chrome, the hoop steel, and

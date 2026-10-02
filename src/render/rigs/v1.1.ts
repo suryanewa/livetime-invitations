@@ -55,6 +55,11 @@ export default defineRig({
       shadowKey: key,
       backdrop: sweep.mesh,
       setWall: sweep.setWall,
+      setContent(_bounds, scale = 1) {
+        // v1.4: the set scales with the scene (rig.ts setWall), the lights' places with it.
+        key.position.set(...V1_1.key.position).multiplyScalar(scale);
+        bounce.position.set(...V1_1.bounce.position).multiplyScalar(scale);
+      },
       setLowDetail(enabled) {
         if (enabled === lowDetail) return;
         lowDetail = enabled;

@@ -12,6 +12,28 @@ doubled, the spindle reads as turned steel, and the plinth is toned towards grap
 gaps): the interruption blend (shared `visualDirector.ts`), the lid's proportions, the tonearm's size at stage
 scale and the label wedge.
 
+## v1.4 scale (2026-10-02)
+
+Owner: *"the sense of scale with the models is pretty poor. Make it feel more consistent."* (brief:
+`docs/scale-fullscreen-brief.md`, Scale part). One world scale, 1 unit = 20 cm (`models/worldScale.ts`).
+
+- **Reference size: the record, a 12-inch LP (30.48 cm).** Party was already authored at the world scale:
+  `PARTY_WORLD_SCALE` = 1. The record (2 × `RECORD.radius` = 1.5216) is 30.43 cm (−0.16 %), and the master turntable,
+  built round it, comes out 42.1 × 32.4 cm (the brief's "≈ 45 cm" is a typical deck; this one is the master's own
+  plinth). No contract number, choreography constant or GLB changed.
+- **Framing (shared rule, `src/render/framing.ts`).** Same 18° lens, azimuth 20° and elevation 15° as every scene. The
+  camera distance is set by the **hero**, the objects on stage at guest-ready, measured as their real silhouette
+  (`silhouettePoints`, contact shadows and shadow proxies excluded): its height fills 60 % of the frame, or its width
+  75 % when it is wide and low. Across, the hero sits centred unless a path needs the room; up and down, the frame
+  centres the whole action; every authored path (`framePoints`) stays 4 % inside the edges. Checked in
+  `tests/framing.test.ts` and on the real silhouettes in `tests/browser/framing.spec.ts`.
+- **Measured hero (the turntable with its lid open), 1:1 stage:** v1.3 0.708 of the height and 0.762 of the width
+  (the camera backed off to fit every path); v1.4 **0.600 / 0.650**, held by its height. At 3:4 the width binds (0.516 /
+  0.750); at 3:2 0.600 / 0.434. Not path-limited at any aspect. The cove at the frame's centre measures `#D1CEC9`.
+- **Set scale 1** (the cove, the key's 12-unit throw and the shadow camera as in v1.3).
+- **Known gaps:** none new. The turntable reads a little smaller than in v1.3 (by design: every hero now fills the same
+  share of the frame).
+
 ## v1.3: the studio pass (2026-10-01)
 
 - **Grades removed** (rows marked v1.3 in Decisions): `PLINTH_TONE` (the brushed steel is the master's factor),

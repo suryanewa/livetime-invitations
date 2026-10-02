@@ -1,5 +1,26 @@
 # Style reference — v1.3 · the studio pass
 
+## v1.4 scale (2026-10-02): one world scale, one framing rule
+
+Owner: *"the sense of scale with the models is pretty poor. Make it feel more consistent."* (`docs/scale-fullscreen-brief.md`, Scale part; the fullscreen part is separate.) Where v1.3's camera section below disagrees, this section wins.
+
+- **One world scale: 1 unit = 20 cm** (`models/worldScale.ts`). Each scene declares its world scale from one real reference, and its root carries it at runtime; contracts, choreography, tests and GLBs stay in each scene's own units, so every beat, duration and test intent holds and no GLB changed.
+
+| Scene | Reference | World scale | Real sizes that follow |
+| --- | --- | --- | --- |
+| Party | 12-inch LP, 30.48 cm | 1 (already) | plinth 42.1 × 32.4 cm |
+| Birthday | cake on its stand, 35 cm | 1 (already) | stand 33.5 cm, cake 27.7 cm across, bin 37.6 cm |
+| Sports | mini ball, 18 cm | 1.8 | rim 28.8 cm inner (1.6 ×), board 58.6 × 46 cm, rim 62 cm up |
+| Dinner | dinner plate, 27 cm | 0.844 | cloche 22 cm, covered dish 15.9 cm tall, bin 31.7 cm |
+| Business | CR80 card, 5.4 cm | 0.381 | holder 5.7 × 8.9 cm, strap 1.7 cm, reader 7.0 × 10.4 cm |
+
+- **Within each scene the proportions are the masters' real ones.** The ball-to-hoop and badge-to-reader ratios were already right for a mini hoop and a standing reader whose glass takes the card, and stay (the reader is not enlarged to the brief's 9–10 cm: at that width the 1.49:1 wedge would stand 1.5–1.7× the holder). The shared bin is one design sized against what it receives: the cake in Birthday, the dish in Dinner.
+- **The set scales with the subject** (`src/render/rig.ts` setWall/setContent): the cove, the key's throw and the shadow camera's range and normal bias follow the scene's world scale, as a photographer sizes the set and the light to the product, so all five keep v1.3's look and shadow density.
+- **The framing rule** (`src/render/framing.ts`, `fitPerspectiveToHero` in `src/render/camera.ts`): one lens (18°), one azimuth (20°) and elevation (15°); the distance is set by the **hero**, the objects on stage at guest-ready seen as their real silhouette, so that its height fills **60 %** of the frame (its width **75 %** when it is wide and low). Across, the hero is centred unless a path needs the room; up and down, the frame centres the whole action; every authored path stays 4 % inside the edges. Only Dinner cannot fit its open bin at that size and backs off (the recorded disposal exception).
+- **Measured hero fill at the square stage** (height / width; v1.3 → v1.4): Party 0.708 / 0.762 → **0.600 / 0.650**; Birthday 0.640 / 0.467 → **0.600 / 0.439**; Sports 0.841 / 0.745 → **0.600 / 0.528**; Dinner 0.306 / 0.434 → **0.355 / 0.496** (path-limited); Business 0.817 / 0.646 → **0.600 / 0.480**. Tests: `tests/world-scale.test.ts`, `tests/framing.test.ts`, `tests/browser/framing.spec.ts`. Per-scene detail: the "v1.4 scale" section of each `docs/scenes/<scene>-v1.2.md`.
+- **Stage colour:** the empty stage's centre now measures `#D5D1CC` (business `#D7D4CF`, party `#D1CEC9`, birthday `#D6D3CE`, sports `#D5D2CD`, dinner `#D4D0CB`), within one level of the `#D5D2CD` token, which is unchanged. Posters and thumbnails were regenerated with the new framing.
+- **Known gaps:** the dish is still the smallest hero (its 47-cm-high open bin behind a 16 cm dish sets the frame). Every rig scales its set with the scene; `daylight-table` keeps a world-size desk and wall (only its wall depth and key throw follow), so on a local host `?rig=daylight-table` shows Sports and Business on a differently sized desk than v1.3. The comparison rigs were not re-judged.
+
 ## v1.3 (2026-10-01): the studio pass
 
 Surya, auditing v1.2: *"Why do these look so cartoonish compared to the original renders?"* The models were not the problem: the same GLBs render photographically in the Models viewer (`scan-to-cad-rebuilds`, the light the masters were judged in). The showcase still lit, framed and finished them like the stylised v1.1 objects. The brief (`docs/studio-pass-brief.md`) names five causes, and v1.3 removes all five. The masters, recipes, beats, durations and interface are unchanged. Where a v1.2, v1.1 or v1.0 statement further down disagrees with this section, this section wins; those statements are marked *superseded in v1.3* or *(removed in v1.3)* and kept for the record. Revisions #31–#36 (`docs/spec-revisions.md`) record the deviations; the measurements are in `docs/qualification.md` (v1.3).
@@ -59,6 +80,8 @@ Its weakest score was interface fit (10–11 of 15): beside the warm-white page 
 | `v1.1` | The v1.1 premium studio, unchanged | `#F8E4C8` declared; measures `#F6E0C5` through the perspective lens | Baseline, not scored | The look the owner called cartoonish |
 
 ### The camera
+
+*(Framing superseded in v1.4: the distance is now set by the hero, above. The lens and angles are unchanged.)*
 
 Perspective is the product lens: `PERSPECTIVE_FOV` 18° and `fitPerspectiveToBounds` in `src/render/camera.ts`, created by the Stage unless a caller asks for `projection: 'orthographic'`.
 

@@ -126,3 +126,105 @@ export function fitPerspectiveToBounds(
   camera.setViewOffset(1000 * aspect, 1000, (r.cx * 1000 * aspect) / 2, (-r.cy * 1000) / 2, 1000 * aspect, 1000);
   camera.updateProjectionMatrix();
 }
+
+/** What a hero fit did (src/render/framing.ts): the fill it reached and whether a path set it. */
+export interface HeroFraming {
+  /** Hero silhouette height over frame height, and width over frame width (0–1). */
+  heroHeight: number;
+  heroWidth: number;
+  /** The axis that set the distance: height (HERO_FILL.height) or width (the wide-object cap). */
+  binding: 'height' | 'width';
+  /** True when an authored path could not fit at HERO_FILL and the camera backed off. */
+  pathLimited: boolean;
+  /** Hero centre in NDC after the slide (0, 0 = centred). */
+  heroCenter: [number, number];
+  /** Camera distance from the aim point (scene units). */
+  distance: number;
+}
+
+/**
+ * The v1.4 framing rule (src/render/framing.ts): same lens, azimuth and elevation for every scene;
+ * the distance makes the hero's silhouette (`hero`, root-space samples at guest-ready) fill
+ * `fill.height` of the frame height, or `fill.width` of its width when that binds first (a wide,
+ * low object such as the plate); the view then slides so the hero sits centred across (unless an
+ * authored path, `paths`, would leave the frame) and the whole action sits centred up and down,
+ * every path `clearance` inside the edges.
+ * If the paths cannot fit at that size at all, the camera backs off just enough (`pathLimited`).
+ */
+export function fitPerspectiveToHero(
+  camera: PerspectiveCamera,
+  aim: Vector3,
+  aspect: number,
+  hero: readonly Vector3[],
+  paths: readonly Vector3[],
+  fill: { readonly height: number; readonly width: number },
+  clearance: number,
+): HeroFraming {
+  const dir = cameraDirection();
+  camera.clearViewOffset();
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+  const limit = 1 - clearance;
+  const extents = (pts: readonly Vector3[]) => {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, behind = false;
+    for (const p of pts) {
+      corner.copy(p).applyMatrix4(camera.matrixWorldInverse);
+      if (corner.z > -camera.near) behind = true;
+      corner.copy(p).project(camera);
+      x0 = Math.min(x0, corner.x); x1 = Math.max(x1, corner.x);
+      y0 = Math.min(y0, corner.y); y1 = Math.max(y1, corner.y);
+    }
+    return { x0, x1, y0, y1, behind };
+  };
+  const place = (d: number) => {
+    camera.position.copy(aim).addScaledVector(dir, d);
+    camera.lookAt(aim);
+    camera.updateMatrixWorld();
+  };
+  const heroFits = (e: ReturnType<typeof extents>) => (e.y1 - e.y0) / 2 <= fill.height && (e.x1 - e.x0) / 2 <= fill.width;
+  const all = [...hero, ...paths];
+  const pathsFit = (d: number) => {
+    place(d);
+    const e = extents(all);
+    return !e.behind && e.x1 - e.x0 <= 2 * limit && e.y1 - e.y0 <= 2 * limit;
+  };
+  // Distance at which the hero fills `fill` (fill falls monotonically with distance).
+  let lo = 0.05, hi = 400;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    place(mid);
+    const e = extents(hero);
+    if (!e.behind && heroFits(e)) hi = mid;
+    else lo = mid;
+  }
+  let d = hi;
+  let pathLimited = false;
+  if (!pathsFit(d)) {
+    pathLimited = true;
+    lo = d; hi = 400;
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      if (pathsFit(mid)) hi = mid;
+      else lo = mid;
+    }
+    d = hi;
+  }
+  place(d);
+  const h = extents(hero), a = extents(all);
+  // Slide: across, the hero sits centred, clamped so every path stays inside the clearance; up and
+  // down, the frame centres the whole action (hero and paths), so a scene whose action rises above
+  // its hero (the carry to the bin) keeps that headroom, as the v1.3 fit did.
+  const slide = (c: number, lo: number, hi: number) => Math.min(Math.max(c, hi - limit), lo + limit);
+  const ox = slide((h.x0 + h.x1) / 2, a.x0, a.x1);
+  const oy = (a.y0 + a.y1) / 2;
+  camera.setViewOffset(1000 * aspect, 1000, (ox * 1000 * aspect) / 2, (-oy * 1000) / 2, 1000 * aspect, 1000);
+  camera.updateProjectionMatrix();
+  return {
+    heroHeight: (h.y1 - h.y0) / 2,
+    heroWidth: (h.x1 - h.x0) / 2,
+    binding: (h.x1 - h.x0) / 2 / fill.width > (h.y1 - h.y0) / 2 / fill.height ? 'width' : 'height',
+    pathLimited,
+    heroCenter: [(h.x0 + h.x1) / 2 - ox, (h.y0 + h.y1) / 2 - oy],
+    distance: d,
+  };
+}

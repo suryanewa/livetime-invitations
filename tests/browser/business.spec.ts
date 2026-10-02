@@ -137,8 +137,8 @@ test('The lit status (LED and tile) keeps its colour, reads by shape at phone si
   await guest(page);
   await page.getByRole('button', { name: /Motion/ }).click();
   expect((await state(page)).reducedMotion).toBe(true);
-  // Window and glass boxes as fractions of the square stage (fixed camera and bounds; they hold
-  // for the v1.3 perspective lens as for the v1.1 orthographic camera).
+  // Window and glass boxes as fractions of the square stage (fixed camera). v1.4: re-measured
+  // under the hero framing rule, which shows the badge and reader at 0.73× their v1.3 size.
   const measure = () => page.evaluate(async () => {
     const url = (window as any).__showcase.controller.captureStill(540, 1, 'image/png') as string;
     const img = new Image();
@@ -153,7 +153,7 @@ test('The lit status (LED and tile) keeps its colour, reads by shape at phone si
     const inBox = (x: number, y: number, b: number[]) => x >= b[0]! * width && x <= b[2]! * width && y >= b[1]! * height && y <= b[3]! * height;
     // v1.2.1: the LED bar at the top of the glass and the status tile on the lower glass (WIN),
     // the tile alone (TILE), and the reader's glass round them.
-    const WIN = [0.59, 0.5, 0.74, 0.84], TILE = [0.59, 0.7, 0.74, 0.84], GLASS = [0.52, 0.45, 0.87, 0.9];
+    const WIN = [0.55, 0.49, 0.645, 0.74], TILE = [0.55, 0.65, 0.645, 0.74], GLASS = [0.49, 0.43, 0.73, 0.77];
     const lit: number[][] = [];
     let hot = 0;
     let tx0 = Infinity, tx1 = -Infinity, ty0 = Infinity, ty1 = -Infinity;
@@ -199,9 +199,10 @@ test('The lit status (LED and tile) keeps its colour, reads by shape at phone si
   const decline = await measure();
 
   for (const [label, m] of [['accept', accept], ['decline', decline]] as const) {
-    // The tile is about 50 × 32 px on this 540 px still (v1.2's LED bar alone was 26 × 6).
+    // The tile is about 37 × 26 px on this 540 px still (v1.3: 50 × 32 before the v1.4 framing;
+    // v1.2's LED bar alone was 26 × 6).
     expect(m.count, label).toBeGreaterThan(600);
-    expect(m.tile.w, label).toBeGreaterThan(34);
+    expect(m.tile.w, label).toBeGreaterThan(30);
     expect(m.tile.h, label).toBeGreaterThan(20);
     expect(m.glyph, label).toBeGreaterThan(25);
     // No channel clips: the window reads as its token, not as mint or pink.
@@ -225,7 +226,9 @@ test('The card print keeps its colour through the scan hold: the laminate does n
   // Mean linear luminance of the cobalt print panel (light template): the largest strongly
   // blue region, eroded 2 px so edges and the strap never count.
   const panel = () => page.evaluate(async () => {
-    const url = (window as any).__showcase.controller.captureStill(540, 1, 'image/png') as string;
+    // v1.4: the hero framing shows the badge at 0.73× its v1.3 size, so the still is 736 px
+    // (540 / 0.734): the panel keeps the pixel count the saturation check was tuned on.
+    const url = (window as any).__showcase.controller.captureStill(736, 1, 'image/png') as string;
     const img = new Image();
     img.src = url;
     await img.decode();
@@ -308,9 +311,12 @@ test('The card print keeps its colour through the scan hold: the laminate does n
   // are the panel's saturation, which light alone barely changes, and a luminance ceiling well
   // below the old failure. (v1.2 checked luminance within 1.25x of rest; with the card pressed
   // higher on a smaller reader the honest lighting difference alone is 1.47x.)
+  // v1.4: from the hero framing's camera distance the pressed holder's laminate catches the
+  // room's window a little more (measured 0.877–0.882 of the rest saturation and up to 1.69× its
+  // luminance; v1.3 0.916–0.922 and 1.52×); the v1.1 failure (pale lavender, 2.8×) stays far out.
   for (const p of hold) {
-    expect(p.sat / rest.sat).toBeGreaterThanOrEqual(0.88);
-    expect(p.lum / rest.lum).toBeLessThanOrEqual(1.6);
+    expect(p.sat / rest.sat).toBeGreaterThanOrEqual(0.86);
+    expect(p.lum / rest.lum).toBeLessThanOrEqual(1.8);
   }
 });
 

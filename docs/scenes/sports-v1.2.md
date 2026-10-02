@@ -10,6 +10,35 @@ frame), `models/sportsContract.ts` (net pose, recoil pivots), `models/sports.ts`
 recoil rig, leather grade), `scripts/masters/recipes/sports.ts` (rim hinge pivot, cream albedo),
 `tests/sports.test.ts`.
 
+## v1.4 scale (2026-10-02)
+
+Owner: *"the ball is small beside a giant hoop"* (brief: `docs/scale-fullscreen-brief.md`, Scale part). One world
+scale, 1 unit = 20 cm (`models/worldScale.ts`).
+
+- **Reference size: a mini (size 3) basketball, 18 cm.** The hoop master is a wall-mount mini hoop, and the brief's
+  test holds: with the rim's inner diameter at 1.6 × the ball (28.8 cm), its board is 58.6 × 46 cm, a real mini hoop's
+  proportions (a full-size 24 cm ball would need a 45.7 cm rim, 1.9 ×, and the master's board would then be 78 cm:
+  not this hoop). The ball-to-hoop ratio is the master's own and unchanged; on the code-authored stand the rim stands
+  62 cm above the floor.
+- **How it is applied: `SPORTS_WORLD_SCALE` = 1.8** (the ball's 0.25 scene units are 9 cm). The whole scene scales
+  together, so `sports_root` carries the scale at runtime (`src/scenes/sports/index.ts`) and every contract number,
+  arc, net profile, pivot, clearance and test stays in scene units: the made arc, the airball's miss offset, the net
+  bulge and the recoil are geometrically the same, the beats and durations unchanged (the scene's gravity is 1.8× in
+  world units; nothing reads it in world units). The GLB is unchanged. The stage carries the bounds, frame points and
+  hero silhouette into the world through the root, and the set (cove, key throw, shadow camera range and normal bias)
+  scales with it (`src/render/rig.ts` setWall), so the backdrop and the shadows keep their v1.3 relation to the scene.
+- **Framing (shared rule, `src/render/framing.ts`).** Same 18° lens, azimuth 20° and elevation 15° as every scene. The
+  camera distance is set by the **hero**, the objects on stage at guest-ready, measured as their real silhouette
+  (`silhouettePoints`, contact shadows and shadow proxies excluded): its height fills 60 % of the frame, or its width
+  75 % when it is wide and low. Across, the hero sits centred unless a path needs the room; up and down, the frame
+  centres the whole action; every authored path (`framePoints`) stays 4 % inside the edges. Checked in
+  `tests/framing.test.ts` and on the real silhouettes in `tests/browser/framing.spec.ts`.
+- **Measured hero (the ball on the floor, the hoop on its stand), 1:1 stage:** v1.3 0.841 of the height, 0.745 of the
+  width; v1.4 **0.600 / 0.528**, held by its height, not path-limited (the airball and the made shot stay inside the
+  4 % clearance). The cove at the frame's centre measures `#D5D2CD`.
+- **Known gaps:** the ball still reads small beside the hoop: that is the real ratio of a mini ball to a mini hoop on a
+  stand. A wall-mount hoop at a real mini height would make it smaller still.
+
 ## v1.3: the studio pass (2026-10-01)
 
 - **Grade removed.** `LEATHER_GRADE`, the load-time colour multiply (0.78, 1.25, 3) that pulled the orange towards

@@ -61,6 +61,14 @@ export const MASTER_CANDLES = [
  * at r 0.838, 0.776 tall (v1.1 1.0, 0.70).
  */
 export const CAKE_SCALE = 1.1;
+/**
+ * World units per Birthday scene unit (v1.4, models/worldScale.ts): 1. Birthday was already
+ * authored at the world scale: the cake on its stand (stand foot to the top tier's rosettes,
+ * 1.5876 scan × 1.1 = 1.746) is 34.9 cm (reference 35 cm), the bottom tier 27.7 cm across its
+ * piping, the stand 33.5 cm, a candle 4.8 cm. The bin is sized against it: the cake with candles
+ * (23.6 cm) sinks below the 26 cm rim.
+ */
+export const BIRTHDAY_WORLD_SCALE = 1;
 
 /**
  * The master turns 5° about y so the six candles spread evenly across the frame (screen x at

@@ -327,14 +327,15 @@ export default defineRig({
       objects: [key, bounce, skyFill, table, wall],
       shadowKey: key,
       backdrop: table,
-      setWall(z = DEFAULT_WALL_Z) {
-        if (z === wallZ) return;
-        wallZ = z;
+      setWall(z = DEFAULT_WALL_Z, scale = 1) {
+        // v1.4: this comparison rig keeps a world-size desk and wall; only the wall's depth follows.
+        if (z * scale === wallZ) return;
+        wallZ = z * scale;
         place();
       },
-      setContent(bounds: Box3) {
+      setContent(bounds: Box3, scale = 1) {
         // Keep the window at the same angle and distance from whatever the scene's centre is.
-        key.position.copy(target.position).addScaledVector(keyDir, K.distance);
+        key.position.copy(target.position).addScaledVector(keyDir, K.distance * scale);
         const size = bounds.getSize(new Vector3());
         // The window's light pool: the whole subject (its motion bounds) sits in the full beam, and
         // the light falls off broadly beyond it across the desk and the wall, as daylight does a
