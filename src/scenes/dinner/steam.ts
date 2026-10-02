@@ -34,9 +34,12 @@ import { newFrame, REVEAL_DIR, sampleSequence } from './sequences.ts';
  *  5. Landing. When the dome is set down, its trailing side comes down last and squeezes the air
  *     still under it out across the table: a small, low puff at the rim that spreads and fades.
  *  6. Column. The uncovered plate's hot, moist boundary layer rises from the well from the moment
- *     the rim clears it, strongest then and thinning from the bottom up (`plumeSource`), as a few
- *     uneven plumes (one carrying dense filaments) that curl as they rise and are gone by
- *     STEAM_END.
+ *     the rim clears it, strongest then and thinning from the bottom up (`plumeSource`): a broad,
+ *     soft sheet about 70 % of the well's width that breaks into irregular wisps as it rises, then
+ *     a thin tail as the plate goes on steaming (visible to ≈ 4 s), gone by STEAM_END.
+ *  7. A change of mind. The cover going back on stops the release (the column's source dies away
+ *     over `PLUME.cut` and its base detaches and rises off); what is already out rises on and
+ *     disperses over its own life (`steamEndAfter`), beside any steam a new reveal releases.
  *
  * Units: Dinner scene units (1 su = 16.9 cm, DINNER_WORLD_SCALE); the plate is at the origin
  * (the reveal never moves it). Physical speeds are noted in cm/s where they were chosen.
@@ -374,6 +377,17 @@ export const PLUME = {
    * starting front is a rounded, soft cap (≈ 4 cm of gradient at its rise), never an edge.
    */
   ramp: 0.22,
+  /**
+   * After the first rush (`decay`), the warm plate goes on steaming thinly for several seconds:
+   * this share of the source decays over `tailDecay` (s), visible to about 4 s.
+   */
+  tail: 0.3,
+  tailDecay: 1.5,
+  /**
+   * A change of mind: the source dies away over this (s) once the cover starts back down, so the
+   * detached column's base is a soft gradient (≈ 3 cm at its rise), never an edge.
+   */
+  cut: 0.15,
   /** Visible steam evaporates as it rises: density e^(−h/evaporate) (≈ 14 cm). */
   evaporate: 0.85,
   /**
@@ -401,7 +415,7 @@ export function plumeDrift(tau: number): number {
   return PLUME.drift * Math.exp(-Math.max(0, tau - 0.5) / PLUME.driftDecay) * smooth(0.25, 0.5, tau);
 }
 
-export const PLUME_COUNT = 4;
+export const PLUME_COUNT = 3;
 
 let plumeCache: Plume[] | null = null;
 /** The column's plumes (deterministic; built once). */
@@ -414,33 +428,26 @@ export function buildPlumes(): Plume[] {
   const rnd = mulberry32(0xc01_5ea);
   const range = (a: number, b: number) => a + (b - a) * rnd();
   const plumes: Plume[] = [];
-  // A few uneven plumes, not a comb: one dominant, the others narrower and weaker, at uneven
-  // spacing over the front half of the well (so the visible column stands over the plate, clear
-  // of the cloche set down behind-left).
-  // The dominant plume carries dense, nearly white filaments (steam reads by its filament edges);
-  // the others are fainter veils beside it.
-  const shares = [2.2, 0.5, 0.3, 0.2];
-  const widths = [0.06, 0.05, 0.04, 0.035];
-  // The dominant plume stands right of the well's middle on screen (away from the cloche set down
-  // to the left); the others scatter round it.
+  // A broad, soft sheet over the whole well, as steam leaves a warm plate (not a strand of
+  // incense): three overlapping sheets side by side across the camera's view, together about 70 %
+  // of the well's width at the base, that break into many irregular wisps as they rise (the
+  // wisps are the fragment shader's).
   const right = new Vector3(Math.cos((20 * Math.PI) / 180), 0, -Math.sin((20 * Math.PI) / 180));
+  const offsets = [-0.19, 0.0, 0.19];
   for (let i = 0; i < PLUME_COUNT; i++) {
-    const r = range(0.04, 0.24), a = RAISED + range(-1.1, 1.1);
-    const base = i === 0 ? right.clone().multiplyScalar(range(0.14, 0.18)).add(new Vector3(0, 0, range(0.02, 0.06)))
-      : new Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
-    const rb = Math.hypot(base.x, base.z);
-    base.y = plateTop(rb);
+    const base = right.clone().multiplyScalar(offsets[i]! + range(-0.03, 0.03)).add(new Vector3(0, 0, range(0.0, 0.08)));
+    base.y = plateTop(Math.hypot(base.x, base.z));
     const d1 = range(0, Math.PI * 2), d2 = d1 + range(1.2, 1.9), d3 = range(0, Math.PI * 2);
     plumes.push({
       base,
-      // The rim clears the well between 0.24 and 0.34 s (it lifts off at ≈ 0.22 s).
+      // The rim clears the well between 0.22 and 0.34 s (it lifts off at ≈ 0.22 s).
       t0: range(0.22, 0.3),
       decay: range(0.45, 0.6),
       // 17–21 cm/s: the first rush off a hot dish (a thermal plume, w ≈ 0.1–0.3 m/s).
-      rise: range(1.0, 1.25),
-      strength: range(1.3, 1.45) * shares[i]!,
-      width: widths[i]! * range(0.85, 1.15),
-      spread: range(0.15, 0.24),
+      rise: range(1.0, 1.2),
+      strength: range(1.9, 2.3),
+      width: range(0.15, 0.19),
+      spread: range(0.12, 0.18),
       sway: range(0.04, 0.06),
       dir1: new Vector3(Math.cos(d1), 0, Math.sin(d1)),
       dir2: new Vector3(Math.cos(d2), 0, Math.sin(d2)),
@@ -451,11 +458,19 @@ export function buildPlumes(): Plume[] {
   return plumes;
 }
 
-/** Source strength of a plume at τ (0 before it starts): full at once, then thinning. */
-export function plumeSource(p: Plume, tau: number): number {
+/**
+ * Source strength of a plume at emission time τ (0 before it starts): full at once, then thinning
+ * to a tail. A release window [emitStart, emitEnd] (a change of mind): nothing before emitStart,
+ * ramped up from it like a first release (a reveal resumed part-way), dying away over PLUME.cut
+ * after emitEnd (the cover going back on).
+ */
+export function plumeSource(p: Plume, tau: number, emitStart = -Infinity, emitEnd = Infinity): number {
   const a = tau - p.t0;
-  if (a <= 0) return 0;
-  return smooth(0, PLUME.ramp, a) * Math.exp(-Math.max(0, a - PLUME.ramp) / p.decay);
+  if (a <= 0 || tau <= emitStart || tau >= emitEnd + PLUME.cut) return 0;
+  const k = Math.max(0, a - PLUME.ramp);
+  return smooth(0, PLUME.ramp, a) * ((1 - PLUME.tail) * Math.exp(-k / p.decay) + PLUME.tail * Math.exp(-k / PLUME.tailDecay))
+    * (emitStart > -Infinity ? smooth(emitStart, emitStart + PLUME.ramp, tau) : 1)
+    * (emitEnd < Infinity ? 1 - smooth(emitEnd, emitEnd + PLUME.cut, tau) : 1);
 }
 
 /**
@@ -463,10 +478,10 @@ export function plumeSource(p: Plume, tau: number): number {
  * source as it was h/rise ago, forming a little off the surface, thinned by evaporation and by
  * the sheet's widening, faded out at the ribbon's top. The shader computes the same.
  */
-export function plumeDensity(p: Plume, h: number, tau: number): number {
+export function plumeDensity(p: Plume, h: number, tau: number, emitStart = -Infinity, emitEnd = Infinity): number {
   if (h < 0) return 0;
   const w = p.width + p.spread * h;
-  return p.strength * plumeSource(p, tau - h / p.rise) * smooth(0, PLUME.base, h) * Math.exp(-h / PLUME.evaporate) * Math.sqrt(p.width / w)
+  return p.strength * plumeSource(p, tau - h / p.rise, emitStart, emitEnd) * smooth(0, PLUME.base, h) * Math.exp(-h / PLUME.evaporate) * Math.sqrt(p.width / w)
     * (1 - smooth(PLUME.length - PLUME.top, PLUME.length, h));
 }
 
@@ -489,8 +504,6 @@ export function plumeCenter(p: Plume, h: number, tau: number, out: Vector3): Vec
  * clean plate with no steam; { tau, fade } freezes the column at τ, scaled by `fade`.
  */
 export const STEAM_REST: { tau: number; fade: number } | null = null;
-/** A change of mind fades the steam already released over this time (s) as the cover returns. */
-export const STEAM_CHANGE_FADE = 0.25;
 
 /**
  * When the steam has gone (s of τ): the last puff, and the column once every plume's density has
@@ -510,6 +523,26 @@ export const STEAM_END = (() => {
   }
   return Math.ceil(end * 100) / 100;
 })();
+
+/**
+ * When steam whose release stopped at `emitEnd` (a change of mind) has gone (s of τ, ≤ STEAM_END):
+ * its last puff, and the column once its density is below 1 % everywhere (as STEAM_END; coarse
+ * steps, a few thousand evaluations, so it costs nothing at the cut).
+ */
+export function steamEndAfter(emitEnd: number, emitStart = -Infinity): number {
+  let end = emitEnd;
+  for (const p of steamPuffs()) if (p.t0 >= emitStart && p.t0 <= emitEnd) end = Math.max(end, p.t0 + p.life);
+  for (const p of steamPlumes()) {
+    let t = emitEnd + PLUME.cut;
+    for (; t < STEAM_END; t += 0.05) {
+      let max = 0;
+      for (let h = 0; h <= PLUME.length && max < 0.01; h += 0.04) max = Math.max(max, plumeDensity(p, h, t, emitStart, emitEnd));
+      if (max < 0.01) break;
+    }
+    end = Math.max(end, t);
+  }
+  return Math.min(STEAM_END, Math.ceil(end * 100) / 100);
+}
 
 export interface PuffState {
   center: Vector3;
