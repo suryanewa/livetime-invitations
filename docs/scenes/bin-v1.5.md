@@ -170,6 +170,12 @@ it changes the shared camera, the posters and the fullscreen backdrops): a **dec
 hero without the bin paths at rest (Dinner 0.70 of the width, Birthday 0.60), and ease the camera back while the bin
 slides in (0–0.3 s) to the framing above.
 
+**Done in the framing pass (spec revision #39, `docs/style-reference.md` "v1.5 decline pull-back").** At rest the
+heroes are back on the rule (Birthday 0.600 of the height, Dinner 0.696 of the width at 1:1); the camera dollies back over
+0–0.65 s of the decline and the declined pose keeps the framing above. The bin now enters after the camera has started
+(Birthday 0.12 s later, settled at 0.36 s; Dinner 0.16 s later, settled at 0.50 s, its flaps open by 0.56 s): at the
+rest framing it is too big to sweep in at once.
+
 ## Review
 
 Three adversarial reviews of the rendered frames (production camera, close-ups at the same lens; scored "as real as

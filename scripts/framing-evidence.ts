@@ -43,13 +43,14 @@ async function open(page: Page, scene: string, clock = true) {
   return { call, tick, ready };
 }
 
-const rowsOf = (dir: string) => readdirSync(dir).filter((f) => f.endsWith('.png')).length;
+const rowsOf = (dir: string) => readdirSync(dir).filter((f) => /^f\d+\.png$/.test(f)).length;
 
 /** A tiled contact sheet of every `step`-th frame (ffmpeg), and an mp4 of the strip. */
 function encode(dir: string, name: string, step: number, cols: number) {
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(1000 / FRAME_MS), '-i', join(dir, 'f%04d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-r', '60', join(out, `${name}.mp4`)]);
-  // Row-major, every `step`-th frame (step × 16 ms apart), named so: <name>-sheet-every<step×16>ms.png.
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', join(dir, 'f%04d.png'), '-vf', `select='not(mod(n\\,${step}))',scale=216:-1,tile=${cols}x${Math.ceil(rowsOf(dir) / step / cols)}:padding=4:color=white`, '-frames:v', '1', '-update', '1', join(out, `${name}-sheet-every${step * FRAME_MS}ms.png`)]);
+  // Row-major, every `step`-th frame (step × 16 ms apart), named so: <name>-sheet-every<step×16>ms.webp.
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', join(dir, 'f%04d.png'), '-vf', `select='not(mod(n\\,${step}))',scale=216:-1,tile=${cols}x${Math.ceil(rowsOf(dir) / step / cols)}:padding=4:color=white`, '-frames:v', '1', '-update', '1', join(dir, 'sheet.png')]);
+  execFileSync('cwebp', ['-quiet', '-q', '82', join(dir, 'sheet.png'), '-o', join(out, `${name}-sheet-every${step * FRAME_MS}ms.webp`)]);
 }
 
 async function strips() {
@@ -72,7 +73,8 @@ async function strips() {
     await call('(s) => s.controller.setMode("guest")');
     await tick(300);
     const fits = await call<any>('(s) => { const f = s.controller.framing(1); return { rest: f.rest, decline: f.decline }; }');
-    const dir = join(out, `frames-${c.name}`);
+    // Raw frames stay out of the repository (outputs/ is git-ignored); the sheets and clips go to `out`.
+    const dir = join(import.meta.dirname, '..', 'outputs', 'framing', `frames-${c.name}`);
     await mkdir(dir, { recursive: true });
     const first = c.change?.[1] === 'decline' ? 'accept' : 'decline';
     await call(`(s) => s.controller.chooseResponse("${first}")`);
@@ -107,11 +109,14 @@ async function strips() {
 
 /** Canonical stills: square (captureStill) and the fullscreen showcase, live and as the static poster. */
 async function stills() {
+  // PNGs in outputs/ (git-ignored), WebP copies in `out`.
+  const raw = join(import.meta.dirname, '..', 'outputs', 'framing', 'stills');
+  await mkdir(raw, { recursive: true });
   const poses: [string, string][] = [
     ['host-ready', '(s) => { s.controller.setMode("host"); s.controller.resetVisual(); }'],
     ['guest-ready', '(s) => s.controller.setMode("guest")'],
-    ['accepted', '(s) => s.controller.chooseResponse("accept")'],
-    ['declined', '(s) => s.controller.chooseResponse("decline")'],
+    ['accepted', '(s) => { s.controller.setMode("guest"); s.controller.chooseResponse("accept"); }'],
+    ['declined', '(s) => { s.controller.setMode("guest"); s.controller.chooseResponse("decline"); }'],
   ];
   const report: string[] = [];
   for (const scene of ['birthday', 'dinner', 'party', 'sports', 'business']) {
@@ -123,7 +128,7 @@ async function stills() {
       for (const [pose, action] of poses) {
         await call(action);
         await tick(400);
-        await save(join(out, `still-${scene}-${pose}.png`), await call<string>('(s) => s.controller.captureStill(720, 1)'));
+        await save(join(raw, `still-${scene}-${pose}.png`), await call<string>('(s) => s.controller.captureStill(720, 1)'));
         const pull = await call<number>('(s) => s.controller.framing().pull');
         report.push(`${scene} ${pose}: pull ${pull}`);
       }
@@ -137,14 +142,27 @@ async function stills() {
         const { call } = await open(page, scene, false);
         await call(action);
         await page.waitForTimeout(500);
-        await page.screenshot({ path: join(out, `fullscreen-${label}-${scene}-${pose}-live.png`) });
+        await page.screenshot({ path: join(raw, `fullscreen-${label}-${scene}-${pose}-live.png`) });
         await call('(s) => s.controller.setQualityTier("static")');
         await page.waitForFunction(() => {
           const img = document.querySelector('.lt-stage__poster') as HTMLImageElement | null;
           return !!img && img.complete && img.naturalWidth > 0 && !img.classList.contains('is-hidden');
         });
         await page.waitForTimeout(400);
-        await page.screenshot({ path: join(out, `fullscreen-${label}-${scene}-${pose}-poster.png`) });
+        await page.screenshot({ path: join(raw, `fullscreen-${label}-${scene}-${pose}-poster.png`) });
+        // The melt: the backdrop alone (poster hidden), and as a control the declined poster over the
+        // rest backdrop; scripts measure the poster's feathered border band against the backdrop.
+        const frame = await call<{ x: number; y: number; size: number }>('(s) => s.controller.getFrame()');
+        await writeFile(join(raw, `fullscreen-${label}-${scene}-${pose}-frame.json`), JSON.stringify({ ...frame, dpr: dsf }));
+        await page.addStyleTag({ content: '.lt-stage__poster { visibility: hidden !important; }' });
+        await page.screenshot({ path: join(raw, `fullscreen-${label}-${scene}-${pose}-backdrop.png`) });
+        await page.evaluate(() => document.querySelectorAll('style').forEach((el) => { if (el.textContent?.includes('visibility: hidden !important')) el.remove(); }));
+        if (pose === 'declined') {
+          const restUrl = await page.evaluate(() => (window as any).__showcase.controller && document.querySelector('.lt-stage__backdrop') && getComputedStyle(document.querySelector('.lt-stage__backdrop')!).backgroundImage.replace('backdrop-declined', 'backdrop'));
+          await page.addStyleTag({ content: `.lt-stage__backdrop { background-image: ${restUrl} !important; }` });
+          await page.waitForTimeout(300);
+          await page.screenshot({ path: join(raw, `fullscreen-${label}-${scene}-${pose}-control.png`) });
+        }
         const bg = await page.locator('.lt-stage__backdrop').evaluate((el) => getComputedStyle(el).backgroundImage);
         const src = await page.locator('.lt-stage__poster').getAttribute('src');
         report.push(`${label} ${scene} ${pose}: poster ${src?.split('/').pop()?.split('?')[0]} over ${bg.match(/backdrop[^"/)]*\.webp/)?.[0]}`);
@@ -152,6 +170,7 @@ async function stills() {
       }
     }
   }
+  for (const f of readdirSync(raw).filter((x) => x.endsWith('.png'))) execFileSync('cwebp', ['-quiet', '-q', '86', join(raw, f), '-o', join(out, f.replace(/\.png$/, '.webp'))]);
   await writeFile(join(out, 'stills.txt'), report.join('\n') + '\n');
   console.log(report.join('\n'));
 }
