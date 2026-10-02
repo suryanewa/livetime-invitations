@@ -1,9 +1,9 @@
 import {
-  Box3, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, type Material, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, Vector3,
-  type WebGLRenderer,
+  Box3, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, type Material, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, Vector2,
+  Vector3, Vector4, type WebGLRenderer,
 } from 'three';
 import type { MaterialLibrary } from '../src/render/materials.ts';
-import { blackbodyAt, createPuffMaterial, createSmokeMaterial, type FlameUniforms, sootRadiance } from '../src/render/flame.ts';
+import { blackbodyAt, createPuffMaterial, createSmokeMaterial, FLAME_GLARE, type FlameUniforms, sootRadiance } from '../src/render/flame.ts';
 import {
   FLAME_REST, flameScale, type FlameState, type Flicker, newSmokePuffs, sootFormed, newSmokeStrand, PUFF_COUNT, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokePuffs, type SmokePuffs, smokeStrand,
   type SmokeStrand,
@@ -137,6 +137,10 @@ function wickMaterial(lib: MaterialLibrary, yTop: number): { material: MeshStand
 }
 
 const inv = new Matrix4();
+const buffer = new Vector2();
+const centroid = new Vector3();
+const view = new Vector3();
+const clip = new Vector4();
 /** Wick ember radiance scale (on soot's 1,900 K = 1 scale). */
 const EMBER_GAIN = 260;
 
@@ -190,13 +194,31 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   quad.frustumCulled = false;
   const u = material.uniforms;
   u.uWidest.value = FLAME_REST.widest;
-  quad.onBeforeRender = (_r: WebGLRenderer, _s, camera) => {
+  quad.onBeforeRender = (renderer: WebGLRenderer, _s, camera) => {
     inv.copy(quad.matrixWorld).invert();
     u.uCam.value.setFromMatrixPosition(camera.matrixWorld).applyMatrix4(inv);
     u.uRight.value.setFromMatrixColumn(camera.matrixWorld, 0).transformDirection(inv);
     u.uUp.value.setFromMatrixColumn(camera.matrixWorld, 1).transformDirection(inv);
     // In front of the flame (towards the camera) so the wick inside it never depth-clips the quad.
     u.uCenter.value.copy(u.uCam.value).sub(u.uMid.value).normalize().multiplyScalar(u.uBoundR.value).add(u.uMid.value);
+    // The camera's glare (src/render/flame.ts FLAME_GLARE): the luminous centroid on screen, the
+    // flame's projected luminous area, the PSF in device pixels; the quad grows to hold the skirt.
+    renderer.getDrawingBufferSize(buffer);
+    const dpr = renderer.getPixelRatio();
+    centroid.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.45 * u.uShape.value[0]).applyMatrix4(quad.matrixWorld);
+    view.copy(centroid).applyMatrix4(camera.matrixWorldInverse);
+    clip.set(view.x, view.y, view.z, 1).applyMatrix4(camera.projectionMatrix);
+    const depth = Math.max(1e-4, -view.z);
+    const pxPerUnit = (buffer.y * camera.projectionMatrix.elements[5]!) / (2 * depth);
+    u.uScreenC.value.set((clip.x / clip.w * 0.5 + 0.5) * buffer.x, (clip.y / clip.w * 0.5 + 0.5) * buffer.y);
+    const s1 = FLAME_GLARE.sigma * dpr, s2 = FLAME_GLARE.skirt * dpr;
+    u.uPsf.value.set(s1, s2);
+    // Luminous area (teardrop ≈ 0.6 of its box) × its radiance on the film's scale (≈5) × the
+    // fraction the optics spread, over the bleed lobe's area: the PSF's peak, capped.
+    const area = 0.6 * (u.uShape.value[0] * pxPerUnit) * (2 * u.uShape.value[1] * pxPerUnit);
+    const flux = 5 * area * u.uState.value[2];
+    u.uPsfPeak.value = Math.min(FLAME_GLARE.cap * 5 * u.uState.value[2], (FLAME_GLARE.fraction * flux) / (2 * Math.PI * s1 * s1));
+    u.uHalf.value = Math.max(u.uHalf.value, (3.2 * s2) / pxPerUnit);
   };
   node.add(quad);
 

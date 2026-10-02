@@ -126,20 +126,51 @@ The wave: lift-offs 0.10–0.23 s, out 0.24–0.38 s, nearest the mouth first (f
 - **Interruption** (accept → decline): `settle()` clears the smoke; the blend through guest-ready
   relights the flames, as before.
 
-## The flame-state API (for the melt, #6)
+## The flame-state API and the melt (#6), integrated with the cake branch
 
 `src/scenes/birthday/fire.ts`:
 
 - `flameState(i, t, sequence, out?) → FlameState`: `{ lit, height, width, tilt, dirX, dirZ, bend,
   neck, lift, cut, cool, intensity, out }`. `height`/`width` are relative to the steady flame
   (1 = 13 mm / 5 mm); `intensity` is the radiant output (0–1); `out` once nothing burns.
-- `litTime(i, t, sequence)`: ∫ intensity dt from the start of the sequence (seconds of
-  steady-flame-equivalent burning). Guest-ready adds 1 per second on the live clock.
+- `burnRate(i, t, sequence)`: how hard the flame heats its wax, `intensity × min(height, 1)` (a
+  flame stretched by the breath is pushed off the wax, so never more than its rest size).
 - `flicker(i, liveTime, gain, out)`: the live modulation (`height` ±3 %).
 - `sootFormed(lit)`: how much of a growing flame's yellow (and light) has formed.
 
-Suggested melt rate: ∝ `intensity × height` (flicker included or not); everything composes in
-`sequences.ts`/`index.ts` as pure functions of time.
+**One lit-time source** (merge of `v1.5/birthday-cake`, 0fee10c): the cake's `sequences.ts`
+`flameScaleOf(sequence, i, t)` is now `burnRate`, so its C¹ lit-time tables (`litTime`,
+`GUEST_READY_LIT`, `ACCEPTED_LIT`, `DECLINED_LIT`) integrate the fire's real ignition, breath and
+per-candle extinction; `fire.ts` keeps no lit time of its own. At guest-ready the live lit time grows
+at the steady flame's rate of 1 (`simulate`), capped at `MELT_CAP`; `settling()` is the OR of the
+flames burning, the smoke tail and the melt still forming; `settle()` resets the flicker gain, the
+smoke tail and the live lit time. The melt's `candleShortening` lowers the wick and the flame node
+(cake), and the fire rig follows it (`FlameRig.shorten`): the flame's base, its ember, its light on
+the cake and the smoke's source all go down with the wick. The flame node's counter-rotation against
+each candle's seeded lean (cake) is kept; the fire rig converts candle space into the node's frame
+through its matrix and takes world up and the breath's direction through world quaternions, so the
+flame stands along world up either way. The flames' light is chained after the cake's own shader
+patches on every cake material, each candle's own melting wax included.
+
+**The GLB** (`pnpm models birthday`, deterministic: two exports, SHA-1 391e2de2…): the v1.1 lathe
+flame is gone (`flame_NN_mesh` dropped from the builder and the contract; `flame_NN` is an empty
+anchor at `CANDLE.flameBase`). The real flame's dimensions now live in the contract
+(`models/birthdayContract.ts` `FLAME`, `FLAME_TOP` = 14 mm above the wax), and `fire.ts`'s
+`FLAME_REST` reads them; the motion bounds and frame points use the real flame top.
+
+## Legibility at the showcase's sizes (integration review)
+
+At its real size the flame is ≈8×24 device px on a laptop (1280×720 @2×) and ≈7×20 on a phone
+(390×844 @3×): judged honestly, without help the six read as warm points on candles, not clearly as
+a lit cake at a glance. Enlarging the flame would be dishonest; what a camera actually does is.
+Glare (lens and sensor point-spread) is a property of the camera, fixed in pixels, not in
+millimetres of flame, which is why a small candle flame in a photograph glows larger than it is.
+The flame shader adds a screen-space point-spread (σ 3 CSS px bleed, 9 px skirt) carrying 5 % of
+each flame's on-screen flux (luminous area × radiance), centred on its luminous centroid; the
+peak is capped at 0.6× the flame's radiance, so a large close-up flame shows no blob (the
+object-space halo, 1.7 flame radii, still frames it there). With it the flames read as glowing
+lights at a glance on laptop, desktop and phone (`legibility-real-sizes-before-after-glare.webp`,
+`showcase-guest-ready-*.webp`). Decision: **no size bump**; the flame stays 13 mm.
 
 ## Framing
 
@@ -147,8 +178,8 @@ The hero is measured from the real silhouettes, the fire's quads and ribbons exc
 steady flame's envelope. Without the 4.5 cm flames the hero is shorter, so at 1:1 the cake is now
 0.471 of the width (v1.4: 0.439), held by its height at 0.600; at 3:4 the bin's path slides it 0.19
 right of centre (was 0.12). `tests/browser/framing.spec.ts` allows 0.21 for Birthday at 3:4, with
-the reason. `birthdayBounds`/`birthdayFramePoints` still use the GLB placeholder's `FLAME_TOP`
-(conservative; not binding).
+the reason. `birthdayBounds`/`birthdayFramePoints` use the real `FLAME_TOP` (contract) since the
+integration.
 
 ## Cost (M2 Pro, Chrome, 1170² frame, each frame waited on with a 1-pixel readPixels)
 
@@ -164,7 +195,10 @@ Lit (perpetual) ≈0.35 ms; worst case (during the smoke) ≈0.85 ms, under the 
 
 ## Verification
 
-- `pnpm typecheck`; `pnpm test`: 297 unit tests (24 files), `tests/birthdayFire.test.ts` new (15): flame size against the paper, 10–12 Hz flicker and exact rest, Planck dimming, `litTime`,
+- After the integration with the cake branch: `pnpm typecheck`; `pnpm test` 307 (24 files);
+  `pnpm test:browser` 88. New since: the melt lowers the flame base, ember and light with the wick
+  and the flame stands along world up on a leaning candle; the burn rate the melt reads.
+- Before it: `pnpm test` 297 (24 files), `tests/birthdayFire.test.ts` new (15): flame size against the paper, 10–12 Hz flicker and exact rest, Planck dimming, `litTime`,
   plume speed 0.25–0.55 m/s at 3–10 cm, smoke from the wick at lift-off and gone by `SMOKE.end`, a
   straight laminar stem (< 1 mm off its chord below 3 cm) under waves above, determinism, the puff
   riding the flame and moving < 3 mm per ms, the ember, the breath strong enough everywhere, and the
@@ -181,8 +215,6 @@ Lit (perpetual) ≈0.35 ms; worst case (during the smoke) ≈0.85 ms, under the 
 
 ## Known gaps
 
-- The GLB still carries the v1.1 lathe flame (`flame_NN_mesh`, `FLAME_DRAW`); the runtime drops it.
-  The next `pnpm models birthday` (cake owner) can drop it from `models/birthdayParts.ts`.
 - The tooling cakes (`models/cake.ts`, study and lookdev) keep the v1.1 view-dependent flame
   (`mat_flame_outer`); the product uses `mat_flame`.
 - No smoke on decline (snuffed flames do smoke, but the cake is carried into the bin at once).

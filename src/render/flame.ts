@@ -1,4 +1,4 @@
-import { AddEquation, Color, CustomBlending, DoubleSide, NormalBlending, OneFactor, OneMinusSrcColorFactor, ShaderMaterial, Vector3 } from 'three';
+import { AddEquation, Color, CustomBlending, DoubleSide, NormalBlending, OneFactor, OneMinusSrcColorFactor, ShaderMaterial, Vector2, Vector3 } from 'three';
 
 /**
  * Candle flame and smoke shaders (v1.5, Birthday #4). The physics and choreography live in
@@ -111,12 +111,25 @@ export interface FlameUniforms {
   uGlow: { value: number };
   uBB: { value: Vector3[] };
   uExposure: { value: number };
+  /** Screen-space glare: the luminous centroid in drawing-buffer pixels, the PSF's σ (px), the glow's peak. */
+  uScreenC: { value: Vector2 };
+  uPsf: { value: Vector2 };
+  uPsfPeak: { value: number };
 }
 
 /** Emission scale: the steady flame's luminous core integrates to ≈5 (three stops over white). */
 export const FLAME_GAIN = 480;
 /** Veiling-glare halo strength (fraction of the 1,900 K soot's radiance). */
 export const FLAME_GLOW = 0.05;
+
+/**
+ * The camera's glare on a flame, in screen space (CSS px): a point-spread of σ 3 px (bleed) with a
+ * 9 px skirt, carrying FLAME_GLARE of the flame's on-screen flux (luminous area in px² × its
+ * radiance, ≈5 on the film's scale). A real lens and sensor spread a few per cent of a bright
+ * source's light this way; it is why a small candle flame in a photograph glows larger than it
+ * is. The peak is capped (FLAME_GLARE_CAP × its radiance) so a close-up's large flame gets no blob.
+ */
+export const FLAME_GLARE = { sigma: 3, skirt: 9, fraction: 0.05, cap: 0.6 } as const;
 
 export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: FlameUniforms } {
   const uniforms: FlameUniforms = {
@@ -141,6 +154,9 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
     uGlow: { value: FLAME_GLOW },
     uBB: { value: bbTable() },
     uExposure: { value: 1 },
+    uScreenC: { value: new Vector2(-1e4, -1e4) },
+    uPsf: { value: new Vector2(6, 18) },
+    uPsfPeak: { value: 0 },
   };
   const m = new ShaderMaterial({
     name,
@@ -177,6 +193,9 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
       uniform float uGlow;
       uniform vec3 uBB[BB_N];
       uniform float uExposure;
+      uniform vec2 uScreenC;
+      uniform vec2 uPsf;
+      uniform float uPsfPeak;
       varying vec3 vLocal;
       varying vec2 vQuad;
 
@@ -279,6 +298,14 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
         float dc2 = max(dot(wc, wc) - ac * ac, 0.0);
         float sg = 1.7 * uShape.y;
         L += uGlow * intensity * exp(-0.5 * dc2 / (sg * sg)) * blackbody(1900.0 - 900.0 * uState.y);
+        // The camera's own glare (lens and sensor point-spread): its width is fixed on the sensor,
+        // in pixels, not in millimetres of flame; its energy a fixed fraction of the flame's flux
+        // on screen (uPsfPeak, set per frame from the projected size). Two lobes: the bleed and
+        // the faint skirt.
+        vec2 dp = gl_FragCoord.xy - uScreenC;
+        float r2 = dot(dp, dp);
+        float psf = 0.75 * exp(-0.5 * r2 / (uPsf.x * uPsf.x)) + 0.25 * (uPsf.x * uPsf.x) / (uPsf.y * uPsf.y) * exp(-0.5 * r2 / (uPsf.y * uPsf.y));
+        L += uPsfPeak * psf * blackbody(1900.0 - 900.0 * uState.y);
         L *= 1.0 - smoothstep(0.75, 1.0, max(abs(vQuad.x), abs(vQuad.y)));
         // A camera's response, per channel: an overexposed blackbody saturates red, then green,
         // through orange and yellow to a warm white (a hue-preserving tone curve turns it pink).

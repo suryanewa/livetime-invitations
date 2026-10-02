@@ -1,4 +1,4 @@
-import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS } from '../../../models/birthdayContract.ts';
+import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME } from '../../../models/birthdayContract.ts';
 import { CAMERA_ANGLES } from '../../render/camera.ts';
 import type { SequenceName } from '../../core/types.ts';
 
@@ -60,15 +60,16 @@ const smoother = (x: number) => { const t = clamp01(x); return Math.min(1, t * t
 export const POOL_Y = CANDLE.height;
 export const WICK_TIP_Y = CANDLE.wickBase + CANDLE.wickHeight;
 
+/** The steady flame (sizes from the contract, models/birthdayContract.ts FLAME). */
 export const FLAME_REST = {
   /** Bottom of the blue cup: 1 mm above the pool (the lowest ≈20 % of a thin wick is quenched). */
-  base: POOL_Y + 1.0 * MM,
+  base: FLAME.base,
   /** Base to tip: 13 mm, so the tip is 14 mm above the pool. */
-  length: 13 * MM,
+  length: FLAME.height,
   /** Half the widest width (5 mm). */
-  radius: 2.5 * MM,
+  radius: FLAME.radius,
   /** Where it is widest (at the wick top), as a fraction of its length. */
-  widest: (WICK_TIP_Y - (POOL_Y + 1.0 * MM)) / (13 * MM),
+  widest: (WICK_TIP_Y - FLAME.base) / FLAME.height,
 } as const;
 
 /** Visible flame top above the candle base at rest. */

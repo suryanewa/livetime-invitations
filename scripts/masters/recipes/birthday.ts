@@ -23,9 +23,9 @@ import { finishCake } from './birthdayFinish.ts';
  *   on exactly that base centre (CANDLE_SOCKETS), so lowering `candle_NN` lowers wax, wick and
  *   flame together into the master's own socket. Numbered left to right on screen.
  * - Wicks and flames: the master's `candle_wicks` and `candle_flames` cover all six candles in one
- *   mesh each (README pitfall 4) and are dropped; the builder authors a wick and the
- *   view-dependent shader flame (`mat_flame_outer`) at each candle's tip, drawn at 1.5× the master's
- *   flame (FLAME_DRAW, v1.2.1: at 1× the six flames were a few pixels at the shared framing).
+ *   mesh each (README pitfall 4) and are dropped; the builder authors a wick at each candle's tip
+ *   and the flame's anchor (`flame_NN`, no mesh since v1.5: the runtime draws the real 13 mm flame,
+ *   its light and its smoke there, models/birthdayFire.ts; v1.2.1's 1.5× lathe is gone).
  * - Joins: the 21 tier and piping meshes → one per material under cake_secondary (`frosting_*`);
  *   the candles are contract nodes and stay separate.
  * - Shadows: the joined frosting (≈200k triangles) skips the shadow pass; `cake_shadow_proxy`

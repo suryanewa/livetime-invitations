@@ -163,21 +163,28 @@ export const CANDLE_HOVER = 0.5;
 export const LEAN_MAX = (1.8 * Math.PI) / 180;
 
 /**
- * The GLB's placeholder flame (the v1.1 lathe at each wick): this many times the master flame's
- * height and width (v1.2.1). Since v1.5 the runtime drops it and draws the real flame instead
- * (src/scenes/birthday/fire.ts FLAME_REST: 13 mm from base to tip, 5 mm wide; models/birthdayFire.ts),
- * so FLAME/FLAME_TOP only size the exported placeholder and keep the motion bounds conservative.
+ * The candle flame (v1.5, edit #4): its real size, drawn by the fire rig (models/birthdayFire.ts,
+ * src/scenes/birthday/fire.ts), candle_NN space. Sunderland et al., Proc. Combust. Inst. 33 (2011):
+ * paraffin on a ≈1.1 mm wick, flame length from the pool Lf = 3.85·L^0.634 mm and width at the
+ * wick top Wf = 3.38·L^0.201 mm; the master's wick stands L = 4.2 mm above the candle top, so
+ * Lf ≈ 10 mm, Wf ≈ 4.5 mm, and a twisted birthday wick burns a little larger: the blue cup's
+ * bottom 1 mm above the pool (the lowest ≈20 % of a thin wick is quenched), 13 mm from there to
+ * the tip, 5 mm wide at the wick top. The master's own flame (0.152 tall, 3 cm) and v1.2's drawn
+ * 1.5× of it (4.5 cm) were 2–3× too large; the exported GLB carries no flame mesh, only the
+ * `flame_NN` anchor at CANDLE.flameBase.
  */
-export const FLAME_DRAW = { height: 1.5, width: 1.45 } as const;
-
-/** Drawn flame height and widest radius (candle_NN space). */
+const MM = 0.005;
 export const FLAME = {
-  height: CANDLE.flameHeight * FLAME_DRAW.height,
-  radius: CANDLE.flameRadius * FLAME_DRAW.width,
+  /** Bottom of the blue cup above the candle base. */
+  base: CANDLE.height + 1.0 * MM,
+  /** Base to tip. */
+  height: 13 * MM,
+  /** Half the widest width (5 mm). */
+  radius: 2.5 * MM,
 } as const;
 
-/** Flame top above the candle base at full size. */
-export const FLAME_TOP = CANDLE.flameBase + FLAME.height;
+/** Flame top above the candle base at full size (14 mm above the wax). */
+export const FLAME_TOP = FLAME.base + FLAME.height;
 
 /**
  * Complete motion bounds: stand, hovering candles, lit flames, the cake's arc over the rim and

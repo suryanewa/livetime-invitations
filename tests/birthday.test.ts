@@ -8,10 +8,10 @@ import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
 import { loadSharp } from '../scripts/masters/sharp.ts';
 import { PALETTE, recipe } from '../scripts/masters/recipes/birthday.ts';
 import {
-  BIN_POS, BIN_YAW, birthdayBounds, CAKE_RADIUS, CAKE_SCALE, CAKE_TOTAL_HEIGHT, CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME, FLAME_DRAW, FLAME_TOP, LEAN_MAX, MASTER,
+  BIN_POS, BIN_YAW, birthdayBounds, CAKE_RADIUS, CAKE_SCALE, CAKE_TOTAL_HEIGHT, CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME, FLAME_TOP, LEAN_MAX, MASTER,
   RIM_CLEARANCE, screenX, STAND, STAND_TOP,
 } from '../models/birthdayContract.ts';
-import { BIRTHDAY_GLB_NODES, buildBirthdayGeometry, FLAME_SIZE } from '../models/birthdayParts.ts';
+import { BIRTHDAY_GLB_NODES, buildBirthdayGeometry } from '../models/birthdayParts.ts';
 import { BIN, buildDisposalBin } from '../models/disposalBin.ts';
 import { BIN_SHADE } from '../models/birthday.ts';
 import {
@@ -488,7 +488,7 @@ describe('Birthday builder (code-authored candles)', () => {
   const lib = plainLibrary();
   const root = buildBirthdayGeometry({ lib });
 
-  it('puts each candle on its master socket with a wick and a flame at the tip', () => {
+  it('puts each candle on its master socket with a wick and the flame\'s anchor at the tip (no flame mesh)', () => {
     for (let i = 0; i < CANDLE_COUNT; i++) {
       const id = String(i + 1).padStart(2, '0');
       const candle = root.getObjectByName(`candle_${id}`)!;
@@ -497,25 +497,20 @@ describe('Birthday builder (code-authored candles)', () => {
       expect(candle.position.y).toBeCloseTo(CANDLE.seat, 9);
       const flame = candle.getObjectByName(`flame_${id}`)!;
       expect(flame.position.y).toBeCloseTo(CANDLE.flameBase, 9);
-      const fb = box(flame);
-      const cb = box(candle);
-      // The drawn flame: FLAME_DRAW × the master's (1.5 tall, 1.45 wide), lathe a quarter wider.
-      expect(fb.max.y - fb.min.y).toBeCloseTo(FLAME.height, 3);
-      expect(FLAME.height).toBeCloseTo(CANDLE.flameHeight * FLAME_DRAW.height, 9);
-      expect(fb.max.x - fb.min.x).toBeLessThan(FLAME.radius * 2 * 1.4);
-      expect(fb.max.x - fb.min.x).toBeGreaterThan(CANDLE.flameRadius * 2 * 1.4);
+      expect(flame.children).toHaveLength(0);
       const wick = box(candle.getObjectByName(`wick_${id}`)!);
       const base = STAND_TOP + CANDLE.seat;
       expect(wick.max.y - base).toBeGreaterThan(CANDLE.wickBase + CANDLE.wickHeight - 0.002);
       expect(wick.min.y - base).toBeLessThan(CANDLE.height);
-      expect(wick.max.y).toBeLessThan(fb.min.y + CANDLE.flameHeight * 0.3);
-      expect(cb.max.y).toBeCloseTo(fb.max.y, 9);
+      // The real flame (v1.5): its cup 1 mm above the wax, the wick top inside it, its tip 14 mm up.
+      expect(FLAME.base).toBeGreaterThan(CANDLE.height);
+      expect(wick.max.y - base).toBeGreaterThan(FLAME.base);
+      expect(wick.max.y - base).toBeLessThan(FLAME.base + 0.4 * FLAME.height);
+      expect((FLAME_TOP - CANDLE.height) / 0.005).toBeCloseTo(14, 6);
     }
-    expect(FLAME_SIZE.height).toBeGreaterThan(0.9);
   });
 });
 
-/** The exported runtime GLB (pnpm models birthday), measured with gltf-transform. */
 describe('Birthday runtime GLB matches the contract', async () => {
   const doc = await createIO().read(join(import.meta.dirname, '..', 'assets', 'scenes', 'birthday', 'birthday.glb'));
   const node = (name: string) => findNode(doc, name);
