@@ -330,15 +330,64 @@ function outcome(t: number, out: BusinessFrame): void {
   out.anchorX = trailing;
   out.anchorY = out.pivot.y + ANCHOR_RISE;
   out.status = t >= SCAN_AT ? 'lit' : 'off';
-  // The LED switches on at the contact beat and its glow rises over 90 ms.
-  out.statusLevel = t >= SCAN_AT ? 0.2 + 0.8 * smoothstep(seg(t, SCAN_AT, SCAN_AT + 0.09)) : 0;
+  out.statusLevel = 0;
+}
+
+// ── Status light (v1.5) ─────────────────────────────────────────────────────────────
+/**
+ * How the reader's light answers, timed as real readers time theirs (HID Signo and Kisi flash or
+ * "breathe" into green or red; EMV readers pair a success tone with the light) and never switching
+ * on or off in a single frame: every edge is a ramp of the light's level, so the glyph emerges from
+ * the dead-front glass instead of popping on.
+ *
+ * The ramps are perceptual, as a product's LED driver fades with gamma-corrected PWM: brightness is
+ * seen roughly as its cube root (CIE L*), and the pictogram's HDR core reaches the tone curve's
+ * shoulder at a quarter of full level, so a ramp linear in level would look like a switch (v1.5's
+ * first cut, an ease-out, showed 59 % of the change in its first 16 ms frame). Every edge is a
+ * smootherstep, which starts and ends as a cube (10u³): the glyph surfaces from black over the
+ * first third and the halo fills in after.
+ *
+ * - **Accept: one rise.** From the contact beat the light comes up over `attack` (0.22 s; above
+ *   half by 0.11 s) and holds: the canonical `accepted` pose is lit at 1. (A crest above full,
+ *   tried first as a "chime", added 5 % light to the halo only: invisible, so dropped.)
+ * - **Decline: a double blink, then a hold.** On over `rise`, held `hold`, off over `fall`, dark
+ *   for `gap`, on again and held lit (the canonical `declined` pose is lit at 1): two flashes, as a
+ *   reader flags a refusal, without an alarm's repetition. On and off read about equal (above half
+ *   level for 145 ms, below it for 175 ms): v1.5's first cut held on 225 ms and dark 96 ms, which
+ *   read as a stutter. Finished 0.40 s after contact, before the card leaves the glass (depart
+ *   1.14 s).
+ *
+ * Every piece meets the next with zero slope (C1; C2 inside each ramp), and both are pure in t.
+ */
+export const STATUS_TIMING = {
+  accept: { attack: 0.22 },
+  decline: { rise: 0.08, hold: 0.07, fall: 0.07, gap: 0.1 },
+} as const;
+
+/** Smootherstep (C2): 0 → 1 with zero slope and curvature at both ends; 10u³ near 0. */
+const smoother = (x: number) => x * x * x * (x * (6 * x - 15) + 10);
+
+/** Status level at `tau` seconds after the contact beat (0 before it), in [0, 1]. */
+export function statusEnvelope(outcome: 'accept' | 'decline', tau: number): number {
+  if (tau <= 0) return 0;
+  // Smootherstep can round a hair past 0 or 1 near its ends: the level is clamped exactly.
+  const level = (x: number) => Math.min(1, Math.max(0, x));
+  if (outcome === 'accept') return level(smoother(seg(tau, 0, STATUS_TIMING.accept.attack)));
+  const { rise, hold, fall, gap } = STATUS_TIMING.decline;
+  const off = rise + hold, dark = off + fall, again = dark + gap;
+  if (tau < off) return level(smoother(seg(tau, 0, rise)));
+  if (tau < dark) return level(1 - smoother(seg(tau, off, dark)));
+  return level(smoother(seg(tau, again, again + rise)));
 }
 
 export function sampleSequence(sequence: SequenceName, t: number, out: BusinessFrame): BusinessFrame {
   const d = DURATIONS[sequence];
   const tc = Math.min(Math.max(t, 0), d);
   if (sequence === 'host') host(tc, out);
-  else outcome(tc, out);
+  else {
+    outcome(tc, out);
+    out.statusLevel = statusEnvelope(sequence, tc - SCAN_AT);
+  }
   out.rot.normalize();
   return out;
 }
@@ -468,8 +517,6 @@ export interface Recovery {
   peel: number;
 }
 
-/** Smootherstep (C2): 0 → 1 with zero slope and curvature at both ends. */
-const smoother = (x: number) => x * x * x * (x * (6 * x - 15) + 10);
 /** Peel bump: 0 with zero slope at both ends, peak 1 at u = 0.4. */
 const peelBump = (u: number) => (u * u * (1 - u) ** 3) / 0.03456;
 const qOff = new Quaternion(), qI = new Quaternion(), rv = new Vector3();
@@ -490,9 +537,13 @@ export function copyFrame(src: BusinessFrame, out: BusinessFrame): BusinessFrame
   return out;
 }
 
-/** Status level of the interrupted outcome's light while it fades (×its level at the change). */
+/**
+ * Status level of the interrupted outcome's light while it fades (×its level at the change): over
+ * 0.18 s, on the status light's perceptual edge (a cubic tail, so the glyph sinks into the glass
+ * rather than cutting out at the end; v1.5, was a smoothstep).
+ */
 export function recoveryFade(t: number): number {
-  return 1 - smoothstep(seg(t / RECOVER, 0, 0.6));
+  return 1 - smoother(seg(t / RECOVER, 0, 0.6));
 }
 
 /**
