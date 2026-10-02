@@ -105,16 +105,22 @@ records `docs/scenes/<scene>-v1.5*.md` and spec revisions #37–#40.
 
 Still open:
 
-- **The bin's second polish round is unmerged** (Surya, 2026-10-02: push now, leave it as a documented gap). It lives
-  on branch `v1.5/bin` (worktree `.claude/worktrees/v15-bin`), ahead of what `main` carries: deferring the bin's
-  6.6 MB download until after `ready` (with its own hidden warm draw, since the controller's warm frame only covers
-  what is loaded), an eased entrance (~0.35–0.45 s, decelerating, inside the pull-back's window: `BIN_DELAY` in
-  `src/scenes/{birthday,dinner}/`) with the cove shadow entering with the bin rather than before it, and a texture-set
-  size check. To resume: `git merge v1.5/integration` into `v1.5/bin`, finish, verify (typecheck, unit, browser on
-  5506, the Birthday and Dinner decline strips), merge into `main`, regenerate the declined posters and backdrops
-  (`pnpm capture birthday|dinner`, `pnpm capture backdrops`). What `main` has: the judges' first bin round (black
-  pedal, 90° flaps with no cove shadow, the traced floor bounce, the in-bin form factor) and the warm frame that
-  removes the first-decline hitch.
+- **The bin's second polish round landed right after the first v1.5 push** (Surya, 2026-10-02: "push now, leave the
+  bin round as a documented gap, so long as the progress is saved"; the round turned out complete and green, so it
+  was merged as the next commit): the bin's 5.9 MB GLB is fetched at low priority after `ready`
+  (`src/scenes/deferredBin.ts`; Birthday needs 7.9 MB before ready instead of 14.4, Dinner 3.4 instead of 10.0; a
+  decline tapped before it arrives saves at once, holds the guest-ready picture and plays once it has; if it cannot
+  load, the declined poster), it warms itself in idle moments once it arrives (first decline: no frame over 20 ms,
+  on a 4× throttled phone too), it slides in decelerating from just outside the drawn view (0.38 s Birthday, 0.40 s
+  Dinner, on screen 0.33–0.38 s at every aspect) with its cove shadow fading in with the share of it inside the
+  frame, and its texture memory halved (34 → 18 MiB). **Verification at this push is partial** (Surya, out of
+  time: "push it now and skip the suite"): on the merged commit, typecheck is clean and the unit suite passes
+  (413); the full browser suite was started and killed before it finished, so the browser tests, the
+  poster-staleness check on the recaptured Birthday and Dinner stills and the decline strips are **unverified**
+  on `main` (the bin owner's own run of the same code before the merge was 107/109 browser, the two failures the
+  posters since recaptured). First thing next session: `pnpm test:browser` on `main`. Left from that round: its warm-up still costs one ~30 ms task
+  at rest on a throttled phone; the round's write-up in `docs/scenes/bin-v1.5.md` and a review of
+  `evidence/v1.5/bin/guest/` were not done by the owner.
 - **Owner decisions, pending:** revisions #37 (the record plays on; the deck order), #38 (the mini hoop system and
   the physics tails), #39 (the decline pull-back), #40 (Normal at 2 device pixels) and the host beat's new length
   (#23: 2.47 s, from the candle placement); Master §9's 2.5 MP buffer ceiling (the laptop renders at 1.65×, a full
