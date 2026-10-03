@@ -1,0 +1,34 @@
+v1.6 cake frame cost (scripts/cake-perf.ts), 2026-10-02, M2 Pro, Chrome 154 headless (--use-angle=metal),
+real time (no fake clock). "base" = v1.5 (7ebc274) on its own dev server (port 5611), "v16" = this branch
+(port 5601), runs interleaved. Other agents were using the same machine's GPU during these runs.
+
+1. Frame interval (rAF) while the scene plays: guest-ready with live flames 3 s, then accept, decline, accept,
+   decline (≈ 757 frames per run), every run of both builds at both sizes:
+     laptop 1280×720 @2 (drawing buffer 2108×1185 @1.65): p50 16.70 · p95 16.70–16.80 · p99 16.80 ms
+     phone   390×844 @3 (drawing buffer  780×1688 @2):    p50 16.70 · p95 16.70–16.80 · p99 16.80 ms
+   (one run of each build logged a single 33.4 ms max)
+
+2. The guest-ready frame rendered back to back, each followed by a 1-pixel readPixels (the GPU waited on;
+   gl.finish alone does not block under ANGLE/Metal), 16 frames per block, wall ms per frame:
+     run              base laptop  v16 laptop   base phone  v16 phone
+     1                2.63         3.49         3.79        3.88
+     2                3.41         2.92         3.65        2.25
+     3                3.92         2.89         2.49        2.12
+     4                2.79         3.14         2.58        2.26
+     5                3.04         3.02         2.03        2.06
+     6                3.14         3.14         2.18        2.06
+     median           3.09         3.08         2.53        2.19
+   → no measurable difference between v1.5 and v1.6 (±0.3 ms run to run).
+
+3. The cake's patches alone: the same frame with the frosting's patched materials ("own") vs plain clones of
+   them (three's PBR with the same maps, none of the patches), alternated 8 × 16 frames per run, medians:
+     v16 laptop: −0.18, −0.01, +0.08, +0.11 ms   v16 phone: +0.01, −0.07, +0.00, +0.00 ms
+     base laptop: +0.08, −0.05, −0.02, +0.01 ms  base phone: +0.16, +0.13, −0.01, −0.01 ms
+   → the food shader costs +0.0 ± 0.2 ms at both sizes (the budget was ≤ +1.5 ms).
+
+4. EXT_disjoint_timer_query around Stage.render (live frames at guest-ready) was too noisy on the shared GPU
+   to separate the builds: v1.5 alone gave laptop medians 4.5, 4.9, 6.4 ms in three runs; v1.6 6.3, 6.35,
+   6.8 (before the draw-order change: 7.7, 8.1).
+
+Load (localhost dev server, cold context): ready 731–837 ms (v1.5 668–718 ms); the bin 1.3–1.5 s after.
+GLB: 31.9 MB raw / 15.2 MB gzip (v1.5 12.5 / 6.9).

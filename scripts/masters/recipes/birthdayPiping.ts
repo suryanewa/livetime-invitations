@@ -492,7 +492,12 @@ export function shell(theta: number, yLedge: number, Rw: number, size: number, h
  * surface, `n` out of it, `u` any direction in it); `R` its radius (to the rope's outer edge).
  * Returns the mesh and the top of its centre (where a sugar pearl is set).
  */
-export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, opts: { turns?: number; rope?: number; droop?: V3; fine?: number } = {}): { mesh: PipeMesh; top: V3 } {
+/**
+ * `rest`: what the rosette rests on: for a point and a direction, how far back along the direction
+ * the surface is (signed, positive in front of it). A piped rosette sits on the surface it is piped
+ * on whatever that surface does under it.
+ */
+export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, opts: { turns?: number; rope?: number; droop?: V3; fine?: number; rest?: (p: V3, dir: V3) => number } = {}): { mesh: PipeMesh; top: V3 } {
   const g = stream(seed);
   const n = norm(n0);
   const u = norm(sub(u0, mul(n, dot(u0, n))));
@@ -520,6 +525,23 @@ export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, op
     centres.push(add(add(c, off), mul(radial, rr)));
     lifts.push(lift);
   }
+  // Resting on what is under it: a foot a little off the surface (≤ ≈ 3 mm) is settled onto it and
+  // fillets into it; one far off it (over a rounded edge) overhangs with the rope's own round
+  // underside showing, as a piped rosette overhangs an edge. Settled smoothly along the rope.
+  const flareK = new Array<number>(L).fill(1);
+  if (opts.rest) {
+    const d = centres.map((p) => opts.rest!(p, n));
+    const move = d.map((x) => x * (1 - smooth(2.5 * MM, 4.5 * MM, Math.abs(x))));
+    const settled = move.map((_, i) => {
+      let acc = 0, w = 0;
+      for (let k = -5; k <= 5; k++) { const j = clamp(i + k, 0, L - 1); const wk = 6 - Math.abs(k); acc += move[j]! * wk; w += wk; }
+      return acc / w;
+    });
+    for (let i = 0; i < L; i++) {
+      centres[i] = sub(centres[i]!, mul(n, settled[i]!));
+      flareK[i] = 1 - smooth(1 * MM, 3 * MM, Math.abs(d[i]! - settled[i]!));
+    }
+  }
   const T = tangents(centres);
   for (let i = 0; i < L; i++) {
     const s = i / (L - 1);
@@ -527,7 +549,7 @@ export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, op
     const p = pressure(s, 2 * Math.PI * pathR * turns, seed + 8, { swell: 0.07, start: 0.35, hiccups: 0.25 });
     const hk = rope * 1.35 * p * k;
     const pc = add(centres[i]!, mul(n, lifts[i]! - dive * 0.55 * hk));
-    feet.push({ c: pc, n, t: T[i]!, w: rope * 0.98 * p * k, h: hk, sink: 0.9 * MM * (k > 0 ? Math.max(k, 0.3) : 0), tw: tw0 + 1.1 * s * dirS, amp, flare: 0.25 });
+    feet.push({ c: pc, n, t: T[i]!, w: rope * 0.98 * p * k, h: hk, sink: 0.9 * MM * (k > 0 ? Math.max(k, 0.3) : 0), tw: tw0 + 1.1 * s * dirS, amp, flare: 0.25 * flareK[i]! });
   }
   const mesh = sweep(feet, { teeth: 12 + Math.floor(g.r() * 3), crest: 0.42, toothJitter: 0.18, toothDrift: 2.5, perTooth: opts.fine ? 3.5 : 4.2, hidden: 6 }, seed);
   // A side rosette droops a little where it overhangs (its outer half slumps by up to `droop`).

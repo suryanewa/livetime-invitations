@@ -7,14 +7,13 @@ import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, MASTER, CAKE_SCALE } from './birt
  *
  * - (the bin's light on the cake inside it is models/disposalBin.ts patchBinVisibility, chained
  *   after these and the flame light by models/birthday.ts; v1.2.1–v1.4 had a darkening ramp here);
- * - subsurface (frosting body and piping): buttercream is a fat-and-sugar foam, light enters it,
- *   so the key's terminator is soft and coloured by the frosting itself. A wrapped-diffuse term
- *   on the direct light only (the image-based light is already soft), tinted by the material;
+ * - subsurface (`subsurfacePatch`, the molten wax since v1.6; the frosting's is in `foodPatch`): a
+ *   wrapped-diffuse term on the direct light, tinted by the material;
  * - press (frosting body): each candle pushes a dimple and a raised, slightly lumpy collar of
  *   displaced buttercream into the top tier as it goes in (CakePress.press), and the frosting
  *   right round it glosses a little as the flame warms it (CakePress.gloss);
- * - ridges (piping, rosettes): the per-vertex convexity `_ridge` makes crests a touch glossier
- *   and grooves a touch matter, and puts the very slight sheen on the crests;
+ * - food (v1.6, `foodPatch`; frosting body, piping, rosettes, smears): the film food look, below
+ *   (subsurface, translucency, coloured shade, baked occlusion, sugar glints, colour and satin);
  * - melt (each candle its own material): the rounded lip, the pool in its cup, the bead and the
  *   run down the low side, the top burning down (src/scenes/birthday/melt.ts drives it).
  *
@@ -60,6 +59,8 @@ type Patch = {
   afterLightsSetup?: string;
   /** After `#include <normal_fragment_maps>`: may edit `normal` (view space). */
   afterNormal?: string;
+  /** After the scene's own lights (lights_fragment_begin), before the image-based light and any lights added later (the flames). */
+  afterSceneLights?: string;
   /** After `#include <lights_fragment_end>`: may scale `reflectedLight`'s indirect terms (occlusion). */
   afterLights?: string;
   /** Extra direct diffuse inside RE_Direct_Physical (geometryNormal, directLight, material in scope). */
@@ -87,6 +88,7 @@ export function patchMaterial(material: Material, patches: Patch[]): void {
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${join('afterRoughness')}`)
       .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>\n${join('afterLightsSetup')}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${join('afterNormal')}`)
+      .replace('#include <lights_fragment_maps>', `${join('afterSceneLights')}\n#include <lights_fragment_maps>`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${join('afterLights')}`)
       .replace('#include <opaque_fragment>', `${join('beforeOpaque')}\n#include <opaque_fragment>`);
     if (direct.trim()) {
@@ -224,13 +226,10 @@ float cakeDy; vec2 cakeGrad;`,
   };
 }
 
-// ── Ridges (piping, rosettes) ──────────────────────────────────────────────────────
+// ── Sugar grain and noise (used by foodPatch) ───────────────────────────────────────
 /**
- * Satin, not clay (v1.5 polish): buttercream is fat and sugar, its piped crests carry a soft broad
- * highlight and the grooves stay matt. Roughness follows the per-vertex convexity `_ridge` from
- * 0.62 in the grooves to 0.36 on the crests (absolute, over the material's own), the very slight
- * sheen lives on the crests, and a fine grain (≈ 0.6 mm, ±8 µm, faded out where a pixel covers it)
- * breaks the perfectly smooth, moulded read of the rosettes' and shells' faces.
+ * The fine grain (≈ 0.6 mm, ±8 µm, faded out where a pixel covers it) that breaks the perfectly
+ * smooth, moulded read of piped faces; `groove`/`crest` are v1.5's ridge roughness (v1.6: FOOD).
  */
 export const RIDGE = { groove: 0.62, crest: 0.36, grain: { freq: 330, amp: 0.00004 } } as const;
 
@@ -250,28 +249,6 @@ vec3 cakeBump(vec3 surfPos, vec3 surfNorm, float h, float faceDir) {
   return normalize(abs(det) * surfNorm - grad);
 }
 `;
-
-export function ridgePatch(mesh: Mesh): Patch {
-  const f = (x: number) => x.toFixed(6);
-  return {
-    key: 'ridge2',
-    uniforms: { ...quantUniforms(mesh) },
-    vertexHead: 'attribute float _ridge;\nvarying float vCakeRidge;\nvarying vec3 vCakeP;\nuniform vec3 uQS; uniform vec3 uQO;',
-    vertexEnd: 'vCakeRidge = _ridge;\nvCakeP = transformed * uQS + uQO;',
-    fragmentHead: `varying float vCakeRidge;\nvarying vec3 vCakeP;\n${CAKE_NOISE}`,
-    afterRoughness: `roughnessFactor = mix(${f(RIDGE.groove)}, ${f(RIDGE.crest)}, smoothstep(-0.6, 0.9, vCakeRidge));`,
-    afterNormal: `{
-  vec3 gp = vCakeP * ${f(RIDGE.grain.freq)};
-  float px = length(fwidth(gp));
-  float fadeG = 1.0 - smoothstep(0.35, 0.9, px);
-  if (fadeG > 0.0) {
-    float h = ${f(RIDGE.grain.amp)} * fadeG * (cakeNoise(gp) + 0.5 * cakeNoise(gp * 2.17 + 3.1));
-    normal = cakeBump(-vViewPosition, normal, h, faceDirection);
-  }
-}`,
-    afterLightsSetup: '#ifdef USE_SHEEN\nmaterial.sheenColor *= 0.3 + 1.1 * max(vCakeRidge, 0.0);\n#endif',
-  };
-}
 
 // ── v1.6: the film food shader (the Hollywood pass) ─────────────────────────────────
 /**
@@ -343,8 +320,8 @@ export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodL
   },
   piping: {
     wrap: 0.38, wrapThin: 0.85, scatter: 0.8, transMm: 2.6, trans: 0.75, transDistort: 0.3, transPower: 3,
-    sssSat: 1.3, shadeSat: 1.15, crestLift: 0.06, grooveDeep: 0.12, mottle: 0.022,
-    roughCrest: 0.34, roughGroove: 0.62, roughCrease: 0.1, glint: 0.55, glintCell: 0.16, glintStrength: 1.4, keyOcclusion: 0.5,
+    sssSat: 1.3, shadeSat: 1.15, crestLift: 0.06, grooveDeep: 0.09, mottle: 0.022,
+    roughCrest: 0.34, roughGroove: 0.62, roughCrease: 0.1, glint: 0.55, glintCell: 0.16, glintStrength: 1.4, keyOcclusion: 0.4,
     fatTint: [1, 0.9, 0.74], fat: 0.35,
   },
   // Chocolate ganache buttercream: darker, more absorbing (shorter scatter, deep red-brown light),
@@ -399,7 +376,9 @@ ${piping ? `vFoodRidge = _food.x * 2.0 - 1.0; vFoodAO = _food.y; vFoodThick = _f
 ${piping ? 'varying float vFoodRidge; varying float vFoodAO; varying float vFoodThick;' : ''}
 ${FOOD_NOISE}
 // Per-fragment state the lighting reads (set after the normal is known).
-float foodThin; float foodAO; float foodContact; vec3 foodDiffN; vec3 foodGlintP; float foodGlintFade; float foodGlintFade2; vec3 foodGlintT; vec3 foodGlintB;`,
+float foodThin; float foodAO; float foodContact; vec3 foodDiffN; vec3 foodGlintP; float foodGlintFade; float foodGlintFade2; vec3 foodGlintT; vec3 foodGlintB;
+// The scene's own lights (the key): translucency and glints; the flames' small lights get the scattering only.
+bool foodScene = true;`,
     afterMap: `{
   // Never one flat colour: a slow mottle of hand-mixed colour (2–4 cm), warm-cool.
   float m1 = cakeNoise(vFoodP * 34.0) - 0.5, m2 = cakeNoise(vFoodP * 91.0 + 7.1) - 0.5;
@@ -467,6 +446,7 @@ float foodThin; float foodAO; float foodContact; vec3 foodDiffN; vec3 foodGlintP
   // The plain lambert term above used the fine normal; move part of it to the softened one.
   reflectedLight.directDiffuse += (lam - saturate(dot(geometryNormal, directLight.direction))) * 0.5 * directLight.color * albedoD * ( 1.0 - F );
   reflectedLight.directDiffuse += extra * directLight.color * foodTint * albedoD * ( 1.0 - F );
+  if (foodScene) {
   // Translucency: light behind a thin part comes through it.
   float T = exp(-${piping ? 'vFoodThick' : '6.0'} / ${f(look.transMm)}) * (0.35 + 0.65 * foodThin);
   vec3 lt = directLight.direction + foodDiffN * ${f(look.transDistort)};
@@ -492,13 +472,16 @@ float foodThin; float foodAO; float foodContact; vec3 foodDiffN; vec3 foodGlintP
     float d = pow(saturate(dot(tn, hv)), 380.0);
     reflectedLight.directSpecular += directLight.color * nlG * d * spot * ${f(look.glintStrength)} * (li == 0 ? 1.0 : 0.7) * fade * foodContact;
   }` : ''}
+  }
 }`,
+    afterSceneLights: 'foodScene = false;',
+    afterLightsSetup: piping ? '#ifdef USE_SHEEN\nmaterial.sheenColor *= 0.3 + 1.1 * max(vFoodRidge, 0.0);\n#endif' : '',
     afterLights: `{
   // Occlusion: the room's light (the body's aoMap does this in three's own aomap chunk), the key at a
   // fraction (micro-shadowing in the creases).
   // Light diffuses into a crease through the frosting itself: occluded light is coloured, never black.
   vec3 foodTintA = ${v3(tint)};
-  ${piping ? `float aoI = mix(0.3, 1.0, vFoodAO);
+  ${piping ? `float aoI = mix(0.36, 1.0, vFoodAO);
   reflectedLight.indirectDiffuse *= mix(foodTintA * aoI, vec3(1.0), aoI);
   reflectedLight.indirectSpecular *= mix(1.0, vFoodAO * vFoodAO, 0.85);` : ''}
   float aoK = ${piping ? 'mix(0.55, 1.0, vFoodAO)' : 'foodContact * (0.6 + 0.4 * foodAO)'};

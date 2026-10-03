@@ -30,6 +30,16 @@
  * - Candles re-tessellated (30 → 128 segments, 2.2 → 0.39 mm rows) from the master's own twisted
  *   six-flute surface, with a `_PROFILE` parameter the runtime melt shader deforms.
  *
+ * v1.6 (the Hollywood pass, docs/scenes/birthday-v1.6-cake.md): the owner still saw "a plasticky, too
+ * perfect and geometric shape / texture". The piping is no longer the master's moulded instances
+ * jittered: `regeneratePiping` rebuilds every piped part as a sculpted star-tip sweep
+ * (birthdayPiping.ts) at the master's own placements and sizes, each from its own seed; the tiers'
+ * top edges are a soft bead (`handProfile`, EDGE_BEAD) with a hand-pushed lip (`topUneven`), the
+ * sides carry the scraper's hand waves (`HAND_WAVES`), knife chatter and, on the tops, the turntable's
+ * spiral (relief); `bakeLight` bakes occlusion and thickness (birthdayBake.ts) into the piping's
+ * `_FOOD` attribute and the body's unique contact map (TEXCOORD_1, `UNIQUE`); the base gets a smear
+ * and crumbs on the plate (a child of the stand).
+ *
  * Everything is a pure function of the master and fixed seeds: `pnpm models birthday` is
  * deterministic.
  */
@@ -568,7 +578,7 @@ function orient(m: Mesh): void {
   }
 }
 
-// ── Piping: components, size jitter, softened rosettes, convexity ─────────────────
+// ── Piping: the master's pieces as components (placements for the regenerated piping) ─────
 interface PrimData { prim: Primitive; pos: Float32Array; nrm: Float32Array; idx: Uint32Array }
 interface Component { verts: { d: PrimData; i: number }[]; min: V3; max: V3; centroid: V3 }
 
@@ -611,181 +621,7 @@ export function components(d: PrimData): Component[] {
   return out.sort((a, b) => Math.atan2(a.centroid[2], a.centroid[0]) - Math.atan2(b.centroid[2], b.centroid[0]) || a.centroid[1] - b.centroid[1]);
 }
 
-/** The point a decoration touches the cake at: its inner face (side), its foot (crown) or inner foot (ledge). */
-function anchorOf(c: Component, mount: 'side' | 'ledge' | 'crown'): V3 {
-  const [cx, cy, cz] = c.centroid;
-  const r = Math.hypot(cx, cz) || 1;
-  const ex = cx / r, ez = cz / r;
-  // Radial half-extent of the box along the outward direction.
-  const half = (Math.abs(ex) * (c.max[0] - c.min[0]) + Math.abs(ez) * (c.max[2] - c.min[2])) / 2;
-  if (mount === 'crown') return [cx, c.min[1], cz];
-  if (mount === 'ledge') return [cx - ex * half, c.min[1], cz - ez * half];
-  return [cx - ex * half, cy, cz - ez * half];
-}
-
-/** Rotation by `angle` about the unit axis `k` through `o`, then uniform scale `s` about `o`. */
-function rigid(p: V3, o: V3, k: V3, angle: number, s: number, out: V3): V3 {
-  const vx = p[0] - o[0], vy = p[1] - o[1], vz = p[2] - o[2];
-  const c = Math.cos(angle), sn = Math.sin(angle), dot = k[0] * vx + k[1] * vy + k[2] * vz;
-  const cx = k[1] * vz - k[2] * vy, cy = k[2] * vx - k[0] * vz, cz = k[0] * vy - k[1] * vx;
-  out[0] = o[0] + s * (vx * c + cx * sn + k[0] * dot * (1 - c));
-  out[1] = o[1] + s * (vy * c + cy * sn + k[1] * dot * (1 - c));
-  out[2] = o[2] + s * (vz * c + cz * sn + k[2] * dot * (1 - c));
-  return out;
-}
-
-function rotateNormal(n: V3, k: V3, angle: number, out: V3): V3 {
-  return rigid(n, [0, 0, 0], k, angle, 1, out);
-}
-
-/** Recomputes area-weighted normals of a component, welded by position. */
-function recomputeNormals(c: Component): void {
-  const d = c.verts[0]!.d;
-  const weld = weldIds(d);
-  const set = new Set(c.verts.map((v) => v.i));
-  const acc = new Map<number, V3>();
-  for (let t = 0; t < d.idx.length; t += 3) {
-    const a = d.idx[t]!, b = d.idx[t + 1]!, e = d.idx[t + 2]!;
-    if (!set.has(a)) continue;
-    const P = d.pos;
-    const ux = P[3 * b]! - P[3 * a]!, uy = P[3 * b + 1]! - P[3 * a + 1]!, uz = P[3 * b + 2]! - P[3 * a + 2]!;
-    const vx = P[3 * e]! - P[3 * a]!, vy = P[3 * e + 1]! - P[3 * a + 1]!, vz = P[3 * e + 2]! - P[3 * a + 2]!;
-    const n: V3 = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
-    for (const v of [a, b, e]) {
-      const w = weld[v]!;
-      const s = acc.get(w) ?? [0, 0, 0];
-      s[0] += n[0]; s[1] += n[1]; s[2] += n[2];
-      acc.set(w, s);
-    }
-  }
-  for (const { i } of c.verts) {
-    const s = acc.get(weld[i]!);
-    if (!s) continue;
-    const l = Math.hypot(...s) || 1;
-    // Keep the orientation the master gave (outward).
-    const sign = s[0] * d.nrm[3 * i]! + s[1] * d.nrm[3 * i + 1]! + s[2] * d.nrm[3 * i + 2]! < 0 ? -1 : 1;
-    d.nrm[3 * i] = (sign * s[0]) / l; d.nrm[3 * i + 1] = (sign * s[1]) / l; d.nrm[3 * i + 2] = (sign * s[2]) / l;
-  }
-}
-
-/** Taubin smoothing of a component's vertices (λ|μ, no shrink), welded by position. */
-function taubin(c: Component, iterations: number): void {
-  const d = c.verts[0]!.d;
-  const weld = weldIds(d);
-  const set = new Set(c.verts.map((v) => v.i));
-  const nbr = new Map<number, Set<number>>();
-  for (let t = 0; t < d.idx.length; t += 3) {
-    const tri = [d.idx[t]!, d.idx[t + 1]!, d.idx[t + 2]!];
-    if (!set.has(tri[0]!)) continue;
-    for (let k = 0; k < 3; k++) {
-      const a = weld[tri[k]!]!, b = weld[tri[(k + 1) % 3]!]!;
-      if (!nbr.has(a)) nbr.set(a, new Set());
-      if (!nbr.has(b)) nbr.set(b, new Set());
-      nbr.get(a)!.add(b);
-      nbr.get(b)!.add(a);
-    }
-  }
-  const ids = [...nbr.keys()];
-  const P = new Map<number, V3>(ids.map((w) => [w, [d.pos[3 * w]!, d.pos[3 * w + 1]!, d.pos[3 * w + 2]!]]));
-  for (let it = 0; it < iterations * 2; it++) {
-    const f = it % 2 === 0 ? 0.5 : -0.53;
-    const next = new Map<number, V3>();
-    for (const w of ids) {
-      const p = P.get(w)!, ns = nbr.get(w)!;
-      const avg: V3 = [0, 0, 0];
-      for (const q of ns) { const pq = P.get(q)!; avg[0] += pq[0]; avg[1] += pq[1]; avg[2] += pq[2]; }
-      next.set(w, [p[0] + f * (avg[0] / ns.size - p[0]), p[1] + f * (avg[1] / ns.size - p[1]), p[2] + f * (avg[2] / ns.size - p[2])]);
-    }
-    for (const [w, p] of next) P.set(w, p);
-  }
-  for (const { i } of c.verts) {
-    const p = P.get(weld[i]!);
-    if (!p) continue;
-    d.pos[3 * i] = p[0]; d.pos[3 * i + 1] = p[1]; d.pos[3 * i + 2] = p[2];
-  }
-}
-
-/**
- * The master's columns, tassels, shells and rosettes are open shells against the cake; at grazing
- * angles their open edges showed as slivers beside the swags. Every open-edge vertex is pushed
- * `inward` (scan units) towards the cake's axis and `down`, its ring of neighbours half as far,
- * so the edges sit well inside the frosting.
- */
-function tuckOpenEdges(d: PrimData, inward: number, down: number): number {
-  const weld = weldIds(d);
-  const edges = new Map<string, number>();
-  for (let t = 0; t < d.idx.length; t += 3) for (let k = 0; k < 3; k++) {
-    const a = weld[d.idx[t + k]!]!, b = weld[d.idx[t + ((k + 1) % 3)]!]!;
-    const key = a < b ? `${a},${b}` : `${b},${a}`;
-    edges.set(key, (edges.get(key) ?? 0) + 1);
-  }
-  const edge = new Set<number>();
-  for (const [key, c] of edges) if (c === 1) for (const x of key.split(',')) edge.add(+x);
-  const near = new Set<number>();
-  for (let t = 0; t < d.idx.length; t += 3) {
-    const tri = [weld[d.idx[t]!]!, weld[d.idx[t + 1]!]!, weld[d.idx[t + 2]!]!];
-    if (tri.some((v) => edge.has(v))) for (const v of tri) if (!edge.has(v)) near.add(v);
-  }
-  for (let i = 0; i < d.pos.length / 3; i++) {
-    const w = weld[i]!;
-    const k = edge.has(w) ? 1 : near.has(w) ? 0.5 : 0;
-    if (!k) continue;
-    const x = d.pos[3 * i]!, z = d.pos[3 * i + 2]!, r = Math.hypot(x, z) || 1;
-    d.pos[3 * i] = x - (x / r) * inward * k;
-    // Never below the cake's lowest point (the bottom border already beds into the plate there).
-    const y = d.pos[3 * i + 1]!;
-    d.pos[3 * i + 1] = y < MASTER.cakeBottom ? y : Math.max(MASTER.cakeBottom, y - down * k);
-    d.pos[3 * i + 2] = z - (z / r) * inward * k;
-  }
-  return edge.size;
-}
-
-/**
- * Per-vertex convexity in [-1, 1] (tanh of the mean curvature, normalised per part): the runtime makes piping
- * ridges a touch glossier and its grooves a touch matter, as a scraped, settled piping line is.
- */
-function convexity(d: PrimData): number[] {
-  const weld = weldIds(d);
-  const sum = new Map<number, { k: number; w: number }>();
-  for (let t = 0; t < d.idx.length; t += 3) {
-    const tri = [d.idx[t]!, d.idx[t + 1]!, d.idx[t + 2]!];
-    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
-      if (a === b) continue;
-      const i = tri[a]!, j = tri[b]!;
-      const dx = d.pos[3 * i]! - d.pos[3 * j]!, dy = d.pos[3 * i + 1]! - d.pos[3 * j + 1]!, dz = d.pos[3 * i + 2]! - d.pos[3 * j + 2]!;
-      const l2 = dx * dx + dy * dy + dz * dz;
-      if (l2 < 1e-14) continue;
-      const nd = d.nrm[3 * i]! * dx + d.nrm[3 * i + 1]! * dy + d.nrm[3 * i + 2]! * dz;
-      const s = sum.get(weld[i]!) ?? { k: 0, w: 0 };
-      s.k += 2 * nd; s.w += l2;
-      sum.set(weld[i]!, s);
-    }
-  }
-  const raw = Array.from({ length: d.pos.length / 3 }, (_, i) => {
-    const s = sum.get(weld[i]!);
-    return s && s.w > 0 ? s.k / s.w : 0;
-  });
-  // Normalised per part (its own 85th percentile of |curvature| ↦ tanh 1): a star rosette's
-  // grooves and a swag's rounded back both span the range.
-  const mags = raw.map(Math.abs).sort((a, b) => a - b);
-  const scale = mags[Math.floor(0.85 * (mags.length - 1))] || 1;
-  return raw.map((c) => Math.tanh(c / scale));
-}
-
 // ── Swag strands and round piping, re-tessellated (v1.5 polish) ───────────────────
-/** Catmull-Rom point on an open polyline at parameter t ∈ [0, n − 1] (centripetal enough here). */
-function crAt(pts: V3[], t: number): V3 {
-  const n = pts.length;
-  const i = Math.min(Math.floor(t), n - 2), u = t - i;
-  const p1 = pts[i]!, p2 = pts[i + 1]!;
-  const p0 = i > 0 ? pts[i - 1]! : [2 * p1[0] - p2[0], 2 * p1[1] - p2[1], 2 * p1[2] - p2[2]] as V3;
-  const p3 = i + 2 < n ? pts[i + 2]! : [2 * p2[0] - p1[0], 2 * p2[1] - p1[1], 2 * p2[2] - p1[2]] as V3;
-  const u2 = u * u, u3 = u2 * u;
-  const out: V3 = [0, 0, 0];
-  for (let k = 0; k < 3; k++) out[k] = 0.5 * (2 * p1[k]! + (-p0[k]! + p2[k]!) * u + (2 * p0[k]! - 5 * p1[k]! + 4 * p2[k]! - p3[k]!) * u2 + (-p0[k]! + 3 * p1[k]! - 3 * p2[k]! + p3[k]!) * u3);
-  return out;
-}
-
 /**
  * The master's swag strands are open half-pipes of 8 sides × 20 segments (21 rings of 9), one end
  * drawn to a point, the other cut square: faceted at laptop size, the cut ends showing as sliced
@@ -795,97 +631,6 @@ function crAt(pts: V3[], t: number): V3 {
  */
 export const STRAND = { rings: 21, side: 9, around: 2, along: 2, tail: 0.18 } as const;
 
-function refineStrands(prim: Primitive, tierR: number): Mesh | null {
-  const pos = read(prim.getAttribute('POSITION')!);
-  const per = STRAND.rings * STRAND.side;
-  const n = pos.length / 3;
-  if (n % per) return null;
-  const m: Mesh = { pos: [], nrm: [], uv: [], idx: [] };
-  const A = (STRAND.side - 1) * STRAND.around + 1, L = (STRAND.rings - 1) * STRAND.along + 1;
-  // Closed cross-sections: the open half-pipe's arc plus a flatter back (the arc mirrored across
-  // its chord at 35 %), so where a strand lifts off the cake (over a column) no open edge shows.
-  const BACK = A - 2, RING = A + BACK;
-  for (let s = 0; s < n / per; s++) {
-    const base = s * per;
-    const P = (k: number, j: number): V3 => { const i = base + k * STRAND.side + j; return [pos[3 * i]!, pos[3 * i + 1]!, pos[3 * i + 2]!]; };
-    // Around first (each ring), then along (each refined column).
-    const rings: V3[][] = [];
-    for (let k = 0; k < STRAND.rings; k++) {
-      const ring = Array.from({ length: STRAND.side }, (_, j) => P(k, j));
-      rings.push(Array.from({ length: A }, (_, a) => crAt(ring, a / STRAND.around)));
-    }
-    const grid: V3[][] = Array.from({ length: L }, () => []);
-    for (let a = 0; a < A; a++) {
-      const col = rings.map((r) => r[a]!);
-      for (let l = 0; l < L; l++) grid[l]!.push(crAt(col, l / STRAND.along));
-    }
-    // The back of each refined ring (and its chord's midpoint, where the strand meets the cake).
-    const feet: V3[] = [];
-    for (let l = 0; l < L; l++) {
-      const arc = grid[l]!;
-      const q0 = arc[0]!, q1 = arc[A - 1]!;
-      const M: V3 = [(q0[0] + q1[0]) / 2, (q0[1] + q1[1]) / 2, (q0[2] + q1[2]) / 2];
-      feet.push(M);
-      const top = arc[(A - 1) / 2]!;
-      let o: V3 = [top[0] - M[0], top[1] - M[1], top[2] - M[2]];
-      const ol = Math.hypot(...o);
-      o = ol > 1e-12 ? [o[0] / ol, o[1] / ol, o[2] / ol] : [0, 0, 0];
-      for (let a = A - 2; a >= 1; a--) {
-        const q = arc[a]!;
-        const k = 1.35 * ((q[0] - M[0]) * o[0] + (q[1] - M[1]) * o[1] + (q[2] - M[2]) * o[2]);
-        arc.push([q[0] - k * o[0], q[1] - k * o[1], q[2] - k * o[2]]);
-      }
-    }
-    // Tails: the first and last `tail` of the length close as rounded caps.
-    const tail = (t: number) => {
-      let f = 1;
-      if (t > 1 - STRAND.tail) f = Math.min(f, Math.sqrt(Math.max(0, 1 - ((t - (1 - STRAND.tail)) / STRAND.tail) ** 2)));
-      if (t < STRAND.tail) f = Math.min(f, Math.sqrt(Math.max(0, 1 - ((STRAND.tail - t) / STRAND.tail) ** 2)));
-      return f;
-    };
-    for (let l = 0; l < L; l++) {
-      const t = l / (L - 1), f = tail(t);
-      if (f >= 1) continue;
-      // Flatten the cross-section onto its foot on the cake (a tail smeared down, not a point in the
-      // air) and sink it a little under the side, behind the column or rosette it ends at.
-      const c = feet[l]!;
-      const rr = Math.hypot(c[0], c[2]) || 1;
-      const sink = (1 - f) * (Math.max(0, rr - tierR) + 0.0015);
-      grid[l] = grid[l]!.map((q) => [c[0] + (q[0] - c[0]) * f - (c[0] / rr) * sink, c[1] + (q[1] - c[1]) * f, c[2] + (q[2] - c[2]) * f - (c[2] / rr) * sink] as V3);
-    }
-    const start = m.pos.length / 3;
-    for (let l = 0; l < L; l++) {
-      const c = centroid(grid[l]!);
-      for (let a = 0; a < RING; a++) {
-        const q = grid[l]![a]!;
-        const qa = grid[l]![(a + 1) % RING]!, qb = grid[l]![(a + RING - 1) % RING]!;
-        const qc = grid[Math.min(L - 1, l + 1)]![a]!, qd = grid[Math.max(0, l - 1)]![a]!;
-        const tu: V3 = [qa[0] - qb[0], qa[1] - qb[1], qa[2] - qb[2]], tv: V3 = [qc[0] - qd[0], qc[1] - qd[1], qc[2] - qd[2]];
-        let nn: V3 = [tu[1] * tv[2] - tu[2] * tv[1], tu[2] * tv[0] - tu[0] * tv[2], tu[0] * tv[1] - tu[1] * tv[0]];
-        // Outward from the ring's centre.
-        const out: V3 = [q[0] - c[0], q[1] - c[1], q[2] - c[2]];
-        let len = Math.hypot(...nn);
-        if (len < 1e-14) { nn = out; len = Math.hypot(...nn) || 1; }
-        if (nn[0] * out[0] + nn[1] * out[1] + nn[2] * out[2] < 0) nn = [-nn[0], -nn[1], -nn[2]];
-        m.pos.push(...q);
-        m.nrm.push(nn[0] / len, nn[1] / len, nn[2] / len);
-        m.uv.push(a / RING, l / (L - 1));
-      }
-    }
-    for (let l = 0; l < L - 1; l++) for (let a = 0; a < RING; a++) {
-      const i = start + l * RING + a, j = start + l * RING + ((a + 1) % RING);
-      m.idx.push(i, i + RING, j, j, i + RING, j + RING);
-    }
-  }
-  orient(m);
-  return m;
-}
-
-function centroid(pts: V3[]): V3 {
-  const c: V3 = [0, 0, 0];
-  for (const p of pts) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; }
-  return [c[0] / pts.length, c[1] / pts.length, c[2] / pts.length];
-}
 const dist = (a: V3, b: V3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 /** Least-squares sphere through points (algebraic fit: |p|² = 2c·p + k). */
@@ -912,39 +657,6 @@ function fitSphere(pts: V3[]): { c: V3; r: number } {
   return { c, r: Math.sqrt(Math.max(1e-12, x[3]! + c[0] * c[0] + c[1] * c[1] + c[2] * c[2])) };
 }
 
-/**
- * Round piping (dots) and sugar pearls were 9–12-sided caps, polygonal up close: each becomes a
- * fine sphere (24 × 16) of the same fitted centre and radius; the part inside the cake is hidden.
- */
-function sphereComponents(d: PrimData): { mesh: Mesh; count: number } {
-  const m: Mesh = { pos: [], nrm: [], uv: [], idx: [] };
-  const comps = components(d);
-  const SEG = 24, RINGS = 16;
-  for (const c of comps) {
-    const pts = c.verts.map(({ i }) => [d.pos[3 * i]!, d.pos[3 * i + 1]!, d.pos[3 * i + 2]!] as V3);
-    let { c: ctr, r } = fitSphere(pts);
-    // A cap too flat to fit (or a fit far off) falls back to its box.
-    const box = (c.max[0] - c.min[0] + c.max[1] - c.min[1] + c.max[2] - c.min[2]) / 6;
-    if (!(r > 0.3 * box && r < 2.5 * box) || dist(ctr, c.centroid) > 2 * box) { ctr = c.centroid; r = box; }
-    const start = m.pos.length / 3;
-    for (let k = 0; k <= RINGS; k++) {
-      const v = k / RINGS, ph = v * Math.PI;
-      for (let j = 0; j <= SEG; j++) {
-        const u = j / SEG, th = u * 2 * Math.PI;
-        const nx = Math.sin(ph) * Math.cos(th), ny = Math.cos(ph), nz = Math.sin(ph) * Math.sin(th);
-        m.pos.push(ctr[0] + r * nx, ctr[1] + r * ny, ctr[2] + r * nz);
-        m.nrm.push(nx, ny, nz);
-        m.uv.push(u, v);
-      }
-    }
-    for (let k = 0; k < RINGS; k++) for (let j = 0; j < SEG; j++) {
-      const i = start + k * (SEG + 1) + j;
-      m.idx.push(i, i + SEG + 1, i + 1, i + 1, i + SEG + 1, i + SEG + 2);
-    }
-  }
-  orient(m);
-  return { mesh: m, count: comps.length };
-}
 
 // ── Relief and roughness maps for the tier bodies (generated, physical units) ─────
 /** Atlas size (px): the side relief at ≈ 0.1 mm a texel, the tops at ≈ 0.2 mm. */
@@ -1345,34 +1057,27 @@ function candleMesh(): Mesh & { profile: number[] } {
 // ── The transform ──────────────────────────────────────────────────────────────────
 const FROSTING_NODE = /^tier_(top|bottom)/;
 
-/** Which tier a master node belongs to, and how its decorations are mounted. */
-function nodeInfo(name: string): { tier: TierId; kind: Kind; mount?: 'side' | 'ledge' | 'crown'; jitter?: number; twist?: number } | null {
+/** Which tier a master node belongs to, and how the finish field moves it. */
+function nodeInfo(name: string): { tier: TierId; kind: Kind } | null {
   const m = FROSTING_NODE.exec(name);
   if (!m) return null;
   const tier = m[1] as TierId;
   const part = name.slice(m[0].length).replace(/^_/, '');
   switch (part) {
     case '': return { tier, kind: 'body' };
-    case 'shell_border': return { tier, kind: 'ledge', mount: 'ledge', jitter: 0.1 };
-    case 'border_pearls': return { tier, kind: 'ledge', mount: 'ledge', jitter: 0.07 };
-    case 'dots': return { tier, kind: 'hang', mount: 'side', jitter: 0.12 };
-    case 'pearls': return { tier, kind: 'hang', mount: 'side', jitter: 0.07 };
-    case 'tassels': return { tier, kind: 'column', mount: 'side', jitter: 0.07 };
-    case 'drops': return { tier, kind: 'column', mount: 'side', jitter: 0.03 };
-    case 'rosettes': return { tier, kind: 'crown', mount: 'ledge', jitter: 0.09, twist: (15 * Math.PI) / 180 };
-    case 'top_rosettes': return { tier, kind: 'crown', mount: 'crown', jitter: 0.1, twist: (15 * Math.PI) / 180 };
+    case 'shell_border': return { tier, kind: 'ledge' };
+    case 'border_pearls': return { tier, kind: 'ledge' };
+    case 'dots': return { tier, kind: 'hang' };
+    case 'pearls': return { tier, kind: 'hang' };
+    case 'tassels': return { tier, kind: 'column' };
+    case 'drops': return { tier, kind: 'column' };
+    case 'rosettes': return { tier, kind: 'crown' };
+    case 'top_rosettes': return { tier, kind: 'crown' };
     case 'swags': return { tier, kind: 'hang' };
     case 'rope_edge': return { tier, kind: 'side' };
     default: throw new Error(`birthday finish: unknown frosting node ${name}`);
   }
 }
-
-/**
- * The two softened rosettes (master angle, radians): one on each tier's crown, a little either
- * side of the camera's line (world azimuth 70° ↔ master 75° after the 5° presentation yaw), so the
- * eye finds them without them being the first thing it sees.
- */
-export const SOFTENED = [{ node: 'tier_top_rosettes', angle: (112 * Math.PI) / 180 }, { node: 'tier_bottom_rosettes', angle: (44 * Math.PI) / 180 }] as const;
 
 export interface FinishReport {
   lines: string[];
@@ -1578,10 +1283,10 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
             const yr = yc - 0.007;
             const r0 = R(yr);
             const centre: V3 = [r0 * radial[0], yr, r0 * radial[2]];
-            const axis = norm(add(radial, [0, 0.24 + 0.08 * g.s(), 0]));
+            const axis = norm(add(radial, [0, 0.16 + 0.06 * g.s(), 0]));
             const size = 0.5 * Math.max(c.tMax - c.tMin, c.yMax - c.yMin);
             const R0 = size * (1 + 0.05 * g.s());
-            const { mesh, top } = spiralRosette(centre, axis, [0, 1, 0], R0, seed0 + 619 * k, { rope: 0.4, turns: 1.25, droop: [0, -0.9 * MM * (1 + 0.4 * g.s()), 0] });
+            const { mesh, top } = spiralRosette(centre, axis, [0, 1, 0], R0, seed0 + 619 * k, { rope: 0.4, turns: 1.25, droop: [0, -0.9 * MM * (1 + 0.4 * g.s()), 0], rest: restOn(profiles[tier]) });
             appendMesh(out, mesh);
             // Its back: the soft mound of buttercream it was piped onto the edge with (seen from
             // behind, over the far side of the top), not the flat underside of a coil.
@@ -1623,39 +1328,39 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
 }
 
 /**
- * A piped part on a tier's edge rests on the cake: its underside (the vertices facing back along
- * `axis`, the hidden half of its ropes) is draped onto the tier's surface wherever it would hang in
- * the air (over the bead, above the top inside the edge, off the side), a little under it, so the part
- * merges into the frosting it was piped on instead of floating over it.
+ * The tier's surface seen from a point: signed distance in the (r, y) half-plane to the outer profile
+ * (positive outside the cake); `restOn`: how far back along a direction the surface is from a point.
  */
-function drapeOnTier(m: PipeMesh, axis: V3, prof: ProfilePoint[]): void {
-  // The outer profile (bottom edge → side → bead → top), as a polyline in (r, y).
+function profileSd(prof: ProfilePoint[]): (r: number, y: number) => number {
   const a = prof.findIndex((p) => p.ny > -0.995);
   const line = prof.slice(Math.max(0, a - 1));
-  for (let i = 0; i < m.pos.length; i += 3) {
-    const n: V3 = [m.nrm[i]!, m.nrm[i + 1]!, m.nrm[i + 2]!];
-    if (dot(n, axis) > -0.1) continue;
-    const x = m.pos[i]!, y = m.pos[i + 1]!, z = m.pos[i + 2]!;
-    const r = Math.hypot(x, z);
-    // Nearest point of the profile, and which side of it this vertex is on.
-    let best = Infinity, br = 0, by = 0, bnr = 0, bny = 0;
+  return (r, y) => {
+    let best = Infinity, sign = 1;
     for (let k = 0; k < line.length - 1; k++) {
       const p = line[k]!, q = line[k + 1]!;
       const dr = q.r - p.r, dy = q.y - p.y, l2 = dr * dr + dy * dy || 1e-12;
       const t = clamp(((r - p.r) * dr + (y - p.y) * dy) / l2, 0, 1);
       const pr = p.r + dr * t, py = p.y + dy * t;
       const d = Math.hypot(r - pr, y - py);
-      if (d < best) { best = d; br = pr; by = py; bnr = p.nr + (q.nr - p.nr) * t; bny = p.ny + (q.ny - p.ny) * t; }
+      if (d < best) { best = d; sign = (r - pr) * (p.nr + (q.nr - p.nr) * t) + (y - py) * (p.ny + (q.ny - p.ny) * t) >= 0 ? 1 : -1; }
     }
-    const outside = (r - br) * bnr + (y - by) * bny;
-    if (outside <= -0.0006) continue;
-    const nl = Math.hypot(bnr, bny) || 1;
-    const inset = 0.6 / 220;
-    const r2 = br - (bnr / nl) * inset, y2 = by - (bny / nl) * inset;
-    const s = r > 1e-9 ? r2 / r : 0;
-    m.pos[i] = x * s; m.pos[i + 1] = y2; m.pos[i + 2] = z * s;
-  }
-  recomputePipeNormals(m);
+    return sign * best;
+  };
+}
+function restOn(prof: ProfilePoint[]): (p: V3, dir: V3) => number {
+  const sd = profileSd(prof);
+  const at = (q: V3) => sd(Math.hypot(q[0], q[2]), q[1]);
+  return (p, dir) => {
+    // March back along −dir from 2 cm in front to 2 cm behind: the first crossing into the cake.
+    const step = 0.0004;
+    let prev = at(sub(p, mul(dir, -0.02)));
+    for (let t = -0.02 + step; t <= 0.02; t += step) {
+      const cur = at(sub(p, mul(dir, t)));
+      if (prev > 0 && cur <= 0) return t - step * (cur / (cur - prev));
+      prev = cur;
+    }
+    return 0;
+  };
 }
 
 /**

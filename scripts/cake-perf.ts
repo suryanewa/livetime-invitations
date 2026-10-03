@@ -63,11 +63,55 @@ for (const [name, w, h, dsf] of [['laptop', 1280, 720, 2], ['phone', 390, 844, 3
     for (let i = 0; i < 4; i++) { sc.controller.chooseResponse(i % 2 ? 'decline' : 'accept'); await wait(2400); }
     on = false;
     await wait(100);
+    // Bench: the guest-ready frame rendered back to back with a finish between (min and quartile of
+    // 120 GPU timings: robust against other work on the machine's GPU).
+    sc.controller.setMode('guest');
+    await wait(1500);
+    const st = W.__stage, gl2 = st.renderer.getContext() as WebGL2RenderingContext;
+    const ext2 = gl2.getExtension('EXT_disjoint_timer_query_webgl2');
+    const bench: number[] = [];
+    if (ext2) {
+      for (let i = 0; i < 140; i++) {
+        const q = gl2.createQuery()!;
+        gl2.beginQuery(ext2.TIME_ELAPSED_EXT, q);
+        st.renderer.render(st.scene, st.camera);
+        gl2.endQuery(ext2.TIME_ELAPSED_EXT);
+        gl2.finish();
+        for (let k = 0; k < 50 && !gl2.getQueryParameter(q, gl2.QUERY_RESULT_AVAILABLE); k++) await wait(2);
+        if (i >= 20 && gl2.getQueryParameter(q, gl2.QUERY_RESULT_AVAILABLE) && !gl2.getParameter(ext2.GPU_DISJOINT_EXT)) bench.push(gl2.getQueryParameter(q, gl2.QUERY_RESULT) / 1e6);
+        gl2.deleteQuery(q);
+      }
+    }
     const gl = W.__stage.renderer.getContext();
-    return { iv, gpu: gpuReady, timer: !!gl.getExtension('EXT_disjoint_timer_query_webgl2'), info: sc.controller.renderInfo() };
+    // Materials: the same frame with the frosting's own (patched) materials and with plain clones of
+    // them (three's PBR with the same maps, none of the cake's patches), alternated in blocks, wall
+    // time to a finish: the patches' cost, independent of the geometry.
+    const frosting: any[] = [];
+    st.scene.traverse((o: any) => { if (o.isMesh && /^frosting_cake_/.test(o.name)) frosting.push(o); });
+    const own = frosting.map((m) => m.material), plain = own.map((m: any) => m.clone());
+    const px = new Uint8Array(4);
+    // readPixels waits for the GPU to finish the frame (gl.finish alone does not under ANGLE/Metal).
+    const sync = () => gl2.readPixels(0, 0, 1, 1, gl2.RGBA, gl2.UNSIGNED_BYTE, px);
+    const block = async (mats: any[]) => {
+      frosting.forEach((m, i) => { m.material = mats[i]; });
+      for (let i = 0; i < 4; i++) { st.renderer.render(st.scene, st.camera); sync(); }
+      const t0 = performance.now();
+      for (let i = 0; i < 16; i++) { st.renderer.render(st.scene, st.camera); sync(); }
+      return (performance.now() - t0) / 16;
+    };
+    const tOwn: number[] = [], tPlain: number[] = [];
+    for (let rep = 0; rep < 8; rep++) { tOwn.push(await block(own)); tPlain.push(await block(plain)); await wait(5); }
+    frosting.forEach((m, i) => { m.material = own[i]; });
+    plain.forEach((m: any) => m.dispose());
+    const mats = { own: tOwn, plain: tPlain };
+    return { iv, gpu: gpuReady, bench, mats, timer: !!gl.getExtension('EXT_disjoint_timer_query_webgl2'), info: sc.controller.renderInfo() };
   });
   const gpuS = r.gpu.slice(10);
-  console.log(`${label} ${name}: frames ${r.iv.length} p50 ${pct(r.iv, 50).toFixed(2)} p95 ${pct(r.iv, 95).toFixed(2)} p99 ${pct(r.iv, 99).toFixed(2)} max ${Math.max(...r.iv).toFixed(1)} ms · GPU render at guest-ready (${r.timer ? `${gpuS.length} frames` : 'no timer query'}) p50 ${gpuS.length ? pct(gpuS, 50).toFixed(2) : '–'} p95 ${gpuS.length ? pct(gpuS, 95).toFixed(2) : '–'} ms · buffer ${r.info?.buffer?.join('×')} @${r.info?.pixelRatio}`);
+  const bs = [...r.bench].sort((x, y) => x - y);
+  const med = (a: number[]) => pct(a, 50);
+  const matsLine = ` · materials: own ${med(r.mats.own).toFixed(2)} vs plain ${med(r.mats.plain).toFixed(2)} ms (patches +${(med(r.mats.own) - med(r.mats.plain)).toFixed(2)})`;
+  const bench = bs.length ? ` · bench (${bs.length}) min ${bs[0]!.toFixed(2)} q25 ${pct(bs, 25).toFixed(2)} med ${pct(bs, 50).toFixed(2)} ms` : '';
+  console.log(`${label} ${name}${matsLine}${bench}: frames ${r.iv.length} p50 ${pct(r.iv, 50).toFixed(2)} p95 ${pct(r.iv, 95).toFixed(2)} p99 ${pct(r.iv, 99).toFixed(2)} max ${Math.max(...r.iv).toFixed(1)} ms · GPU render at guest-ready (${r.timer ? `${gpuS.length} frames` : 'no timer query'}) p50 ${gpuS.length ? pct(gpuS, 50).toFixed(2) : '–'} p95 ${gpuS.length ? pct(gpuS, 95).toFixed(2) : '–'} ms · buffer ${r.info?.buffer?.join('×')} @${r.info?.pixelRatio}`);
   await page.close();
 }
 await browser.close();

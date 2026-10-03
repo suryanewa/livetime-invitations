@@ -182,6 +182,10 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
   });
   for (const m of variants?.materials ?? []) if (isCake(m) && !isWax(m)) cakeMaterials.add(m);
   const frosting = frostingMeshes(root);
+  // v1.6: the tiers draw first, so the depth they leave rejects the piping's buried undersides and
+  // feet before they are shaded.
+  const tiers = frosting.get('cake_buttercream');
+  if (tiers) tiers.renderOrder = -1;
   for (const m of cakeMaterials) patchFrosting(m, press, frosting.get(m.name.replace(/_cocoa$/, '')) ?? null);
   // The plate round the cake's foot darkens a little where the bead border rests on it.
   const plate: PlateContact = { lift: { value: 0 }, foot: { value: new Vector3(0, 0, 0.66) } };

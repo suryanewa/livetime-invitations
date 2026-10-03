@@ -36,7 +36,7 @@ export const MASTER = {
    * pearls; v1.5 0.647391, the master's 0.639565).
    */
   tierTop: 0.603,
-  cakeTop: 0.64467,
+  cakeTop: 0.64371,
   /** Candles (all six identical): base, top, radius; they bed 0.017 into the top tier. */
   candleBase: 0.586,
   candleTop: 0.8028,
