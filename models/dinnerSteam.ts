@@ -88,7 +88,7 @@ export const STEAM_LOOK = {
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
    */
-  steps: { dense: 22, thin: 15, veil: 13 },
+  steps: { dense: 22, thin: 18, veil: 13 },
   /** The temporal resolve: the new frame's share of each pixel (≈ the last 7 frames averaged). */
   history: 0.1,
   /** The march's pixel budget: half the drawing buffer a side, at most this many pixels. */

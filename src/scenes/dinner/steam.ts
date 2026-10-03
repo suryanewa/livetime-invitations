@@ -110,7 +110,7 @@ export const CLOUD = {
   /** The room's draught leans the rising cloud (su of lean per su of height). */
   lean: 0.07,
   /** Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). */
-  erode: [0.25, 1.5] as const,
+  erode: [0.2, 1.3] as const,
   /** The cloud is gone by this age (s), faded out over the last `fadeOut`. */
   life: 2.0,
   fadeOut: 0.6,
@@ -176,11 +176,11 @@ export const VEIL = {
   t0: 0.3,
   ramp: 0.3,
   /** The first rush decays over `decay`; a `tail` share decays over `tailDecay` (s). */
-  decay: 0.7,
-  tail: 0.5,
-  tailDecay: 1.4,
+  decay: 0.4,
+  tail: 0.55,
+  tailDecay: 1.6,
   /** Visible density goes as the flow to this power (thin steam keeps a few bright ribbons), and the plate stops steaming visibly between these τ. */
-  gather: 0.5,
+  gather: 0.4,
   end: [4.4, 5.5] as const,
   /** A change of mind: the source dies away over this (s). */
   cut: 0.15,
@@ -196,7 +196,7 @@ export const VEIL = {
   /** Evaporation with height (su). */
   evaporate: 0.85,
   /** Mean density of the veil at its source (the cloud's is 1). */
-  strength: 3.2,
+  strength: 1.6,
 } as const;
 
 /** One of the steam's clocks, as the shader takes it. */
@@ -589,12 +589,12 @@ export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infin
 export interface CloudLook { amp: number; band: number; billow: number; warp: number; core: number; sheet: number; sheetWidth: number }
 export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, band: 0, billow: 0, warp: 0, core: 0, sheet: 0, sheetWidth: 0 }): CloudLook {
   out.amp = 0.008 + 0.07 * smooth(0.35, 1.5, age);
-  out.band = 0.015 + 0.045 * smooth(0.35, 1.7, age);
+  out.band = 0.015 + 0.065 * smooth(0.3, 1.3, age);
   out.billow = 0.028 + 0.042 * smooth(0.25, 1.3, age);
   out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
-  out.core = 1.3 + (0.05 - 1.3) * smooth(0.2, 0.95, age);
-  out.sheet = 0.35 + 0.2 * smooth(0.15, 0.5, age) - 0.4 * smooth(0.55, 1.5, age);
-  out.sheetWidth = 0.012 + 0.035 * smooth(0.3, 1.7, age);
+  out.core = 1.3 + (0.04 - 1.3) * smooth(0.2, 0.85, age);
+  out.sheet = 0.35 + 0.1 * smooth(0.15, 0.5, age) - 0.33 * smooth(0.4, 1.05, age);
+  out.sheetWidth = 0.012 + 0.05 * smooth(0.3, 1.3, age);
   return out;
 }
 
