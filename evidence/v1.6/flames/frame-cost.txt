@@ -1,0 +1,15 @@
+laptop 1280x720 CSS @2x (2,560x1,440 capped to 2.5 MP: 2,108x1,186)
+full                                 8.475 ms
+no bloom                             8.067 ms
+no haze                              7.892 ms
+no bloom, no haze                    7.008 ms
+no flames (no march, bloom, haze)    7.258 ms
+no flames, no flame light            6.417 ms
+
+phone 390x844 CSS @2 (Normal tier cap; 780x1,688)
+full                                 8.017 ms
+no bloom                             6.908 ms
+no haze                              7.192 ms
+no bloom, no haze                    6.433 ms
+no flames (no march, bloom, haze)    6.400 ms
+no flames, no flame light            5.692 ms

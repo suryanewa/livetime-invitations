@@ -279,7 +279,10 @@ const FLAME_FRAGMENT = /* glsl */ `
     // Varicose flicker wave travelling up the flame (the buoyant vortices' pinch), ±3 %.
     float wave = 1.0 + 0.03 * sin(uPhase - 7.0 * s) * smoothstep(0.15, 0.6, s);
     float rough = 1.0 + (0.015 + 0.12 * turb) * s * vnoise(q * 0.55 + vec3(3.1, 0.0, uNoise.z));
-    float R = uShape.y * profile(s) * wave * rough * (1.0 - uShape.w * 0.55 * exp(-pow((s - 0.12) / 0.14, 2.0)));
+    // Never under ≈1.1 px across (a flame thinner than a pixel falls between the pixels' samples:
+    // at the thumbnail one would blink out), its light spread over the wider body (flux kept).
+    float R0 = max(uShape.y, 1.1 * uPx);
+    float R = R0 * profile(s) * wave * rough * (1.0 - uShape.w * 0.55 * exp(-pow((s - 0.12) / 0.14, 2.0)));
     float r = length(vec2(x, z)) / max(R, 1e-6);
     if (r > 1.1) return;
     float cut = uState.x, cool = uState.y, lit = uState.w;
@@ -298,8 +301,11 @@ const FLAME_FRAGMENT = /* glsl */ `
     // sheet): seen overexposed, a crisp silhouette whose last fifth thins and cools into a narrow
     // amber rim (never sharper than a pixel: no stair-steps on a 9 px flame); the glow round it
     // is the camera's (the bloom).
-    float ew = max(0.04, 1.2 * uPx / max(R * rl, 1e-6));
-    float edge = exp(-22.0 * max(rr - 0.78, 0.0)) * (1.0 - smoothstep(1.0 - ew, 1.0, rr));
+    // (Its colour ramp and its cut are never narrower than ≈2 px: the 11 Hz flicker moves the edge
+    // by fractions of a pixel, and a thinner rim crawls.)
+    float px = uPx / max(R * rl, 1e-6);
+    float ew = max(0.04, 2.0 * px);
+    float edge = exp(-max(rr - 0.78, 0.0) / max(1.0 / 22.0, 1.6 * px)) * (1.0 - smoothstep(1.0 - ew, 1.0, rr));
     float rin = 0.78 * (1.0 - smoothstep(W * 1.2, W * 2.6, s));
     float soot = smoothstep(rin - 0.18, rin + 0.1, rr) * edge * step(sf, s);
     // The core's push into the foot: no soot on the axis just above the wick.
@@ -313,7 +319,7 @@ const FLAME_FRAGMENT = /* glsl */ `
     soot *= sootFormed(lit);
     // Temperature: hottest soot mid-flame; cooler at the tip and the outer mantle; just-formed soot
     // at the zone's foot is cooler (orange); the cut-off gas cools.
-    float T = 1900.0 - 380.0 * smoothstep(0.5, 1.0, s) - 300.0 * smoothstep(0.7, 1.0, rr);
+    float T = 1900.0 - 380.0 * smoothstep(0.5, 1.0, s) - 430.0 * smoothstep(0.6, 1.0, rr);
     T -= 220.0 * (1.0 - smoothstep(sf, sm + 0.1, s));
     T -= 330.0 * cool;
     T -= 260.0 * (1.0 - lit);
@@ -321,7 +327,7 @@ const FLAME_FRAGMENT = /* glsl */ `
     // Its soot burns out as it glows (a blown flame's soot is gone in tens of milliseconds, the
     // smoke that follows is the wick's vapour): the absorption goes with the radiant output, so a
     // dying flame thins away instead of darkening into a sooty ghost.
-    kap = soot * ${FLAME_KAPPA.toFixed(1)} * uState.z;
+    kap = soot * ${FLAME_KAPPA.toFixed(1)} * uState.z * clamp(dot(blackbody(T), vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
     // Blue sheath: the reaction zone round the bottom of the flame is a thin, translucent shell
     // (CH*, C2* chemiluminescence) outside the luminous zone, brightest where it curves under the
     // flame and where it is seen edge-on, fading up its sides.
@@ -332,7 +338,7 @@ const FLAME_FRAGMENT = /* glsl */ `
     cup *= smoothstep(0.0, 0.12, s) * (1.0 - smoothstep(W * 0.8, W * 1.25, s)) * (1.0 - smoothstep(0.0, 0.2, sootShell));
     // A dim, saturated blue limb that shows only where it covers a pixel and more (at the
     // showcase's sizes against the daylit wall it is all but invisible, as it is to a camera).
-    cup *= smoothstep(0.8, 1.6, 0.14 * R / max(uPx, 1e-7));
+    cup *= smoothstep(1.4, 2.6, 0.14 * R / max(uPx, 1e-7));
     // A fresh or starved flame is mostly blue; the cooling gas has no blue left.
     j += gBlue * cup * vec3(0.0003, 0.0026, 0.0058) * (1.0 + 2.2 * (1.0 - lit)) * (1.0 - cool);
     j *= alive;
@@ -354,7 +360,7 @@ const FLAME_FRAGMENT = /* glsl */ `
     vec3 lo = vec3(dot(o, uAxisX), dot(o, uAxisY), dot(o, uAxisZ));
     vec3 ld = vec3(dot(rd, uAxisX), dot(rd, uAxisY), dot(rd, uAxisZ));
     ld = vec3(ld.x < 0.0 ? -1.0 : 1.0, ld.y < 0.0 ? -1.0 : 1.0, ld.z < 0.0 ? -1.0 : 1.0) * max(abs(ld), vec3(1e-7));
-    float L = uShape.x, m = 1.15 * uShape.y + (0.2 + 2.5 * uNoise.y) * MM;
+    float L = uShape.x, m = 1.15 * max(uShape.y, 1.1 * uPx) + (0.2 + 2.5 * uNoise.y) * MM;
     vec3 bmin = vec3(-m - max(uShape.z, 0.0), -0.03 * L, -m);
     vec3 bmax = vec3(m + max(-uShape.z, 0.0), L, m);
     vec3 ta3 = (bmin - lo) / ld, tb3 = (bmax - lo) / ld;
@@ -376,7 +382,8 @@ const FLAME_FRAGMENT = /* glsl */ `
         Ls += Tr * jj;
         Tr *= exp(-kk * dt);
       }
-      Ls *= dt * uGain * intensity;
+      float rk = uShape.y / max(uShape.y, 1.1 * uPx);
+      Ls *= dt * uGain * intensity * rk * rk;
     }
     // A flame cut off from its fuel (the breath's) fades much faster than it cools (soot's
     // radiance falls roughly as T^5 and its soot burns out): amber, then gone.
