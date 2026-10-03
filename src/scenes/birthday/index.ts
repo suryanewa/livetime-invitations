@@ -491,6 +491,7 @@ export class BirthdayScene implements SceneInstance {
     n.bin_root!.visible = true;
     for (const c of this.rig.candles) {
       c.fire.quad.visible = true;
+      c.fire.bead.visible = true;
       // The molten wax (hidden until the melt shows it) is warmed too.
       if (c.run) c.run.visible = true;
       if (c.pool) c.pool.visible = true;

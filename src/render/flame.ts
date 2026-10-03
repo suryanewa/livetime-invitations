@@ -113,6 +113,8 @@ export interface FlameUniforms {
   uEmber: { value: number };
   uPhase: { value: number };
   uWidest: { value: number };
+  /** v1.6 polish: the luminous zone's foot (a fraction of the length: 1.2 mm under the wick's tip). */
+  uFoot: { value: number };
   uGain: { value: number };
   uBB: { value: Vector3[] };
   /** The renderer's exposure (the rig's), so the flame sits on the scene's own scale. */
@@ -172,6 +174,7 @@ const FLAME_FRAGMENT = /* glsl */ `
   uniform float uEmber;
   uniform float uPhase;
   uniform float uWidest;
+  uniform float uFoot;
   uniform float uGain;
   uniform vec3 uBB[BB_N];
   uniform float uExposure;
@@ -252,9 +255,11 @@ const FLAME_FRAGMENT = /* glsl */ `
   }
 
   // The flame's field at p: soot emission (linear radiance per unit length, before uGain), the
-  // blue sheath's, and soot's absorption.
-  void field(vec3 p, out vec3 j, out float kap) {
+  // blue sheath's (jb: kept apart, the camera sees it only where no soot glows on the same line of
+  // sight), and soot's absorption.
+  void field(vec3 p, out vec3 j, out vec3 jb, out float kap) {
     j = vec3(0.0);
+    jb = vec3(0.0);
     kap = 0.0;
     vec3 d = p - uBase;
     float L = uShape.x;
@@ -294,7 +299,8 @@ const FLAME_FRAGMENT = /* glsl */ `
     // envelope (the blue sheath) at its foot: its bottom is rounded, widest about a third of the
     // way up it, the dark core pushing up into its centre: a teardrop, not a bullet on a flat foot.
     float W = uWidest;
-    float sf = W * 1.02, sm = sf + 0.32 * (1.0 - sf);
+    // (v1.6 polish: the foot 1.2 mm under the wick's tip, wrapping it; it was at the tip.)
+    float sf = uFoot, sm = sf + 0.32 * (1.0 - sf);
     float rl = s < sm ? sqrt(max(0.0, 1.0 - pow((sm - s) / (sm - sf), 2.0))) : 1.0;
     float rr = r / max(rl, 1e-3);
     // The luminous zone ends within a few tenths of a millimetre (soot burns out at the flame
@@ -333,14 +339,16 @@ const FLAME_FRAGMENT = /* glsl */ `
     // flame and where it is seen edge-on, fading up its sides.
     // Thin (a few tenths of a millimetre, a limb seen edge-on), never over the soot (blue and yellow
     // never add up to lilac), and closed under the flame (no seam at the cup's foot).
-    float shell = smoothstep(0.86, 0.96, r) * (1.0 - smoothstep(0.99, 1.06, r));
-    float cup = shell * (1.0 - smoothstep(0.0, 0.2, s)) * (0.35 + 0.65 * (1.0 - smoothstep(0.0, 0.07, s)));
-    cup *= smoothstep(0.0, 0.12, s) * (1.0 - smoothstep(W * 0.8, W * 1.25, s)) * (1.0 - smoothstep(0.0, 0.2, sootShell));
+    float shell = smoothstep(0.88, 0.97, r) * (1.0 - smoothstep(0.99, 1.04, r));
+    // One continuous shell (v1.6 polish: closed under the flame, its floor and its sides together, up
+    // the sides to the luminous zone's foot and a little past it; it drew two crescents).
+    float cup = shell * (0.55 + 0.45 * (1.0 - smoothstep(0.0, 0.1, s)));
+    cup *= smoothstep(0.0, 0.015, s) * (1.0 - smoothstep(max(W, sf + 0.06) * 0.7, max(W, sf + 0.06) * 1.05, s)) * (1.0 - smoothstep(0.0, 0.2, sootShell));
     // A dim, saturated blue limb that shows only where it covers a pixel and more (at the
     // showcase's sizes against the daylit wall it is all but invisible, as it is to a camera).
     cup *= smoothstep(1.4, 2.6, 0.14 * R / max(uPx, 1e-7));
     // A fresh or starved flame is mostly blue; the cooling gas has no blue left.
-    j += gBlue * cup * vec3(0.0003, 0.0026, 0.0058) * (1.0 + 2.2 * (1.0 - lit)) * (1.0 - cool);
+    jb = gBlue * cup * vec3(0.0002, 0.0014, 0.0032) * (1.0 + 4.0 * (1.0 - lit)) * (1.0 - cool) * alive;
     j *= alive;
     kap *= alive;
   }
@@ -374,16 +382,22 @@ const FLAME_FRAGMENT = /* glsl */ `
     if (t1 > t0 && intensity > 1e-4) {
       float dt = (t1 - t0) / float(STEPS);
       float jit = ign(gl_FragCoord.xy);
+      vec3 Lb = vec3(0.0);
       for (int k = 0; k < STEPS; k++) {
         vec3 p = ro + rd * (t0 + (float(k) + jit) * dt);
-        vec3 jj;
+        vec3 jj, jbl;
         float kk;
-        field(p, jj, kk);
+        field(p, jj, jbl, kk);
         Ls += Tr * jj;
+        Lb += Tr * jbl;
         Tr *= exp(-kk * dt);
       }
       float rk = uShape.y / max(uShape.y, 1.1 * uPx);
-      Ls *= dt * uGain * intensity * rk * rk;
+      float sc = dt * uGain * intensity * rk * rk;
+      Ls *= sc;
+      // The blue sheath is a thousandth of the soot's radiance: wherever soot glows on the same line
+      // of sight the camera sees only the soot (blue over orange drew a pink-lilac foot).
+      Ls += Lb * sc * (1.0 - smoothstep(0.02, 0.25, dot(Ls, vec3(0.2126, 0.7152, 0.0722)) * uExposure));
     }
     // A flame cut off from its fuel (the breath's) fades much faster than it cools (soot's
     // radiance falls roughly as T^5 and its soot burns out): amber, then gone.
@@ -475,6 +489,7 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
     uEmber: { value: 0 },
     uPhase: { value: 0 },
     uWidest: { value: 0.25 },
+    uFoot: { value: 0.07 },
     uGain: { value: FLAME_GAIN },
     uBB: { value: bbTable() },
     uExposure: { value: 1 },

@@ -1,16 +1,16 @@
 import {
-  Box3, BufferAttribute, BufferGeometry, type Camera, Color, type Light, DynamicDrawUsage, type Material, Matrix3, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, Vector2,
+  Box3, BufferAttribute, BufferGeometry, type Camera, Color, type Light, DynamicDrawUsage, type Material, Matrix3, Matrix4, Mesh, MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, SphereGeometry, Vector2,
   Vector3, Vector4, type WebGLRenderer,
 } from 'three';
 import type { MaterialLibrary } from '../src/render/materials.ts';
-import { CANDLE } from './birthdayContract.ts';
+import { CANDLE, FLAME, WICK_EXPOSED } from './birthdayContract.ts';
 import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
 import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, SMOKE_GLOW, sootRadiance } from '../src/render/flame.ts';
 import { addHaze } from '../src/render/heatHaze.ts';
 import { SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
 import { SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
 import {
-  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, rand, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
+  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, POOL_Y, rand, WICK_TIP_Y, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /**
@@ -231,6 +231,11 @@ export interface FlameRig {
   twin: Mesh;
   /** v1.6: the live clock and flicker gain it was posed with (the heat haze shimmers only while live). */
   live: { time: number; gain: number };
+  /**
+   * v1.6 polish: the charred bead the curled wick ends in (a lit wick's tip is a rounded knob of
+   * carbon, glowing orange-red where it pokes into the flame sheet; the master's wick is a cut rod).
+   */
+  bead: Mesh;
 }
 
 /**
@@ -254,7 +259,11 @@ const WICK = { fresh: [0.8, 0.75, 0.64], char: [0.016, 0.015, 0.014], ash: [0.33
 /** The way candle `index`'s braid curls (the wick's own x–z, radians from +x): each its own, round the master's lean. */
 const curlAngle = (index: number) => (rand(index, 41) - 0.5) * 2.4;
 
-function wickMaterial(lib: MaterialLibrary, mesh: Mesh | null, index: number): { material: MeshStandardMaterial; look: WickLook } {
+/**
+ * `pool`: the pool's height above the wick mesh's foot (scene units); `squash`: how much of its
+ * exposed length a burning wick shows (v1.6 polish: the master's 4.2 mm drawn as WICK_EXPOSED).
+ */
+function wickMaterial(lib: MaterialLibrary, mesh: Mesh | null, index: number, pool = 0, squash = 1): { material: MeshStandardMaterial; look: WickLook } {
   const material = (lib.unique('mat_wick') as MeshStandardMaterial);
   const look: WickLook = { ember: { value: new Color(0, 0, 0) }, char: { value: 1 }, ash: { value: 0 } };
   const a = curlAngle(index);
@@ -264,14 +273,20 @@ function wickMaterial(lib: MaterialLibrary, mesh: Mesh | null, index: number): {
   // Scene units per local unit (uniform node scale; the quantization's), the wick's local extent.
   const k = mesh ? mesh.scale.y : 1;
   const y0 = { value: b?.min.y ?? 0 }, scale = { value: k }, len = { value: b ? (b.max.y - b.min.y) * k : 0.0327 };
+  const poolU = { value: pool }, squashK = { value: squash };
   material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { uEmberColor: look.ember, uWickChar: look.char, uWickAsh: look.ash, uWickY0: y0, uWickS: scale, uWickLen: len, uWickCurl: curlDir });
+    Object.assign(shader.uniforms, { uEmberColor: look.ember, uWickChar: look.char, uWickAsh: look.ash, uWickY0: y0, uWickS: scale, uWickLen: len, uWickCurl: curlDir, uWickPool: poolU, uWickK: squashK });
     const f3 = (v: readonly number[]) => `vec3(${v.map((x) => x.toFixed(4)).join(', ')})`;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vWickTop;\nvarying vec2 vWickXZ;\nuniform float uWickY0;\nuniform float uWickS;\nuniform float uWickLen;\nuniform float uWickChar;\nuniform vec2 uWickCurl;')
+      .replace('#include <common>', '#include <common>\nvarying float vWickTop;\nvarying vec2 vWickXZ;\nuniform float uWickY0;\nuniform float uWickS;\nuniform float uWickLen;\nuniform float uWickChar;\nuniform vec2 uWickCurl;\nuniform float uWickPool;\nuniform float uWickK;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
   float wickU = (position.y - uWickY0) * uWickS;
-  vWickTop = uWickLen - wickU;
+  // v1.6 polish: a burning wick shows WICK_EXPOSED above its pool (its exposed part squashed; the
+  // master's mesh is the fresh 4.2 mm wick), its cut end tapered to a rounded, charred tip.
+  float wickD = wickU - uWickPool;
+  vWickTop = (uWickLen - uWickPool) * uWickK - (wickD > 0.0 ? wickD * uWickK : wickD);
+  transformed.y -= max(wickD, 0.0) * (1.0 - uWickK) / uWickS;
+  transformed.xz *= 1.0 - 0.4 * smoothstep(0.6, 1.0, wickU / uWickLen) * smoothstep(0.85, 1.0, wickU / uWickLen);
   vWickXZ = position.xz;
   float wickK = clamp(wickU / uWickLen, 0.0, 1.0);
   transformed.xz += uWickCurl * (${WICK.curl.toFixed(4)} / uWickS) * uWickChar * wickK * wickK * wickK;`);
@@ -287,7 +302,7 @@ function wickMaterial(lib: MaterialLibrary, mesh: Mesh | null, index: number): {
   float uneven = 0.5 + 0.5 * sin(3.0 * wickAng + 1.7) * sin(5.0 * wickAng + 0.4);
   totalEmissiveRadiance += uEmberColor * (1.0 - smoothstep(0.0015, 0.003 + 0.0015 * uneven, vWickTop));`);
   };
-  material.customProgramCacheKey = () => 'birthday-wick-v15c';
+  material.customProgramCacheKey = () => 'birthday-wick-v16p';
   return { material, look };
 }
 
@@ -353,6 +368,9 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
     }
   });
   if (n) top.set(sx / n, box.max.y, sz / n);
+  // v1.6 polish: the burning wick stands WICK_EXPOSED over its pool (its material squashes the rest).
+  const wickPool = POOL_Y - box.min.y, wickSquash = WICK_EXPOSED / Math.max(1e-6, box.max.y - POOL_Y);
+  top.y = WICK_TIP_Y;
 
   const material = lib.unique('mat_flame') as ShaderMaterial & { uniforms: FlameUniforms };
   const quad = new Mesh(quadGeometry, material);
@@ -438,7 +456,7 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   let wickMesh: Mesh | null = null;
   wick.traverse((o) => { if (!wickMesh && (o as Mesh).isMesh) wickMesh = o as Mesh; });
   const wm = wickMesh as Mesh | null;
-  const w = wickMaterial(lib, wm, index);
+  const w = wickMaterial(lib, wm, index, wickPool, wickSquash);
   if (wm) wm.material = w.material;
   // The curl's reach at the tip in candle space (the material bends the top by WICK.curl along its
   // own x–z, scaled by the quantization): the ember and the smoke leave from the curled tip.
@@ -449,8 +467,19 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
       .applyMatrix3(new Matrix3().setFromMatrix4(new Matrix4().multiplyMatrices(toCandle, wm.matrixWorld)));
   }
   u.uWickR.value = CANDLE.wickRadius;
-  return { node, quad, material, wickTip: top, index, shorten: 0, lights, wickMaterial: w.material, wick: w.look, curlTip, twin, live };
+  const bead = new Mesh(beadGeometry(), new MeshStandardMaterial({ name: 'wick_bead', color: new Color(...WICK.char), roughness: 1, metalness: 0 }));
+  bead.name = `${node.name}_bead`;
+  bead.userData.fx = true;
+  bead.userData.noShadowCast = true;
+  bead.visible = false;
+  node.add(bead);
+  material.addEventListener('dispose', () => (bead.material as MeshStandardMaterial).dispose());
+  return { node, quad, material, wickTip: top, index, shorten: 0, lights, wickMaterial: w.material, wick: w.look, curlTip, twin, live, bead };
 }
+
+let beadShared: SphereGeometry | null = null;
+/** The bead: a knob ≈1.1 mm across (the braid's char swells a little over the wick's 1 mm). */
+const beadGeometry = () => (beadShared ??= new SphereGeometry(0.55 * MM_UNITS, 12, 8));
 
 const qInv = new Quaternion();
 const qCake = new Quaternion();
@@ -528,6 +557,10 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   u.uBase.value.copy(anchor).addScaledVector(flow, f.lift);
   u.uShape.value[0] = L;
   u.uShape.value[1] = R;
+  // v1.6 polish: the flame's zones stand where they are on the wick, whatever its length: widest a
+  // millimetre over the wick's tip, the luminous zone's foot 1.2 mm under it (it wraps the tip).
+  u.uWidest.value = Math.min(0.6, Math.max(0.08, (WICK_TIP_Y + FLAME.widest - FLAME_REST.base) / L));
+  u.uFoot.value = Math.min(0.8, Math.max(0.02, (WICK_TIP_Y - FLAME.foot - FLAME_REST.base) / L));
   u.uShape.value[2] = bend;
   u.uShape.value[3] = f.neck;
   u.uState.value[0] = f.cut;
@@ -542,6 +575,16 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   u.uWickFoot.value.set(r.wickTip.x, r.wickTip.y - 4 * MM_UNITS - r.shorten, r.wickTip.z).applyMatrix4(toNode);
   u.uEmber.value = ember;
   u.uPhase.value = fl.phase;
+  // The bead on the curled tip: charred once lit, its ember's glow, grey as the ash forms.
+  const charred = r.wick.char.value;
+  r.bead.visible = charred > 0.5;
+  if (r.bead.visible) {
+    r.bead.position.copy(u.uWick.value);
+    const bm = r.bead.material as MeshStandardMaterial;
+    const a = r.wick.ash.value;
+    bm.color.setRGB(WICK.char[0] + (WICK.ash[0] - WICK.char[0]) * a, WICK.char[1] + (WICK.ash[1] - WICK.char[1]) * a, WICK.char[2] + (WICK.ash[2] - WICK.char[2]) * a);
+    bm.emissive.copy(r.wick.ember.value);
+  }
   // The volume's turbulence: carried on the live clock; the breath's gust tears the flame (by its lean), and a dying flame frays.
   u.uNoise.value.set(fl.time, Math.min(1, Math.max(f.tilt / 1.1, 0.6 * f.cut)), 3.7 * r.index + 0.5);
   tip.copy(u.uBase.value).addScaledVector(u.uAxisY.value, L).addScaledVector(u.uAxisX.value, -bend);

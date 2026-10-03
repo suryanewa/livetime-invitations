@@ -31,17 +31,23 @@ const alphaNear = (st: SmokeStrand, w: [number, number, number], r: number) => {
 const MPS = 5;
 
 describe('Birthday fire: the flame', () => {
-  it('is a birthday candle flame: 13–15 mm from the pool, 4.5–5.5 mm wide, widest at the wick top; each a little different', () => {
+  it('is a birthday candle flame on a short wick: 15–18 mm from the pool, 4.5–5.5 mm wide, its luminous foot wrapping the wick\'s tip; each a little different', () => {
+    // v1.6 polish (judge: "a flame on a stick"): ±12 % (stratified), a 3 mm burning wick under a
+    // 15.5 mm flame, the luminous zone's foot 1.2 mm under the wick's tip, widest 1 mm over it.
     const sizes = Array.from({ length: CANDLE_COUNT }, (_, i) => flameScale(i));
-    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(0.93);
-    expect(Math.max(...sizes)).toBeLessThanOrEqual(1.07);
-    expect(Math.max(...sizes) - Math.min(...sizes)).toBeGreaterThan(0.04);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(0.86);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(1.14);
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeGreaterThan(0.16);
     const top = FLAME_REST.base + FLAME_REST.length - POOL_Y;
-    expect(top / MM).toBeGreaterThanOrEqual(13);
-    expect(top / MM).toBeLessThanOrEqual(15);
+    expect(top / MM).toBeGreaterThanOrEqual(15);
+    expect(top / MM).toBeLessThanOrEqual(18);
     expect((2 * FLAME_REST.radius) / MM).toBeGreaterThanOrEqual(4.5);
     expect((2 * FLAME_REST.radius) / MM).toBeLessThanOrEqual(5.5);
-    expect(FLAME_REST.base + FLAME_REST.widest * FLAME_REST.length).toBeCloseTo(WICK_TIP_Y, 9);
+    expect((WICK_TIP_Y - POOL_Y) / MM).toBeCloseTo(3, 6);
+    expect((WICK_TIP_Y - (FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length)) / MM).toBeCloseTo(1.2, 6);
+    expect((FLAME_REST.base + FLAME_REST.widest * FLAME_REST.length - WICK_TIP_Y) / MM).toBeCloseTo(1, 6);
+    // The bare wick under the luminous zone is at most a quarter of the flame seen above the pool.
+    expect((FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length - POOL_Y) / top).toBeLessThan(0.25);
   });
 
   it('flickers at 10–12 Hz with a few per cent of length, sways a few degrees in the room\'s draft, and is exactly still at gain 0', () => {

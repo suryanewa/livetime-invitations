@@ -1,4 +1,4 @@
-import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME } from '../../../models/birthdayContract.ts';
+import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME, WICK_EXPOSED } from '../../../models/birthdayContract.ts';
 import { CAMERA_ANGLES } from '../../render/camera.ts';
 import type { SequenceName } from '../../core/types.ts';
 import { LIGHT_FROM } from './placement.ts';
@@ -62,9 +62,9 @@ const smooth = (x: number) => { const t = clamp01(x); return t * t * (3 - 2 * t)
 const smoother = (x: number) => { const t = clamp01(x); return Math.min(1, t * t * t * (t * (6 * t - 15) + 10)); };
 
 // ── The steady flame (candle_NN space; FLAME_REST.base etc. are heights above the candle base) ──
-/** Candle top (the wax pool) and wick tip, heights in candle_NN space. */
+/** Candle top (the wax pool) and the burning wick's tip (v1.6 polish: 3 mm up), heights in candle_NN space. */
 export const POOL_Y = CANDLE.height;
-export const WICK_TIP_Y = CANDLE.wickBase + CANDLE.wickHeight;
+export const WICK_TIP_Y = POOL_Y + WICK_EXPOSED;
 
 /** The steady flame (sizes from the contract, models/birthdayContract.ts FLAME). */
 export const FLAME_REST = {
@@ -74,19 +74,25 @@ export const FLAME_REST = {
   length: FLAME.height,
   /** Half the widest width (5 mm). */
   radius: FLAME.radius,
-  /** Where it is widest (at the wick top), as a fraction of its length. */
-  widest: (WICK_TIP_Y - FLAME.base) / FLAME.height,
+  /** Where it is widest (a millimetre above the wick top), as a fraction of its length. */
+  widest: (WICK_TIP_Y + FLAME.widest - FLAME.base) / FLAME.height,
+  /** v1.6 polish: the luminous zone's foot (1.2 mm under the wick's tip: it wraps it), as a fraction of its length. */
+  foot: (WICK_TIP_Y - FLAME.foot - FLAME.base) / FLAME.height,
 } as const;
 
 /** Visible flame top above the candle base at rest. */
 export const FLAME_REST_TOP = FLAME_REST.base + FLAME_REST.length;
 
 /**
- * No two wicks stand the same height: candle `i`'s flame is this many times FLAME_REST (±7 %
- * seeded; Lf ∝ L^0.63, so ±0.5 mm of wick).
+ * No two wicks stand the same height: candle `i`'s flame is this many times FLAME_REST (v1.6
+ * polish: ±12 % seeded, the judge's ±10–15 %; Lf ∝ L^0.63, so ±0.6 mm of wick and its curl).
  */
 export function flameScale(i: number): number {
-  return 1 + 0.07 * signed(i, 50);
+  // Stratified: the six take −1 … +1 of the spread in a seeded order (independent draws of six
+  // clustered on one side, 0.91–1.02), with a little jitter.
+  const rank = CANDLE_SOCKETS.reduce((n, _, j) => n + (rand(j, 50) < rand(i, 50) ? 1 : 0), 0);
+  const k = CANDLE_COUNT > 1 ? (2 * rank) / (CANDLE_COUNT - 1) - 1 : 0;
+  return 1 + 0.12 * (0.85 * k + 0.15 * signed(i, 51));
 }
 
 /**
@@ -468,8 +474,12 @@ export function smokeSource(i: number, kind: SmokeKind = 'breath'): SmokeSource 
 }
 
 export const EMBER = {
-  /** Wick glow while the flame burns over it: its very tip, where it pokes into the hot mantle, a dull red (≈1,030 K). */
-  lit: 0.3,
+  /**
+   * Wick glow while the flame burns over it: its curled tip, where it pokes into the flame sheet,
+   * glows orange-red (v1.6 polish: ≈1,240 K, a bead in every macro photograph; v1.5's dull red,
+   * 1,030 K, left a black rod under the flame).
+   */
+  lit: 0.8,
   /** Fresh oxygen on the bare wick: it flares to its peak in 50 ms, then cools (e-folding 0.8 s). */
   flare: 0.05,
   decay: 0.8,

@@ -551,11 +551,11 @@ describe('Birthday builder (code-authored candles)', () => {
       const base = STAND_TOP + CANDLE.seat;
       expect(wick.max.y - base).toBeGreaterThan(CANDLE.wickBase + CANDLE.wickHeight - 0.002);
       expect(wick.min.y - base).toBeLessThan(CANDLE.height);
-      // The real flame (v1.5): its cup 1 mm above the wax, the wick top inside it, its tip 14 mm up.
+      // The real flame (v1.5; v1.6 polish 15.5 mm): its cup 0.8 mm above the wax, the wick top inside it, its tip 16.3 mm up.
       expect(FLAME.base).toBeGreaterThan(CANDLE.height);
       expect(wick.max.y - base).toBeGreaterThan(FLAME.base);
       expect(wick.max.y - base).toBeLessThan(FLAME.base + 0.4 * FLAME.height);
-      expect((FLAME_TOP - CANDLE.height) / 0.005).toBeCloseTo(14, 6);
+      expect((FLAME_TOP - CANDLE.height) / 0.005).toBeCloseTo(16.3, 6);
     }
   });
 });
