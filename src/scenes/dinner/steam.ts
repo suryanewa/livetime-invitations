@@ -68,8 +68,13 @@ export const CLOUD = {
   floorGrow: 0.1,
   /** Densest under the crown (warm saturated air rises; the dome's cool wall condenses it): the base keeps this share. */
   baseDensity: 0.55,
-  /** τ (s) at which the thermal clock starts: the rim ≈ 5 cm up and moving off. */
-  release: 0.3,
+  /**
+   * τ (s) at which the thermal clock starts: the dome is clearing the cloud's side (it is clear of
+   * the plate's middle by 0.44 s). Before it, and for a beat after it, the fog stands in the dome's
+   * shape (v1.6 polish: the judge saw the hold last 0.1 s; it now stands ≈ 0.3 s, its walls within
+   * a centimetre, its top drawn up into the dome's wake).
+   */
+  release: 0.4,
   /** The dome's drag: the crown's air follows its lift by this share, and its path by `side`, while it is over the cloud. */
   dragUp: 0.32,
   dragSide: 0.1,
@@ -77,7 +82,7 @@ export const CLOUD = {
   overlap: [0.15, 0.7] as const,
   /** The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s. */
   riseW: 1.45,
-  riseStart: 0.25,
+  riseStart: 0.3,
   riseMix: 0.9,
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
   base: 0,
@@ -127,7 +132,7 @@ export const SPILL = {
   /** It climbs the wall at this speed (su/s, ≈ 25 cm/s: the exchange outflow caught by the hot wall, drawn up by the lifting dome). */
   rise: 1.5,
   /** Spread round the raised rim (rad, Gaussian width). */
-  spread: 0.6,
+  spread: 0.8,
   /** Its source: the raised rim's gap (su) at which it is full. */
   fullGap: 0.09,
   /** It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). */
@@ -330,16 +335,17 @@ export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinit
   out.rise = U;
   out.cap = 1 + CLOUD.capGrow * U;
   out.squash = CLOUD.squash * smooth(0, 1.4, a);
-  out.stem = 1 - CLOUD.stem * smooth(0, 1.2, a);
-  out.skirt = CLOUD.skirt * (1 - Math.exp(-a / CLOUD.skirtTime)) * smooth(0, 0.35, a);
-  out.roll = CLOUD.roll * (1 - Math.exp(-a / CLOUD.rollTime)) * smooth(0, 0.4, a);
+  // (The hold: nothing slumps, narrows, rolls, sways or leans for the first ≈ 0.1–0.25 s of the thermal.)
+  out.stem = 1 - CLOUD.stem * smooth(0.1, 1.3, a);
+  out.skirt = CLOUD.skirt * (1 - Math.exp(-a / CLOUD.skirtTime)) * smooth(0.1, 0.45, a);
+  out.roll = CLOUD.roll * (1 - Math.exp(-a / CLOUD.rollTime)) * smooth(0.1, 0.5, a);
   // The ring's core sits inside the cap's edge (where the dome's shoulder was), carried with it.
   const Ys = CLOUD.ringAt[1], Ps = CLOUD.ringAt[0] * CLOUD.radius;
   out.ringR = Ps * out.cap;
   out.ringY = Ys + U * riseWeight(Ys) * centreWeight(Ps) + out.dragUp * dragWeight(Ys) * dragCentre(Ps) - out.squash * capIntegral(Ys);
   out.ringSigma = CLOUD.ringCore * (1 + 0.4 * (out.cap - 1));
-  out.turb = CLOUD.turb[0] + (CLOUD.turb[1] - CLOUD.turb[0]) * (1 - Math.exp(-a / CLOUD.turbTime)) * smooth(0, 0.3, a);
-  out.lean.copy(LEAN_DIR).multiplyScalar(CLOUD.lean * smooth(0.1, 1.6, a));
+  out.turb = CLOUD.turb[0] + (CLOUD.turb[1] - CLOUD.turb[0]) * (1 - Math.exp(-a / CLOUD.turbTime)) * smooth(0.15, 0.5, a);
+  out.lean.copy(LEAN_DIR).multiplyScalar(CLOUD.lean * smooth(0.25, 1.8, a));
   out.erode = 0.97 * Math.pow(smooth(CLOUD.erode[0], CLOUD.erode[1], a), 0.85);
   out.fade = 1 - smooth(CLOUD.life - CLOUD.fadeOut, CLOUD.life, a);
   out.floor = CLOUD.floor + CLOUD.floorGrow * smooth(0, 1.0, a);
