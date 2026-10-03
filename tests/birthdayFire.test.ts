@@ -320,6 +320,30 @@ describe('Birthday fire: the smoke', () => {
     }
   });
 
+  it('the blow (v1.6 polish): the flame bends from its base into a long thin tongue, its luminous zone tears and is gone within 50 ms of lift-off, the base a dim blue sheet until the flame is out', () => {
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const b = BREATH_AT[i]!;
+      let maxH = 0, minW = 1, maxBend = 0;
+      for (let t = b.arrive; t < b.lift; t += 0.001) {
+        const f = flameState(i, t, 'accept');
+        maxH = Math.max(maxH, f.height); minW = Math.min(minW, f.width); maxBend = Math.max(maxBend, f.bend);
+      }
+      expect(maxH).toBeGreaterThan(1.5);
+      expect(maxH).toBeLessThan(2);
+      expect(minW).toBeLessThan(0.62);
+      expect(maxBend).toBeGreaterThan(0.3);
+      // Gone within 50 ms of lift-off (its light and its soot), never drifting off as a whole flame.
+      const at50 = flameState(i, b.lift + 0.05, 'accept');
+      expect(at50.intensity).toBeLessThan(0.02);
+      expect(at50.tear).toBeGreaterThan(0.9);
+      expect(at50.lift).toBeLessThan(5 * MM);
+      // The lifted base burns on as a dim blue sheet, out with the extinction wave (unchanged).
+      expect(flameState(i, b.lift + 0.05, 'accept').blue).toBeGreaterThan(0.1);
+      expect(flameState(i, b.lift + 0.05, 'accept').blue).toBeLessThan(0.75);
+      expect(flameState(i, extinguishedAt(i) + 0.001, 'accept').out).toBe(true);
+    }
+  });
+
   it('the breath: a round jet from the camera side, 1/d to each candle, strong enough to blow every flame out', () => {
     for (let i = 0; i < CANDLE_COUNT; i++) {
       const b = BREATH_AT[i]!;

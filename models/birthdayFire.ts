@@ -545,7 +545,8 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   swayV.set(fl.swayX + lx, 0, fl.swayZ + lz).applyQuaternion(qCake).applyQuaternion(qInv);
   swayV.addScaledVector(up, -swayV.dot(up));
   const swayA = swayV.length();
-  dirH.copy(flow).multiplyScalar(f.tilt).addScaledVector(swayV, 0.55);
+  // The breath's lean, the same way: (1 − bend) of it tilts the axis, the rest curves it downstream.
+  dirH.copy(flow).multiplyScalar(f.tilt * (1 - f.bend)).addScaledVector(swayV, 0.55);
   let tilt = dirH.length();
   if (tilt > 1e-6) dirH.divideScalar(tilt);
   else { dirH.copy(flow); tilt = 0; }
@@ -556,8 +557,9 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   const size = flameScale(r.index);
   const L = FLAME_REST.length * size * Math.max(f.height, 1e-3) * fl.height;
   const R = FLAME_REST.radius * size * Math.max(f.width, 1e-3) * fl.width;
-  // (The breath's curl of the tip back up, less the room's bend along the lean.)
-  const bend = 0.5 * L * tilt * f.bend - 0.45 * L * swayA * (swayA > 1e-9 ? swayV.dot(dirH) / swayA : 0);
+  // The tip's offset along the lean (negative: downstream): the breath's curve (its tip turned a
+  // further tilt·bend; the axis x = c·s², c = L·tan(Δ)/2) and the room's bend.
+  const bend = -0.5 * L * Math.tan(f.tilt * f.bend) * flow.dot(dirH) - 0.45 * L * swayA * (swayA > 1e-9 ? swayV.dot(dirH) / swayA : 0);
   // Base: on the wick's axis at the cup's height, carried downstream once it has lifted off.
   anchor.set(r.wickTip.x, FLAME_REST.base - r.shorten, r.wickTip.z).applyMatrix4(toNode);
   u.uBase.value.copy(anchor).addScaledVector(flow, f.lift);
@@ -573,6 +575,7 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   u.uState.value[1] = f.cool;
   u.uState.value[2] = Math.max(0, f.intensity * fl.intensity);
   u.uState.value[3] = f.lit;
+  u.uBreath.value.set(f.tear, f.blue);
   // The bloom's twin shows only while there is a flame to glow (an ember alone does not bloom).
   r.twin.visible = u.uState.value[2] * sootFormed(f.lit) > 1e-3;
   // The ember sits on the tip where the charred braid has curled it.

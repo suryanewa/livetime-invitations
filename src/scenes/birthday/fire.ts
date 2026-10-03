@@ -295,9 +295,19 @@ export const BREATH = {
    * flow while it dims; the wick's vapour streams through the same place as the first smoke.
    */
   blowOff: 0.5,
-  carry: 0.35,
+  carry: 0.12,
   /** Largest lean drawn (rad): a flame laid nearly flat. */
   maxTilt: (76 * Math.PI) / 180,
+  /**
+   * v1.6 polish: the drawn-out flame (× length and × width at full flow, r = U/(U + w_b) → 0.76),
+   * the share of its lean that bends it from the base, how fast the luminous zone tears and is gone
+   * after lift-off (s), and the lifted base's blue sheet (× the burning cup's).
+   */
+  stretch: 0.9,
+  thin: 0.65,
+  bend: 0.55,
+  tear: 0.06,
+  sheet: 0.7,
 } as const;
 
 interface CandleBreath {
@@ -386,6 +396,13 @@ export interface FlameState {
   cut: number;
   /** Cooling of the detached gas: 0 burning (≈1,900 K), 1 dark. */
   cool: number;
+  /**
+   * v1.6 polish: the blow's tearing of the luminous zone into tongues (0 whole – 1 gone), and the
+   * blue sheath's strength (1 the burning flame's cup; after lift-off the dim sheet the lifted base
+   * is, fading to 0 as the flame goes out).
+   */
+  tear: number;
+  blue: number;
   /** Radiant output relative to the steady flame (light, melt). */
   intensity: number;
   /** No flame left at all. */
@@ -393,7 +410,7 @@ export interface FlameState {
 }
 
 export function newFlameState(): FlameState {
-  return { lit: 1, height: 1, width: 1, tilt: 0, dirX: 1, dirZ: 0, bend: 0, neck: 0, lift: 0, cut: 0, cool: 0, intensity: 1, out: false };
+  return { lit: 1, height: 1, width: 1, tilt: 0, dirX: 1, dirZ: 0, bend: 0, neck: 0, lift: 0, cut: 0, cool: 0, tear: 0, blue: 1, intensity: 1, out: false };
 }
 
 /** How much of a growing flame's soot (its yellow, its light) has formed, by its growth (shader: sootFormed). */
@@ -404,14 +421,14 @@ export function sootFormed(lit: number): number {
 /** A steady lit flame. */
 export function litFlame(out: FlameState): FlameState {
   out.lit = 1; out.height = 1; out.width = 1; out.tilt = 0; out.dirX = 1; out.dirZ = 0; out.bend = 0; out.neck = 0;
-  out.lift = 0; out.cut = 0; out.cool = 0; out.intensity = 1; out.out = false;
+  out.lift = 0; out.cut = 0; out.cool = 0; out.tear = 0; out.blue = 1; out.intensity = 1; out.out = false;
   return out;
 }
 
 /** No flame. */
 export function noFlame(out: FlameState): FlameState {
   litFlame(out);
-  out.lit = 0; out.height = 0; out.width = 0; out.cut = 1; out.cool = 1; out.intensity = 0; out.out = true;
+  out.lit = 0; out.height = 0; out.width = 0; out.cut = 1; out.cool = 1; out.tear = 1; out.blue = 0; out.intensity = 0; out.out = true;
   return out;
 }
 
@@ -460,22 +477,26 @@ export function flameState(i: number, t: number, sequence: SequenceName, out: Fl
   // The gust is not steady: a fast flutter of the lean (15–22 Hz, ±7 %), out of phase per candle.
   const flutter = 1 + 0.07 * Math.sin(2 * Math.PI * (15 + 7 * rand(i, 13)) * t + 6.283 * rand(i, 14));
   out.tilt = Math.min(BREATH.maxTilt, Math.atan(U / BREATH.buoyant) * flutter);
-  out.height = 1 + 0.45 * r;
-  out.width = 1 - 0.3 * r;
-  out.bend = 0.35 * r;
+  // v1.6 polish (judge: "a rigid tilt, then a yellow leaf drifts away"): the flame bends from its
+  // base (`bend`: the share of the lean that is the axis curving downstream, the base staying on
+  // the wick) and is drawn out into a thin tongue, up to ≈1.7 × as long and ≈0.55 × as wide.
+  out.height = 1 + BREATH.stretch * r;
+  out.width = 1 - BREATH.thin * r;
+  out.bend = BREATH.bend * smooth(r / 0.35);
   out.neck = smoother((U / BREATH.liftOff - 0.35) / 0.65);
   if (t > b.lift) {
-    // Off the wick: the lifted flame hovers a few millimetres downstream and dies from the base up;
-    // at blow-off the rest lets go and drifts with the flow, cooling: yellow, orange, dull red.
+    // Off the wick: the luminous zone, cut off from its fuel, tears into one or two orange tongues
+    // that shrink downstream and are gone within BREATH.tear s (its soot burns out in tens of
+    // milliseconds); the base lifts off as a dim blue sheet a few millimetres downstream, going out
+    // with the extinction wave (b.out) as before.
     const k = (t - b.lift) / b.out;
-    const tBlow = b.lift + BREATH.blowOff * b.out;
-    out.lift = BREATH.standoff * smooth(k / BREATH.blowOff) + BREATH.carry * smooth((k - BREATH.blowOff) / (1 - BREATH.blowOff)) * Math.max(0, breathDrift(i, tBlow, t));
-    out.cut = smooth(k);
-    // Cut off from its fuel the soot burns out and cools within tens of milliseconds: the flame
-    // dims as it shrinks (still yellow-orange: it never lingers as a red ghost), gone by 70 %.
-    out.cool = smooth((k - 0.1) / 0.6);
-    // Cut off from its fuel the flame shrinks as it dies.
-    out.height *= 1 - 0.45 * smooth(k);
+    const kt = (t - b.lift) / BREATH.tear;
+    out.lift = BREATH.standoff * smooth(k / BREATH.blowOff) + BREATH.carry * smooth((k - BREATH.blowOff) / (1 - BREATH.blowOff)) * Math.max(0, breathDrift(i, b.lift + BREATH.blowOff * b.out, t));
+    out.tear = smooth(kt);
+    out.cut = smooth(kt);
+    out.cool = smooth((kt - 0.3) / 0.7);
+    out.blue = BREATH.sheet * (1 - smooth(k));
+    out.height *= 1 - 0.3 * smooth(kt);
   }
   // Radiant output: the part of the flame still burning, at its temperature.
   out.intensity = (1 - out.cut) * (1 - out.cool) ** 2;

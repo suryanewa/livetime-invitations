@@ -1,4 +1,4 @@
-import { AddEquation, Color, CustomBlending, DoubleSide, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector3, Vector4 } from 'three';
+import { AddEquation, Color, CustomBlending, DoubleSide, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
 
 /**
  * Candle flame and smoke shaders (v1.5, Birthday #4; the flame rebuilt as a volume in v1.6, the
@@ -106,6 +106,8 @@ export interface FlameUniforms {
   uShape: { value: [number, number, number, number] };
   /** cut, cool, intensity, lit. */
   uState: { value: [number, number, number, number] };
+  /** v1.6 polish: the blow's tearing of the luminous zone (0–1) and the blue sheath's strength (1 burning; the lifted sheet after). */
+  uBreath: { value: Vector2 };
   uWick: { value: Vector3 };
   /** The wick inside the flame, from its foot to its (curled) tip, and its radius: it hides the flame behind it. */
   uWickFoot: { value: Vector3 };
@@ -170,6 +172,7 @@ const FLAME_FRAGMENT = /* glsl */ `
   uniform vec3 uAxisZ;
   uniform vec4 uShape;
   uniform vec4 uState;
+  uniform vec2 uBreath;
   uniform vec3 uWick;
   uniform vec3 uWickFoot;
   uniform float uWickR;
@@ -290,7 +293,8 @@ const FLAME_FRAGMENT = /* glsl */ `
     float rough = 1.0 + (0.015 + 0.12 * turb) * s * vnoise(q * 0.55 + vec3(3.1, 0.0, uNoise.z));
     // Never under ≈1.1 px across (a flame thinner than a pixel falls between the pixels' samples:
     // at the thumbnail one would blink out), its light spread over the wider body (flux kept).
-    float R0 = max(uShape.y, 1.1 * uPx);
+    float tear = uBreath.x;
+    float R0 = max(uShape.y, 1.1 * uPx) * (1.0 - 0.35 * tear);
     float R = R0 * profile(s) * wave * rough * (1.0 - uShape.w * 0.55 * exp(-pow((s - 0.12) / 0.14, 2.0)));
     float r = length(vec2(x, z)) / max(R, 1e-6);
     if (r > 1.1) return;
@@ -323,6 +327,13 @@ const FLAME_FRAGMENT = /* glsl */ `
     soot *= 1.0 - 0.5 * smoothstep(0.72, 1.0, s);
     // The apex: the soot burns out a little before the profile closes (a rounded, orange tip).
     soot *= 1.0 - smoothstep(0.86, 1.0, s);
+    // The blow (v1.6 polish): cut off from its fuel the luminous zone tears into one or two tongues
+    // (elongated cells carried downstream along the flame), the base first, gone within 50 ms.
+    if (tear > 0.0) {
+      float tn = 0.5 + 0.5 * vnoise(vec3(x / MM * 0.3, y / MM * 0.09 - uNoise.x * 30.0, z / MM * 0.3) + vec3(uNoise.z * 1.7, 0.0, 4.1));
+      tn *= 0.55 + 0.45 * s;
+      soot *= smoothstep(tear - 0.1, tear + 0.1, tn);
+    }
     float sootShell = soot;
     // The soot loading varies a little and drifts up with the gas (in a gust, a lot).
     soot *= 1.0 + (0.06 + 0.3 * turb) * vnoise(q * vec3(0.8, 0.4, 0.8) + vec3(5.0 + uNoise.z, 0.0, 1.3));
@@ -358,7 +369,8 @@ const FLAME_FRAGMENT = /* glsl */ `
     // showcase's sizes against the daylit wall it is all but invisible, as it is to a camera).
     cup *= smoothstep(1.4, 2.6, 0.14 * R / max(uPx, 1e-7));
     // A fresh or starved flame is mostly blue; the cooling gas has no blue left.
-    jb = gBlue * cup * vec3(0.0002, 0.0014, 0.0032) * (1.0 + 4.0 * (1.0 - lit)) * (1.0 - cool) * alive;
+    // (After lift-off the cup is the dim sheet the lifted base is: uBreath.y, not the soot's front.)
+    jb = gBlue * cup * vec3(0.0002, 0.0014, 0.0032) * (1.0 + 4.0 * (1.0 - lit)) * uBreath.y;
     j *= alive;
     kap *= alive;
   }
@@ -389,7 +401,8 @@ const FLAME_FRAGMENT = /* glsl */ `
     // hair's breadth of the blue sheath (v1.5 judge: a wick seen through blue read purple).
     t1 = min(t1, rayCapsule(ro, rd, uWickFoot, uWick, uWickR));
     gBlue = 0.2 + 0.8 * smoothstep(1.4 * uWickR, 2.6 * uWickR, raySegment(ro, rd, uWickFoot, uWick));
-    if (t1 > t0 && intensity > 1e-4) {
+    vec3 Lbl = vec3(0.0);
+    if (t1 > t0 && (intensity > 1e-4 || uBreath.y > 1e-3)) {
       float dt = (t1 - t0) / float(STEPS);
       float jit = ign(gl_FragCoord.xy);
       vec3 Lb = vec3(0.0);
@@ -403,16 +416,16 @@ const FLAME_FRAGMENT = /* glsl */ `
         Tr *= exp(-kk * dt);
       }
       float rk = uShape.y / max(uShape.y, 1.1 * uPx);
-      float sc = dt * uGain * intensity * rk * rk;
-      Ls *= sc;
+      float sc = dt * uGain * rk * rk;
+      Ls *= sc * intensity;
       // The blue sheath is a thousandth of the soot's radiance: wherever soot glows on the same line
       // of sight the camera sees only the soot (blue over orange drew a pink-lilac foot).
-      Ls += Lb * sc * (1.0 - smoothstep(0.02, 0.25, dot(Ls, vec3(0.2126, 0.7152, 0.0722)) * uExposure));
+      Lbl = Lb * sc * (1.0 - smoothstep(0.02, 0.25, dot(Ls, vec3(0.2126, 0.7152, 0.0722)) * uExposure));
     }
     // A flame cut off from its fuel (the breath's) fades much faster than it cools (soot's
     // radiance falls roughly as T^5 and its soot burns out): amber, then gone.
     float fade = 1.0 - uState.y;
-    vec3 Lx = Ls * uExposure * fade * fade * fade;
+    vec3 Lx = (Ls * fade * fade * fade + Lbl) * uExposure;
     // A camera's response, per channel: an overexposed blackbody saturates red, then green, then
     // (a sensor's channels overlap: a little of all its light reaches each) blue: orange, yellow, a
     // cream-white core, as in photographs (a hue-preserving tone curve turns it pink).
@@ -499,6 +512,7 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
     uAxisZ: { value: new Vector3(0, 0, 1) },
     uShape: { value: [0.065, 0.0125, 0, 0] },
     uState: { value: [0, 0, 1, 1] },
+    uBreath: { value: new Vector2(0, 1) },
     uWick: { value: new Vector3() },
     uWickFoot: { value: new Vector3() },
     uWickR: { value: 0.0015 },
@@ -591,7 +605,7 @@ export const SMOKE_LIGHT = { room: [0.6, 0.62, 0.66] as const, key: 0.6, g: 0.3,
  * over their first `fade` s of age: the dying flame's emission falls as the vapour's scattering
  * rises (it condenses within 4 ms), so flame and smoke are one thread with no gap.
  */
-export const SMOKE_GLOW = { born: 0.04, fade: 0.035, radiance: 0.9 } as const;
+export const SMOKE_GLOW = { born: 0.04, fade: 0.035, radiance: 0.4 } as const;
 
 /**
  * v1.5's flat smoke radiance (white, brighter than the wall: ≈ 245 of 255 on screen against the
