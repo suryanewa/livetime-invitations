@@ -636,7 +636,8 @@ export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, op
     }
     recomputeNormals(mesh);
   }
-  return { mesh, top: add(add(c, off), mul(n, rope * 1.75)) };
+  // (The top of the eye's kiss: where a pearl is set.)
+  return { mesh, top: add(add(c, off), mul(n, 0.15 * R + 0.33 * R)) };
 }
 
 /**
@@ -781,10 +782,11 @@ export function baseSmears(yPlate: number, r0: number, seed: number, smearAt: nu
     // v1.6 polish (fix 4): a film, not a chip: 10–16 mm long, thickest (≤ 0.3 mm) where it was
     // deposited, feathering to nothing at its outline, streaked along the drag (the scraper's teeth
     // left grooves in it and fingers at its tail).
-    const lenS = (10 + 6 * g.r()) * MM, wid = (2.2 + 1.4 * g.r()) * MM, H = (0.16 + 0.14 * g.r()) * MM;
+    const lenS = (13 + 7 * g.r()) * MM, wid = (2.8 + 1.6 * g.r()) * MM, H = (0.16 + 0.14 * g.r()) * MM;
     // Dragged out from under the border, a little across.
     const yaw = (g.r() < 0.5 ? 1 : -1) * (0.9 + 0.4 * g.r());
-    const rc = r0 + (0.5 + 1.5 * g.r()) * MM;
+    // (Out past the border's slumped foot, v1.6 polish: the old 0.5–2 mm lay under the new shells.)
+    const rc = r0 + (3 + 1.5 * g.r()) * MM;
     const c: V3 = [rc * Math.cos(th), yPlate, rc * Math.sin(th)];
     const tan: V3 = [-Math.sin(th), 0, Math.cos(th)], rad: V3 = [Math.cos(th), 0, Math.sin(th)];
     const along = add(mul(tan, Math.cos(yaw)), mul(rad, Math.sin(yaw) * 0.6));
@@ -849,7 +851,7 @@ export function crumb(c: V3, R: number, seed: number): PipeMesh {
       // Flattened below (it sits on the plate, a hair into it).
       const y = d[1] < 0 ? d[1] * r * 0.25 : d[1] * r * sq;
       row.push([c[0] + d[0] * r, c[1] + y, c[2] + d[2] * r]);
-      rg.push(pore < -0.02 ? -1 : 0);
+      rg.push(pore < -0.02 ? -0.15 : 0.3);
     }
     P.push(row);
     RG.push(rg);

@@ -27,16 +27,19 @@ export const MASTER = {
    * Widest point of the tiers and piping (the bottom tier's tassel skirts and rosettes). v1.6:
    * re-measured after the Hollywood pass regenerated the piping as sculpted sweeps
    * (scripts/masters/recipes/birthdayPiping.ts) on the hand-coated tiers (v1.5: 0.635837; the master's
-   * own 0.628963).
+   * own 0.628963). v1.6 polish (the judge's fixes 2–4): rosettes ±15 % in size and the bottom shell
+   * border slumped onto the plate reach the eased bin limit (birthdayFinish.ts reachLimit): 0.62869 →
+   * 0.63567 (the reach limit now 0.6 mm short of the bin's, for the real 27.7 cm).
    */
-  cakeRadius: 0.62869,
+  cakeRadius: 0.63567,
   /**
    * Top-tier surface where the candles stand (the master's; v1.5 the finished top is uneven by
    * ±0.7 mm about it), and the crown rosettes' tips (v1.6 re-measured: the spiral rosettes and their
-   * pearls; v1.5 0.647391, the master's 0.639565).
+   * pearls; v1.5 0.647391, the master's 0.639565). v1.6 polish: the crown rosettes are domed swirls
+   * with a pulled peak and a pearl pressed in beside it (0.64371 → 0.65176).
    */
   tierTop: 0.603,
-  cakeTop: 0.64371,
+  cakeTop: 0.65176,
   /** Candles (all six identical): base, top, radius; they bed 0.017 into the top tier. */
   candleBase: 0.586,
   candleTop: 0.8028,

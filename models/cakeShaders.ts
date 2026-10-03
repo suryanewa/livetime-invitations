@@ -364,7 +364,7 @@ export interface FoodFlames {
  * every candle's soft shadow (its own: the dark disc at its foot; the other five: soft spokes), at
  * `gain` over what the flames' own light loop adds (the coat scatters it: a broader, brighter pool).
  */
-export const FLAME_POOL = { gain: 2.5, wrap: 0.5 } as const;
+export const FLAME_POOL = { gain: 2.0, wrap: 0.5 } as const;
 
 /** Thickness range of the packed `_FOOD` attribute (mm): scripts/masters/recipes/birthdayFinish.ts FOOD_THICK_MM. */
 export const FOOD_THICK_MM = 16;
@@ -479,9 +479,11 @@ uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uni
   vec3 foodTintG = ${v3(tint)};
   diffuseColor.rgb *= mix(vec3(1.0), foodTintG * foodTintG, ${f(look.grooveTint)} * min(1.0, 0.9 * groove + 0.7 * crease));
   ${ivoryK > 0 ? `diffuseColor.rgb *= mix(vec3(1.0), vec3(1.0, 0.985, 0.95), ${f(ivoryK)});` : ''}
-  ${film ? `// The film on the plate (the smear): where it thins to nothing the plate shows through it.
-  float filmT = smoothstep(-1.0, 0.35, vFoodRidge);
-  diffuseColor.rgb = mix(${v3([film.r, film.g, film.b])}, diffuseColor.rgb, 0.2 + 0.8 * filmT);` : ''}` : `
+  ${film ? `// The film on the plate (the smear): where it thins to nothing the plate shows through it
+  // (the material is drawn transparent; a crumb is opaque), a touch of the plate's colour in it.
+  float filmT = smoothstep(-1.0, -0.2, vFoodRidge);
+  diffuseColor.a *= filmT;
+  diffuseColor.rgb = mix(${v3([film.r, film.g, film.b])}, diffuseColor.rgb, 0.6 + 0.4 * filmT);` : ''}` : `
   #ifdef USE_AOMAP
     vec2 foodC = texture2D(aoMap, vAoMapUv).rg;
     float crease = 1.0 - foodC.g;
@@ -705,7 +707,7 @@ function quantUniformsFood(mesh: Object3D): Record<string, IUniform> {
 export function pearlPatch(mesh: Mesh, frosting: Color): Patch {
   const f = (x: number) => x.toFixed(6);
   const peak = Math.max(frosting.r, frosting.g, frosting.b, 1e-6);
-  const tint = [frosting.r / peak, frosting.g / peak, frosting.b / peak].map((c) => 0.55 + 0.45 * c);
+  const tint = [frosting.r / peak, frosting.g / peak, frosting.b / peak].map((c) => 0.75 + 0.25 * c);
   return {
     key: 'pearl-ao2',
     uniforms: { ...quantUniformsPearl(mesh) },
@@ -725,11 +727,11 @@ ${CAKE_NOISE}`,
   if (fadeD > 0.0) normal = cakeBump(-vViewPosition, normal, 0.00006 * fadeD * (cakeNoise(dp) + 0.5 * cakeNoise(dp * 2.3 + 1.7)), faceDirection);
 }`,
     afterLights: `{
-  float aoP = mix(0.45, 1.0, vPearlAO);
+  float aoP = mix(0.6, 1.0, vPearlAO);
   vec3 shadeP = mix(${'vec3(' + tint.map(f).join(', ') + ')'} * aoP, vec3(1.0), aoP);
   reflectedLight.indirectDiffuse *= shadeP;
   reflectedLight.indirectSpecular *= mix(1.0, aoP, 0.8);
-  reflectedLight.directDiffuse *= mix(vec3(1.0), shadeP, 0.35);
+  reflectedLight.directDiffuse *= mix(vec3(1.0), shadeP, 0.25);
 }`,
   };
 }

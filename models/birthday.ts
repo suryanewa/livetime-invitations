@@ -236,6 +236,9 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     for (const m of new Set(own)) {
       const cocoa = /_cocoa$/.test(m.name);
       patchMaterial(m, [foodPatch(smears, 'piping', cocoa ? FOOD.cocoaBody : FOOD.body, (m as MeshStandardMaterial).color, { film: plateColor })]);
+      // v1.6 polish (fix 4): the film feathers to nothing over the plate (its edge is see-through).
+      m.transparent = true;
+      m.depthWrite = false;
       smearLit.push(m);
     }
   }

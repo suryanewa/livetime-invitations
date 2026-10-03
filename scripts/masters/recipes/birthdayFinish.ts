@@ -278,7 +278,9 @@ function wobble(tier: TierId, theta: number, y: number): [number, number] {
  * (tests/birthday.test.ts). A large bottom shell at a bulge of the side would reach ½ mm past it:
  * the outermost 3.5 mm of reach are eased (tanh) to stop just short, so no decoration crosses it.
  */
-const REACH = (BIN.opening - 0.04) / CAKE_SCALE - 0.0003;
+// (v1.6 polish: 0.6 mm short of it, so the slumped shell border and the larger rosettes keep the
+// cake at its real 27.7 cm ± 1 %, tests/world-scale.test.ts.)
+const REACH = (BIN.opening - 0.04) / CAKE_SCALE - 0.0006;
 function reachLimit(r: number): number {
   const w = 0.0035, r0 = REACH - w;
   return r <= r0 ? r : r0 + w * Math.tanh((r - r0) / w);
@@ -1300,7 +1302,7 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
             const d = norm(rotate(side, axis, g.r() * 2 * Math.PI));
             const keep = g.r() > 0.12;
             const at = add(add(top, mul(axis, -sink * pr)), mul(d, R0 * (0.06 + 0.16 * g.r())));
-            if (keep) pearls.push({ c: at, r: pr * (1 + 0.08 * g.s()), d: axis, cap: 2 });
+            if (keep) pearls.push({ c: at, r: pr * (1 + 0.08 * g.s()), d: axis, cap: 0.6 });
           };
           if (crown) {
             // Small rosettes round the top's edge, tipped a little outward over it: domed swirls
@@ -1313,7 +1315,7 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
             const { mesh, seat } = domedSwirl(centre, axis, radial, R0, seed0 + 613 * k);
             appendMesh(out, mesh);
             // Pressed into the dome beside the tail's peak (not skewered on it).
-            pearlAt(seat, axis, 0.15 * R0, 0.2);
+            pearlAt(seat, axis, 0.15 * R0, -0.3);
           } else {
             // Big rosettes on the tier's top edge, facing out and a little up.
             const yr = yc - 0.007;
@@ -1327,7 +1329,7 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
             // Its back: the buttercream it was piped onto the edge with (seen from behind, over the
             // far side of the top), ridged by the same star tip, not the flat underside of a coil.
             appendMesh(out, backMound(centre, axis, R0, seed0 + 631 * k));
-            pearlAt(top, axis, R0, 0.3);
+            pearlAt(top, axis, R0, -0.45);
           }
         });
         break;
@@ -1341,7 +1343,7 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
           let { c: ctr, r } = fitSphere(pts);
           const box = (c.max[0] - c.min[0] + c.max[1] - c.min[1] + c.max[2] - c.min[2]) / 6;
           if (!(r > 0.3 * box && r < 2.5 * box) || dist(ctr, c.centroid) > 2 * box) { ctr = c.centroid; r = box; }
-          pearls.push({ c: ctr, r: r * (1 + 0.06 * g.s()), cap: part === 'border_pearls' ? 2.6 : 1.4, optional: part === 'border_pearls' });
+          pearls.push({ c: ctr, r: r * (1 + 0.06 * g.s()), cap: part === 'border_pearls' ? 3 : 1.4 });
         });
         break;
       }
@@ -1426,6 +1428,8 @@ class PipingHash {
       // Mostly up and out of the cake (a pearl is pressed into the top of what it sits on).
       const radial = norm([c[0], 0, c[2]]);
       d = norm(add(close.length && len(out) > 1e-9 ? norm(out) : radial, mul(add(radial, [0, 1, 0]), 0.35)));
+      // Never down (into the plate or the coat): a pearl comes out of what holds it upwards.
+      if (d[1] < 0.35) d = norm(add(d, [0, 0.35 - d[1] + 0.2, 0]));
     }
     let t = 0;
     let clear = false;
