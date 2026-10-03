@@ -480,6 +480,7 @@ export class BirthdayScene implements SceneInstance {
   /** Low tier for the imported stand, frosting and candle materials (the library handles the rest). */
   setLowDetail(enabled: boolean): void {
     setImportedLowDetail(this.root, enabled);
+    this.rig.smoke.volume.setLowDetail(enabled);
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
@@ -495,6 +496,8 @@ export class BirthdayScene implements SceneInstance {
       if (c.pool) c.pool.visible = true;
     }
     this.rig.smoke.mesh.visible = true;
+    // v1.6 polish: the smoke volume's passes (splat, light, march, its noise) link in the next frames.
+    this.rig.smoke.volume.showForCompile();
     await renderer.compileAsync(scene, camera);
     this.rig.setPreset(this.preset === 'vanilla' ? 'cocoa' : 'vanilla');
     await renderer.compileAsync(scene, camera);

@@ -28,8 +28,11 @@ import {
  * docs/scenes/birthday-v1.6-flames.md).
  */
 
-/** The three.js layer of what draws in the bloom pass. */
-export const BLOOM_LAYER = 30;
+/**
+ * The three.js layer of what draws in the bloom pass (v1.6 polish: 29, apart from the scene depth's
+ * 30: the smoke volume marks the cake as a depth occluder, which must not bloom).
+ */
+export const BLOOM_LAYER = 29;
 
 export const BLOOM = {
   /** Exposed scene-linear radiance where blooming starts, and the soft knee's half-width. */

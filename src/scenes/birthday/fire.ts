@@ -511,6 +511,14 @@ export const SMOKE = {
    * 3 s to 5.5 s.
    */
   burst: 0.3,
+  /**
+   * v1.6 polish: the burst's vapour × this (the first puff is the densest white of the sequence),
+   * and the puff's head: the thread leaves the wick (1 + puffWidth) × as wide, narrowing to the
+   * stem's width over puffFor s (3–5 mm for the first 0.2–0.5 s).
+   */
+  puff: 1.8,
+  puffWidth: 2.4,
+  puffFor: 0.45,
   decay: 4.5,
   stop: SMOKE_STOP,
   /** Plume: w = c·(z + z0)^(−1/3) (point-source plume, m/s with z in m), reached after τacc. */
@@ -571,7 +579,7 @@ export function smokeRate(i: number, t: number, kind: SmokeKind = 'breath'): num
   const src = smokeSource(i, kind);
   const a = t - src.bare;
   if (a <= 0) return 0;
-  return src.strength * smooth(a / src.rise) * ((1 - src.smoulder) * Math.exp(-a / (SMOKE.burst * src.slow)) + src.smoulder * Math.exp(-a / (SMOKE.decay * src.slow)))
+  return src.strength * smooth(a / src.rise) * (SMOKE.puff * (1 - src.smoulder) * Math.exp(-a / (SMOKE.burst * src.slow)) + src.smoulder * Math.exp(-a / (SMOKE.decay * src.slow)))
     * (1 - smooth((a - 0.55 * src.stop) / (0.45 * src.stop)));
 }
 
@@ -599,6 +607,15 @@ export interface SmokeStrand {
   alpha: Float32Array;
   /** Age (s) per point: drives the wisp noise in the shader. */
   age: Float32Array;
+  /**
+   * v1.6 polish (the smoke volume, models/birthdaySmoke.ts): the vapour each parcel carries, as the
+   * wick's emission rate at its birth (× the breath's dilution; 0 where none of it is seen), the
+   * height it has risen (m) and the thread's own width there (m: diffusion and the breath's jet, without
+   * the turbulent spread, which the volume draws as meander and folds).
+   */
+  rate: Float32Array;
+  rise: Float32Array;
+  full: Float32Array;
   /** Densest point's opacity (the scene stops drawing smoke nobody can see). */
   peak: number;
 }
@@ -609,6 +626,9 @@ export function newSmokeStrand(): SmokeStrand {
     width: new Float32Array(SMOKE_POINT_COUNT),
     alpha: new Float32Array(SMOKE_POINT_COUNT),
     age: new Float32Array(SMOKE_POINT_COUNT),
+    rate: new Float32Array(SMOKE_POINT_COUNT),
+    rise: new Float32Array(SMOKE_POINT_COUNT),
+    full: new Float32Array(SMOKE_POINT_COUNT),
     peak: 0,
   };
 }
@@ -773,19 +793,26 @@ export function smokeStrand(i: number, strand: number, t: number, wickAt: WickAt
     // Width (m): the thread thickens by diffusion, spreads turbulently above the transition and
     // in the breath's jet.
     // The first vapour off the wick rises as a starting plume: its head a thermal wider than the stem.
-    const head = 1 + 1.2 * (1 - smooth((birth - src.bare) / 0.12));
-    const w = (SMOKE.width0 * 1e-3 + SMOKE.widthGrow * src.diffuse * 1e-3 * Math.sqrt(a / 0.5)) * head + SMOKE.spread * Math.max(0, zr - zt) * grow + SMOKE.jetSpread * dm;
+    // v1.6 polish: the first vapour is the densest and thickest of the whole sequence (the wick and
+    // the pool at their hottest: a puff 3–5 mm wide for its first 0.2–0.5 s); the stem then
+    // thins as the wick cools and gives off less (judge: "after extinction a faint thin thread").
+    const head = 1 + SMOKE.puffWidth * (1 - smooth((birth - src.bare) / SMOKE.puffFor));
+    const core = (SMOKE.width0 * 1e-3 * (0.55 + 0.45 * Math.min(1, q)) + SMOKE.widthGrow * src.diffuse * 1e-3 * Math.sqrt(a / 0.5)) * head + SMOKE.jetSpread * dm;
+    const w = core + SMOKE.spread * Math.max(0, zr - zt) * grow;
     // Drawn no wider than SMOKE.maxWidth: a turbulent column breaks into wisps rather than widening as
     // one sheet (a wide ribbon folding over itself draws hard-edged planes); its opacity still thins
     // with the full width.
     out.width[k] = Math.min(w, SMOKE.maxWidth) * MPS * (strand === 0 ? 1 : 0.8);
     out.age[k] = a;
+    out.rise[k] = zr;
+    out.full[k] = core * (strand === 0 ? 1 : 0.8);
     // Opacity of the whole column here: the vapour condenses a millimetre above the ember (4 ms),
     // thins as it widens and fades with age; it leaves the wick dense even in the breath (in the
     // wick's own wake). The strands share its optical depth (Beer–Lambert): where they still
     // overlap, low down, they composite back to exactly the column's opacity.
     const dilute = (breath ? 1 / (1 + breathAt(i, birth) / 6) : 1) / (1 + moving / STRUNG_AT);
-    let depth = SMOKE.depth * q * dilute * smooth(a / 0.004) * Math.pow((SMOKE.width0 * 1e-3) / w, SMOKE.thin);
+    out.rate[k] = share * q * dilute;
+    let depth = SMOKE.depth * q * dilute * smooth(a / 0.004) * Math.pow((SMOKE.width0 * 1e-3 * head) / w, SMOKE.thin);
     depth *= (1 - smooth((a - src.fade[0]) / (src.fade[1] - src.fade[0]))) * tailFade;
     const alpha = 1 - Math.exp(-share * depth);
     out.alpha[k] = alpha;
@@ -802,6 +829,6 @@ export function smokeAlive(t: number): boolean {
 }
 
 /** Global fade of the tail's last 1.5 s: exactly 0 from SMOKE.end. */
-function smokeTail(t: number): number {
+export function smokeTail(t: number): number {
   return 1 - smooth((t - (SMOKE.end - 1.5)) / 1.5);
 }

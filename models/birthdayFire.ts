@@ -7,8 +7,10 @@ import { CANDLE } from './birthdayContract.ts';
 import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
 import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, SMOKE_GLOW, sootRadiance } from '../src/render/flame.ts';
 import { addHaze } from '../src/render/heatHaze.ts';
+import { markDepthOccluders } from '../src/render/sceneDepth.ts';
+import { SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
 import {
-  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, rand, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, sootFormed, type WakeAt, type WickAt,
+  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, rand, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /**
@@ -581,9 +583,19 @@ export class SmokeRig {
   private readonly strands: SmokeStrand[];
   private readonly attrs: Record<'position' | 'aPrev' | 'aNext' | 'aWidth' | 'aAlpha' | 'aAge' | 'aSeed' | 'aHot', BufferAttribute>;
   readonly material = createSmokeMaterial();
+  /**
+   * v1.6 polish: the smoke above its first few centimetres, as a ray-marched volume
+   * (models/birthdaySmoke.ts); the ribbons draw only the laminar stems and hand the vapour over.
+   */
+  readonly volume: SmokeVolume;
 
   /** `parent`: the room the smoke rises in (birthday_root): smoke stays where it was born, not on the carried cake. */
   constructor(parent: Object3D, private readonly candles: number) {
+    // The volume marches up to the opaque scene: the candles (wax and wicks) are all that can stand
+    // between the lens and smoke rising above the wicks, so only they draw in its depth pass (the
+    // cake's 1.4 M triangles of piping would cost a depth pass for nothing).
+    parent.traverse((o) => { if (/^candle_\d\d$/.test(o.name)) markDepthOccluders(o); });
+    this.volume = new SmokeVolume(parent);
     const strands = candles * SMOKE_STRAND_COUNT;
     const n = strands * SMOKE_POINT_COUNT * 2;
     const mk = (size: number) => new BufferAttribute(new Float32Array(n * size), size).setUsage(DynamicDrawUsage);
@@ -636,11 +648,15 @@ export class SmokeRig {
    * opacity drawn (0: nothing to see).
    */
   update(t: number, kind: SmokeKind, wickAt: WickSource, wake?: WakeAt): number {
+    this.volume.begin();
     if (!smokeAlive(t)) {
       this.mesh.visible = false;
+      this.volume.end(t);
       return 0;
     }
     this.wickAt = wickAt;
+    const tail = smokeTail(t);
+    const [r0, r1] = SMOKE_VOLUME.ribbon;
     let any = false, peak = 0;
     const P = SMOKE_POINT_COUNT;
     const { position, aPrev, aNext, aWidth, aAlpha, aAge, aSeed, aHot } = this.attrs;
@@ -655,8 +671,14 @@ export class SmokeRig {
         const st = this.strands[i * SMOKE_STRAND_COUNT + s]!;
         if (smokeStrand(i, s, t, at, st, kind, wake)) any = true;
         peak = Math.max(peak, st.peak);
+        const src = smokeSource(i, kind);
+        this.volume.addThread(st, [src.fade[0] * SMOKE_VOLUME.ageFade, src.fade[1] * SMOKE_VOLUME.ageFade], tail);
         const base = (i * SMOKE_STRAND_COUNT + s) * P;
+        let path = 0;
         for (let k = 0; k < P; k++) {
+          if (k > 0) path += Math.hypot(st.position[k * 3]! - st.position[k * 3 - 3]!, st.position[k * 3 + 1]! - st.position[k * 3 - 2]!, st.position[k * 3 + 2]! - st.position[k * 3 - 1]!);
+          // The ribbon is the thread's laminar stem only: past it the volume carries the vapour.
+          const pr = path / 5, stem = pr <= r0 ? 1 : pr >= r1 ? 0 : 1 - ((pr - r0) / (r1 - r0)) ** 2 * (3 - 2 * (pr - r0) / (r1 - r0));
           const kp = Math.max(0, k - 1), kn = Math.min(P - 1, k + 1);
           for (let side = 0; side < 2; side++) {
             const v = (base + k) * 2 + side;
@@ -666,7 +688,7 @@ export class SmokeRig {
               next[v * 3 + c] = st.position[kn * 3 + c]!;
             }
             wid[v] = st.width[k]!;
-            alp[v] = st.alpha[k]!;
+            alp[v] = st.alpha[k]! * stem;
             age[v] = st.age[k]!;
             // Noise coordinate travels with the parcel (its birth), distinct per thread.
             seed[v] = (t - st.age[k]!) * 2.3 + s * 7.31 + i * 3.77;
@@ -680,10 +702,12 @@ export class SmokeRig {
     }
     for (const a of Object.values(this.attrs)) a.needsUpdate = true;
     this.mesh.visible = any;
+    this.volume.end(t);
     return peak;
   }
 
   dispose(): void {
+    this.volume.dispose();
     this.geometry.dispose();
     (this.material as Material).dispose();
     this.mesh.removeFromParent();
