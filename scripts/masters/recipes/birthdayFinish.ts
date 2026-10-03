@@ -1327,7 +1327,7 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
             const { mesh, top } = spiralRosette(centre, axis, [0, 1, 0], R0, seed0 + 619 * k, { rope: 0.4, turns: 1.25, droop: [0, -0.9 * MM * (1 + 0.4 * g.s()), 0], rest: restOn(profiles[tier]) });
             appendMesh(out, mesh);
             // Its back: the buttercream it was piped onto the edge with (seen from behind, over the
-            // far side of the top), ridged by the same star tip, not the flat underside of a coil.
+            // far side of the top), a soft mass inside the coil's outline (v1.6 polish 2: no ridged loops).
             appendMesh(out, backMound(centre, axis, R0, seed0 + 631 * k));
             pearlAt(top, axis, R0, -0.45);
           }
@@ -1480,7 +1480,9 @@ function restOn(prof: ProfilePoint[]): (p: V3, dir: V3) => number {
       if (prev > 0 && cur <= 0) return t - step * (cur / (cur - prev));
       prev = cur;
     }
-    return 0;
+    // v1.6 polish 2: no surface within 2 cm (over the top, past the edge): far off it, not on it (0 had
+    // settled those feet as resting, with a fillet flared out into the air: the terraces and sheets).
+    return Infinity;
   };
 }
 
