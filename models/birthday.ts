@@ -100,7 +100,23 @@ function patchFrosting(material: Material, press: CakePress, mesh: Mesh | null):
   // v1.6: the film food shader (models/cakeShaders.ts foodPatch), then the press and the plate contact.
   if (role === 'body') patchMaterial(material, [foodPatch(mesh, 'body', cocoa ? FOOD.cocoaBody : FOOD.body, c), pressPatch(mesh, press), contactPatch(mesh)]);
   else if (role === 'piping') patchMaterial(material, [foodPatch(mesh, 'piping', cocoa ? FOOD.cocoaPiping : FOOD.piping, c), contactPatch(mesh)]);
-  else if (role === 'pearl') patchMaterial(material, [pearlPatch(), contactPatch(mesh)]);
+  else if (role === 'pearl') {
+    // v1.6 polish (fix 3): a sugar pearl's pearlescent coat, not chrome: a satin sugar shell under a
+    // thin glaze (the master's clearcoat 1 at 0.04 mirrored the room like a ball bearing).
+    // Its shade takes the frosting's colour (the body's, the light it sits in).
+    const pearlShade = cocoa ? new Color(0.296, 0.117, 0.05) : new Color(0.434, 0.597, 1);
+    const pm = material as MeshPhysicalMaterial;
+    if (pm.isMeshPhysicalMaterial) {
+      pm.roughness = 0.34;
+      pm.clearcoat = 0.5;
+      pm.clearcoatRoughness = 0.16;
+      pm.iridescence = Math.min(pm.iridescence, 0.3);
+      pm.sheen = 0.35;
+      pm.sheenRoughness = 0.5;
+      pm.sheenColor.setRGB(1, 0.96, 0.93);
+    }
+    patchMaterial(material, [pearlPatch(mesh, pearlShade), contactPatch(mesh)]);
+  }
 }
 
 /** The joined frosting mesh each frosting material (either preset) is drawn on. */

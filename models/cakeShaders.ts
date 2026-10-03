@@ -584,17 +584,49 @@ function quantUniformsFood(mesh: Object3D): Record<string, IUniform> {
   return { uFoodQS: q.uQS, uFoodQO: q.uQO };
 }
 
-/** The sugar pearls: their baked occlusion (they sit in the frosting, between ropes). */
-export function pearlPatch(): Patch {
+/**
+ * The sugar pearls: their baked occlusion (they sit in the frosting, between ropes). v1.6 polish
+ * (fix 3): a crease is never black (the occluded light is the frosting's, coloured, floored at
+ * 45 %); a dragée is a sugar shell, not a ball bearing: each a hair different in tint (ivory, a
+ * breath of pink or blue in the pearl coat), its shell faintly dented (≈ 1 mm undulation, a few µm
+ * of slope), so its highlight wanders instead of mirroring the room. `albedo` the frosting colour
+ * its shade takes.
+ */
+export function pearlPatch(mesh: Mesh, frosting: Color): Patch {
+  const f = (x: number) => x.toFixed(6);
+  const peak = Math.max(frosting.r, frosting.g, frosting.b, 1e-6);
+  const tint = [frosting.r / peak, frosting.g / peak, frosting.b / peak].map((c) => 0.55 + 0.45 * c);
   return {
-    key: 'pearl-ao',
-    vertexHead: 'attribute vec4 _food; varying float vPearlAO;',
-    vertexEnd: 'vPearlAO = _food.y;',
-    fragmentHead: 'varying float vPearlAO;',
-    afterLights: `reflectedLight.indirectDiffuse *= vPearlAO;
-  reflectedLight.indirectSpecular *= mix(1.0, vPearlAO, 0.8);
-  reflectedLight.directDiffuse *= mix(1.0, vPearlAO, 0.35);`,
+    key: 'pearl-ao2',
+    uniforms: { ...quantUniformsPearl(mesh) },
+    vertexHead: 'attribute vec4 _food; varying float vPearlAO; varying vec3 vPearlP; uniform vec3 uPearlQS; uniform vec3 uPearlQO;',
+    vertexEnd: 'vPearlAO = _food.y; vPearlP = transformed * uPearlQS + uPearlQO;',
+    fragmentHead: `varying float vPearlAO; varying vec3 vPearlP;
+${CAKE_NOISE}`,
+    afterMap: `{
+  // Each pearl its own tint (cells about a pearl wide), ±2 % in value.
+  float pc = cakeHash(floor(vPearlP / 0.012) + 3.1);
+  diffuseColor.rgb *= mix(vec3(1.0, 0.985, 0.955), vec3(0.985, 0.985, 1.0), pc) * (0.98 + 0.04 * cakeHash(floor(vPearlP / 0.012) + 7.7));
+}`,
+    afterNormal: `{
+  // A sugar shell's dents (≈ 1 mm), faded where a pixel covers them.
+  vec3 dp = vPearlP * 900.0;
+  float fadeD = 1.0 - smoothstep(0.4, 1.0, length(fwidth(dp)));
+  if (fadeD > 0.0) normal = cakeBump(-vViewPosition, normal, 0.00006 * fadeD * (cakeNoise(dp) + 0.5 * cakeNoise(dp * 2.3 + 1.7)), faceDirection);
+}`,
+    afterLights: `{
+  float aoP = mix(0.45, 1.0, vPearlAO);
+  vec3 shadeP = mix(${'vec3(' + tint.map(f).join(', ') + ')'} * aoP, vec3(1.0), aoP);
+  reflectedLight.indirectDiffuse *= shadeP;
+  reflectedLight.indirectSpecular *= mix(1.0, aoP, 0.8);
+  reflectedLight.directDiffuse *= mix(vec3(1.0), shadeP, 0.35);
+}`,
   };
+}
+
+function quantUniformsPearl(mesh: Object3D): Record<string, IUniform> {
+  const q = quantUniforms(mesh);
+  return { uPearlQS: q.uQS, uPearlQO: q.uQO };
 }
 
 // ── Contact occlusion where the cake meets the plate ───────────────────────────────
@@ -646,6 +678,13 @@ export function plateContactPatch(contact: PlateContact): Patch {
   float ao = 1.0 - 0.5 * ring * on * up;
   reflectedLight.indirectDiffuse *= ao;
   reflectedLight.indirectSpecular *= mix(1.0, ao, 0.6);
+  // v1.6 polish (fix 3): the crease where the border is squashed onto the plate: a tight dark line
+  // (≈ 1 mm), on the key too (the 1024 shadow map cannot draw it); inside the border's outline (the
+  // gaps between the shells' heads) it is darkest.
+  float crease = exp(-max(pr, 0.0) / 0.0045) * on * up;
+  reflectedLight.directDiffuse *= 1.0 - 0.5 * crease;
+  reflectedLight.indirectDiffuse *= 1.0 - 0.4 * crease;
+  reflectedLight.directSpecular *= 1.0 - 0.6 * crease;
 }`,
   };
 }
