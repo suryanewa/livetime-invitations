@@ -81,7 +81,7 @@ export const STEAM_LOOK = {
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
    */
-  steps: { dense: 28, thin: 20, veil: 16 },
+  steps: { dense: 28, thin: 22, veil: 22 },
   /** The march's pixel budget: half the drawing buffer a side, at most this many pixels. */
   marchPixels: 460_000,
   lowShare: 0.6,
@@ -91,7 +91,7 @@ export const STEAM_LOOK = {
 const RHO_MAX = 1.5, BOX_MAX = 2.6, Y_MAX = CLOUD_Y_MAX, MAP_W = 96, MAP_H = 160;
 const NOISE_SIZE = 64;
 /** The spill's density at its full source. */
-const SPILL_STRENGTH = 7.5;
+const SPILL_STRENGTH = 3.2;
 /** The light volume: N³ voxels over the proxy box, its z-slices tiled COLS × ROWS in one 2D atlas. */
 const LIGHT_N = 24, LIGHT_COLS = 6, LIGHT_ROWS = 4;
 /** Probes of the march's occupancy along each ray. */
@@ -156,8 +156,9 @@ float worley(vec3 p, int n, int seed) {
   }
   return clamp(sqrt(d), 0.0, 1.0);
 }
+/** (Three octaves: a fourth, at 2 voxels a cell, aliased into a fine diagonal hatch under the flow's shear.) */
 float perlinFbm(vec3 p, int n, int seed) {
-  return 0.55 * perlin(p, n, seed) + 0.28 * perlin(p, n * 2, seed + 1) + 0.12 * perlin(p, n * 4, seed + 2) + 0.05 * perlin(p, n * 8, seed + 3);
+  return 0.58 * perlin(p, n, seed) + 0.29 * perlin(p, n * 2, seed + 1) + 0.13 * perlin(p, n * 4, seed + 2);
 }
 float worleyFbm(vec3 p, int n, int seed) {
   return 0.625 * (1.0 - worley(p, n, seed)) + 0.25 * (1.0 - worley(p, n * 2, seed + 1)) + 0.125 * (1.0 - worley(p, n * 4, seed + 2));
@@ -170,7 +171,7 @@ void main() {
   // Perlin-Worley: billows with irregular, connected structure (Schneider, Nubis).
   float w = worleyFbm(p, 4, 37);
   float pw = clamp((0.5 + 0.5 * perlinFbm(p, 4, 41)) * 0.55 + w * 0.65 - 0.1, 0.0, 1.0);
-  float detail = worleyFbm(p, 8, 53);
+  float detail = worleyFbm(p, 4, 53);
   gl_FragColor = vec4(0.5 + 0.5 * a, 0.5 + 0.5 * b, pw, detail);
 }
 `;
@@ -397,7 +398,8 @@ float veil(vec3 p, int l, float detail) {
   float a = te - ${f(VEIL.t0)};
   if (a <= 0.0 || te <= uD[l].x || te >= uD[l].y + ${f(VEIL.cut)}) return 0.0;
   float k = max(0.0, a - ${f(VEIL.ramp)});
-  float src = smoothstep(0.0, ${f(VEIL.ramp)}, a) * (${f(1 - VEIL.tail)} * exp(-k / ${f(VEIL.decay)}) + ${f(VEIL.tail)} * exp(-k / ${f(VEIL.tailDecay)}))
+  float flow = ${f(1 - VEIL.tail)} * exp(-k / ${f(VEIL.decay)}) + ${f(VEIL.tail)} * exp(-k / ${f(VEIL.tailDecay)});
+  float src = smoothstep(0.0, ${f(VEIL.ramp)}, a) * pow(flow, ${f(VEIL.gather)}) * (1.0 - smoothstep(${f(VEIL.end[0])}, ${f(VEIL.end[1])}, te))
     * smoothstep(uD[l].x, uD[l].x + ${f(VEIL.ramp)}, te) * (1.0 - smoothstep(uD[l].y, uD[l].y + ${f(VEIL.cut)}, te));
   if (src <= 0.0) return 0.0;
   vec2 c = p.xz - uB[l].zw * h * 0.6;
@@ -411,11 +413,12 @@ float veil(vec3 p, int l, float detail) {
   float s = h - ${f(VEIL.rise)} * tau;
   // A slow field that changes with height bends the sheets as they rise (they snake and twist,
   // never stand as a curtain of straight streaks), and breaks the column into a few wisps.
-  vec4 n = texture(uNoise, vec3(c.x * 0.8, s * 0.9, c.y * 0.8) + vec3(0.0, 0.0, 0.05 * tau));
-  vec3 qw = vec3(c.x * 0.95, s * 0.5, c.y * 0.95) + (n.xyz - 0.5) * (0.8 + 1.2 * smoothstep(0.0, 0.6, h));
+  vec4 n = texture(uNoise, vec3(c.x * 0.8, s * 0.5, c.y * 0.8) + vec3(0.0, 0.0, 0.05 * tau));
+  // (Drawn out along the rise: ribbons, not puffs.)
+  vec3 qw = vec3(c.x * 1.0, s * 0.3, c.y * 1.0) + (n.xyz - 0.5) * vec3(0.9, 0.4, 0.9) * (0.8 + 1.2 * smoothstep(0.0, 0.6, h));
   float ridge = 1.0 - abs(2.0 * texture(uNoise, qw + 3.7).r - 1.0);
   // (A few ribbons, not a curtain: the large field leaves most of the column clear.)
-  float sheets = smoothstep(0.62, 0.96, ridge) * smoothstep(0.45, 0.7, n.b);
+  float sheets = smoothstep(0.62 + 0.2 * (1.0 - src), 0.96, ridge) * smoothstep(0.45 + 0.15 * (1.0 - src), 0.72, n.b);
   float wisps = mix(0.6, 0.06 + 4.6 * sheets, smoothstep(0.02, 0.2, h));
   wisps *= mix(1.0, 0.7 + 0.6 * n.a, detail);
   return ${f(VEIL.strength)} * src * smoothstep(0.0, ${f(VEIL.base)}, h) * exp(-h / ${f(VEIL.evaporate)})
@@ -555,7 +558,8 @@ float veilMean(vec3 p, int l) {
   float a = te - ${f(VEIL.t0)};
   if (a <= 0.0 || te <= uD[l].x || te >= uD[l].y + ${f(VEIL.cut)}) return 0.0;
   float k = max(0.0, a - ${f(VEIL.ramp)});
-  float src = smoothstep(0.0, ${f(VEIL.ramp)}, a) * (${f(1 - VEIL.tail)} * exp(-k / ${f(VEIL.decay)}) + ${f(VEIL.tail)} * exp(-k / ${f(VEIL.tailDecay)}));
+  float src = smoothstep(0.0, ${f(VEIL.ramp)}, a) * pow(${f(1 - VEIL.tail)} * exp(-k / ${f(VEIL.decay)}) + ${f(VEIL.tail)} * exp(-k / ${f(VEIL.tailDecay)}), ${f(VEIL.gather)})
+    * (1.0 - smoothstep(${f(VEIL.end[0])}, ${f(VEIL.end[1])}, te));
   float w = ${f(VEIL.radius)} + ${f(VEIL.spread)} * h;
   float r = length(p.xz - uB[l].zw * h * 0.6);
   return 0.5 * ${f(VEIL.strength)} * src * smoothstep(0.0, ${f(VEIL.base)}, h) * exp(-h / ${f(VEIL.evaporate)}) * pow(${f(VEIL.radius)} / w, 2.0) * (1.0 - smoothstep(0.45 * w, w, r));
@@ -590,8 +594,18 @@ float domeLit(vec3 p) {
   return 1.0 - shade;
 }
 
-/** Interleaved gradient noise: the march's per-pixel start (a fixed dither, deterministic). */
-float ign(vec2 px) { return fract(52.9829189 * fract(dot(px, vec2(0.06711056, 0.00583715)))); }
+/**
+ * The march's per-pixel start: an integer hash of the pixel (a fixed dither, deterministic). White,
+ * not interleaved-gradient noise: IGN's diagonal structure survived the upsample's gather as a fine
+ * hatch in thin steam; white noise averages out under it.
+ */
+float ign(vec2 px) {
+  uvec2 v = uvec2(px);
+  uint h = v.x * 1597334677u ^ v.y * 3812015801u;
+  h = (h ^ (h >> 16u)) * 2246822519u;
+  h ^= h >> 13u;
+  return float(h) / 4294967295.0;
+}
 
 vec2 boxHit(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
   vec3 inv = 1.0 / rd;

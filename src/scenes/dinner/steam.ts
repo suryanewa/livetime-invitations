@@ -62,7 +62,7 @@ export const CLOUD = {
   height: 0.62,
   power: 2.2,
   /** The cloud's soft edge inside the wall (su): it holds the dome's shape, with no hard surface. */
-  wall: 0.075,
+  wall: 0.05,
   /** The clear layer over the hot porcelain at the seat, and how much deeper it gets as the plate re-heats the air (su). */
   floor: 0.035,
   floorGrow: 0.1,
@@ -76,9 +76,9 @@ export const CLOUD = {
   /** The dome's horizontal offset (su) over which it stops dragging: still over the cloud → clear of it. */
   overlap: [0.15, 0.7] as const,
   /** The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s. */
-  riseW: 1.15,
-  riseStart: 0.3,
-  riseMix: 1.6,
+  riseW: 1.45,
+  riseStart: 0.25,
+  riseMix: 0.9,
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
   base: 0,
   /** The cap's radius grows by this per su of rise (a thermal's entrainment, α ≈ 0.25, over R ≈ 0.63); the stem narrows by up to `stem`. */
@@ -173,7 +173,10 @@ export const VEIL = {
   /** The first rush decays over `decay`; a `tail` share decays over `tailDecay` (s). */
   decay: 0.7,
   tail: 0.5,
-  tailDecay: 1.25,
+  tailDecay: 1.1,
+  /** Visible density goes as the flow to this power (thin steam keeps a few bright ribbons), and the plate stops steaming visibly between these τ. */
+  gather: 0.5,
+  end: [4.0, 5.3] as const,
   /** A change of mind: the source dies away over this (s). */
   cut: 0.15,
   /** It rises at this speed (su/s, ≈ 19 cm/s) and forms this far off the porcelain (su). */
@@ -188,7 +191,7 @@ export const VEIL = {
   /** Evaporation with height (su). */
   evaporate: 0.85,
   /** Mean density of the veil at its source (the cloud's is 1). */
-  strength: 1.8,
+  strength: 3.2,
 } as const;
 
 /** One of the steam's clocks, as the shader takes it. */
@@ -488,7 +491,10 @@ export function veilSource(tau: number, emitStart = -Infinity, emitEnd = Infinit
   const a = tau - VEIL.t0;
   if (a <= 0 || tau <= emitStart || tau >= emitEnd + VEIL.cut) return 0;
   const k = Math.max(0, a - VEIL.ramp);
-  return smooth(0, VEIL.ramp, a) * ((1 - VEIL.tail) * Math.exp(-k / VEIL.decay) + VEIL.tail * Math.exp(-k / VEIL.tailDecay))
+  const flow = (1 - VEIL.tail) * Math.exp(-k / VEIL.decay) + VEIL.tail * Math.exp(-k / VEIL.tailDecay);
+  // (Visible steam: as the flow thins the column narrows to fewer ribbons that keep their light,
+  // so its density falls as flow^gather; the plate stops steaming visibly at VEIL.end.)
+  return smooth(0, VEIL.ramp, a) * Math.pow(flow, VEIL.gather) * (1 - smooth(VEIL.end[0], VEIL.end[1], tau))
     * (emitStart > -Infinity ? smooth(emitStart, emitStart + VEIL.ramp, tau) : 1)
     * (emitEnd < Infinity ? 1 - smooth(emitEnd, emitEnd + VEIL.cut, tau) : 1);
 }
@@ -540,7 +546,7 @@ export function steamEndAfter(emitEnd: number, emitStart = -Infinity): number {
  * is carried off, so it mixes in faster than in still air (v1.5, kept). Its light falls with this
  * time scale (s) from the cut, from a smooth start.
  */
-export const STEAM_STIR = 0.4;
+export const STEAM_STIR = 0.3;
 export function stirFade(age: number): number {
   const e = Math.max(0, age);
   return Math.exp(-(e * e) / (STEAM_STIR * (e + 0.2)));
@@ -574,12 +580,12 @@ export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infin
 export interface CloudLook { amp: number; threshold: number; warp: number; fine: number; core: number; coreWidth: number; sheetWidth: number; sheet: number }
 export function cloudLook(age: number, erode: number, out: CloudLook = { amp: 0, threshold: 0, warp: 0, fine: 0, core: 0, coreWidth: 0, sheetWidth: 0, sheet: 0 }): CloudLook {
   const young = 1 - smooth(0.1, 1.2, age);
-  out.amp = 0.5 + 0.35 * smooth(0, 1.4, age);
+  out.amp = 0.6 + 0.25 * smooth(0, 1.4, age);
   out.threshold = 0.3 + 0.32 * erode;
   out.warp = 1 + 1.4 * smooth(0, 1.2, age) - 0.6 * smooth(1.2, 2.4, age);
   out.fine = 0.1 + 0.15 * erode;
   out.core = 0.8 + (0.08 - 0.8) * smooth(0.1, 1.3, age);
-  out.coreWidth = 0.16 + 0.06 * young;
+  out.coreWidth = 0.12 + 0.03 * young;
   out.sheetWidth = 0.08 + 0.02 * young;
   out.sheet = (0.75 - 0.4 * young) * (1 - 0.55 * smooth(0.8, 2.0, age));
   return out;
