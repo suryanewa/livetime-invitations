@@ -69,10 +69,17 @@ const OPEN = 1e6;
 export const STEAM_LOOK = {
   /** Extinction per su at full density (the cloud under the crown: optical depth ≈ 3–4 through it). */
   sigma: 3.4,
-  /** The key's share (its colour × intensity scaled to steam's in-scatter) and the room's (linear). */
-  key: new Color(0.98, 0.99, 1.0).multiplyScalar(0.95),
-  /** (v1.6 polish: 0.6 → 0.3, so the key does the work: a lit side, a terminator, a grey core.) */
-  ambient: new Color(0.22, 0.22, 0.224),
+  /** The key's share (its intensity scaled to steam's in-scatter) and the room's (linear luminance). */
+  key: 0.95,
+  /** (v1.6 polish: 0.6 → 0.3, so the key does the work: a lit side, a terminator, a grey core; polish 2: 0.22.) */
+  room: 0.22,
+  /**
+   * Their colours (v1.6 polish 2: the judge saw "cold steam in a warm room"): the key is the
+   * window's daylight (the rig's key, #F3F5FA); the room is what surrounds the steam on every side
+   * but the window's: the greige walls and cove, the table and the white plate that reflects them.
+   */
+  keyTint: new Color('#F3F5FA'),
+  roomTint: new Color('#E0D7CA'),
   /** Henyey-Greenstein asymmetry (water droplets scatter forward). */
   g: 0.7,
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
@@ -115,6 +122,8 @@ const LIGHT_N = 24, LIGHT_COLS = 6, LIGHT_ROWS = 4;
 const PROBES = 6;
 
 const f = (x: number) => x.toFixed(5);
+/** A colour scaled to unit (Rec. 709) luminance, as a vector. */
+const unitLuminance = (c: Color) => { const l = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; return new Vector3(c.r / l, c.g / l, c.b / l); };
 const smoothstep01 = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 
 /** GLSL piecewise-linear lookup over [x, y] pairs (inlined constants). */
@@ -417,8 +426,6 @@ uniform float uFrame;
 /** Whether the march bisects where rays enter the steam (the young cloud's narrow edge). */
 uniform bool uRefine;
 uniform vec3 uKeyDir;
-uniform vec3 uKeyColor;
-uniform vec3 uAmbient;
 uniform float uG;
 uniform float uDomeShade;
 uniform mat4 uCoverInv;
@@ -748,12 +755,15 @@ float hg(float c, float g) { float g2 = g * g; return (1.0 - g2) / (4.0 * 3.1415
  * hatch in thin steam; white noise averages out under it.
  */
 /**
- * The march's fourth channel (a float target): the shadow (10 bits), whether the steam the pixel
- * shows is mostly the rising veil or spill (+1024), and its depth along the ray (su, the fraction × 64).
+ * The march's fourth channel (a float target; v1.6 polish 2): a drawn pixel is ≥ 512 (the cleared
+ * value is 1), then whether the steam it shows is mostly the rising veil or spill (+256), the key's
+ * share of its light (7 bits: the composite colours it by key and room), and its depth along the ray
+ * (su, the fraction × 64; ≈ 4 mm steps).
  */
-float packShadow(float shadow, float depth) { return floor(clamp(shadow, 0.0, 1.0) * 1023.0 + 0.5) + clamp(depth / 64.0, 0.0, 0.999); }
-float unpackShadow(float w) { return mod(floor(w), 1024.0) / 1023.0; }
-bool unpackRising(float w) { return w >= 1024.0; }
+float packMarch(float keyShare, bool rising, float depth) { return 512.0 + (rising ? 256.0 : 0.0) + floor(clamp(keyShare, 0.0, 1.0) * 127.0 + 0.5) + clamp(depth / 64.0, 0.0, 0.999); }
+bool unpackDrawn(float w) { return w >= 512.0; }
+float unpackKey(float w) { return w >= 512.0 ? mod(floor(w - 512.0), 256.0) / 127.0 : 0.0; }
+bool unpackRising(float w) { return w >= 768.0; }
 float unpackDepth(float w) { return fract(w) * 64.0; }
 
 float ign(vec2 px) {
@@ -882,8 +892,7 @@ void main() {
     }
   }
   // (v1.6 polish 2: the steam's shadow on what the ray meets is the composite's, at full resolution.)
-  float shadow = 1.0;
-  if (t1 <= t0) { gl_FragColor = vec4(0.0, 0.0, used, packShadow(shadow, 0.0)); return; }
+  if (t1 <= t0) { gl_FragColor = vec4(0.0, 0.0, used, 1.0); return; }
   // Probes: where along the ray anything can show (the dilated mean, the veil's column), so the
   // march's steps all fall where the steam is.
   float dp = (t1 - t0) / float(uProbes);
@@ -901,7 +910,7 @@ void main() {
     }
     if (hit) { first = min(first, tp); last = tp; }
   }
-  if (last < first) { gl_FragColor = vec4(0.0, 0.0, used, packShadow(shadow, 0.0)); return; }
+  if (last < first) { gl_FragColor = vec4(0.0, 0.0, used, 1.0); return; }
   float a0 = max(t0, first - dp), a1 = min(t1, last + dp);
   int steps = uSteps;
   float dt = (a1 - a0) / float(steps);
@@ -918,7 +927,7 @@ void main() {
   float ph0 = mix(hg(cosT, uG), hg(cosT, ${f(STEAM_LOOK.gBack)}), ${f(STEAM_LOOK.back)});
   float ph1 = mix(hg(cosT, 0.5 * uG), hg(cosT, ${f(0.5 * STEAM_LOOK.gBack)}), ${f(STEAM_LOOK.back)}), ph2 = 1.0 / (4.0 * 3.14159265);
   float detail = uLow || uDebug == 9 ? 0.0 : 1.0;
-  vec3 C = vec3(0.0);
+  vec2 C = vec2(0.0);
   float T = 1.0, wt = 0.0, tw = 0.0, rw = 0.0;
   // Each sample stands for the span since the last one. Where the ray enters the steam from clear
   // air, the boundary is found by bisection (3 steps: an eighth of a step), so the edge is where the
@@ -969,10 +978,13 @@ void main() {
     // The room: from above (occluded by the cloud over it: a greyer underside), the plate's bounce.
     // (The lifted dome's shadow takes the key; the room's light round it a little.)
     if ((uFlags & 8) != 0) bounce = 0.0;
-    vec3 Sc = uKeyColor * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav) + ((uFlags & 4) != 0 ? vec3(0.0) : uAmbient * (0.25 + 0.75 * exp(-uSigma * lv.y * 0.9)) * lit * (1.0 - 0.85 * cav))
-      + vec3(bounce) * (1.0 - 0.6 * cav);
+    // (v1.6 polish 2: in luminance, by source: the key's, and the room's with the plate's bounce; the
+    // composite gives each its colour.)
+    float sKey = ${f(STEAM_LOOK.key)} * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav);
+    float sRoom = ((uFlags & 4) != 0 ? 0.0 : ${f(STEAM_LOOK.room)} * (0.25 + 0.75 * exp(-uSigma * lv.y * 0.9)) * lit * (1.0 - 0.85 * cav))
+      + bounce * (1.0 - 0.6 * cav);
     float Ts = exp(-sig * seg);
-    C += T * (1.0 - Ts) * Sc;
+    C += T * (1.0 - Ts) * vec2(sKey, sRoom);
     // (The steam's depth along the ray, weighted by what it shows: where the resolve reprojects from.)
     wt += T * (1.0 - Ts);
     tw += T * (1.0 - Ts) * (t - dt);
@@ -980,10 +992,12 @@ void main() {
     T *= Ts;
   }
   float alpha = 1.0 - T;
-  if (uDebug == 1 || uDebug == 5) C = vec3(alpha);
-  if (uDebug == 2) C = vec3((a1 - a0) * 0.5);
-  // Premultiplied luminance (steam is white: the tint is the composite's), coverage, the depth used.
-  gl_FragColor = vec4(dot(C, vec3(0.2126, 0.7152, 0.0722)), alpha, used, packShadow(shadow, wt > 1e-4 ? tw / wt : 0.0) + (rw > 0.5 * wt ? 1024.0 : 0.0));
+  if (uDebug == 1 || uDebug == 5) C = vec2(alpha, 0.0);
+  if (uDebug == 2) C = vec2((a1 - a0) * 0.5, 0.0);
+  // Premultiplied luminance, coverage, the depth used, and (packed) the key's share of the light,
+  // the steam's depth along the ray and whether it is the rising veil or spill.
+  float lum = C.x + C.y;
+  gl_FragColor = vec4(lum, alpha, used, packMarch(lum > 1e-5 ? C.x / lum : 0.5, rw > 0.5 * wt, wt > 1e-4 ? tw / wt : 0.0));
 }
 `;
 
@@ -1061,25 +1075,25 @@ void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
   ivec2 lim = textureSize(uCur, 0) - 1;
   vec4 c = texelFetch(uCur, px, 0);
-  // (A pixel the march did not draw keeps the cleared .w = 1: no shadow there. A drawn pixel's
-  // packed shadow is ≥ 512: the steam takes at most STEAM_LOOK.shadow of the light.)
-  float shadow = c.w >= 2.0 ? unpackShadow(c.w) : 1.0;
-  vec2 res = c.xy;
+  // (v1.6 polish 2) Luminance, coverage and the key's luminance (its share of the light, for the colour).
+  vec3 cur = vec3(c.xy, unpackKey(c.w) * c.x);
+  vec3 res = cur;
   if (uHistValid) {
-    vec2 m1 = vec2(0.0), m2 = vec2(0.0);
+    vec3 m1 = vec3(0.0), m2 = vec3(0.0);
     float bestA = -1.0, bestW = 0.0;
     for (int k = 0; k < 9; k++) {
       vec4 v = texelFetch(uCur, clamp(px + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), lim), 0);
-      m1 += v.xy;
-      m2 += v.xy * v.xy;
+      vec3 x = vec3(v.xy, unpackKey(v.w) * v.x);
+      m1 += x;
+      m2 += x * x;
       if (v.y > bestA) { bestA = v.y; bestW = v.w; }
     }
     m1 /= 9.0;
-    vec2 sd = sqrt(max(m2 / 9.0 - m1 * m1, 0.0));
+    vec3 sd = sqrt(max(m2 / 9.0 - m1 * m1, 0.0));
     vec2 uv = (vec2(px) + 0.5) / vec2(lim + 1);
     vec2 puv = uv;
     // The steam's point: this pixel's, or (at an edge it has just left) its densest neighbour's.
-    float depth = bestW >= 2.0 ? unpackDepth(bestW) : 0.0;
+    float depth = unpackDrawn(bestW) ? unpackDepth(bestW) : 0.0;
     float viewZ = 1e4;
     if (bestA > 0.002 && depth > 0.0) {
       vec4 fa = uInvVPL * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
@@ -1093,13 +1107,13 @@ void main() {
       vec4 h = historyAt(puv);
       // (A moving occluder only matters where it cuts the steam: steam well in front of both keeps its history.)
       if (abs(h.z - c.z) < 0.03 * max(min(h.z, c.z), 1e-3) || viewZ < min(h.z, c.z) - 0.1) {
-        vec2 hc = clamp(h.xy, m1 - 1.25 * sd - 0.004, m1 + 1.25 * sd + 0.004);
-        res = mix(hc, c.xy, uBlend);
-        if (uDebug == 11) res = vec2(1.0, 1.0);
-      } else if (uDebug == 11) res = vec2(0.4, 1.0);
-    } else if (uDebug == 11) res = vec2(0.0, 1.0);
+        vec3 hc = clamp(h.xyw, m1 - 1.25 * sd - 0.004, m1 + 1.25 * sd + 0.004);
+        res = mix(hc, cur, uBlend);
+        if (uDebug == 11) res = vec3(1.0, 1.0, 0.5);
+      } else if (uDebug == 11) res = vec3(0.4, 1.0, 0.2);
+    } else if (uDebug == 11) res = vec3(0.0, 1.0, 0.0);
   }
-  gl_FragColor = vec4(res, c.z, shadow);
+  gl_FragColor = vec4(res.xy, c.z, res.z);
 }
 `;
 
@@ -1117,7 +1131,8 @@ uniform bool uHasDepth;
 uniform bool uReady;
 uniform bool uOrtho;
 uniform vec2 uNearFar;
-uniform vec3 uTint;
+uniform vec3 uKeyTint;
+uniform vec3 uRoomTint;
 uniform vec2 uScale;
 uniform int uDebug;
 uniform vec3 uCamLocal;
@@ -1137,8 +1152,6 @@ float viewDistance(float dz) {
   float n = uNearFar.x, fa = uNearFar.y;
   return uOrtho ? n + dz * (fa - n) : -(n * fa) / ((fa - n) * dz - fa);
 }
-/** The march's fourth channel: the steam's shadow on what the ray meets. */
-float decodeShadow(float w) { return w; }
 
 /**
  * The steam's shadow on what this pixel shows (the plate, the table; not the cloche), at full
@@ -1182,7 +1195,7 @@ void main() {
   vec3 acc = vec3(0.0);
   float wsum = 0.0;
   float best = 1e9;
-  vec3 bestV = vec3(0.0, 0.0, 1.0);
+  vec3 bestV = vec3(0.0);
   for (int k = 0; k < 4; k++) {
     ivec2 o = ivec2(k & 1, k >> 1);
     vec4 v = texelFetch(uVolume, clamp(b + o, ivec2(0), size - 1), 0);
@@ -1190,21 +1203,25 @@ void main() {
     float wb = t.x * t.y;
     float dd = abs(v.z - own);
     float wd = exp(-dd / (0.02 * min(own, v.z) + 0.003));
-    acc += vec3(v.x, v.y, decodeShadow(v.w)) * wb * wd;
+    acc += v.xyw * wb * wd;
     wsum += wb * wd;
-    if (dd < best) { best = dd; bestV = vec3(v.x, v.y, decodeShadow(v.w)); }
+    if (dd < best) { best = dd; bestV = v.xyw; }
   }
+  // (Luminance, coverage, the key's luminance.)
   vec3 g = wsum > 1e-4 ? acc / wsum : bestV;
   vec2 v = g.xy;
   // The steam veils what is behind by its coverage; its shadow darkens what it falls on further.
-  g.z = surfaceShadow(own, v.y);
-  float cover = 1.0 - (1.0 - v.y) * g.z;
-  if (uDebug == 8) { gl_FragColor = vec4(g.z, wsum > 1e-4 ? 1.0 : 0.0, own > 9000.0 ? 1.0 : 0.0, 1.0); return; }
+  float shadow = surfaceShadow(own, v.y);
+  float cover = 1.0 - (1.0 - v.y) * shadow;
+  if (uDebug == 8) { gl_FragColor = vec4(shadow, wsum > 1e-4 ? 1.0 : 0.0, own > 9000.0 ? 1.0 : 0.0, 1.0); return; }
   if (uDebug == 1 || uDebug == 5) { gl_FragColor = vec4(v.x, 0.0, 0.0, 1.0); return; }
   if (cover < 0.002) discard;
   // (Tooling: the steam's own linear radiance / 2, unpremultiplied, where it is dense enough.)
   if (uDebug == 12) { gl_FragColor = vec4(vec3(v.y > 0.5 ? 0.5 * v.x / v.y : 0.0), 1.0); return; }
-  gl_FragColor = vec4(uTint * (v.x / max(v.y, 1e-4)), 1.0);
+  // (v1.6 polish 2: lit in colour: the key's light is the window's, the room's the warm greige of
+  // the walls and the table that surround it, each of unit luminance.)
+  float keyShare = clamp(g.z / max(v.x, 1e-6), 0.0, 1.0);
+  gl_FragColor = vec4(mix(uRoomTint, uKeyTint, keyShare) * (v.x / max(v.y, 1e-4)), 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
   gl_FragColor = vec4(gl_FragColor.rgb * v.y, cover);
@@ -1330,8 +1347,6 @@ export class DinnerSteam {
       uLow: { value: false },
       uSigma: { value: STEAM_LOOK.sigma },
       uKeyDir: { value: new Vector3(-0.36, 0.643, 0.676).normalize() },
-      uKeyColor: { value: new Vector3(STEAM_LOOK.key.r, STEAM_LOOK.key.g, STEAM_LOOK.key.b) },
-      uAmbient: { value: new Vector3(STEAM_LOOK.ambient.r, STEAM_LOOK.ambient.g, STEAM_LOOK.ambient.b) },
       uG: { value: STEAM_LOOK.g },
       uDomeShade: { value: STEAM_LOOK.domeShade },
       uCoverInv: { value: new Matrix4() },
@@ -1380,7 +1395,7 @@ export class DinnerSteam {
       uDebug: this.uniforms.uDebug!,
       uScale: this.uniforms.uScale!,
       uReady: { value: false },
-      uTint: { value: new Vector3(1, 1, 1) },
+      uKeyTint: { value: unitLuminance(STEAM_LOOK.keyTint) }, uRoomTint: { value: unitLuminance(STEAM_LOOK.roomTint) },
       uCamLocal: this.uniforms.uCamLocal!, uModelView: this.uniforms.uModelView!, uLight: this.uniforms.uLight!,
       uLightMin: this.uniforms.uLightMin!, uLightMax: this.uniforms.uLightMax!, uCoverInv: this.uniforms.uCoverInv!,
       uKeyDir: this.uniforms.uKeyDir!, uShadowOn: this.uniforms.uShadowOn!, uSigma: this.uniforms.uSigma!, uFlags: this.uniforms.uFlags!,
