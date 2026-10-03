@@ -72,6 +72,11 @@ describe('Scene depth (v1.6)', () => {
     expect(camera.layers.mask).toBe(1);
     expect(scene.overrideMaterial).toBeNull();
     expect(scene.background).toBe(background);
+    expect(depth.allocated).toBe(true);
+    // Once nothing asks for it, the target is freed (a scene switch leaves no GPU memory behind).
+    unregister.pop()!();
+    expect(depth.render(recording(log), scene, camera)).toBe(false);
+    expect(depth.allocated).toBe(false);
     depth.dispose();
   });
 

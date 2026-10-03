@@ -97,10 +97,14 @@ export class SceneDepth {
    * `scene` it returns at once and touches nothing.
    */
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera): boolean {
-    if (clients.size === 0) return false;
     let served: SceneDepthClient[] | null = null;
-    for (const c of clients) if (drawnIn(c.object, scene) && c.active()) (served ??= []).push(c);
-    if (!served) return false;
+    if (clients.size) for (const c of clients) if (drawnIn(c.object, scene) && c.active()) (served ??= []).push(c);
+    if (!served) {
+      // Nothing needs it: free the target (no GPU memory is held for scenes that do not ask; a
+      // scene switch must leave nothing behind). Without one, nothing at all is touched.
+      if (this.target) this.release();
+      return false;
+    }
 
     renderer.getDrawingBufferSize(this.size);
     const w = Math.max(1, this.size.x), h = Math.max(1, this.size.y);
@@ -139,10 +143,19 @@ export class SceneDepth {
     return true;
   }
 
-  dispose(): void {
+  private release(): void {
     this.target?.depthTexture?.dispose();
     this.target?.dispose();
     this.target = null;
+  }
+
+  /** Whether a depth target is held (only while a client is active). */
+  get allocated(): boolean {
+    return this.target !== null;
+  }
+
+  dispose(): void {
+    this.release();
     this.material.dispose();
   }
 }
