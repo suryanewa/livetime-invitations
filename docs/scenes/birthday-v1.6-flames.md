@@ -423,3 +423,178 @@ light wall), *Kerze -- 2021 -- 5491/5487/6000.jpg* (D. Rabich, CC BY-SA 4.0), *C
 (`captureStill(1200, 3)` crops); `fold-tabs-before-after-3600px.png`,
 `laptop-plume-heads-before-after-x2.png`; `laptop-1280x720@2x-lit.webp`, `-smoke-0.52s.webp`,
 `-smoke-1.72s.webp`, `-accepted-8s.webp`; `accepted-still-reduced-motion-540@2.png`.
+
+## Polish round: the judge's fixes (v1.6 polish, branch `v1.6/flames-polish`)
+
+The independent VFX judge would not sign the first build (flame at rest 5–6, flicker 4, blow 5, smoke
+after 1 s 3, light 3.5, macro 5) and ranked nine tells. This round takes its five demanded fixes in
+its order, then the light; every number below is measured on rendered frames through the real
+controller (the judge's own scripts: the size series, the 1 s lit strips, the 30× macro with the
+bloom on and off, the blow strips, the smoke sheet 0.3–3.9 s, the light on/off difference).
+Evidence: `evidence/v1.6/flames-polish/`.
+
+### 1. The smoke as a volume (`models/birthdaySmoke.ts`, new)
+
+Tell 1 (critical: "six strings") and tell 6 (the first smoke too weak).
+
+- **Source.** The strand physics (`fire.ts` `smokeStrand`) is unchanged as the source and now also
+  reports each parcel's vapour (`rate`: the wick's emission at its birth × the breath's dilution, 0
+  where none is seen), its rise and its own width. The ribbons draw only a thread's laminar stem,
+  its first 2.5 cm of path, handing the vapour to the volume by 5 cm (`SMOKE_VOLUME.ribbon`).
+- **Splat.** Every frame the parcels are resampled into Gaussian puffs 1.2 σ apart, each carrying
+  the vapour emitted between its parcels (mass conserved: the plume thins as it widens, it does not
+  fade), and drawn additively into a 5 mm grid over the top tier: at most 80 × 96 × 64 voxels
+  (40 × 48 × 32 cm), its z slices tiled in one single-channel half-float atlas (640 × 768), the box
+  placed each frame round what is showing and snapped to the voxel lattice (nothing swims).
+  ≈1,000–2,000 puffs; instanced quads, one per puff and slice it reaches.
+- **Light volume** (half the grid a side, one pass): optical depth to the key (8 taps, 12 cm), to
+  the room above (4 taps), and a dilated occupancy for empty-space skipping.
+- **March** (the steam's technique, `models/dinnerSteam.ts`): a client of the stage's scene depth;
+  half resolution (≤ 400 k pixels); 12 probes of the occupancy find the occupied span, 40 jittered
+  steps march it (24 on Low), up to the opaque scene's depth; the composite is the steam's 4 × 4
+  depth-aware upsample, tone mapped like the scene, premultiplied. Motion: laminar to 3–4 cm; a
+  meander from 3–9 cm up (wavelength 6–10 cm, envelope ±1.2 cm at 10 cm, ±2.4 cm at 20 cm) and
+  folds from 4–8 cm (1.4 cm growing to 2.8 cm, just past folding over), both carried up with the
+  gas; ridged-noise sheets (denser on a carried level set, emptier between: edge-on folds read
+  brighter). Width: the sheet's own thickness 2.5 mm + 7 % of the height (1 cm at 10 cm), the plume
+  ≈1–2 cm wide at 10 cm and 3–5 cm at 20 cm with the warp. Plumes merge: 0.6 of their offset from
+  the candles' centre by 20 cm, from 4 cm (v1.5: 0.55 from 5 cm over 20 cm). The aerosol evaporates
+  as it mixes (e-folding 9 cm above 4 cm) and the volume's age fade is 1.4 × the ribbon's.
+- **Shading.** Single scattering of the key, Henyey–Greenstein g 0.6 (forward: front-lit smoke is
+  faint), albedo 0.92, self-shadowed through the light volume; Wrenninge's two octaves only where
+  the smoke is optically thick (weighted 1 − e^−τ: thin smoke is single-scattering); the room's light
+  occluded from above, a little blue-grey. (A sign error in the first phase function lit it as if
+  back-lit, ≈2× too bright: fixed.)
+- **The first puff** (`SMOKE.puff`, `puffWidth`, `puffFor`): the burst carries 1.8 × the vapour and
+  leaves the wick 3.4 × as wide, narrowing over 0.45 s (≈4 mm for the first 0.2–0.5 s), without
+  thinning its optical depth for the width (more vapour, not more air); the stem thins as the wick
+  cools (width0 × 0.55–1 with the rate).
+- **Measured** (540 @2, luminance over the wall's row median): the stems are 1–2 px threads for
+  3–5 cm, then wavering sheets that merge; 20–30 cm up the veil lifts the wall by ≈5 levels at
+  2.4 s (the first build's threads: 15–30), i.e. barely visible, as in *Candle with smoke*; the first
+  puff (0.4–0.8 s) is the densest smoke of the sequence. Frame-to-frame (60 fps, 2× close-up):
+  mean change 0.25/255, max 7: no shimmer.
+- **Depth.** Only the candles occlude smoke rising above the wicks; they draw in the depth pass as
+  their shadow stand-ins (2 k triangles each; the tooling cake without stand-ins: the candles
+  themselves). Two fixes the volume needed in shared code: the scene-depth pass now lets the
+  scene's lights take part with the shadow map suspended (a pass without them bumped three's
+  light-state version, and every lit material re-validated its program in the main pass: +0.5 ms
+  whenever a depth client was active, Dinner's steam included); the bloom moved to layer 29 (the
+  depth pass's layer is 30: the cake would have bloomed).
+- **Cost** (laptop / phone): 0.63 / 0.57 ms at 1.5 s (march 0.22, splat and light 0.07, depth pass
+  and composite 0.33), 0.24 / 0.25 ms at the hand-over. No program links at the blow (its passes,
+  and its 64³ noise, link in the warm frames under the poster: `showForCompile`).
+
+### 2. The flame sits on its wick
+
+Tell 2 (severe: "a flame on a stick") and tell 7 (macro).
+
+- A burning wick shows **3 mm** over its pool (`WICK_EXPOSED`; the wick's own material squashes the
+  master's 4.2 mm, so the GLB is unchanged); the flame is **15.5 mm** from its cup (0.8 mm over the
+  pool) to its tip, ±12 % per candle (stratified: 0.90–1.10).
+- The luminous zone's foot is **1.2 mm under the wick's tip** (it wraps the curled tip) and the
+  flame is widest 1 mm over it, both held where they are on the wick whatever the flame's length
+  (`uFoot`, `uWidest`). Bare wick under the luminous zone: 1.8 mm of a 16.3 mm flame (0.11; the
+  judge measured ≈0.7 on the first build).
+- The curled tip ends in a **charred bead** (≈1.1 mm) glowing orange-red: the lit ember is ≈1,240 K
+  (`EMBER.lit` 0.8; v1.5's 1,030 K was black).
+- The **blue cup** is one thin continuous shell, closed under the flame and joined to the luminous
+  foot, and the camera sees it only where no soot glows on the same line of sight (blue over orange
+  drew the pink-lilac foot). Against the blue frosting it is, correctly, all but invisible.
+- **Framing held.** The hero fit and `FLAME_TOP` keep v1.5's flame envelope (`FLAME_FRAME`), so the
+  camera, every Birthday poster's framing and the backdrops stay where they are; the drawn flame
+  reaches 2–4 mm higher, inside the frame's margin.
+
+### 3. Colour and bloom
+
+Tell 3 (severe: "lemon-and-white stickers, all six identical").
+
+- **Response.** The camera's per-channel shoulder is a sensor's 1 − e^−x (it was x / (1 + x), which
+  compressed every channel towards lemon-cream), and the body is exposed lower (`FLAME_GAIN`
+  1,900 → 700): red saturates while green is still ≈0.6 linear. A **hot core** low in the luminous
+  zone (+150 K, × 2.2 soot) is the only part that clips white through the crosstalk.
+- **Coverage** follows the brightest channel, so the light wall no longer washes the tip to peach
+  and the blue frosting no longer turns the rim lavender.
+- **Measured.** Macro (22×, bloom on = off on the body): white core 46 % of the width at its widest,
+  in the lower third; body G/R 0.83–0.88; upper flame and tip 0.61–0.67 (the last 8 % fades to
+  peach over the wall). Laptop: body G/R median 0.79–0.83 (first build 0.95–0.97); white 6–14 % of a
+  flame's pixels; flames 15–20 px tall (10–12).
+- **Bloom.** Amber (luminance × (1.55, 0.9, 0.38)); kept off the emitters' own pixels (the twin
+  writes its radiance, without the small-size footprint floor, into the bloom source's alpha); two
+  lobes by per-level upsample weights (`BLOOM.lobes`: a tight core, a faint veil reaching ≈2–4 % of a
+  laptop canvas; 6 levels on Normal/High, +0.03 ms over 5; 3 on Low). Laptop on/off: +4/+2/+1 mean
+  round the flames, nothing on them. 192 px thumbnail: +18 red (the footprint floor 26 → 36).
+- **Per candle:** ±12 % length (above) and a 2–4° rest lean of its own (`restLean`, stills too).
+
+### 4. Motion (`fire.ts` `flicker`: a change to the v1.5 flicker statistics)
+
+Tell 4 (severe in motion). The research behind the change: the regular 10–12 Hz "puffing" of candle
+flames is the collective oscillation of three or more flames bundled together (Kitahata et al., J.
+Phys. Chem. A 2009; Okamoto et al., Sci. Rep. 6:36145, 2016); a lone birthday-candle flame in still
+room air is steady and lives by the room's air. So: no coherent buzz; per candle a 1/f sway (six
+partials 0.31–2.4 Hz ±15 %, amplitude ∝ f^−½, RMS 2° per plan component) and length breathing
+(0.33–3.1 Hz, RMS 3.2 %, ±9 % at most); the shared room draft (±1°, 0.1–0.3 Hz); flutters of
+100–300 ms (8–12 Hz, ±4°, ±7 %, the varicose wave only then) on one candle at a time every 3–4 s (none
+overlapping in 600 s). The room's lean bends the flame from its base (55 % axis tilt, 45 % tip
+bend). Measured: laptop tip sideways 0.35–1.7 px over 1 s (first build < 0.3 px); 30× close-up:
+no 10.9 Hz peak (area spectrum 1–4 Hz), centroid sd 1.96 px (0.58), white-area variation 6.7 %
+(2.8 %). The flicker test now asserts these statistics.
+
+### 5. The blow
+
+Tell 5 (high: "a rigid tilt, then a yellow leaf drifts away").
+
+- The flame bends from its base (55 % of the breath's lean curves the axis downstream) and is drawn
+  out: length × 1.58 at lift-off (up to × 1.68), width × 0.58 (down to × 0.51).
+- Off the wick its luminous zone tears into one or two tongues (elongated noise cells carried along
+  it, the base first) and its output is under 2 % within **44 ms** of lift-off (`BREATH.tear` 60 ms;
+  never faster than 0.044 per ms, the scene's continuity bound); the lifted base is a dim blue sheet
+  (× 0.7, fading) that goes out with the extinction wave; the blow-off carry is 0.12 (no intact
+  teardrop drifting). The first vapour's last glow is halved (it drew a salmon puff).
+- Kept: lift times, the extinction wave (`extinguishedAt`), the smoke's hand-over, the change of
+  mind's carry, lit time → melt.
+
+### 6. The light
+
+Tell 8 (medium: "the light is not felt"). Calibrated by rendering against photometry (six ≈1 cd
+flames ≈4.5 cm over the frosting: ≈900 lx, +30–35 % of a ≈2,500 lx room): the rig gave +12 %
+(linear red, the group view with the flames' light on and off); now × 2.0: **+24.5 %** at the top
+tier's centre, +19 % over it, warm pools between the candles round each one's own shadow disk, warm
+inner sides on the rim rosettes, glowing candle tops. On the blue frosting warm light reads a little
+lavender, so the lower half of the judge's +20–30 % was chosen. Same shader: no cost.
+
+### Tells: gone and remaining
+
+Gone: 1 (strings: stems, wavering sheets, a merging veil), 2 (flame on a stick), 3 (lemon stickers;
+clipped core 46 %, golden body, orange tip, amber glare), 4 (the buzz; sideways ≥ 0.5 px), 5 (rigid
+tilt and drifting leaf), 6 (weak first smoke), 8 (light not felt). Mostly gone: 7 (macro: the
+wrapping foot, bead and continuous cup are in; the luminous zone's lower part is translucent over
+the frosting, as a real flame is against a lit background). Unchanged: 9 (192 px: warm dots, the
+glow restored to +18). Remaining, recorded: the smoke at close-up (2× the hero) is softer than a
+real filament (5 mm voxels: the sheets' edges are a few millimetres soft); its six stems still start
+evenly spaced (they are the candles); the heat haze is unchanged and still all but invisible over
+the daylit wall (not a tell).
+
+### Cost (M2 Pro, Chrome/Metal; `evidence/v1.6/flames-polish/frame-cost.txt`)
+
+The whole fire (six flames, bloom, haze, smoke): lit 1.59 ms laptop / 1.58 ms phone; at the
+hand-over 1.49 / 1.45 ms; at 1 s 1.00 ms laptop. Budget ≤ 2.5 ms: met at both sizes.
+
+### Verification
+
+`pnpm typecheck`; `pnpm vitest run`: 32 files, 441 tests (new: the blow, the smoke volume; rewritten
+to the new statistics: the flicker, the flame's size and zones, the hero envelope). Browser
+(`BASE_URL=http://127.0.0.1:5607`): `birthday.spec` 7/7, `bloom.spec` 3/3, `scene-depth.spec` 5/5
+(Birthday now draws the depth pass while its smoke rises, none while lit), `resilience.spec`
+(program links) 2/2, `collection.spec` (30 switches) 1/1, `posters.spec` Birthday 1/1 after the
+recapture (`pnpm capture birthday`: the lit posters show the new flames; the others re-encoded).
+No program links during the blow. Reduced motion: still flames when lit, no smoke on the accepted
+still.
+
+### Evidence (`evidence/v1.6/flames-polish/`)
+
+`1-smoke-wide-sheet-0.3-3.9s.webp`, `1-smoke-hero-540x2-0.6-1.0-1.6-2.4-3.4-4.4s.webp`,
+`2-flame-on-wick-macro-before-after.png`, `3-colour-bloom-sizes-before-after.png`,
+`4-lit-group-0.5s-every-48ms.png`, `4-motion-stats.txt`, `5-blow-one-0-352ms-every-16ms.png`,
+`5-blow-closeup-z25-64-176ms.png`, `5-blow-group-0-384ms-every-32ms.png`,
+`6-light-off-on-relative-x4.png`, `frame-cost.txt`, `reduced-motion-guest-accepted-540x2.png`.
