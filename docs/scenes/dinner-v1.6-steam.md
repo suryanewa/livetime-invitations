@@ -146,7 +146,9 @@ depth. With no active client in the stage's scene the hook returns before touchi
 meshes the client marked (`markDepthOccluders`: the plate and the cloche, and the bin once it has arrived) are
 drawn depth-only (a colourless override material, both sides, on a dedicated camera layer, so no lights, no
 shadow pass and no transparent parts) into a 32-bit float depth texture the size of the drawing buffer, then the
-client's `prepare` runs. Camera layers, override material, background and render target are restored.
+client's `prepare` runs. Camera layers, override material, background and render target are restored. The
+target is freed on the first frame no client needs it (a scene switch leaves no GPU memory behind:
+`tests/browser/collection.spec.ts`'s resource check failed until it was).
 Tested: the hook makes no renderer call for a scene without an active client (`tests/scene-depth.test.ts`); the
 other four scenes' stills are byte-identical with the hook removed, at rest and mid-sequence, and draw no depth
 pass (`tests/browser/scene-depth.spec.ts`); the posters are unchanged (`tests/browser/posters.spec.ts`).
@@ -262,6 +264,33 @@ all of them but the last shadow strength (16 %, from 30 %), which was checked on
   mottling at 1:1.
 - **Steam is luminance only** in the half-resolution target (white, tinted 1:1:1 in the composite).
 - **The spill is subtle**: thin, it reads mainly at the cloche's silhouette during 0.15–0.35 s.
+
+## Tests
+
+- `tests/dinner-steam.test.ts` (20): the field is pure in τ; at the seat it is the dome's cavity (dense under the
+  crown, nothing outside the cloche or on the porcelain); the dome's drag (1–5 cm up, stopping once the dome has
+  gone, a centimetre along its path); the dome's shape held within 1.5 cm at 0.45 s, the bubble's slow start, the
+  mushroom (top up > 8 cm, cap > 1.15× by 1.3 s); the base's slump out over the gilt rim and down; rise ≤ 25 cm/s,
+  decelerating; forward(inverse(p)) = p within 0.5 cm wherever the cloud is; nothing in or under the plate or the
+  table, the bounds hold all of it; tearing, evaporation, the veil's tail and `STEAM_END`; the spill from the raised
+  side while the far rim is on the plate; a resumed reveal carries no cloud, the veil's soft cut; no steam in the
+  accepted still; and the eight v1.5 on-stage clock tests, adapted (reveal clock, carry-on and idle, decline and
+  host, reduced motion and settle, replay, change back, change of mind with capture, mid-rewind resume, eight
+  quick changes).
+- `tests/scene-depth.test.ts` (5): no renderer call without an active client, nor for a client elsewhere,
+  inactive or hidden; one depth-only pass of the occluders' layer then `prepare`, everything restored, the target
+  freed when no longer needed; the occluder marking; the stage's hook order.
+- `tests/browser/scene-depth.spec.ts` (5): Party, Birthday, Sports and Business stills byte-identical with the hook
+  removed (at rest, mid-sequence, later) and no depth pass drawn; Dinner draws it during the reveal, not for the
+  accepted still.
+- Results on the final code: `pnpm typecheck` clean; `pnpm test` 421 of 422 (30 files), the one failure a Party
+  clearance test timing out at 180 s with the suite taking 1275 s under load (it passed in the earlier full run on
+  this branch, 422/422, and does not touch the steam). Browser: `tests/browser/dinner.spec.ts` 6/6,
+  `tests/browser/scene-depth.spec.ts` 5/5, the Dinner posters check 1/1 (0.00 % changed), the collection resource
+  check 1/1 after the target-release fix. **The full browser suite was not completed** on the final code (an
+  earlier partial run, under load, failed the collection resource check, since fixed, and two Party timing tests
+  that do not involve the steam: `idle.spec.ts` off-screen pause and `party.spec.ts` cobalt label); it is left to
+  the integration run.
 
 ## Evidence (not committed; `evidence/v1.6/steam/`)
 
