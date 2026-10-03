@@ -1184,7 +1184,7 @@ function masterStrands(prim: Primitive, R: (y: number) => number): { feet: V3[];
  */
 function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId, ProfilePoint[]>, log: (line: string) => void): void {
   const hash = new PipingHash();
-  const deferred: { prim: Primitive; pearls: { c: V3; r: number }[]; seed: number; name: string; before: number }[] = [];
+  const deferred: { prim: Primitive; pearls: { c: V3; r: number; d?: V3; cap?: number; optional?: boolean }[]; seed: number; name: string; before: number }[] = [];
   for (const node of nodes) {
     const name = node.getName();
     const info = nodeInfo(name);
@@ -1196,7 +1196,7 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
     const part = name.slice(`tier_${tier}`.length).replace(/^_/, '');
     const out = emptyMesh();
     const seed0 = seedOf(name);
-    const pearls: { c: V3; r: number }[] = [];
+    const pearls: { c: V3; r: number; d?: V3; cap?: number; optional?: boolean }[] = [];
     const comps = () => components(primData(prims[0]!)).map((c) => localOf(c, T.R));
     switch (part) {
       case 'swags': {
@@ -1218,7 +1218,7 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
           const g = stream(seed0 + k);
           const w = (c.tMax - c.tMin) / 2, h = c.rMax;
           // (v1.6 polish, fix 4: pleats of uneven depth and a pulled, uneven end, not a turned part.)
-          appendMesh(out, pulledLine(c.theta, c.yMax - 0.004, c.yMin + 0.002, R, 0.86 * w, 0.82 * h, (s) => 1 - 0.1 * s + 0.05 * Math.sin(5 * s + k) + 0.03 * Math.sin(13 * s + 2 * k), { ...STAR, teeth: 16, perTooth: 5, toothJitter: 0.38, toothDrift: 5 }, seed0 + 101 * k, { amp: 0.17, lean: 0.03 * g.s(), twist: 0.6, hem: 0.5 * MM }));
+          appendMesh(out, pulledLine(c.theta, c.yMax - 0.004, c.yMin + 0.002, R, 0.86 * w, 0.82 * h, (s) => 1 - 0.1 * s + 0.05 * Math.sin(5 * s + k) + 0.03 * Math.sin(13 * s + 2 * k), { ...STAR, teeth: 16, perTooth: 5, toothJitter: 0.3, toothDrift: 5 }, seed0 + 101 * k, { amp: 0.17, lean: 0.03 * g.s(), twist: 0.6, hem: 0.5 * MM }));
         });
         break;
       }
@@ -1229,10 +1229,10 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
           if (fan) {
             // A flared skirt: narrow at its collar, widest just above where it stands on the border.
             // (v1.6 polish, fix 4: irregular pulled pleats and a tapered, scalloped hem.)
-            appendMesh(out, pulledLine(c.theta, c.yMax, c.yMin + 0.004, R, 0.8 * w, 0.78 * h, (s) => 0.35 + 0.65 * Math.pow(s, 0.8) - 0.3 * smoothstep(0.82, 1, s), { ...STAR, teeth: 18, perTooth: 4, toothJitter: 0.45, toothDrift: 4 }, seed0 + 211 * k, { amp: 0.24, cap0: 0.12, tail: 0.1, twist: 0.5, flare: 0.2, hem: 1.6 * MM }));
+            appendMesh(out, pulledLine(c.theta, c.yMax, c.yMin + 0.004, R, 0.8 * w, 0.78 * h, (s) => 0.35 + 0.65 * Math.pow(s, 0.8) - 0.3 * smoothstep(0.82, 1, s), { ...STAR, teeth: 18, perTooth: 4, toothJitter: 0.3, toothDrift: 4 }, seed0 + 211 * k, { amp: 0.21, cap0: 0.12, tail: 0.1, twist: 0.5, flare: 0.2, hem: 0.6 * MM }));
           } else {
             // An onion bulb under a thin collar.
-            appendMesh(out, pulledLine(c.theta, c.yMax, c.yMin, R, 0.82 * w, 0.82 * h, (s) => 0.3 + 0.75 * Math.sin(Math.PI * Math.pow(s, 0.85)) ** 0.9, { ...STAR, teeth: 14, perTooth: 4, toothJitter: 0.35, toothDrift: 4 }, seed0 + 307 * k, { amp: 0.2, cap0: 0.15, tail: 0.15, twist: 0.8, hem: 0.4 * MM }));
+            appendMesh(out, pulledLine(c.theta, c.yMax, c.yMin, R, 0.82 * w, 0.82 * h, (s) => 0.3 + 0.75 * Math.sin(Math.PI * Math.pow(s, 0.85)) ** 0.9, { ...STAR, teeth: 14, perTooth: 4, toothJitter: 0.28, toothDrift: 4 }, seed0 + 307 * k, { amp: 0.2, cap0: 0.15, tail: 0.15, twist: 0.8, hem: 0.4 * MM }));
           }
         });
         break;
@@ -1298,9 +1298,9 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
           const pearlAt = (top: V3, axis: V3, R0: number, sink: number) => {
             const side = norm(cross(axis, Math.abs(axis[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
             const d = norm(rotate(side, axis, g.r() * 2 * Math.PI));
-            const keep = g.r() > 0.22;
+            const keep = g.r() > 0.12;
             const at = add(add(top, mul(axis, -sink * pr)), mul(d, R0 * (0.06 + 0.16 * g.r())));
-            if (keep) pearls.push({ c: at, r: pr * (1 + 0.08 * g.s()) });
+            if (keep) pearls.push({ c: at, r: pr * (1 + 0.08 * g.s()), d: axis, cap: 2 });
           };
           if (crown) {
             // Small rosettes round the top's edge, tipped a little outward over it: domed swirls
@@ -1310,9 +1310,10 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
             const axis = tilt(norm(add([0, 1, 0], mul(radial, 0.06 + 0.04 * g.s()))));
             const size = 0.5 * (c.tMax - c.tMin);
             const R0 = size * (1 + 0.15 * g.s());
-            const { mesh, top } = domedSwirl(centre, axis, radial, R0, seed0 + 613 * k);
+            const { mesh, seat } = domedSwirl(centre, axis, radial, R0, seed0 + 613 * k);
             appendMesh(out, mesh);
-            pearlAt(top, axis, R0, 0.45);
+            // Pressed into the dome beside the tail's peak (not skewered on it).
+            pearlAt(seat, axis, 0.15 * R0, 0.2);
           } else {
             // Big rosettes on the tier's top edge, facing out and a little up.
             const yr = yc - 0.007;
@@ -1340,7 +1341,7 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
           let { c: ctr, r } = fitSphere(pts);
           const box = (c.max[0] - c.min[0] + c.max[1] - c.min[1] + c.max[2] - c.min[2]) / 6;
           if (!(r > 0.3 * box && r < 2.5 * box) || dist(ctr, c.centroid) > 2 * box) { ctr = c.centroid; r = box; }
-          pearls.push({ c: ctr, r: r * (1 + 0.06 * g.s()) });
+          pearls.push({ c: ctr, r: r * (1 + 0.06 * g.s()), cap: part === 'border_pearls' ? 2.6 : 1.4, optional: part === 'border_pearls' });
         });
         break;
       }
@@ -1362,17 +1363,22 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
   // v1.6 polish (fix 3): every sugar pearl bedded in what it was pressed into, once all the piping is
   // built: lifted out along the way it faces until the piping holds only its lowest part (no piping
   // through its visible side: the "bitten" pearls), the frosting round it its fillet.
-  let lifted = 0, maxLift = 0;
+  let lifted = 0, maxLift = 0, buried = 0;
   for (const d of deferred) {
+    const kept: typeof d.pearls = [];
     for (const pr of d.pearls) {
-      const t = hash.bed(pr.c, pr.r);
+      const t = hash.bed(pr.c, pr.r, pr.d, pr.cap, !!pr.optional);
+      // One the piping has closed over (a shell border's dragée under the next head) is not there.
+      if (t < 0) { buried++; continue; }
       if (t > 0) { lifted++; maxLift = Math.max(maxLift, t / pr.r); }
+      kept.push(pr);
     }
+    d.pearls = kept;
     const m = pearlSpheres(d.pearls, d.seed);
     setGeometry(doc, d.prim, m);
     log(`  piping ${d.name}: ${d.pearls.length} dragées (${d.before} → ${m.pos.length / 3} vertices)`);
   }
-  log(`  pearls bedded: ${lifted} lifted out of the piping (up to ${maxLift.toFixed(2)} r)`);
+  log(`  pearls bedded: ${lifted} lifted out of the piping (up to ${maxLift.toFixed(2)} r), ${buried} buried under it (left out)`);
 }
 
 /** The piping's vertices in a uniform grid (scan units), for bedding the pearls. */
@@ -1405,24 +1411,33 @@ class PipingHash {
   /**
    * Beds a pearl (centre `c`, moved in place, radius `r`): the way it faces is away from the piping
    * round it; it is lifted along that until no piping point inside it stands above its lowest
-   * 30 % (nor within 0.15 r of its surface above that). Returns how far it moved.
+   * 30 %. Returns how far it moved, or −1 if the piping still closes over it at `cap` radii.
    */
-  bed(c: V3, r: number): number {
-    const around = this.near(c, 2.2 * r);
+  bed(c: V3, r: number, dir?: V3, cap = 1.1, optional = false): number {
+    const around = this.near(c, (2.2 + cap) * r);
     if (!around.length) return 0;
-    const m: V3 = [0, 0, 0];
-    for (const p of around) { m[0] += p[0] / around.length; m[1] += p[1] / around.length; m[2] += p[2] / around.length; }
-    const out = sub(c, m);
-    // Mostly up and out of the cake (a pearl is pressed into the top of what it sits on).
-    const radial = norm([c[0], 0, c[2]]);
-    const d = norm(add(len(out) > 1e-9 ? norm(out) : radial, mul(add(radial, [0, 1, 0]), 0.35)));
+    let d: V3;
+    if (dir) d = norm(dir);
+    else {
+      const m: V3 = [0, 0, 0];
+      const close = around.filter((p) => dist(p, c) < 2.2 * r);
+      for (const p of close) { m[0] += p[0] / close.length; m[1] += p[1] / close.length; m[2] += p[2] / close.length; }
+      const out = sub(c, m);
+      // Mostly up and out of the cake (a pearl is pressed into the top of what it sits on).
+      const radial = norm([c[0], 0, c[2]]);
+      d = norm(add(close.length && len(out) > 1e-9 ? norm(out) : radial, mul(add(radial, [0, 1, 0]), 0.35)));
+    }
     let t = 0;
-    for (; t <= 1.1 * r; t += r / 24) {
+    let clear = false;
+    for (; t <= cap * r; t += r / 24) {
       const cc = add(c, mul(d, t));
       const bad = around.some((p) => dist(p, cc) < 1.05 * r && dot(sub(p, cc), d) > -0.4 * r);
-      if (!bad) break;
+      if (!bad) { clear = true; break; }
     }
-    t = Math.min(t, 1.1 * r);
+    if (!clear) {
+      if (optional) return -1;
+      t = cap * r;
+    }
     const moved = add(c, mul(d, t));
     c[0] = moved[0]; c[1] = moved[1]; c[2] = moved[2];
     return t;

@@ -92,13 +92,18 @@ const WAX_BODY: Record<string, string> = { cake_candle_blue: '#AAC3DE', cake_can
  * frosting comes out more saturated; the near-white piping, a butter cream). `mesh` is the joined
  * frosting mesh the material is drawn on (both presets share it).
  */
-function patchFrosting(material: Material, press: CakePress, mesh: Mesh | null): void {
+function patchFrosting(material: Material, press: CakePress, mesh: Mesh | null, flames: FlameLights): void {
   const role = material.userData.frosting as string | undefined;
   if (!mesh) return;
   const c = (material as MeshStandardMaterial).color ?? new Color(1, 1, 1);
   const cocoa = /_cocoa$/.test(material.name);
   // v1.6: the film food shader (models/cakeShaders.ts foodPatch), then the press and the plate contact.
-  if (role === 'body') patchMaterial(material, [foodPatch(mesh, 'body', cocoa ? FOOD.cocoaBody : FOOD.body, c), pressPatch(mesh, press), contactPatch(mesh)]);
+  if (role === 'body') {
+    // v1.6 polish (fix 4): the room's 10 mm occlusion at half strength (the contact map's 1–2 mm
+    // carries the creases; at full strength every piece sat in a centimetre-wide halo).
+    (material as MeshStandardMaterial).aoMapIntensity = 0.5;
+    patchMaterial(material, [foodPatch(mesh, 'body', cocoa ? FOOD.cocoaBody : FOOD.body, c, { flames }), pressPatch(mesh, press), contactPatch(mesh)]);
+  }
   else if (role === 'piping') patchMaterial(material, [foodPatch(mesh, 'piping', cocoa ? FOOD.cocoaPiping : FOOD.piping, c), contactPatch(mesh)]);
   else if (role === 'pearl') {
     // v1.6 polish (fix 3): a sugar pearl's pearlescent coat, not chrome: a satin sugar shell under a
@@ -202,14 +207,22 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
   // feet before they are shaded.
   const tiers = frosting.get('cake_buttercream');
   if (tiers) tiers.renderOrder = -1;
-  for (const m of cakeMaterials) patchFrosting(m, press, frosting.get(m.name.replace(/_cocoa$/, '')) ?? null);
+  // (The flames' light is created first: the coat's warm pool reads its uniforms, models/cakeShaders.ts FLAME_POOL.)
+  const flameLights = createFlameLights();
+  for (const m of cakeMaterials) patchFrosting(m, press, frosting.get(m.name.replace(/_cocoa$/, '')) ?? null, flameLights);
   // The plate round the cake's foot darkens a little where the bead border rests on it.
   const plate: PlateContact = { lift: { value: 0 }, foot: { value: new Vector3(0, 0, 0.66) } };
   const piping = frosting.get('cake_piping');
   if (piping) plate.foot.value.copy(measureFoot(piping));
+  // (The plate's colour: the smear on it thins to nothing over it.)
+  const plateColor = new Color(0.6, 0.66, 0.72);
   root.getObjectByName('tray')?.traverse((o) => {
     const m = (o as Mesh).material as Material | undefined;
-    if ((o as Mesh).isMesh && !o.userData.shadowProxy && m && m.name.startsWith('cake_stand')) patchMaterial(m, [plateContactPatch(plate)]);
+    if ((o as Mesh).isMesh && !o.userData.shadowProxy && m && m.name.startsWith('cake_stand')) {
+      patchMaterial(m, [plateContactPatch(plate)]);
+      const c = (m as MeshStandardMaterial).color;
+      if (c) plateColor.copy(c);
+    }
   });
   const waxClones: Material[] = [];
   /** Every cake material the flames light (frosting, each candle's wax), patched once at the end. */
@@ -222,11 +235,10 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     const own = [smears.material as Material, ...(variants?.materials ?? []).filter((m) => m.name.startsWith('cake_smear'))];
     for (const m of new Set(own)) {
       const cocoa = /_cocoa$/.test(m.name);
-      patchMaterial(m, [foodPatch(smears, 'piping', cocoa ? FOOD.cocoaBody : FOOD.body, (m as MeshStandardMaterial).color)]);
+      patchMaterial(m, [foodPatch(smears, 'piping', cocoa ? FOOD.cocoaBody : FOOD.body, (m as MeshStandardMaterial).color, { film: plateColor })]);
       smearLit.push(m);
     }
   }
-  const flameLights = createFlameLights();
 
   // v1.5 fire (#4): each GLB lathe flame becomes a volumetric flame with its light; one ribbon
   // mesh carries every candle's smoke (models/birthdayFire.ts).

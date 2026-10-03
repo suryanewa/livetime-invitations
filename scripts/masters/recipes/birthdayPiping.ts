@@ -375,7 +375,7 @@ export function swagStrand(feet: V3[], normals: V3[], w0: number, h0: number, se
   // Buttercream gathers at the bottom of the loop (it sags while it sets): a fuller low point.
   const gather = 0.1 + 0.1 * g.r();
   const curl = (g.s() * 1.4) * MM;
-  const amp = 0.2 + 0.05 * g.s();
+  const amp = 0.23 + 0.05 * g.s();
   const wob = 0.18 * MM;
   const feetOut: Foot[] = [];
   for (let i = 0; i < L; i++) {
@@ -397,7 +397,7 @@ export function swagStrand(feet: V3[], normals: V3[], w0: number, h0: number, se
     feetOut.push({ c, n, t, w: w * p * k, h: h * p * k, sink: 1.1 * MM * Math.max(k, 0.35) * (k > 0 ? 1 : 0), tw: twist0 + twist * s + 0.22 * fbm1((s * length) / (9 * MM), seed + 11, 2), amp: amp * (1 + 0.25 * fbm1((s * length) / (14 * MM), seed + 13, 2)), flare: 0.3 });
   }
   // (v1.6 polish, fix 4: 4.6 samples a tooth, the silhouette's grooves no longer a sawtooth.)
-  return sweep(feetOut, { ...STAR, teeth: 11 + 2 * Math.floor(g.r() * 2), crest: 0.48, perTooth: 4.6, toothDrift: 2 + 3 * g.r() }, seed);
+  return sweep(feetOut, { ...STAR, teeth: 11 + 2 * Math.floor(g.r() * 2), crest: 0.42, perTooth: 4.6, toothDrift: 2 + 3 * g.r() }, seed);
 }
 
 // ── Straight pulled lines: columns, tassel bulbs and fans ─────────────────────────────
@@ -433,16 +433,18 @@ export function pulledLine(theta: number, y0: number, y1: number, R: (y: number)
     const dn = Math.sign(y1 - y0);
     for (let i = 0; i < L; i++) {
       const s = i / (L - 1);
-      const zone = smooth(0.7, 1, s);
+      const zone = smooth(0.72, 0.96, s);
       if (zone <= 0) continue;
       for (let j = 0; j < A; j++) {
         const v = i * A + j;
         const crest = 0.5 + 0.5 * mesh.ridge[v]!;
-        const own = 0.5 + hash1(j, seed + 71) + 0.6 * noise1((j / A) * 7, seed + 73);
+        // (Smooth round the hem: a pleat's own length, not a random spike per vertex column.)
+        const own = 0.75 + 0.5 * noise1((j / A) * 9, seed + 71) + 0.25 * noise1((j / A) * 23, seed + 73);
         mesh.pos[3 * v + 1] = mesh.pos[3 * v + 1]! + dn * opts.hem * zone * zone * crest * Math.max(0.2, own);
       }
     }
     recomputeNormals(mesh);
+    orientMesh(mesh);
   }
   return mesh;
 }
@@ -466,7 +468,7 @@ export function ropeBorder(y: number, R: (y: number) => number, thick: number, s
     const a1 = start + ((k + 1) * 2 * Math.PI) / runs + 0.04 + 0.02 * h.r();
     const r0 = R(y);
     const length = (a1 - a0) * r0;
-    const L = Math.round(length / (0.5 * MM));
+    const L = Math.round(length / (0.6 * MM));
     const twistPitch = (8.5 + 1.5 * h.s()) * MM, beadPitch = (3.4 + 0.3 * h.s()) * MM;
     const tw0 = h.r() * 2 * Math.PI, yOff = 0.25 * MM * h.s();
     const feet: Foot[] = [];
@@ -620,7 +622,7 @@ export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, op
   }
   const mesh = sweep(feet, { teeth: 12 + Math.floor(g.r() * 3), crest: 0.42, toothJitter: 0.18, toothDrift: 2.5, perTooth: opts.fine ? 3.5 : opts.rest ? 3.7 : 4.2, hidden: 6, wrap: !!opts.rest }, seed);
   // The centre: the soft mound the bag pushed out before it moved off (fills the eye of the coil).
-  appendMesh(mesh, pipedDot(add(add(c, off), mul(n, 0.15 * R)), n, u, 0.42 * R, seed + 23, [9, 22]));
+  appendMesh(mesh, pipedDot(add(add(c, off), mul(n, 0.15 * R)), n, u, 0.42 * R, seed + 23, [10, 40], 8));
   // A side rosette droops a little where it overhangs (its outer half slumps by up to `droop`).
   if (opts.droop) {
     const d = opts.droop;
@@ -644,7 +646,7 @@ export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, op
  * pulled off at the top in a tapered tail that leans the way the bag left. `c` the centre on the
  * surface, `n` out of it, `u` any direction in it; `R` its radius. Returns the mesh and its peak.
  */
-export function domedSwirl(c: V3, n0: V3, u0: V3, R: number, seed: number): { mesh: PipeMesh; top: V3 } {
+export function domedSwirl(c: V3, n0: V3, u0: V3, R: number, seed: number): { mesh: PipeMesh; top: V3; seat: V3 } {
   const g = stream(seed);
   const n = norm(n0);
   const u = norm(sub(u0, mul(n, dot(u0, n))));
@@ -697,7 +699,7 @@ export function domedSwirl(c: V3, n0: V3, u0: V3, R: number, seed: number): { me
   }
   const mesh = sweep(feet, { teeth: 9 + Math.floor(g.r() * 3), crest: 0.45, toothJitter: 0.18, toothDrift: 2, perTooth: 3.6, hidden: 5 }, seed);
   // The eye under the tail: the buttercream the inner loop closed over (no hole down the middle).
-  appendMesh(mesh, pipedDot(add(c, mul(n, 0.55 * H)), n, u, 0.45 * R, seed + 29, [9, 22]));
+  appendMesh(mesh, pipedDot(add(c, mul(n, 0.55 * H)), n, u, 0.45 * R, seed + 29, [9, 22], 9));
   // The peak: the highest point of the rope (where the tail was pulled off).
   let top: V3 = c, best = -Infinity;
   for (let i = 0; i < L; i++) {
@@ -705,7 +707,10 @@ export function domedSwirl(c: V3, n0: V3, u0: V3, R: number, seed: number): { me
     const ht = dot(sub(tp, c), n) - 0.3 * len(sub(sub(tp, c), mul(n, dot(sub(tp, c), n))));
     if (ht > best) { best = ht; top = tp; }
   }
-  return { mesh, top };
+  // Where a pearl is pressed in: on the dome's crown, on the side away from where the tail leans.
+  const away = norm(sub(c, sub(top, mul(n, dot(sub(top, c), n)))));
+  const seat = add(add(c, mul(n, 0.55 * H + 0.3 * R)), mul(len(sub(top, c)) > 1e-9 && Number.isFinite(away[0]) ? away : u, 0.38 * R));
+  return { mesh, top, seat };
 }
 
 // ── Dots ──────────────────────────────────────────────────────────────────────────────
@@ -714,7 +719,7 @@ export function domedSwirl(c: V3, n0: V3, u0: V3, R: number, seed: number): { me
  * peak the bag leaves as it is lifted away, which droops (`down`, along the surface) under its own
  * weight. `c` on the surface, `n` out of it; `R` the dome's radius.
  */
-export function pipedDot(c: V3, n0: V3, down0: V3, R: number, seed: number, res: [number, number] = [16, 40]): PipeMesh {
+export function pipedDot(c: V3, n0: V3, down0: V3, R: number, seed: number, res: [number, number] = [16, 40], teeth = 0): PipeMesh {
   const g = stream(seed);
   const n = norm(n0);
   const down = norm(sub(down0, mul(n, dot(down0, n))));
@@ -737,7 +742,10 @@ export function pipedDot(c: V3, n0: V3, down0: V3, R: number, seed: number, res:
       const a = (2 * Math.PI * j) / J;
       const lob = 1 + 0.05 * Math.sin(2 * a + seed) + 0.04 * Math.sin(3 * a + 2 * seed);
       const ell = 1 + (ecc - 1) * Math.cos(2 * (a - eAng));
-      const rho = q * R * lob * ell;
+      // A star tip's kiss (the eye of a rosette or swirl): its teeth run from the peak to the foot,
+      // turning a little as the bag was lifted.
+      const star = teeth ? 1 + 0.16 * (Math.pow(0.5 - 0.5 * Math.cos(teeth * (a + 0.6 * q)), 0.6) - 0.6) * Math.min(1, q / 0.3) : 1;
+      const rho = q * R * lob * ell * star;
       // Dome (1 − ρ²)^0.75 over the peak's gaussian; a concave fillet in the last 15 %.
       const x = Math.min(q, 1);
       let z = H * Math.pow(Math.max(0, 1 - x * x), 0.72) + peak * Math.exp(-((q / 0.2) ** 2));
@@ -747,7 +755,7 @@ export function pipedDot(c: V3, n0: V3, down0: V3, R: number, seed: number, res:
       const lean = mul(peakDir, peak * 0.9 * Math.exp(-((q / 0.35) ** 2)));
       const dir = add(mul(down, Math.cos(a)), mul(side, Math.sin(a)));
       row.push(add(add(add(c, mul(dir, rr)), mul(n, z)), lean));
-      rg.push(0.5 - q);
+      rg.push(teeth ? clamp((star - 1) / 0.064, -1, 1) : 0.5 - q);
     }
     P.push(row);
     RG.push(rg);
@@ -800,7 +808,8 @@ export function baseSmears(yPlate: number, r0: number, seed: number, smearAt: nu
         const h = H * body * (1 + streak * smooth(0.05, 0.4, u)) - 0.012 * MM;
         const p = add(add(add(c, mul(along, (u - 0.3) * lenS)), mul(across, x)), [0, h, 0]);
         row.push(p);
-        rg.push(clamp(streak * 2, -1, 1) * 0.5);
+        // The ridge channel carries the film's thickness (−1 feathered to nothing … 1 the deposit).
+        rg.push(clamp(2 * Math.min(1, (h + 0.012 * MM) / H) - 1, -1, 1));
       }
       P.push(row);
       RG.push(rg);
