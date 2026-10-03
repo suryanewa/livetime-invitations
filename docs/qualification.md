@@ -94,6 +94,26 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 - Drawing buffer at the showcase stage (≈400 CSS px, DPR 1.5 → 600², MSAA 4×): ≈13 MiB. **Total ≈ 20 MiB** against the 48 MiB budget.
 - **Risk recorded:** at the master's 2.5 MP drawing-buffer ceiling, MSAA 4× alone would need ≈90 MiB. Embeds larger than ≈700 CSS px at DPR 1.5 should create the renderer without MSAA; this is a decision for Milestone 7 integration guidance.
 
+## v1.6: the Hollywood pass, first judging (2026-10-03)
+
+Surya's three items on v1.5 (`docs/hollywood-pass-brief.md`), each at "Hollywood CGI level". Each object was
+rebuilt by one owner, then judged by an independent VFX-supervisor agent that rendered its own frames through the
+production stage against photographs and film references at the three real sizes and in macro, and demanded fixes
+before signing; a second owner per object then made them (the second judging is recorded below it when done).
+
+| Object | First build | Judge's scores (0–10 vs "Hollywood CGI") | Verdict and the five demanded fixes |
+| --- | --- | --- | --- |
+| Cake | Regenerated star-tip piping, hand-coated tiers, baked-light food shader (`birthday-v1.6-cake.md`) | square 540: 6 / cocoa 6.5; laptop 5.5 / 6.5; phone 5.5 / 6.5; macro 3.5 / 4.5 | Not signed: "the swags now read as piped rope; what still reads as CG is everything around them". Fixes: (1) a coat whose satin sheen, 3–6 % mottle, strokes and pinholes survive at laptop size (σ ≥ 3–5/255 over 3 cm; the first build measured 0.55–1.8); (2) break the twins (rosettes ±12–18 % with random start and tilt, dots ±20 % with random peaks, bays ±2–3 mm, domed crown swirls, grooved far-side backs); (3) a continuous shell chain squashed onto the board, pearls bedded with fillets and no black crevices; (4) macro geometry (no self-intersecting tucks or poking swag ends, smoother silhouettes, deeper star grooves, a 1–2 mm contact crease, a feathered smear); (5) light and colour (visible soft candle shadows and a warm pool, ivory white piping, thin-edge glow) |
+| Flames | Raymarched flame volume, selective HDR bloom, heat haze, shadowed flickering light (`birthday-v1.6-flames.md`); the owner's own three-round VFX reviewer: macro 5 → 7, laptop 6 → 7.5, phone 6 → 7.5, 540 card 6 → 7.5, 192 thumbnail 4, blow 3 → 6, light 6 | (independent judge pending the smoke pass) | The owner's reviewer called it "signable at laptop, phone and 540"; the v1.5 smoke became the loudest tell, so the smoke was rebuilt to the same standard |
+| Steam | Raymarched volume from the dome's cavity, material-space advection, vortex roll, scattering, steam shadow, scene depth (`dinner-v1.6-steam.md`) | laptop: form 3.5, motion 5, lighting 3.5, integration 4.5 → **4**; phone 5 / 5.5 / 4.5 / 5 → **5** | Not signed: "the timing is right … but it reads as a frosted cotton-wool ball with a crawling sand grain; the dome shape holds ~0.1 s". Fixes: (1) a sharp lobed edge and silky interior (a narrow threshold band carved by flow-advected billows, noise stretched along the flow, no upsample blur at the edge); (2) no grain (jitter anchored in material space or TAA, no octaves finer than ~4 px); (3) light it as a body (room ~0.3, steep key falloff, two-lobe phase, a legible offset shadow on the plate); (4) a visible bright sheet spilling from the gap at 0.15–0.35 s, then the dome-shaped wall held crisp for 0.25–0.4 s; (5) less vapour (cap no wider than the plate, half the opacity by 1.2 s), a real vortex ring, backlit wisps through 3–5 s, the returning cover pushing the cloud aside |
+
+Also landed: meshopt compression of every runtime GLB (−58 % raw, −45 % gzip; the cake 31.9 → 11.0 MiB raw after
+its regeneration grew it from 12.5), decoded geometry bit-identical, 36 capture stills pixel-identical.
+
+Verification on the integrated build is recorded with the second judging below once the polish rounds land; the
+machine was shared by up to six rendering sessions during this pass (load average 30–90), so timing-sensitive
+unit tests (the Party clearance test, the Sports planning test) timed out under load and were re-run alone.
+
 ## v1.5: the judging of the twelve edits (2026-10-02)
 
 Three independent judges measured the integrated build (`v1.5/integration` at `aae7b65`–`b46ed48`, before the polish rounds), each rendering its own frames through the real controller rather than trusting the owners' evidence: **A**, motion and physics (frame strips at 62.5 fps with a per-frame scene-graph probe, pure functions sampled at 2 kHz); **B**, materials and look (close-ups through the production stage against product and food photographs, at the real on-screen sizes); **C**, the guest's experience (real-time Playwright sessions on 1280 × 720 @2× and 390 × 844 @3× with touch, every flow of every scene, frame pacing, memory, downloads, reduced motion, hidden tab and off-screen). Their scores against "perfection" and the findings that drove the polish round:
