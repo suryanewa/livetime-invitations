@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { Color, type Material, MeshPhysicalMaterial, MeshStandardMaterial, PerspectiveCamera, Scene, ShaderLib, Vector2, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
+import { Color, type Material, MeshPhysicalMaterial, type Object3D, MeshStandardMaterial, PerspectiveCamera, Scene, ShaderLib, Vector2, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { Bloom, BLOOM_LAYER, emitBloom, pendingBloom } from '../src/render/bloom.ts';
 import { createFlameMaterial, FLAME_STEPS } from '../src/render/flame.ts';
@@ -9,6 +9,9 @@ import { createFlameLights, patchFlameLight } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
+import { SMOKE_VOLUME } from '../models/birthdaySmoke.ts';
+import { SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
+import { BREATH_AT, newSmokeStrand, smokeStrand, SMOKE_POINT_COUNT, type WickAt } from '../src/scenes/birthday/fire.ts';
 
 /**
  * v1.6 flames (docs/scenes/birthday-v1.6-flames.md): the volume's material, the bloom's and the
@@ -200,5 +203,48 @@ describe('v1.6 flames: the volume, the bloom and the haze', () => {
     expect(t.z).toBeGreaterThan(L.candleA.value[0]!.y);
     expect(t.z).toBeLessThan(Math.min(...L.candleB.value.map((v) => v.y)));
     expect(t.w).toBeGreaterThan(0.3);
+  });
+  it('the smoke above its stem is a volume (v1.6 polish): the ribbon hands the vapour over along the thread, only the candles occlude it, nothing is marched without smoke', () => {
+    const { rig, scene } = build();
+    const smoke = rig.smoke;
+    // Bloom and the scene's depth never share a layer (the depth occluders must not bloom).
+    expect(BLOOM_LAYER).not.toBe(SCENE_DEPTH_LAYER);
+    // Only the candles' shadow stand-ins are depth occluders (no cake, no piping).
+    const occluders: Object3D[] = [];
+    rig.root.traverse((o) => { if (o.layers.isEnabled(SCENE_DEPTH_LAYER)) occluders.push(o); });
+    expect(occluders.length).toBeGreaterThan(0);
+    const underCandle = (o: Object3D | null): boolean => !!o && (/^candle_\d\d$/.test(o.name) || underCandle(o.parent));
+    for (const o of occluders) expect(underCandle(o)).toBe(true);
+    // Lit: no smoke, the volume is not drawn (no depth pass, no march).
+    scene.pose('guest-ready');
+    for (let k = 0; k < 4; k++) scene.beforeRender();
+    expect(smoke.volume.object.visible).toBe(false);
+    // 1.2 s after the breath: the volume carries the smoke above the stems.
+    scene.sample('accept', 1.2);
+    scene.beforeRender();
+    expect(smoke.volume.object.visible).toBe(true);
+    expect(smoke.volume.puffs).toBeGreaterThan(50);
+    expect(smoke.volume.dropped).toBe(0);
+    // The hand-over: the ribbon carries a thread's first SMOKE_VOLUME.ribbon[0] of path at its full
+    // opacity and nothing past ribbon[1] (the volume does).
+    const st = newSmokeStrand();
+    const w: [number, number, number] = [0, 1, 0];
+    const still: WickAt = (_b, out) => { out[0] = w[0]; out[1] = w[1]; out[2] = w[2]; };
+    smokeStrand(0, 0, BREATH_AT[0]!.lift + 1.5, still, st);
+    const a = smoke.mesh.geometry.getAttribute('aAlpha');
+    let path = 0, past = 0, near = 0;
+    for (let k = 1; k < SMOKE_POINT_COUNT; k++) {
+      path += Math.hypot(st.position[k * 3]! - st.position[k * 3 - 3]!, st.position[k * 3 + 1]! - st.position[k * 3 - 2]!, st.position[k * 3 + 2]! - st.position[k * 3 - 1]!) / 5;
+      if (path > SMOKE_VOLUME.ribbon[1]) past++;
+      else if (path < SMOKE_VOLUME.ribbon[0]) near++;
+    }
+    expect(past).toBeGreaterThan(10);
+    expect(near).toBeGreaterThan(3);
+    expect(a).toBeTruthy();
+    // Settled (the canonical accepted pose: posters, reduced motion): nothing.
+    scene.pose('accepted');
+    scene.settle();
+    scene.beforeRender();
+    expect(smoke.volume.object.visible).toBe(false);
   });
 });

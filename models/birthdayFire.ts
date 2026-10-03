@@ -7,7 +7,7 @@ import { CANDLE, FLAME, WICK_EXPOSED } from './birthdayContract.ts';
 import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
 import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, SMOKE_GLOW, sootRadiance } from '../src/render/flame.ts';
 import { addHaze } from '../src/render/heatHaze.ts';
-import { SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
+import { markDepthOccluders, SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
 import { SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
 import {
   FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, POOL_Y, rand, restLean, WICK_TIP_Y, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
@@ -656,7 +656,10 @@ export class SmokeRig {
     // The volume marches up to the opaque scene: the candles are all that can stand between the lens
     // and smoke rising above the wicks, so only they draw in its depth pass, as their low-poly shadow
     // stand-ins (2 k triangles each; the wax is 35 k, the cake's piping 1.4 M).
-    parent.traverse((o) => { if (o.userData.shadowProxy && /^candle_\d\d/.test(o.name)) o.layers.enable(SCENE_DEPTH_LAYER); });
+    let stand = 0;
+    parent.traverse((o) => { if (o.userData.shadowProxy && /^candle_\d\d/.test(o.name)) { o.layers.enable(SCENE_DEPTH_LAYER); stand++; } });
+    // (A cake without the stand-ins, the tooling cake: the candles themselves.)
+    if (!stand) parent.traverse((o) => { if (/^candle_\d\d$/.test(o.name)) markDepthOccluders(o); });
     this.volume = new SmokeVolume(parent);
     const strands = candles * SMOKE_STRAND_COUNT;
     const n = strands * SMOKE_POINT_COUNT * 2;

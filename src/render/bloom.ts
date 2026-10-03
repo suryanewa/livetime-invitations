@@ -412,7 +412,8 @@ export class Bloom {
     renderer.getDrawingBufferSize(this.buffer);
     const W = this.buffer.x, H = this.buffer.y;
     const mips = this.mips;
-    const reach = Math.ceil(2.5 * (1 << mips.length) * pr);
+    // (The widest level's tent reaches ≈1.5 of its texels; v1.6 polish: 1.6, was 2.5 with five levels.)
+    const reach = Math.ceil(1.6 * (1 << mips.length) * pr);
     const x0 = p!.full ? 0 : Math.max(0, Math.floor(p!.x0 - reach)), y0 = p!.full ? 0 : Math.max(0, Math.floor(p!.y0 - reach));
     const x1 = p!.full ? W : Math.min(W, Math.ceil(p!.x1 + reach)), y1 = p!.full ? H : Math.min(H, Math.ceil(p!.y1 + reach));
     if (x1 <= x0 || y1 <= y0) return false;

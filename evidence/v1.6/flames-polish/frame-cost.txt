@@ -1,0 +1,23 @@
+Frame cost, v1.6 flames polish. M2 Pro, Chrome/Metal (ANGLE), headless, the live stage; each frame
+waited on with a 1-pixel readPixels; alternating 12-frame batches per case (20-30 batches),
+medians. The machine was shared with other owners' servers and browsers: absolute times run high,
+batch-to-batch variance ~0.2-0.4 ms; the differences are the costs.
+Cases: full; nofx = no flames (volumes + twins), no bloom, no haze, no smoke (volume, ribbons);
+nobloom; nohaze; nosmoke = the smoke volume hidden; skip-* = the volume's passes skipped.
+
+laptop 1280x720 @2 (2,108 x 1,185 after the 2.5 MP cap)
+  lit guest-ready     full 8.233  nofx 6.642  nobloom 7.200  nohaze 7.933   -> fire 1.59, bloom 1.03, haze 0.30
+  lit (5 vs 6 levels) full 8.333  b5 8.300  nobloom 7.375                     -> bloom 0.96, 6th level +0.03
+  hand-over 0.2 s     full 8.233  nofx 6.742  nosmoke 7.992                   -> fire 1.49, smoke volume 0.24
+  smoke 1.0 s         full 6.992  nofx 5.992  nosmoke 6.517                   -> fire 1.00, smoke volume 0.48
+  smoke 1.5 s         full 6.158  nosmoke 5.533  skip-march 5.942  skip-splat-light-march 5.867
+                      -> smoke volume 0.63 (march 0.22, splat+light 0.07, depth pass+composite 0.33)
+phone 390x844 @2 (780 x 1,688)
+  lit guest-ready     full 7.250  nofx 5.667  nobloom 6.067  nohaze 7.083   -> fire 1.58, bloom 1.18, haze 0.17
+  hand-over 0.2 s     full 7.225  nofx 5.775  nosmoke 6.975                   -> fire 1.45, smoke volume 0.25
+  smoke 1.5 s         full 5.625  nosmoke 5.058                               -> smoke volume 0.57
+
+Found and fixed on the way: the scene-depth pass rendered with no lights, so three bumped its light-
+state version twice a frame and every lit material re-validated its program in the main pass
+(+0.5 ms whenever a depth client was active, Dinner's steam included); and the depth layer held the
+whole cake (1.6 M triangles) where the candles' shadow proxies (2 k each) are the only occluders.
