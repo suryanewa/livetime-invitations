@@ -99,6 +99,9 @@ describe('Scene depth (v1.6)', () => {
     const calls: string[] = [];
     const fake = {
       sceneDepth: { render: () => { calls.push('depth'); return false; } },
+      // (The flames' bloom and haze hooks, merged into the stage at integration: idle here.)
+      bloom: { prepare: () => false, composite: () => calls.push('bloom') },
+      haze: { apply: () => undefined },
       renderer: { render: () => calls.push('main') },
       scene: new Scene(), camera: new PerspectiveCamera(),
     };
