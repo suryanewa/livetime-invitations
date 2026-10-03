@@ -82,7 +82,7 @@ export const CLOUD = {
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
   base: 0,
   /** The cap's radius grows by this per su of rise (a thermal's entrainment, α ≈ 0.25, over R ≈ 0.63); the stem narrows by up to `stem`. */
-  capGrow: 0.32,
+  capGrow: 0.22,
   stem: 0.3,
   /** The cap flattens by up to this share of its height as it rises. */
   squash: 0.12,
@@ -105,10 +105,10 @@ export const CLOUD = {
   /** The room's draught leans the rising cloud (su of lean per su of height). */
   lean: 0.14,
   /** Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). */
-  erode: [0.45, 2.5] as const,
+  erode: [0.35, 2.1] as const,
   /** The cloud is gone by this age (s), faded out over the last `fadeOut`. */
-  life: 2.9,
-  fadeOut: 0.8,
+  life: 2.5,
+  fadeOut: 0.7,
   /** Visible steam evaporates as it rises: e^(−(y − evapFrom)/evaporate) above evapFrom (su). */
   evapFrom: 0.9,
   evaporate: 1.3,
@@ -127,7 +127,7 @@ export const SPILL = {
   /** It climbs the wall at this speed (su/s, ≈ 25 cm/s: the exchange outflow caught by the hot wall, drawn up by the lifting dome). */
   rise: 1.5,
   /** Spread round the raised rim (rad, Gaussian width). */
-  spread: 0.75,
+  spread: 0.6,
   /** Its source: the raised rim's gap (su) at which it is full. */
   fullGap: 0.09,
   /** It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). */
@@ -172,7 +172,7 @@ export const VEIL = {
   ramp: 0.3,
   /** The first rush decays over `decay`; a `tail` share decays over `tailDecay` (s). */
   decay: 0.7,
-  tail: 0.45,
+  tail: 0.5,
   tailDecay: 1.25,
   /** A change of mind: the source dies away over this (s). */
   cut: 0.15,
@@ -333,7 +333,7 @@ export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinit
   // The ring's core sits inside the cap's edge (where the dome's shoulder was), carried with it.
   const Ys = CLOUD.ringAt[1], Ps = CLOUD.ringAt[0] * CLOUD.radius;
   out.ringR = Ps * out.cap;
-  out.ringY = Ys + U * riseWeight(Ys) * centreWeight(Ps) + out.dragUp * dragWeight(Ys) - out.squash * capIntegral(Ys);
+  out.ringY = Ys + U * riseWeight(Ys) * centreWeight(Ps) + out.dragUp * dragWeight(Ys) * dragCentre(Ps) - out.squash * capIntegral(Ys);
   out.ringSigma = CLOUD.ringCore * (1 + 0.4 * (out.cap - 1));
   out.turb = CLOUD.turb[0] + (CLOUD.turb[1] - CLOUD.turb[0]) * (1 - Math.exp(-a / CLOUD.turbTime)) * smooth(0, 0.3, a);
   out.lean.copy(LEAN_DIR).multiplyScalar(CLOUD.lean * smooth(0.1, 1.6, a));
@@ -354,8 +354,10 @@ export interface CloudMaterial {
 /** The thermal's updraft is strongest on its axis: the rise by material radius P (the cap's edge lags and droops). */
 export const centreWeight = (P: number) => 1 - CLOUD.centre * Math.min(1, (P / CLOUD.radius) ** 2);
 /** The vertical map's forward form: material (P, Y) → height after the rise, the drag and the cap's squash. */
-export const verticalForward = (Y: number, P: number, s: CloudState) => Y + s.rise * riseWeight(Y) * centreWeight(P) + s.dragUp * dragWeight(Y) - s.squash * capIntegral(Y);
-const verticalSlope = (Y: number, P: number, s: CloudState) => 1 + s.rise * riseWeightD(Y) * centreWeight(P) + s.dragUp * dragWeightD(Y) - s.squash * capWeight(Y);
+/** The lifting dome draws the crown's air up most on its axis (a peak pulled after it), the edge least. */
+export const dragCentre = (P: number) => 1.45 - 0.9 * Math.min(1, (P / CLOUD.radius) ** 2);
+export const verticalForward = (Y: number, P: number, s: CloudState) => Y + s.rise * riseWeight(Y) * centreWeight(P) + s.dragUp * dragWeight(Y) * dragCentre(P) - s.squash * capIntegral(Y);
+const verticalSlope = (Y: number, P: number, s: CloudState) => 1 + s.rise * riseWeightD(Y) * centreWeight(P) + s.dragUp * dragWeightD(Y) * dragCentre(P) - s.squash * capWeight(Y);
 /** The stem and base evaporate as the uncovered plate re-heats them (their share of the light left). */
 export const stemLeft = (Y: number, s: CloudState) => 1 - s.stemFade * (1 - smooth(0.12, 0.42, Y));
 /** Bisection steps of the vertical solve (the map is monotonic; ≈ 0.04 mm over its bracket). */
@@ -385,7 +387,7 @@ export function axisInverse(rho0: number, y0: number, s: CloudState, out: [numbe
   // map is monotonic in the height (bisection gives Y*(P)), and P·S(Y*(P)) is monotonic in P (the
   // axis rises fastest), so an outer bisection finds P.
   const solveY = (Pm: number) => {
-    let lo = y - s.rise - s.dragUp - 0.05, hi = y + s.squash + 0.05;
+    let lo = y - s.rise - 1.5 * s.dragUp - 0.05, hi = y + s.squash + 0.05;
     for (let i = 0; i < VERTICAL_STEPS; i++) {
       const mid = 0.5 * (lo + hi);
       if (verticalForward(mid, Pm, s) < y) lo = mid; else hi = mid;
@@ -577,9 +579,9 @@ export function cloudLook(age: number, erode: number, out: CloudLook = { amp: 0,
   out.warp = 1 + 1.4 * smooth(0, 1.2, age) - 0.6 * smooth(1.2, 2.4, age);
   out.fine = 0.1 + 0.15 * erode;
   out.core = 0.8 + (0.08 - 0.8) * smooth(0.1, 1.3, age);
-  out.coreWidth = 0.18 + 0.14 * young;
-  out.sheetWidth = 0.09 + 0.06 * young;
-  out.sheet = 0.75 - 0.4 * young;
+  out.coreWidth = 0.16 + 0.06 * young;
+  out.sheetWidth = 0.08 + 0.02 * young;
+  out.sheet = (0.75 - 0.4 * young) * (1 - 0.55 * smooth(0.8, 2.0, age));
   return out;
 }
 
@@ -629,11 +631,16 @@ const TMP_V = new Vector3();
  * the flow (plus the turbulence, the noise's reach and the lean), and the veil as far as it has
  * risen. The shader marches only inside them.
  */
-export function steamBounds(s: CloudState, veil: { tau: number; emitStart: number; emitEnd: number } | null, cloudMin: Vector3, cloudMax: Vector3, veilMin: Vector3, veilMax: Vector3): void {
+export function steamBounds(
+  s: CloudState, veil: { tau: number; emitStart: number; emitEnd: number } | null, cloudMin: Vector3, cloudMax: Vector3, veilMin: Vector3, veilMax: Vector3,
+  spillMin: Vector3 = new Vector3(), spillMax: Vector3 = new Vector3(),
+): void {
   cloudMin.set(Infinity, Infinity, Infinity);
   cloudMax.set(-Infinity, -Infinity, -Infinity);
   veilMin.copy(cloudMin);
   veilMax.copy(cloudMax);
+  spillMin.copy(cloudMin);
+  spillMax.copy(cloudMax);
   if (s.present && s.fade > 0) {
     let rMax = 0, yMin = Infinity, yMax = -Infinity;
     for (const [P, Y] of OUTLINE) {
@@ -652,8 +659,8 @@ export function steamBounds(s: CloudState, veil: { tau: number; emitStart: numbe
   if (veil && spillFade(veil.tau) > 0 && veil.tau < SPILL.fade[1]) {
     sampleSequence('accept', Math.min(veil.tau, veil.emitEnd), frame);
     const c = frame.coverPos, r = COVER.radius + 0.12;
-    cloudMin.min(TMP_V.set(c.x - r, Math.max(0, c.y - 0.12), c.z - r));
-    cloudMax.max(TMP_V.set(c.x + r, c.y + COVER.domeHeight + 0.1, c.z + r));
+    spillMin.set(c.x - r, Math.max(0, c.y - 0.12), c.z - r);
+    spillMax.set(c.x + r, c.y + COVER.domeHeight + 0.1, c.z + r);
   }
   if (veil) {
     // From where its source stopped (or the porcelain) to as high as its first vapour has risen.

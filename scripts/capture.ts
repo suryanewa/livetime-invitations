@@ -159,7 +159,8 @@ const SCENE_CAPTURE = {
     sharedDeclined: true,
     sharedReady: true,
     sharedAll: true,
-    // v1.5: the accept clip runs on until the reveal's steam has gone (STEAM_END 3.6 s).
+    // v1.5/v1.6: the accept clip runs on through the steam: the cloud standing in the dome's shape,
+    // mushrooming and tearing into wisps (gone by ≈ 3.2 s), and the start of the plate's thin veil.
     clips: { host: 1.5, accept: 3.8, decline: 1.8, change: 2.6 },
   },
 } as const;

@@ -75,6 +75,8 @@ export const STEAM_LOOK = {
   g: 0.45,
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
+  /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
+  shadow: 0.3,
   /**
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
@@ -86,10 +88,10 @@ export const STEAM_LOOK = {
 } as const;
 
 /** The flow map's domain and resolution (per clock): ρ ∈ [0, RHO_MAX], y ∈ [0, Y_MAX] (su). */
-const RHO_MAX = 1.5, Y_MAX = CLOUD_Y_MAX, MAP_W = 96, MAP_H = 160;
+const RHO_MAX = 1.5, BOX_MAX = 2.6, Y_MAX = CLOUD_Y_MAX, MAP_W = 96, MAP_H = 160;
 const NOISE_SIZE = 64;
 /** The spill's density at its full source. */
-const SPILL_STRENGTH = 6.0;
+const SPILL_STRENGTH = 7.5;
 /** The light volume: N³ voxels over the proxy box, its z-slices tiled COLS × ROWS in one 2D atlas. */
 const LIGHT_N = 24, LIGHT_COLS = 6, LIGHT_ROWS = 4;
 /** Probes of the march's occupancy along each ray. */
@@ -219,9 +221,10 @@ varying vec2 vUv;
 ${FLOW_GLSL}
 
 float centreWeight(float P) { return 1.0 - ${f(CLOUD.centre)} * min(1.0, pow(P / ${f(CLOUD.radius)}, 2.0)); }
-float vForward(float Y, float P, vec4 s0) { return Y + s0.x * riseWeight(Y) * centreWeight(P) + s0.y * dragWeight(Y) - s0.z * capIntegral(Y); }
+float dragCentre(float P) { return 1.45 - 0.9 * min(1.0, pow(P / ${f(CLOUD.radius)}, 2.0)); }
+float vForward(float Y, float P, vec4 s0) { return Y + s0.x * riseWeight(Y) * centreWeight(P) + s0.y * dragWeight(Y) * dragCentre(P) - s0.z * capIntegral(Y); }
 float solveY(float y, float P, vec4 s0) {
-  float lo = y - s0.x - s0.y - 0.05, hi = y + s0.z + 0.05;
+  float lo = y - s0.x - 1.5 * s0.y - 0.05, hi = y + s0.z + 0.05;
   for (int i = 0; i < ${VERTICAL_STEPS}; i++) {
     float mid = 0.5 * (lo + hi);
     if (vForward(mid, P, s0) < y) lo = mid; else hi = mid;
@@ -236,7 +239,7 @@ float solveP(float P1, float Y, float skirt) {
   }
   return 0.5 * (a + b);
 }
-float vSlope(float Y, float P, vec4 s0) { return 1.0 + s0.x * riseWeightD(Y) * centreWeight(P) + s0.y * dragWeightD(Y) - s0.z * capWeight(Y); }
+float vSlope(float Y, float P, vec4 s0) { return 1.0 + s0.x * riseWeightD(Y) * centreWeight(P) + s0.y * dragWeightD(Y) * dragCentre(P) - s0.z * capWeight(Y); }
 
 /** The cloud at the seat (cloudSeat): \`grow\` widens the soft wall (the dilated occupancy). */
 float seat(float r, float Y, float floorH, float grow) {
@@ -321,6 +324,11 @@ uniform vec3 uCloudMin[${STEAM_LAYERS}];
 uniform vec3 uCloudMax[${STEAM_LAYERS}];
 uniform vec3 uVeilMin[${STEAM_LAYERS}];
 uniform vec3 uVeilMax[${STEAM_LAYERS}];
+uniform vec3 uSpillMin[${STEAM_LAYERS}];
+uniform vec3 uSpillMax[${STEAM_LAYERS}];
+/** The light volume's box (the clouds and the veils: it never jumps when the spill's box goes). */
+uniform vec3 uLightMin;
+uniform vec3 uLightMax;
 uniform int uSteps;
 uniform int uProbes;
 /** The march's resolution over the drawing buffer's (≈ 0.42–0.5 a side). */
@@ -404,10 +412,11 @@ float veil(vec3 p, int l, float detail) {
   // A slow field that changes with height bends the sheets as they rise (they snake and twist,
   // never stand as a curtain of straight streaks), and breaks the column into a few wisps.
   vec4 n = texture(uNoise, vec3(c.x * 0.8, s * 0.9, c.y * 0.8) + vec3(0.0, 0.0, 0.05 * tau));
-  vec3 qw = vec3(c.x * 1.5, s * 0.75, c.y * 1.5) + (n.xyz - 0.5) * (1.0 + 1.6 * smoothstep(0.0, 0.6, h));
+  vec3 qw = vec3(c.x * 0.95, s * 0.5, c.y * 0.95) + (n.xyz - 0.5) * (0.8 + 1.2 * smoothstep(0.0, 0.6, h));
   float ridge = 1.0 - abs(2.0 * texture(uNoise, qw + 3.7).r - 1.0);
-  float sheets = smoothstep(0.7, 0.96, ridge) * smoothstep(0.38, 0.62, n.b);
-  float wisps = mix(0.6, 0.1 + 3.0 * sheets, smoothstep(0.02, 0.2, h));
+  // (A few ribbons, not a curtain: the large field leaves most of the column clear.)
+  float sheets = smoothstep(0.62, 0.96, ridge) * smoothstep(0.45, 0.7, n.b);
+  float wisps = mix(0.6, 0.06 + 4.6 * sheets, smoothstep(0.02, 0.2, h));
   wisps *= mix(1.0, 0.7 + 0.6 * n.a, detail);
   return ${f(VEIL.strength)} * src * smoothstep(0.0, ${f(VEIL.base)}, h) * exp(-h / ${f(VEIL.evaporate)})
     * pow(${f(VEIL.radius)} / w, 2.0) * lateral * wisps * (1.0 - smoothstep(${f(VEIL.length - VEIL.top)}, ${f(VEIL.length)}, h));
@@ -453,8 +462,8 @@ float spill(vec3 p, int l, float detail) {
   if (y < -0.1 || y > ${f(COVER.domeHeight + 0.03)}) return 0.0;
   float r = length(cv.xz);
   float d = r - domeWall(y);
-  float w = 0.014 + 0.085 * max(y, 0.0);
-  if (d < -0.004 || d > w + 0.03) return 0.0;
+  float w = 0.008 + 0.045 * max(y, 0.0);
+  if (d < -0.004 || d > w + 0.02) return 0.0;
   float c = dot(cv.xz / max(r, 1e-4), vec2(${f(RAISED_DIR.x)}, ${f(RAISED_DIR.y)}));
   float ang = acos(clamp(c, -1.0, 1.0));
   float az = exp(-(ang * ang) / ${f(SPILL.spread * SPILL.spread)});
@@ -467,7 +476,7 @@ float spill(vec3 p, int l, float detail) {
   float b = i + 1 < 4 ? uSp0[l][i + 1] : uSp1[l][i - 3];
   float src = mix(a, b, fk);
   if (src <= 0.0) return 0.0;
-  float sheet = smoothstep(-0.004, 0.006, d) * (1.0 - smoothstep(0.4 * w, w + 0.03, d));
+  float sheet = smoothstep(-0.004, 0.004, d) * (1.0 - smoothstep(0.4 * w, w + 0.02, d));
   // Lobes and filaments, rising with the air and curling over at the rim.
   float tau = uA[l].x;
   vec3 q = vec3(cv.x * 3.2, (y - ${f(SPILL.rise)} * tau) * 2.2, cv.z * 3.2);
@@ -557,7 +566,7 @@ const float LN = ${LIGHT_N}.0;
 const float LCOLS = ${LIGHT_COLS}.0;
 const float LROWS = ${LIGHT_ROWS}.0;
 vec3 lightAt(vec3 p) {
-  vec3 u = clamp((p - uBoxMin) / max(uBoxMax - uBoxMin, vec3(1e-4)), 0.0, 1.0);
+  vec3 u = clamp((p - uLightMin) / max(uLightMax - uLightMin, vec3(1e-4)), 0.0, 1.0);
   vec2 xy = clamp(u.xy * LN, 0.5, LN - 0.5);
   float fz = clamp(u.z * LN - 0.5, 0.0, LN - 1.0);
   float z0 = floor(fz), z1 = min(z0 + 1.0, LN - 1.0);
@@ -610,7 +619,7 @@ void main() {
   float z = cell.y * LCOLS + cell.x;
   if (z >= LN) { gl_FragColor = vec4(0.0); return; }
   vec3 u = vec3(mod(px, LN) / LN, (z + 0.5) / LN);
-  vec3 p = uBoxMin + u * (uBoxMax - uBoxMin);
+  vec3 p = uLightMin + u * (uLightMax - uLightMin);
   vec3 L = normalize(uKeyDir);
   float od = 0.0, up = 0.0;
   for (int i = 0; i < 9; i++) {
@@ -645,10 +654,13 @@ void main() {
     if (a.y > a.x && uCloudMin[l].x <= uCloudMax[l].x) { t0 = min(t0, a.x); t1 = max(t1, a.y); }
     vec2 b = boxHit(ro, rd, uVeilMin[l], uVeilMax[l]);
     if (b.y > b.x && uVeilMin[l].x <= uVeilMax[l].x) { t0 = min(t0, b.x); t1 = max(t1, b.y); }
+    vec2 c = boxHit(ro, rd, uSpillMin[l], uSpillMax[l]);
+    if (c.y > c.x && uSpillMin[l].x <= uSpillMax[l].x) { t0 = min(t0, c.x); t1 = max(t1, c.y); }
   }
   t0 = max(t0, 0.0);
   // The table.
-  if (rd.y < 0.0) t1 = min(t1, -ro.y / rd.y);
+  float tSurf = 1e9;
+  if (rd.y < 0.0) { tSurf = -ro.y / rd.y; t1 = min(t1, tSurf); }
   // The opaque scene (plate, cloche, bin) along this ray: the farthest of the four full-resolution
   // pixels this one covers (the upsample keeps the nearer ones off it by depth).
   float used = 1e4;
@@ -663,10 +675,23 @@ void main() {
       max(texelFetch(uSceneDepth, ivec2(a.x, b.y), 0).r, texelFetch(uSceneDepth, b, 0).r));
     if (dz < 1.0) {
       used = viewDistance(dz);
-      if (v1.z < 0.0) t1 = min(t1, (-used - v0.z) / v1.z);
+      if (v1.z < 0.0) { float ts = (-used - v0.z) / v1.z; tSurf = min(tSurf, ts); t1 = min(t1, ts); }
     }
   }
-  if (t1 <= t0) { gl_FragColor = vec4(0.0, 0.0, used, 1.0); return; }
+  // The steam's shadow on what the ray meets (the plate, the cloche, the table): the key is part of
+  // their light, and the light volume knows how much steam lies between them and it.
+  float shadow = 1.0;
+  if (tSurf < 1e8) {
+    vec3 ps = ro + rd * tSurf;
+    // (A margin: the table's points sit exactly on the box's floor, and rounding must not flip them.)
+    if (all(greaterThanEqual(ps, uLightMin - 0.02)) && all(lessThanEqual(ps, uLightMax + 0.02))) {
+      // Faded towards the box's sides, so its edge never draws a line.
+      vec3 e = min(ps - uLightMin, uLightMax - ps);
+      float inside = smoothstep(-0.02, 0.12, min(e.x, e.z));
+      shadow = 1.0 - ${f(STEAM_LOOK.shadow)} * inside * (1.0 - exp(-uSigma * lightAt(ps).x));
+    }
+  }
+  if (t1 <= t0) { gl_FragColor = vec4(0.0, 0.0, used, shadow); return; }
   // Probes: where along the ray anything can show (the dilated mean, the veil's column), so the
   // march's steps all fall where the steam is.
   float dp = (t1 - t0) / float(uProbes);
@@ -680,11 +705,11 @@ void main() {
       if (uA[l].y <= 0.0) continue;
       if (all(greaterThanEqual(p, uCloudMin[l])) && all(lessThanEqual(p, uCloudMax[l])) && cloudOccupies(p, l)) hit = true;
       else if (all(greaterThanEqual(p, uVeilMin[l])) && all(lessThanEqual(p, uVeilMax[l])) && veilOccupies(p, l)) hit = true;
-      else if (spillOccupies(p, l)) hit = true;
+      else if (all(greaterThanEqual(p, uSpillMin[l])) && all(lessThanEqual(p, uSpillMax[l])) && spillOccupies(p, l)) hit = true;
     }
     if (hit) { first = min(first, tp); last = tp; }
   }
-  if (last < first) { gl_FragColor = vec4(0.0, 0.0, used, 1.0); return; }
+  if (last < first) { gl_FragColor = vec4(0.0, 0.0, used, shadow); return; }
   float a0 = max(t0, first - dp), a1 = min(t1, last + dp);
   int steps = uSteps;
   float dt = (a1 - a0) / float(steps);
@@ -707,7 +732,9 @@ void main() {
       float so = 0.0;
       bool inCloud = all(greaterThanEqual(p, uCloudMin[l])) && all(lessThanEqual(p, uCloudMax[l]));
       bool inVeil = all(greaterThanEqual(p, uVeilMin[l])) && all(lessThanEqual(p, uVeilMax[l]));
-      float dl = (inCloud && uDebug != 3 && uDebug != 5 ? cloud(p, l, detail, L, so) + spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 ? veil(p, l, detail) : 0.0);
+      bool inSpill = all(greaterThanEqual(p, uSpillMin[l])) && all(lessThanEqual(p, uSpillMax[l]));
+      float dl = (inCloud && uDebug != 3 && uDebug != 5 ? cloud(p, l, detail, L, so) : 0.0) + (inSpill ? spill(p, l, detail) : 0.0)
+        + (inVeil && uDebug != 4 ? veil(p, l, detail) : 0.0);
       if (dl <= 0.0) continue;
       float k = uA[l].z * captured(p - vec3(0.0, uD[l].w, 0.0), l);
       dens += dl * k;
@@ -718,13 +745,13 @@ void main() {
     // The light volume: the optical depth to the key through the cloud's mean and to the room
     // above, and the lifted dome's shade; the billows' own shade from the local tap.
     vec3 lv = lightAt(p);
-    float od = uSigma * (lv.x + 0.03 * dens + localOd);
+    float od = uSigma * (1.5 * lv.x + 0.03 * dens + localOd);
     // Wrenninge's octaves: each scatters again with less extinction, less light and a flatter phase.
     float key = exp(-od) * ph0 + 0.5 * exp(-0.3 * od) * ph1 + 0.25 * exp(-0.1 * od) * ph2;
     float lit = mix(uDomeShade, 1.0, lv.z);
     // The room from every side (less under the cloud's own cover), and the white plate's bounce from below.
     float bounce = 0.22 * (1.0 - smoothstep(0.05, 0.9, p.y)) * (1.0 - smoothstep(0.7, 1.0, length(p.xz)));
-    vec3 Sc = (uKeyColor * (4.0 * 3.14159265) * key + uAmbient * (0.45 + 0.55 * exp(-uSigma * lv.y * 0.6) + bounce)) * lit;
+    vec3 Sc = (uKeyColor * (4.0 * 3.14159265) * key + uAmbient * (0.3 + 0.7 * exp(-uSigma * lv.y * 0.8) + bounce)) * lit;
     float Ts = exp(-sig * dt);
     C += T * (1.0 - Ts) * Sc;
     T *= Ts;
@@ -733,7 +760,7 @@ void main() {
   if (uDebug == 1 || uDebug == 5) C = vec3(alpha);
   if (uDebug == 2) C = vec3((a1 - a0) * 0.5);
   // Premultiplied luminance (steam is white: the tint is the composite's), coverage, the depth used.
-  gl_FragColor = vec4(dot(C, vec3(0.2126, 0.7152, 0.0722)), alpha, used, 1.0);
+  gl_FragColor = vec4(dot(C, vec3(0.2126, 0.7152, 0.0722)), alpha, used, shadow);
 }
 `;
 
@@ -769,27 +796,37 @@ void main() {
   }
   ivec2 size = textureSize(uVolume, 0);
   vec2 hp = gl_FragCoord.xy * uScale - 0.5;
-  ivec2 b = ivec2(floor(hp));
-  vec2 fr = hp - vec2(b);
-  vec4 acc = vec4(0.0);
+  // A 4 × 4 gather with a smooth (tent² ≈ cubic B-spline) kernel: it upsamples without blocks and
+  // soaks up the march's dithered start, weighted by how well each sample's depth matches this pixel's.
+  ivec2 b = ivec2(floor(hp)) - 1;
+  vec2 fr = hp - floor(hp);
+  vec3 acc = vec3(0.0);
+  float wsum = 0.0;
   float best = 1e9;
-  vec2 bestV = vec2(0.0);
-  for (int k = 0; k < 4; k++) {
-    ivec2 o = ivec2(k & 1, k >> 1);
+  vec3 bestV = vec3(0.0, 0.0, 1.0);
+  for (int k = 0; k < 16; k++) {
+    ivec2 o = ivec2(k & 3, k >> 2);
     vec4 v = texelFetch(uVolume, clamp(b + o, ivec2(0), size - 1), 0);
-    float wb = (o.x == 1 ? fr.x : 1.0 - fr.x) * (o.y == 1 ? fr.y : 1.0 - fr.y);
+    vec2 dxy = abs(vec2(o) - 1.0 - fr);
+    vec2 t = max(vec2(0.0), 1.0 - dxy / 2.0);
+    float wb = t.x * t.x * t.x * t.y * t.y * t.y;
     float dd = abs(v.z - own);
     float wd = exp(-dd / (0.02 * min(own, v.z) + 0.003));
-    acc += vec4(v.xy * wb * wd, wb * wd, 0.0);
-    if (dd < best) { best = dd; bestV = v.xy; }
+    acc += vec3(v.x, v.y, v.w) * wb * wd;
+    wsum += wb * wd;
+    if (dd < best && wb > 0.05) { best = dd; bestV = vec3(v.x, v.y, v.w); }
   }
-  vec2 v = acc.z > 1e-4 ? acc.xy / acc.z : bestV;
+  vec3 g = wsum > 1e-4 ? acc / wsum : bestV;
+  vec2 v = g.xy;
+  // The steam veils what is behind by its coverage; its shadow darkens what it falls on further.
+  float cover = 1.0 - (1.0 - v.y) * g.z;
+  if (uDebug == 8) { gl_FragColor = vec4(g.z, wsum > 1e-4 ? 1.0 : 0.0, own > 9000.0 ? 1.0 : 0.0, 1.0); return; }
   if (uDebug == 1 || uDebug == 5) { gl_FragColor = vec4(v.x, 0.0, 0.0, 1.0); return; }
-  if (v.y < 0.002) discard;
-  gl_FragColor = vec4(uTint * (v.x / v.y), 1.0);
+  if (cover < 0.002) discard;
+  gl_FragColor = vec4(uTint * (v.x / max(v.y, 1e-4)), 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
-  gl_FragColor = vec4(gl_FragColor.rgb * v.y, v.y);
+  gl_FragColor = vec4(gl_FragColor.rgb * v.y, cover);
 }
 `;
 
@@ -881,6 +918,7 @@ export class DinnerSteam {
       uBoxMin: { value: new Vector3(-1, 0, -1) },
       uBoxMax: { value: new Vector3(1, 2, 1) },
       uCloudMin: { value: v3() }, uCloudMax: { value: v3() }, uVeilMin: { value: v3() }, uVeilMax: { value: v3() },
+      uSpillMin: { value: v3() }, uSpillMax: { value: v3() }, uLightMin: { value: new Vector3() }, uLightMax: { value: new Vector3(1, 1, 1) },
       uSteps: { value: STEAM_LOOK.steps.dense },
       uProbes: { value: PROBES },
       uScale: { value: new Vector2(0.5, 0.5) },
@@ -983,7 +1021,8 @@ export class DinnerSteam {
     if (this.half.width !== w || this.half.height !== h) this.half.setSize(w, h);
     renderer.getClearColor(TMP_C);
     const alpha = renderer.getClearAlpha();
-    renderer.setClearColor(TMP_D.setRGB(0, 0, 1e4), 0);
+    // (Empty: no light, no cover, far, and no shadow.)
+    renderer.setClearColor(TMP_D.setRGB(0, 0, 1e4), 1);
     renderer.setRenderTarget(this.half);
     renderer.clear(true, false, false);
     if (!dbg.__steamSkip?.includes('march')) renderer.render(this.marchScene, camera);
@@ -1041,15 +1080,18 @@ export class DinnerSteam {
     const S2 = this.mapUniforms.uS2!.value as Vector4[], S3 = this.mapUniforms.uS3!.value as Vector4[];
     const cMin = this.uniforms.uCloudMin!.value as Vector3[], cMax = this.uniforms.uCloudMax!.value as Vector3[];
     const vMin = this.uniforms.uVeilMin!.value as Vector3[], vMax = this.uniforms.uVeilMax!.value as Vector3[];
+    const sMin = this.uniforms.uSpillMin!.value as Vector3[], sMax = this.uniforms.uSpillMax!.value as Vector3[];
+    const lightMin = (this.uniforms.uLightMin!.value as Vector3).set(Infinity, Infinity, Infinity);
+    const lightMax = (this.uniforms.uLightMax!.value as Vector3).set(-Infinity, -Infinity, -Infinity);
     const min = (this.uniforms.uBoxMin!.value as Vector3).set(Infinity, Infinity, Infinity);
     const max = (this.uniforms.uBoxMax!.value as Vector3).set(-Infinity, -Infinity, -Infinity);
-    const limMin = TMP_A.set(-RHO_MAX, 0, -RHO_MAX), limMax = TMP_B.set(RHO_MAX, Y_MAX, RHO_MAX);
+    const limMin = TMP_A.set(-BOX_MAX, 0, -BOX_MAX), limMax = TMP_B.set(BOX_MAX, Y_MAX, BOX_MAX);
     let any = false;
     let steps: number = STEAM_LOOK.steps.veil;
     this.clocks.forEach((c, l) => {
       const drawn = c.tau !== null && c.fade > 0;
       // An empty box (min > max) is never entered.
-      cMin[l]!.set(1, 1, 1); cMax[l]!.set(0, 0, 0); vMin[l]!.set(1, 1, 1); vMax[l]!.set(0, 0, 0);
+      cMin[l]!.set(1, 1, 1); cMax[l]!.set(0, 0, 0); vMin[l]!.set(1, 1, 1); vMax[l]!.set(0, 0, 0); sMin[l]!.set(1, 1, 1); sMax[l]!.set(0, 0, 0);
       if (!drawn) {
         A[l]!.set(0, 0, 0, 0);
         S0[l]!.set(0, 0, 0, 0);
@@ -1081,13 +1123,22 @@ export class DinnerSteam {
       S1[l]!.set(s.cap, s.stem, s.skirt, s.roll);
       S2[l]!.set(s.ringR, s.ringY, s.ringSigma, s.fade);
       S3[l]!.set(s.floor, s.turb, s.stemFade, 0);
-      steamBounds(s, { tau, emitStart: c.emitStart, emitEnd: c.emitEnd }, cMin[l]!, cMax[l]!, vMin[l]!, vMax[l]!);
-      for (const [lo, hi] of [[cMin[l]!, cMax[l]!], [vMin[l]!, vMax[l]!]] as const) {
+      steamBounds(s, { tau, emitStart: c.emitStart, emitEnd: c.emitEnd }, cMin[l]!, cMax[l]!, vMin[l]!, vMax[l]!, sMin[l]!, sMax[l]!);
+      for (const [lo, hi, lit] of [[cMin[l]!, cMax[l]!, true], [vMin[l]!, vMax[l]!, true], [sMin[l]!, sMax[l]!, false]] as const) {
+        if (lit && lo.x <= hi.x) {
+          // Its shadow on the plate and the table falls away from the key: the box reaches over it.
+          const k = this.uniforms.uKeyDir!.value as Vector3;
+          const sx = (-k.x / Math.max(k.y, 0.2)) * hi.y, sz = (-k.z / Math.max(k.y, 0.2)) * hi.y;
+          lo.x = Math.min(lo.x, lo.x + sx); hi.x = Math.max(hi.x, hi.x + sx);
+          lo.z = Math.min(lo.z, lo.z + sz); hi.z = Math.max(hi.z, hi.z + sz);
+          lo.y = 0;
+        }
         lo.max(limMin);
         hi.min(limMax);
         if (lo.x > hi.x || lo.y > hi.y) { lo.set(1, 1, 1); hi.set(0, 0, 0); continue; }
         min.min(lo);
         max.max(hi);
+        if (lit) { lightMin.min(lo); lightMax.max(hi); }
         any = true;
       }
     });
@@ -1096,6 +1147,7 @@ export class DinnerSteam {
       min.set(-1, 0, -1);
       max.set(1, 1, 1);
     }
+    if (lightMin.x > lightMax.x) { lightMin.copy(min); lightMax.copy(max); }
     this.object.visible = any;
   }
 

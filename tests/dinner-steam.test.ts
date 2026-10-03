@@ -94,11 +94,12 @@ describe('Dinner steam field (v1.6)', () => {
     const f = sampleSequence('accept', 0.45, newFrame());
     expect(Math.hypot(f.coverPos.x, f.coverPos.z)).toBeGreaterThan(0.7);
     const seat = outline(0), held = outline(0.45), later = outline(1.3);
-    // Its outline then is the cavity's within a centimetre and a half, its top drawn up 1–4 cm.
+    // Its outline then is the cavity's within a centimetre and a half, its top drawn up into a peak after
+    // the dome, 1–5 cm (of a 10.6 cm dome).
     expect(Math.abs(held.cap - seat.cap) * SU_CM).toBeLessThan(1.5);
     expect(Math.abs(held.low - seat.low) * SU_CM).toBeLessThan(1.5);
     expect((held.top - seat.top) * SU_CM).toBeGreaterThan(1);
-    expect((held.top - seat.top) * SU_CM).toBeLessThan(4);
+    expect((held.top - seat.top) * SU_CM).toBeLessThan(5);
     // A buoyant bubble starts from rest: the top has risen under a centimetre and a half 0.2 s after the release.
     expect(riseAt(0.2) * SU_CM).toBeLessThan(1.5);
     // Then the cap rises and spreads while the stem narrows: a mushroom.

@@ -90,3 +90,74 @@ by the flow instead of scrolling.
   saturated layer leaks from the top of the gap and is caught by the hot dome's boundary layer: a thin sheet
   climbing the raised side's outer wall at ≈ 25 cm/s, strongest where the gap is widest, fed until lift-off and
   carried off by 0.46 s.
+
+### The renderer (`models/dinnerSteam.ts`)
+
+Per frame, before the main render (the scene depth's client, `prepare`), and only while steam shows:
+
+1. **Noise, once.** One tileable 64³ RGBA8 3D texture (1 MB) generated on the GPU in 64 layer draws at the first
+   steam frame: two Perlin fBms (the warps), a Perlin-Worley billow and a Worley fBm (the fine detail).
+2. **The flow map** (one draw, 96 × 160 texels per clock, half-float): for every (ρ, y) about the plate's axis,
+   the nested bisections of `axisInverse` give the material radius and height, the mean density (the seat's
+   cloud × the flow's dilution × the stem's evaporation × the cloud's fade, nothing in the porcelain) and a
+   dilated mean for empty-space skipping. The march then reads the flow with one texture fetch per sample.
+3. **The light volume** (one draw, 24³ voxels over the live bounds, tiled as z-slices in one 2D atlas): each
+   voxel's optical depth to the rig's key through the steam's mean (9 taps), to the room above (4 taps), and the
+   lifted dome's shadow (its ellipsoid with a soft penumbra).
+4. **The march**, at half the drawing buffer's resolution a side, capped at 460 k pixels (0.42–0.5 a side):
+   each pixel intersects its ray with every live clock's cloud and veil boxes (`steamBounds`: the cavity's
+   outline carried forward by the flow, the veil as far as it has risen), stops at the table and at the opaque
+   scene's depth (the farthest of the full-resolution pixels it covers), finds with 6 probes of the dilated
+   mean where along that span anything can show, and marches only there: 28 steps for the dense young cloud, 20
+   as it thins into wisps, 16 for the veil alone (the Low tier 60 % of these), from an interleaved-gradient-noise
+   start (a fixed dither: deterministic). Each sample undoes the room's large turbulent warp (growing to 2.5 cm),
+   the draught's lean and the dome's side drag, reads the flow map, and reads the cloud's own turbulence at the
+   material point: a large field warping a finer fBm (in material space, so it is carried, stretched and rolled
+   with the air). The mixture (the mean perturbed by it) gives fog inside and a thin bright mixing sheet at its
+   edge; the veil and the spill add their own sheets.
+5. **Light per sample.** Single scattering from the key with Henyey-Greenstein (g 0.45, flattened towards
+   isotropic for the dense cloud), its transmittance from the light volume plus a local tap of the billows for
+   the young cloud's own shade; Wrenninge's multiple-scattering octaves (0.5 and 0.25 of the light at 0.3 and 0.1
+   of the extinction, flatter phases); the room's ambient, occluded from above, plus the white plate's bounce from
+   below; the lifted dome's shade. Integrated front to back, energy-conserving (Hillaire 2015): σ_t 3.4 per
+   scene unit at full density.
+6. **The composite** (the main render's transparent pass, over the box's footprint): a 4 × 4 depth-aware
+   gather (a smooth B-spline-like kernel weighted by how well each half-resolution sample's depth matches the
+   pixel's own) upsamples without blocks or halos at the cloche's edge and soaks up the dither; the radiance is
+   tone mapped like the scene and laid over it premultiplied.
+
+The clocks (`update`) set per-clock uniforms from `cloudState`, `cloudLook` and the spill's last half-second of
+source; up to three clocks share the one march (the reveal's and two left behind by changes of mind).
+
+### The scene depth (`src/render/sceneDepth.ts`)
+
+A small module with one hook in `Stage.render` (`this.sceneDepth.render(...)` before the main render) and one
+line in `Stage.dispose`. A client registers itself (`requestSceneDepth`) and says each frame whether it needs the
+depth. With no active client in the stage's scene the hook returns before touching the renderer; with one, the
+meshes the client marked (`markDepthOccluders`: the plate and the cloche, and the bin once it has arrived) are
+drawn depth-only (a colourless override material, both sides, on a dedicated camera layer, so no lights, no
+shadow pass and no transparent parts) into a 32-bit float depth texture the size of the drawing buffer, then the
+client's `prepare` runs. Camera layers, override material, background and render target are restored.
+Tested: the hook makes no renderer call for a scene without an active client (`tests/scene-depth.test.ts`); the
+other four scenes' stills are byte-identical with the hook removed, at rest and mid-sequence, and draw no depth
+pass (`tests/browser/scene-depth.spec.ts`); the posters are unchanged (`tests/browser/posters.spec.ts`).
+
+## The clocks and a change of mind (kept from v1.5)
+
+- **The steam clock τ** is the accept's own time while the reveal plays (`revealSteamTime` after a change back,
+  continuous, up to `k` × faster while the cover moves), then `simulate` carries it on in real time until
+  `STEAM_END`; `settling()` keeps the loop drawing until then. `STEAM_END` is now the later of the cloud's life
+  (τ 3.2 s) and the veil falling below `STEAM_GONE` everywhere: 6.45 s (v1.5: 6.61 s).
+- **The accepted still has no steam** (`STEAM_REST = null`): posters, reduced motion and a saved accept are
+  unchanged (the shipped Dinner posters match at 0.00 %), and the depth pass does not run for them.
+- **A change of mind** leaves the steam already out on its own clock (up to two lots, `STEAM_LAYERS` 3), stirred
+  by the returning cover (`stirFade`) and broken up by the binned dish's wake (`wakeFade`); the veil's source dies
+  away over `VEIL.cut` (0.15 s) so its column detaches and rises off as a gradient. What the cover closes over
+  stays under it (`captured`, judged by where the cloud was at the capture). New in v1.6: the fog low over the
+  plate (the cloud's base and its slump over the rim) is swept by the cover's skirt and leaves with the plate
+  over 0.25 s from the capture, and the stirred band round the seated dome reaches further near the table
+  (without it, the base's ring stayed on the table as a grey haze in front of the bin: "smoke from the bin").
+- **A reveal resumed part-way** (changed back mid-rewind) carries no new cloud: its cloud is the one left
+  behind; it releases only the plate's veil, ramped up from where it resumes (`cloudState(τ, emitStart).present`).
+- **The dome's drag stops at a cut** (`dragAt(min(τ, emitEnd))`): a cloud left behind is no longer drawn after a
+  dome that is coming back down.
