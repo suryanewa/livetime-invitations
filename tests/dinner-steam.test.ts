@@ -8,7 +8,7 @@ import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { DinnerScene } from '../src/scenes/dinner/index.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, dragAt, leftSteamEnd, RAISED_DIR, riseAt, SPILL, spillFade,
+  axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, dragAt, EDGE, leftSteamEnd, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
   spillSource, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
 } from '../src/scenes/dinner/steam.ts';
 
@@ -118,7 +118,7 @@ describe('Dinner steam field (v1.6)', () => {
     // draught's lean at its height and the edge's mean reach included) stays within the plate.
     let widest = 0;
     for (let tau = 0.5; cloudState(tau).erode < 0.6; tau += 0.05) {
-      const s = cloudState(tau), o = outline(tau), look = cloudLook(s.age, s.erode);
+      const s = cloudState(tau), o = outline(tau), look = cloudLook(s.age, s.erode, undefined, s.peel);
       widest = Math.max(widest, o.cap + s.lean.length() * Math.max(0, o.top - 0.15) + 0.5 * (look.amp + look.billow));
     }
     expect(widest).toBeLessThanOrEqual(PLATE.radius);
@@ -132,6 +132,28 @@ describe('Dinner steam field (v1.6)', () => {
     expect(cloudLook(0).billow * SU_CM).toBeGreaterThan(0.3);
     // The vortex ring rolls the cap's edge over more than half a turn by 1.2 s.
     expect(at12.roll).toBeGreaterThan(Math.PI);
+  });
+
+  it('v1.6 polish 2: from the lift-off the outer layer peels while the bulk holds; room air undercuts the foot from the rim in', () => {
+    // Nothing peels while the dome still sits on the plate; the outer layer is fully turbulent soon
+    // after the rim has lifted off, and its lobes and curls are centimetre and millimetre scale.
+    expect(cloudState(0.2).peel).toBe(0);
+    expect(cloudState(0.55).peel).toBeGreaterThan(0.75);
+    expect(EDGE.fine * SU_CM).toBeGreaterThan(0.3);
+    expect(EDGE.fine * SU_CM).toBeLessThan(0.6);
+    expect(cloudLook(0.15, 0, undefined, 1).billow * SU_CM).toBeGreaterThan(1.2 * cloudLook(0.15, 0).billow * SU_CM);
+    // The gravity current: none before the lift-off; by 0.55 s it has lifted the fog off the porcelain
+    // at the rim by more than a centimetre, while 3 cm in the fog still sits on the well.
+    expect(cloudState(0.25).undercutReach).toBe(0);
+    const s = cloudState(0.55);
+    expect(undercutAt(CLOUD.radius - 0.01, s) * SU_CM).toBeGreaterThan(1.0);
+    expect(undercutAt(CLOUD.radius - 3 / SU_CM - s.undercutReach, s)).toBe(0);
+    const at = (P: number, h: number) => cloudSeat(new Vector3(P, plateTop(P) + h, 0), CLOUD.floor, undercutAt(P, s));
+    expect(at(CLOUD.radius - 0.05, 0.04)).toBeLessThan(0.05 * at(0.2, 0.04));
+    expect(at(0.2, 0.04)).toBeGreaterThan(0.2);
+    // (The held dome: the walls stand where they were, the undercut takes only the foot.)
+    const P = CLOUD.radius - 0.05;
+    expect(at(P, 0.25)).toBeCloseTo(cloudSeat(new Vector3(P, plateTop(P) + 0.25, 0), CLOUD.floor), 6);
   });
 
   it('its base rolls outward and down over the plate\'s rim', () => {

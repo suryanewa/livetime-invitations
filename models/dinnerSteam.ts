@@ -30,7 +30,7 @@ import {
 } from 'three';
 import { COVER, PLATE_PROFILE } from './dinnerContract.ts';
 import {
-  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, RAISED_DIR, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
+  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, EDGE, RAISED_DIR, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
 } from '../src/scenes/dinner/steam.ts';
 import { requestSceneDepth, type SceneDepthFrame } from '../src/render/sceneDepth.ts';
 
@@ -90,7 +90,7 @@ export const STEAM_LOOK = {
    */
   steps: { dense: 22, thin: 18, veil: 13 },
   /** The temporal resolve: the new frame's share of each pixel (≈ the last 7 frames averaged). */
-  history: 0.1,
+  history: 0.15,
   /** The march's pixel budget: half the drawing buffer a side, at most this many pixels. */
   marchPixels: 400_000,
   lowShare: 0.6,
@@ -395,6 +395,8 @@ uniform vec4 uE[${STEAM_LAYERS}];
 uniform vec4 uF[${STEAM_LAYERS}];
 /** Per clock: the vortex ring's core (ρ, y, reach, su) and how much fog it holds (0..1). */
 uniform vec4 uR[${STEAM_LAYERS}];
+/** Per clock (v1.6 polish 2): the peeling layer's fine amplitude (su), the peel (0..1), the room's air under the base: reach in from the rim, height (su). */
+uniform vec4 uH[${STEAM_LAYERS}];
 /** Per clock: the spill's source at τ − k·dt (k = 0..7, faded), and whether there is any. */
 uniform vec4 uSp0[${STEAM_LAYERS}];
 uniform vec4 uSp1[${STEAM_LAYERS}];
@@ -597,9 +599,10 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   float ring = uR[l].w * exp(-dot(rr, rr));
   // (Outside the edge's furthest reach: the dilated occupancy.)
   if (m.a <= 1e-4) return 0.0;
-  // (Further outside the wall than the swell and the billows can reach: clear, before any noise.)
+  vec4 H = uH[l];
+  // (Further outside the wall than the swell, the billows and the peeling layer can reach: clear, before any noise.)
   float dw = seatDistance(m.r, m.g);
-  if (dw < -(E.x + 1.3 * E.z + 0.01)) return 0.0;
+  if (dw < -(E.x + 1.3 * E.z + 2.6 * H.x + 0.01)) return 0.0;
   vec2 dir = rho > 1e-5 ? q.xz / rho : vec2(1.0, 0.0);
   // (Plan direction in x/z, height in y.)
   vec3 X = vec3(dir.x * m.r, m.g, dir.y * m.r);
@@ -614,13 +617,47 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   vec3 Xb = X * vec3(1.6, 1.0, 1.6) + (n1.rgb - 0.5) * E.w + vec3(0.71, 0.05 * tau, 0.23);
   vec4 nb = texture(uNoise, Xb);
   float lobes = nb.b + 0.3 * (nb.a - 0.5) * detail;
+  // v1.6 polish 2: the room's cooler air slides in under the warm fog from the rim (a gravity
+  // current): a boundary like the wall, deepest at the rim, so the foot lifts off the porcelain. Its
+  // head breaks into lobes and clefts (as a gravity current's does), so the foot is no ellipse.
+  if (H.w > 0.0) {
+    float reachU = H.z * (0.35 + 1.3 * nb.a);
+    float hU = H.w * (0.55 + 0.9 * n1.b) * smoothstep(${f(CLOUD.radius)} - reachU, ${f(CLOUD.radius + 0.02)}, m.r);
+    dw = min(dw, m.g - plateTop(min(m.r, 0.8)) - hU);
+  }
   float dEff = dw + E.z * (lobes - 0.5) * 2.0 + E.x * (n1.r - 0.5) * 2.0;
-  if (dEff < -0.06) return 0.0;
+  // v1.6 polish 2: the peeling layer, on the edge band only. From the lift-off the outer centimetre
+  // or two is a shear layer (the room's air sliding down the wall and in, the cloud's drawn up): the
+  // dense boundary takes its own lobes (≈ 1.3 cm Worley bulges: rounded, so seen edge-on each keeps
+  // its outline), and outside it the layer peels off in thin curling sheets of 2–4 mm, translucent,
+  // fading out over ≈ 1.3 cm. All in material space (carried with the air), the outer layer sliding
+  // slowly along the wall against the inner; its coordinates are turned off the noise's tiling axes.
+  float wisp = 0.0, fineD = 0.0;
+  if (H.x > 0.0 && detail > 0.0 && dEff > -(2.6 * H.x + 4.0 * H.x + 0.01) && dEff < 2.6 * H.x + E.y) {
+    float outer = sat(0.5 - dw / 0.08);
+    vec3 Xp = mat3(0.80, 0.36, -0.48, -0.20, 0.91, 0.36, 0.56, -0.20, 0.80) * X;
+    vec3 Xf = Xp * 4.6 + (nb.rgb - 0.5) * 0.9 + vec3(0.37, -0.6 * H.y * outer * (tau - 0.27) + 0.21, 0.53 + 0.3 * tau);
+    vec4 nf = texture(uNoise, Xf);
+    vec4 ng = texture(uNoise, Xf * 2.3 + (nf.rgb - 0.5) * 1.2 + vec3(0.11, 0.0, 0.29));
+    // (The shade below reads the boundary without these: the face keeps its silky fog.)
+    fineD = H.x * (1.8 * (nf.a - 0.6) * 2.0 + 1.3 * (ng.a - 0.6) * 2.0);
+    // Here and there the layer tears off in thin curling sheets (the zero set of a gradient noise,
+    // folded by a finer one), translucent, out to ≈ 1.3 cm.
+    float wd = -(dEff + fineD);
+    if (wd > -E.y && wd < 4.0 * H.x) {
+      float fold = (nf.g - 0.5) * 2.0 + 0.45 * (ng.r - 0.5) * 2.0;
+      float sheetW = smoothstep(0.8, 0.97, 1.0 - fold * fold) * smoothstep(0.55, 0.75, nb.a + 0.4 * (nf.b - 0.5));
+      wisp = ${f(EDGE.wisp)} * H.y * sheetW * (1.0 - smoothstep(0.0, 4.0 * H.x, wd)) * smoothstep(-E.y, 0.0, wd);
+    }
+  }
+  float dShade = dEff;
+  dEff += fineD;
+  if (dEff < -0.06 && wisp <= 0.0) return 0.0;
   float edge = smoothstep(0.0, E.y, dEff);
   // Inside, a silky fog that empties as it ages; at the edge, the mixing layer's thin sheet.
-  // (Both start at the boundary: nothing feathers outside it.)
+  // (Both start at the boundary: nothing feathers outside it but the peeling layer.)
   float sh = (dEff - E.y) / F.z;
-  float d = (F.x * (0.75 + 0.5 * (n1.g - 0.5)) + F.y * exp(-sh * sh)) * edge;
+  float d = (F.x * (0.75 + 0.5 * (n1.g - 0.5)) + F.y * exp(-sh * sh)) * edge + wisp;
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
   // sheets gather into a few larger wisps.
@@ -632,7 +669,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // The billows' own shade: the edge a little way towards the key.
   if (d > 0.02 && detail > 0.0 && uC[l].z < 0.7) {
     vec4 nl = texture(uNoise, Xb + L * 0.2);
-    shadeOd = 0.24 * sat((dEff + E.z * (nl.b - nb.b) * 2.0) / 0.06);
+    shadeOd = 0.24 * sat((dShade + E.z * (nl.b - nb.b) * 2.0) / 0.06);
   }
   return d;
 }
@@ -951,6 +988,29 @@ uniform vec4 uPB;
 uniform float uVeilShift;
 varying vec2 vUv;
 
+/**
+ * The history at uv, Catmull-Rom filtered (v1.6 polish 2: five bilinear taps; a plain bilinear fetch
+ * resampled the history every frame and blurred the edge's fine structure away). Its .z (the depth
+ * used) is the middle tap's.
+ */
+vec4 historyAt(vec2 uv) {
+  vec2 size = vec2(textureSize(uHist, 0));
+  vec2 sp = uv * size;
+  vec2 tc = floor(sp - 0.5) + 0.5;
+  vec2 fr = sp - tc;
+  vec2 w0 = fr * (-0.5 + fr * (1.0 - 0.5 * fr));
+  vec2 w1 = 1.0 + fr * fr * (-2.5 + 1.5 * fr);
+  vec2 w2 = fr * (0.5 + fr * (2.0 - 1.5 * fr));
+  vec2 w3 = fr * fr * (-0.5 + 0.5 * fr);
+  vec2 w12 = w1 + w2;
+  vec2 t0 = (tc - 1.0) / size, t3 = (tc + 2.0) / size, t12 = (tc + w2 / w12) / size;
+  vec4 mid = texture(uHist, t12);
+  vec4 r = texture(uHist, vec2(t12.x, t0.y)) * (w12.x * w0.y) + texture(uHist, vec2(t0.x, t12.y)) * (w0.x * w12.y)
+    + mid * (w12.x * w12.y) + texture(uHist, vec2(t3.x, t12.y)) * (w3.x * w12.y) + texture(uHist, vec2(t12.x, t3.y)) * (w12.x * w3.y);
+  r /= w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+  return vec4(r.xyw, mid.z).xywz;
+}
+
 /** Where the steam at local point p was on the previous frame (the veil and the spill: rising). */
 vec3 previous(vec3 p, bool rising) {
   for (int l = 0; l < ${STEAM_LAYERS}; l++) {
@@ -1006,10 +1066,10 @@ void main() {
       puv = pc.xy / pc.w * 0.5 + 0.5;
     }
     if (all(greaterThanEqual(puv, vec2(0.0))) && all(lessThanEqual(puv, vec2(1.0)))) {
-      vec4 h = texture(uHist, puv);
+      vec4 h = historyAt(puv);
       // (A moving occluder only matters where it cuts the steam: steam well in front of both keeps its history.)
       if (abs(h.z - c.z) < 0.03 * max(min(h.z, c.z), 1e-3) || viewZ < min(h.z, c.z) - 0.1) {
-        vec2 hc = clamp(h.xy, m1 - 1.6 * sd - 0.004, m1 + 1.6 * sd + 0.004);
+        vec2 hc = clamp(h.xy, m1 - 1.25 * sd - 0.004, m1 + 1.25 * sd + 0.004);
         res = mix(hc, c.xy, uBlend);
         if (uDebug == 11) res = vec2(1.0, 1.0);
       } else if (uDebug == 11) res = vec2(0.4, 1.0);
@@ -1213,7 +1273,7 @@ export class DinnerSteam {
       uLift: { value: 0 },
       uSeated: { value: new Vector3() },
       uLight: { value: this.light.texture },
-      uR: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] },
+      uR: { value: v4() }, uH: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] },
     };
     this.lightMaterial = new ShaderMaterial({
       name: 'fx_steam_light', uniforms: this.uniforms, vertexShader: FULLSCREEN_VERTEX, fragmentShader: LIGHT_FRAGMENT, depthTest: false, depthWrite: false, toneMapped: false,
@@ -1282,6 +1342,7 @@ export class DinnerSteam {
     if (!this.noise || this.noiseFor !== renderer) this.generateNoise(renderer);
     const prev = renderer.getRenderTarget();
     const dbg = globalThis as { __steamDebug?: number; __steamSteps?: number; __steamSkip?: string; __steamNoTaa?: boolean };
+    if (dbg.__steamSkip?.includes('prep')) return;
     // The camera, the key and the depth.
     const camera = frame.camera as PerspectiveCamera | OrthographicCamera;
     const u = this.uniforms;
@@ -1322,7 +1383,8 @@ export class DinnerSteam {
     renderer.setRenderTarget(this.half);
     renderer.clear(true, false, false);
     if (!dbg.__steamSkip?.includes('march')) renderer.render(this.marchScene, camera);
-    this.resolve(renderer, camera, w, h, dbg);
+    if (dbg.__steamSkip?.includes('resolve')) this.compositeUniforms.uVolume!.value = this.half.texture;
+    else this.resolve(renderer, camera, w, h, dbg);
     renderer.setRenderTarget(prev);
     renderer.setClearColor(TMP_C, alpha);
     this.ready = true;
@@ -1415,6 +1477,7 @@ export class DinnerSteam {
     const A = this.uniforms.uA!.value as Vector4[], B = this.uniforms.uB!.value as Vector4[];
     const Cc = this.uniforms.uC!.value as Vector4[], D = this.uniforms.uD!.value as Vector4[];
     const E = this.uniforms.uE!.value as Vector4[], F = this.uniforms.uF!.value as Vector4[], R = this.uniforms.uR!.value as Vector4[];
+    const Hh = this.uniforms.uH!.value as Vector4[];
     const G = this.uniforms.uSp0!.value as Vector4[], H = this.uniforms.uSp1!.value as Vector4[];
     const spillOn = this.uniforms.uSpillOn!.value as number[];
     const S0 = this.mapUniforms.uS0!.value as Vector4[], S1 = this.mapUniforms.uS1!.value as Vector4[];
@@ -1455,8 +1518,9 @@ export class DinnerSteam {
       shadowOn = Math.max(shadowOn, present ? Math.min(1, Math.max(0, (tau - 0.3) / 0.15)) : 1);
       B[l]!.set(s.dragSide.x, s.dragSide.y, s.lean.x, s.lean.y);
       Cc[l]!.set(s.turb, s.erode, s.age, s.rise);
-      const look = cloudLook(s.age, s.erode, this.look);
+      const look = cloudLook(s.age, s.erode, this.look, s.peel);
       E[l]!.set(look.amp, look.band, look.billow, look.warp);
+      Hh[l]!.set(EDGE.fine * s.peel, s.peel, s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
       // (The ring holds fog once it has rolled up, until the cloud has gone.)
       R[l]!.set(s.ringR, s.ringY, s.ringSigma, smoothstep01((s.age - 0.25) / 0.4) * (1 - smoothstep01((s.age - 1.2) / 0.6)));
@@ -1475,7 +1539,7 @@ export class DinnerSteam {
       S1[l]!.set(s.cap, s.stem, s.skirt, s.roll);
       S2[l]!.set(s.ringR, s.ringY, s.ringSigma, s.fade);
       // (The occupancy reaches as far as the turbulence, the swell and the billows can move the edge.)
-      S3[l]!.set(s.floor, s.turb + look.amp + look.billow + 0.03, s.stemFade, 0);
+      S3[l]!.set(s.floor, s.turb + look.amp + look.billow + 2 * EDGE.fine * s.peel + 0.03, s.stemFade, 0);
       steamBounds(s, { tau, emitStart: c.emitStart, emitEnd: c.emitEnd }, cMin[l]!, cMax[l]!, vMin[l]!, vMax[l]!, sMin[l]!, sMax[l]!);
       for (const [lo, hi, lit] of [[cMin[l]!, cMax[l]!, true], [vMin[l]!, vMax[l]!, true], [sMin[l]!, sMax[l]!, false]] as const) {
         if (lit && lo.x <= hi.x) {
