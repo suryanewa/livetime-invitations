@@ -1501,6 +1501,10 @@ export class DinnerSteam {
     if (!any) {
       min.set(-1, 0, -1);
       max.set(1, 1, 1);
+      // (No steam: the half-resolution march and its history give their memory back, and the next
+      // steam starts a fresh history.)
+      if (this.half.width > 1) for (const rt of [this.half, ...this.hist]) rt.setSize(1, 1);
+      this.prev = null;
     }
     if (lightMin.x > lightMax.x) { lightMin.copy(min); lightMax.copy(max); }
     this.object.visible = any;
