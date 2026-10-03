@@ -1,6 +1,6 @@
 import {
   BufferAttribute, BufferGeometry, type Camera, Color, CustomBlending, HalfFloatType, LinearFilter, Mesh, NoBlending, type Object3D, OneFactor, OrthographicCamera, RGBAFormat, Scene,
-  ShaderMaterial, AddEquation, Vector2, Vector4, type WebGLRenderer, WebGLRenderTarget,
+  ShaderMaterial, AddEquation, Vector2, Vector3, Vector4, type WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 
 /**
@@ -28,8 +28,11 @@ import {
  * docs/scenes/birthday-v1.6-flames.md).
  */
 
-/** The three.js layer of what draws in the bloom pass. */
-export const BLOOM_LAYER = 30;
+/**
+ * The three.js layer of what draws in the bloom pass (v1.6 polish: 29, apart from the scene depth's
+ * 30: the smoke volume marks the cake as a depth occluder, which must not bloom).
+ */
+export const BLOOM_LAYER = 29;
 
 export const BLOOM = {
   /** Exposed scene-linear radiance where blooming starts, and the soft knee's half-width. */
@@ -40,8 +43,19 @@ export const BLOOM = {
   /** Display-space gain of the added light (≈ the sRGB curve's slope over the stage's mid-light values). */
   display: 0.65,
   /** Mip levels: Normal/High; Low (the cheaper chain: a tighter glow, three passes fewer). */
-  levels: 5,
+  levels: 6,
   lowLevels: 3,
+  /**
+   * v1.6 polish: each level's weight relative to the one above it (level k's share is the product
+   * of the first k): a lens's glare has two lobes, a tight core round the emitter (levels 0–1, 2–4
+   * CSS px) and a faint, wide veil (levels 3–5, to ≈ 2–4 % of a laptop canvas), with little between.
+   */
+  lobes: [0.55, 0.45, 2.2, 3.0, 2.6] as const,
+  /**
+   * The glare's colour (luminance 1): a lens's glare round a flame carries the flame's own warm
+   * light, amber (v1.6 polish; the camera-response colour read lemon over the body).
+   */
+  tint: [1.55, 0.9, 0.38] as const,
 } as const;
 
 type Rect = readonly [number, number, number, number];
@@ -203,24 +217,34 @@ const TENT = /* glsl */ `
     return c * (1.0 / 16.0);
   }`;
 
-/** Upsample a level onto the next larger one (added by the blend). */
+/** Upsample a level onto the next larger one (added by the blend), weighted (BLOOM.lobes). */
 const UPSAMPLE = /* glsl */ `
   uniform sampler2D tSrc;
   uniform vec2 uTexel;
+  uniform float uWeight;
   varying vec2 vUv;
   ${TENT}
-  void main() { gl_FragColor = vec4(tent(tSrc, vUv, uTexel), 1.0); }`;
+  void main() { gl_FragColor = vec4(tent(tSrc, vUv, uTexel) * uWeight, 1.0); }`;
 
-/** The chain's light onto the canvas (added in display space through the saturating response). */
+/**
+ * The chain's light onto the canvas (added in display space through the saturating response),
+ * amber, and kept off the emitters' own pixels (the source's alpha: their radiance without the
+ * small-size footprint floor): the glare lights what is round a flame, the flame keeps its colour
+ * (v1.6 polish: added over the body it turned a golden flame lemon and white).
+ */
 const COMPOSITE = /* glsl */ `
   uniform sampler2D tSrc;
+  uniform sampler2D tEmit;
   uniform vec2 uTexel;
   uniform vec2 uGain; // strength / levels, display gain
   uniform vec2 uView; // drawing-buffer size (px)
+  uniform vec3 uTint;
   ${TENT}
   void main() {
     vec2 uv = gl_FragCoord.xy / uView;
     vec3 b = tent(tSrc, uv, uTexel) * uGain.x;
+    float own = texture2D(tEmit, uv).a;
+    b = dot(b, vec3(0.2126, 0.7152, 0.0722)) * uTint * (1.0 - smoothstep(0.15, 0.8, own));
     gl_FragColor = vec4(1.0 - exp(-b * uGain.y), 1.0);
   }`;
 
@@ -254,8 +278,10 @@ export class Bloom {
   private readonly quad: Mesh;
   private readonly prefilter = pass(PREFILTER, { tSrc: { value: null }, uTexel: { value: new Vector2() }, uCurve: { value: [0, 0, 0, 0] } });
   private readonly down = pass(DOWNSAMPLE, { tSrc: { value: null }, uTexel: { value: new Vector2() } });
-  private readonly up = pass(UPSAMPLE, { tSrc: { value: null }, uTexel: { value: new Vector2() } });
-  private readonly compositing = pass(COMPOSITE, { tSrc: { value: null }, uTexel: { value: new Vector2() }, uGain: { value: new Vector2() }, uView: { value: new Vector2() } });
+  private readonly up = pass(UPSAMPLE, { tSrc: { value: null }, uTexel: { value: new Vector2() }, uWeight: { value: 1 } });
+  private readonly compositing = pass(COMPOSITE, {
+    tSrc: { value: null }, tEmit: { value: null }, uTexel: { value: new Vector2() }, uGain: { value: new Vector2() }, uView: { value: new Vector2() }, uTint: { value: new Vector3(...BLOOM.tint) },
+  });
   private levels: number = BLOOM.levels;
   /** Whether this device can render to half floats (WebGL2 with EXT_color_buffer_float or _half_float); without it, no bloom. */
   private supported: boolean | null = null;
@@ -359,7 +385,10 @@ export class Bloom {
     const mips = this.mips;
     this.draw(renderer, this.prefilter, source, mips[0]!);
     for (let i = 1; i < mips.length; i++) this.draw(renderer, this.down, mips[i - 1]!, mips[i]!);
-    for (let i = mips.length - 1; i > 0; i--) this.draw(renderer, this.up, mips[i]!, mips[i - 1]!);
+    for (let i = mips.length - 1; i > 0; i--) {
+      this.up.uniforms.uWeight!.value = BLOOM.lobes[i - 1] ?? 1;
+      this.draw(renderer, this.up, mips[i]!, mips[i - 1]!);
+    }
     renderer.setRenderTarget(prev.target);
     renderer.setClearColor(clear, prev.alpha);
     renderer.autoClear = prev.autoClear;
@@ -383,7 +412,8 @@ export class Bloom {
     renderer.getDrawingBufferSize(this.buffer);
     const W = this.buffer.x, H = this.buffer.y;
     const mips = this.mips;
-    const reach = Math.ceil(2.5 * (1 << mips.length) * pr);
+    // (The widest level's tent reaches ≈1.5 of its texels; v1.6 polish: 1.6, was 2.5 with five levels.)
+    const reach = Math.ceil(1.6 * (1 << mips.length) * pr);
     const x0 = p!.full ? 0 : Math.max(0, Math.floor(p!.x0 - reach)), y0 = p!.full ? 0 : Math.max(0, Math.floor(p!.y0 - reach));
     const x1 = p!.full ? W : Math.min(W, Math.ceil(p!.x1 + reach)), y1 = p!.full ? H : Math.min(H, Math.ceil(p!.y1 + reach));
     if (x1 <= x0 || y1 <= y0) return false;
@@ -391,6 +421,7 @@ export class Bloom {
     renderer.getScissor(scissor);
     const u = this.compositing.uniforms;
     (u.uGain!.value as Vector2).set(this.strength / mips.length, BLOOM.display);
+    u.tEmit!.value = this.source!.texture;
     (u.uView!.value as Vector2).set(W, H);
     renderer.autoClear = false;
     renderer.setRenderTarget(null);

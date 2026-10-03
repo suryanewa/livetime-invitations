@@ -5,12 +5,12 @@ import { blackbodyAt, createFlameMaterial, SMOKE_RADIANCE, sootRadiance } from '
 import { rigBirthday } from '../models/birthday.ts';
 import { CANDLE_LIGHT } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
-import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, STAND_TOP } from '../models/birthdayContract.ts';
+import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME_FRAME, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
 import { CARRY_FROM, DURATIONS, IGNITE_START, ON_STAND } from '../src/scenes/birthday/poses.ts';
 import {
-  ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
+  ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, frameScale, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
   POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
@@ -31,44 +31,73 @@ const alphaNear = (st: SmokeStrand, w: [number, number, number], r: number) => {
 const MPS = 5;
 
 describe('Birthday fire: the flame', () => {
-  it('is a birthday candle flame: 13–15 mm from the pool, 4.5–5.5 mm wide, widest at the wick top; each a little different', () => {
+  it('is a birthday candle flame on a short wick: 15–18 mm from the pool, 4.5–5.5 mm wide, its luminous foot wrapping the wick\'s tip; each a little different', () => {
+    // v1.6 polish (judge: "a flame on a stick"): ±12 % (stratified), a 3 mm burning wick under a
+    // 15.5 mm flame, the luminous zone's foot 1.2 mm under the wick's tip, widest 1 mm over it.
     const sizes = Array.from({ length: CANDLE_COUNT }, (_, i) => flameScale(i));
-    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(0.93);
-    expect(Math.max(...sizes)).toBeLessThanOrEqual(1.07);
-    expect(Math.max(...sizes) - Math.min(...sizes)).toBeGreaterThan(0.04);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(0.86);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(1.14);
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeGreaterThan(0.16);
     const top = FLAME_REST.base + FLAME_REST.length - POOL_Y;
-    expect(top / MM).toBeGreaterThanOrEqual(13);
-    expect(top / MM).toBeLessThanOrEqual(15);
+    expect(top / MM).toBeGreaterThanOrEqual(15);
+    expect(top / MM).toBeLessThanOrEqual(18);
     expect((2 * FLAME_REST.radius) / MM).toBeGreaterThanOrEqual(4.5);
     expect((2 * FLAME_REST.radius) / MM).toBeLessThanOrEqual(5.5);
-    expect(FLAME_REST.base + FLAME_REST.widest * FLAME_REST.length).toBeCloseTo(WICK_TIP_Y, 9);
+    expect((WICK_TIP_Y - POOL_Y) / MM).toBeCloseTo(3, 6);
+    expect((WICK_TIP_Y - (FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length)) / MM).toBeCloseTo(1.2, 6);
+    expect((FLAME_REST.base + FLAME_REST.widest * FLAME_REST.length - WICK_TIP_Y) / MM).toBeCloseTo(1, 6);
+    // The bare wick under the luminous zone is at most a quarter of the flame seen above the pool.
+    expect((FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length - POOL_Y) / top).toBeLessThan(0.25);
   });
 
-  it('flickers at 10–12 Hz with a few per cent of length, sways a few degrees in the room\'s draft, and is exactly still at gain 0', () => {
+  it('lives by the room\'s air: a slow 1/f sway of a few degrees and breathing of its length, no 11 Hz buzz, a rare flutter one candle at a time; exactly still at gain 0', () => {
+    // v1.6 polish (judge: v1.5's coherent 10.9 Hz tip bob read as a mechanical buzz; a lone flame
+    // in still air does not puff at 10–12 Hz, three or more bundled ones do: Okamoto et al. 2016).
     const fl = newFlicker();
+    const dt = 0.005, T = 60;
     for (let i = 0; i < CANDLE_COUNT; i++) {
-      // Dominant frequency from zero crossings of the length over 4 s at 1 kHz.
+      let maxLean = 0, s2 = 0, n = 0, maxDh = 0, hiPow = 0, loPow = 0;
       const xs: number[] = [];
-      let maxDh = 0, maxSway = 0;
-      for (let k = 0; k < 4000; k++) {
-        flicker(i, k / 1000, 1, fl);
-        xs.push(fl.height - 1);
+      for (let t = 0; t < T; t += dt) {
+        flicker(i, t, 1, fl);
+        maxLean = Math.max(maxLean, Math.hypot(fl.swayX, fl.swayZ));
         maxDh = Math.max(maxDh, Math.abs(fl.height - 1));
-        maxSway = Math.max(maxSway, Math.hypot(fl.swayX, fl.swayZ));
+        s2 += (fl.height - 1) ** 2;
+        n++;
+        if (fl.wave === 0) xs.push(fl.swayX);
       }
-      // The fast component: subtract a 60 ms moving average (drops the slow sub-harmonic).
-      const hi = xs.map((x, k) => x - xs.slice(Math.max(0, k - 30), k + 30).reduce((a, b) => a + b, 0) / (Math.min(xs.length, k + 30) - Math.max(0, k - 30)));
-      let crossings = 0;
-      for (let k = 100; k < 3900; k++) if (hi[k - 1]! < 0 && hi[k]! >= 0) crossings++;
-      const hz = crossings / 3.8;
-      expect(hz).toBeGreaterThan(9.5);
-      expect(hz).toBeLessThan(12.5);
+      // Lean peaks of 3–7° (sway and flutters), length breathing ±3 % RMS, never past ±9 %.
+      expect((maxLean * 180) / Math.PI).toBeGreaterThan(3);
+      expect((maxLean * 180) / Math.PI).toBeLessThan(7.5);
+      expect(Math.sqrt(s2 / n)).toBeGreaterThan(0.02);
+      expect(Math.sqrt(s2 / n)).toBeLessThan(0.045);
       expect(maxDh).toBeLessThanOrEqual(FLICKER.amplitude + 1e-9);
-      expect(maxDh).toBeGreaterThan(0.01);
-      expect(maxSway).toBeLessThan((3.5 * Math.PI) / 180);
+      // Outside flutters the sway is slow: its frame-to-frame (5 ms) change is a small share of
+      // its swing (no buzz), i.e. nearly all its power lies under a few hertz.
+      for (let k = 1; k < xs.length; k++) { hiPow += (xs[k]! - xs[k - 1]!) ** 2; loPow += xs[k]! ** 2; }
+      const hz = Math.sqrt(hiPow / loPow) / (2 * Math.PI * dt);
+      expect(hz).toBeLessThan(3);
+      expect(hz).toBeGreaterThan(0.3);
       flicker(i, 1.234, 0, fl);
-      for (const [v, rest] of [[fl.height, 1], [fl.width, 1], [fl.intensity, 1], [fl.swayX, 0], [fl.swayZ, 0]] as const) expect(Math.abs(v - rest)).toBe(0);
+      for (const [v, rest] of [[fl.height, 1], [fl.width, 1], [fl.intensity, 1], [fl.swayX, 0], [fl.swayZ, 0], [fl.wave, 0]] as const) expect(Math.abs(v - rest)).toBe(0);
     }
+    // Flutters: 100–300 ms, every few seconds somewhere on the cake, never two candles at once.
+    let events = 0, both = 0, longest = 0, shortest = Infinity;
+    const runs = new Array(CANDLE_COUNT).fill(0);
+    for (let t = 0; t < 300; t += 0.002) {
+      let k = 0;
+      for (let i = 0; i < CANDLE_COUNT; i++) {
+        flicker(i, t, 1, fl);
+        if (fl.wave > 0) { k++; if (runs[i] === 0) events++; runs[i] += 0.002; }
+        else if (runs[i] > 0) { longest = Math.max(longest, runs[i]); shortest = Math.min(shortest, runs[i]); runs[i] = 0; }
+      }
+      if (k > 1) both++;
+    }
+    expect(both).toBe(0);
+    expect(events).toBeGreaterThan(300 / 6);
+    expect(events).toBeLessThan(300 / 2);
+    expect(longest).toBeLessThanOrEqual(0.302);
+    expect(shortest).toBeGreaterThanOrEqual(0.098);
   });
 
   it('is coloured by temperature: 1,900 K soot is orange-white, and gas cooled to 1,300 K is under 1 % as bright', () => {
@@ -291,6 +320,30 @@ describe('Birthday fire: the smoke', () => {
     }
   });
 
+  it('the blow (v1.6 polish): the flame bends from its base into a long thin tongue, its luminous zone tears and is gone within 50 ms of lift-off, the base a dim blue sheet until the flame is out', () => {
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const b = BREATH_AT[i]!;
+      let maxH = 0, minW = 1, maxBend = 0;
+      for (let t = b.arrive; t < b.lift; t += 0.001) {
+        const f = flameState(i, t, 'accept');
+        maxH = Math.max(maxH, f.height); minW = Math.min(minW, f.width); maxBend = Math.max(maxBend, f.bend);
+      }
+      expect(maxH).toBeGreaterThan(1.5);
+      expect(maxH).toBeLessThan(2);
+      expect(minW).toBeLessThan(0.62);
+      expect(maxBend).toBeGreaterThan(0.3);
+      // Gone within 50 ms of lift-off (its light and its soot), never drifting off as a whole flame.
+      const at50 = flameState(i, b.lift + 0.05, 'accept');
+      expect(at50.intensity).toBeLessThan(0.02);
+      expect(at50.tear).toBeGreaterThan(0.9);
+      expect(at50.lift).toBeLessThan(5 * MM);
+      // The lifted base burns on as a dim blue sheet, out with the extinction wave (unchanged).
+      expect(flameState(i, b.lift + 0.05, 'accept').blue).toBeGreaterThan(0.1);
+      expect(flameState(i, b.lift + 0.05, 'accept').blue).toBeLessThan(0.75);
+      expect(flameState(i, extinguishedAt(i) + 0.001, 'accept').out).toBe(true);
+    }
+  });
+
   it('the breath: a round jet from the camera side, 1/d to each candle, strong enough to blow every flame out', () => {
     for (let i = 0; i < CANDLE_COUNT; i++) {
       const b = BREATH_AT[i]!;
@@ -327,10 +380,14 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
       expect(c.flame.children.some((o) => (o as Mesh).isMesh && o.userData.fx)).toBe(true);
       expect(c.flame.getObjectByName(`${c.flame.name}_mesh`)).toBeUndefined();
     }
-    // Hero top: the steady flame's tip (the GLB's 1.5× lathe and the fire's quads are not counted).
+    // Hero top: the framing's flame envelope (v1.6 polish holds v1.5's: FLAME_FRAME, frameScale;
+    // the GLB's 1.5× lathe and the fire's quads are not counted).
     const top = Math.max(...scene.heroPoints!.map((p) => p.y));
-    const tallest = Math.max(...rig.candles.map((_, i) => flameScale(i)));
-    expect(top).toBeCloseTo(STAND_TOP + CANDLE.seat + FLAME_REST.base + tallest * FLAME_REST.length, 3);
+    const tallest = Math.max(...rig.candles.map((_, i) => frameScale(i)));
+    expect(top).toBeCloseTo(STAND_TOP + CANDLE.seat + FLAME_FRAME.base + tallest * FLAME_FRAME.height, 3);
+    // The drawn flame reaches at most a few millimetres above it.
+    const drawn = Math.max(...rig.candles.map((_, i) => flameScale(i))) * FLAME_REST.length + FLAME_REST.base;
+    expect((drawn - (FLAME_FRAME.base + tallest * FLAME_FRAME.height)) / MM).toBeLessThan(5);
   });
 
   it('lit: settling while the flames burn (they flicker), still after settle(); the light follows the flame', () => {

@@ -1,14 +1,16 @@
 import {
-  Box3, BufferAttribute, BufferGeometry, type Camera, Color, type Light, DynamicDrawUsage, type Material, Matrix3, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, Vector2,
+  Box3, BufferAttribute, BufferGeometry, type Camera, Color, type Light, DynamicDrawUsage, type Material, Matrix3, Matrix4, Mesh, MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, SphereGeometry, Vector2,
   Vector3, Vector4, type WebGLRenderer,
 } from 'three';
 import type { MaterialLibrary } from '../src/render/materials.ts';
-import { CANDLE } from './birthdayContract.ts';
+import { CANDLE, FLAME, WICK_EXPOSED } from './birthdayContract.ts';
 import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
 import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, SMOKE_GLOW, sootRadiance } from '../src/render/flame.ts';
 import { addHaze } from '../src/render/heatHaze.ts';
+import { markDepthOccluders, SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
+import { SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
 import {
-  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, rand, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, sootFormed, type WakeAt, type WickAt,
+  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, POOL_Y, rand, restLean, WICK_TIP_Y, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /**
@@ -28,7 +30,16 @@ import {
  */
 export const CANDLE_CANDELA = 1;
 const CANDLE_LIGHT_SCALE = 1.5 / 2500;
-export const CANDLE_LIGHT = CANDLE_CANDELA * 25 * CANDLE_LIGHT_SCALE;
+/**
+ * v1.6 polish (judge: "the light is not felt": +6/255 red spread flat over the top tier, ≈+11 %
+ * linear): calibrated by rendering against the photometric estimate. Six ≈1 cd flames ≈4.5 cm over
+ * the frosting and ≈5 cm from the top tier's centre give it E ≈ Σ I·cosθ/d² ≈ 6 × 150 ≈ 900 lx,
+ * ≈+30–35 % of a ≈2,500 lx room; the rig delivered +12 % (measured, linear red, the group view with
+ * the flames' light on and off), so its scale is ×2.0 (now ≈+24 %, with warm pools between the
+ * candles and warm highlights on the piping round them).
+ */
+const FLAME_LIGHT_CAL = 2.0;
+export const CANDLE_LIGHT = CANDLE_CANDELA * 25 * CANDLE_LIGHT_SCALE * FLAME_LIGHT_CAL;
 
 /** The flame's light colour: soot at ≈1,900 K (linear sRGB, luminance-normalised). */
 export function flameLightColor(): Color {
@@ -229,6 +240,11 @@ export interface FlameRig {
   twin: Mesh;
   /** v1.6: the live clock and flicker gain it was posed with (the heat haze shimmers only while live). */
   live: { time: number; gain: number };
+  /**
+   * v1.6 polish: the charred bead the curled wick ends in (a lit wick's tip is a rounded knob of
+   * carbon, glowing orange-red where it pokes into the flame sheet; the master's wick is a cut rod).
+   */
+  bead: Mesh;
 }
 
 /**
@@ -252,7 +268,11 @@ const WICK = { fresh: [0.8, 0.75, 0.64], char: [0.016, 0.015, 0.014], ash: [0.33
 /** The way candle `index`'s braid curls (the wick's own x–z, radians from +x): each its own, round the master's lean. */
 const curlAngle = (index: number) => (rand(index, 41) - 0.5) * 2.4;
 
-function wickMaterial(lib: MaterialLibrary, mesh: Mesh | null, index: number): { material: MeshStandardMaterial; look: WickLook } {
+/**
+ * `pool`: the pool's height above the wick mesh's foot (scene units); `squash`: how much of its
+ * exposed length a burning wick shows (v1.6 polish: the master's 4.2 mm drawn as WICK_EXPOSED).
+ */
+function wickMaterial(lib: MaterialLibrary, mesh: Mesh | null, index: number, pool = 0, squash = 1): { material: MeshStandardMaterial; look: WickLook } {
   const material = (lib.unique('mat_wick') as MeshStandardMaterial);
   const look: WickLook = { ember: { value: new Color(0, 0, 0) }, char: { value: 1 }, ash: { value: 0 } };
   const a = curlAngle(index);
@@ -262,14 +282,20 @@ function wickMaterial(lib: MaterialLibrary, mesh: Mesh | null, index: number): {
   // Scene units per local unit (uniform node scale; the quantization's), the wick's local extent.
   const k = mesh ? mesh.scale.y : 1;
   const y0 = { value: b?.min.y ?? 0 }, scale = { value: k }, len = { value: b ? (b.max.y - b.min.y) * k : 0.0327 };
+  const poolU = { value: pool }, squashK = { value: squash };
   material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { uEmberColor: look.ember, uWickChar: look.char, uWickAsh: look.ash, uWickY0: y0, uWickS: scale, uWickLen: len, uWickCurl: curlDir });
+    Object.assign(shader.uniforms, { uEmberColor: look.ember, uWickChar: look.char, uWickAsh: look.ash, uWickY0: y0, uWickS: scale, uWickLen: len, uWickCurl: curlDir, uWickPool: poolU, uWickK: squashK });
     const f3 = (v: readonly number[]) => `vec3(${v.map((x) => x.toFixed(4)).join(', ')})`;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vWickTop;\nvarying vec2 vWickXZ;\nuniform float uWickY0;\nuniform float uWickS;\nuniform float uWickLen;\nuniform float uWickChar;\nuniform vec2 uWickCurl;')
+      .replace('#include <common>', '#include <common>\nvarying float vWickTop;\nvarying vec2 vWickXZ;\nuniform float uWickY0;\nuniform float uWickS;\nuniform float uWickLen;\nuniform float uWickChar;\nuniform vec2 uWickCurl;\nuniform float uWickPool;\nuniform float uWickK;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
   float wickU = (position.y - uWickY0) * uWickS;
-  vWickTop = uWickLen - wickU;
+  // v1.6 polish: a burning wick shows WICK_EXPOSED above its pool (its exposed part squashed; the
+  // master's mesh is the fresh 4.2 mm wick), its cut end tapered to a rounded, charred tip.
+  float wickD = wickU - uWickPool;
+  vWickTop = (uWickLen - uWickPool) * uWickK - (wickD > 0.0 ? wickD * uWickK : wickD);
+  transformed.y -= max(wickD, 0.0) * (1.0 - uWickK) / uWickS;
+  transformed.xz *= 1.0 - 0.4 * smoothstep(0.6, 1.0, wickU / uWickLen) * smoothstep(0.85, 1.0, wickU / uWickLen);
   vWickXZ = position.xz;
   float wickK = clamp(wickU / uWickLen, 0.0, 1.0);
   transformed.xz += uWickCurl * (${WICK.curl.toFixed(4)} / uWickS) * uWickChar * wickK * wickK * wickK;`);
@@ -285,7 +311,7 @@ function wickMaterial(lib: MaterialLibrary, mesh: Mesh | null, index: number): {
   float uneven = 0.5 + 0.5 * sin(3.0 * wickAng + 1.7) * sin(5.0 * wickAng + 0.4);
   totalEmissiveRadiance += uEmberColor * (1.0 - smoothstep(0.0015, 0.003 + 0.0015 * uneven, vWickTop));`);
   };
-  material.customProgramCacheKey = () => 'birthday-wick-v15c';
+  material.customProgramCacheKey = () => 'birthday-wick-v16p';
   return { material, look };
 }
 
@@ -351,6 +377,9 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
     }
   });
   if (n) top.set(sx / n, box.max.y, sz / n);
+  // v1.6 polish: the burning wick stands WICK_EXPOSED over its pool (its material squashes the rest).
+  const wickPool = POOL_Y - box.min.y, wickSquash = WICK_EXPOSED / Math.max(1e-6, box.max.y - POOL_Y);
+  top.y = WICK_TIP_Y;
 
   const material = lib.unique('mat_flame') as ShaderMaterial & { uniforms: FlameUniforms };
   const quad = new Mesh(quadGeometry, material);
@@ -436,7 +465,7 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   let wickMesh: Mesh | null = null;
   wick.traverse((o) => { if (!wickMesh && (o as Mesh).isMesh) wickMesh = o as Mesh; });
   const wm = wickMesh as Mesh | null;
-  const w = wickMaterial(lib, wm, index);
+  const w = wickMaterial(lib, wm, index, wickPool, wickSquash);
   if (wm) wm.material = w.material;
   // The curl's reach at the tip in candle space (the material bends the top by WICK.curl along its
   // own x–z, scaled by the quantization): the ember and the smoke leave from the curled tip.
@@ -447,15 +476,26 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
       .applyMatrix3(new Matrix3().setFromMatrix4(new Matrix4().multiplyMatrices(toCandle, wm.matrixWorld)));
   }
   u.uWickR.value = CANDLE.wickRadius;
-  return { node, quad, material, wickTip: top, index, shorten: 0, lights, wickMaterial: w.material, wick: w.look, curlTip, twin, live };
+  const bead = new Mesh(beadGeometry(), new MeshStandardMaterial({ name: 'wick_bead', color: new Color(...WICK.char), roughness: 1, metalness: 0 }));
+  bead.name = `${node.name}_bead`;
+  bead.userData.fx = true;
+  bead.userData.noShadowCast = true;
+  bead.visible = false;
+  node.add(bead);
+  material.addEventListener('dispose', () => (bead.material as MeshStandardMaterial).dispose());
+  return { node, quad, material, wickTip: top, index, shorten: 0, lights, wickMaterial: w.material, wick: w.look, curlTip, twin, live, bead };
 }
+
+let beadShared: SphereGeometry | null = null;
+/** The bead: a knob ≈1.1 mm across (the braid's char swells a little over the wick's 1 mm). */
+const beadGeometry = () => (beadShared ??= new SphereGeometry(0.55 * MM_UNITS, 12, 8));
 
 const qInv = new Quaternion();
 const qCake = new Quaternion();
 const toNode = new Matrix4();
 const up = new Vector3();
 const flow = new Vector3();
-const sway = new Vector3();
+const swayV = new Vector3();
 const dirH = new Vector3();
 const anchor = new Vector3();
 const tip = new Vector3();
@@ -507,9 +547,15 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   // Candle space → the node's frame (its position, lowered with the melt, and its rotation).
   r.node.updateMatrix();
   toNode.copy(r.node.matrix).invert();
-  // Lean = breath lean along the flow + room-draft sway.
-  sway.set(fl.swayX, 0, fl.swayZ).addScaledVector(up, -fl.swayX * up.x - fl.swayZ * up.z);
-  dirH.copy(flow).multiplyScalar(f.tilt).add(sway);
+  // Lean = breath lean along the flow + the room's sway + the flame's own rest lean (v1.6 polish:
+  // 2–4°, in stills too). The room's lean bends the flame from its base rather than tipping it:
+  // 55 % of it tilts the axis, the rest is the tip's bend (the base stays on the wick).
+  const [lx, lz] = restLean(r.index);
+  swayV.set(fl.swayX + lx, 0, fl.swayZ + lz).applyQuaternion(qCake).applyQuaternion(qInv);
+  swayV.addScaledVector(up, -swayV.dot(up));
+  const swayA = swayV.length();
+  // The breath's lean, the same way: (1 − bend) of it tilts the axis, the rest curves it downstream.
+  dirH.copy(flow).multiplyScalar(f.tilt * (1 - f.bend)).addScaledVector(swayV, 0.55);
   let tilt = dirH.length();
   if (tilt > 1e-6) dirH.divideScalar(tilt);
   else { dirH.copy(flow); tilt = 0; }
@@ -520,18 +566,25 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   const size = flameScale(r.index);
   const L = FLAME_REST.length * size * Math.max(f.height, 1e-3) * fl.height;
   const R = FLAME_REST.radius * size * Math.max(f.width, 1e-3) * fl.width;
-  const bend = 0.5 * L * tilt * f.bend;
+  // The tip's offset along the lean (negative: downstream): the breath's curve (its tip turned a
+  // further tilt·bend; the axis x = c·s², c = L·tan(Δ)/2) and the room's bend.
+  const bend = -0.5 * L * Math.tan(f.tilt * f.bend) * flow.dot(dirH) - 0.45 * L * swayA * (swayA > 1e-9 ? swayV.dot(dirH) / swayA : 0);
   // Base: on the wick's axis at the cup's height, carried downstream once it has lifted off.
   anchor.set(r.wickTip.x, FLAME_REST.base - r.shorten, r.wickTip.z).applyMatrix4(toNode);
   u.uBase.value.copy(anchor).addScaledVector(flow, f.lift);
   u.uShape.value[0] = L;
   u.uShape.value[1] = R;
+  // v1.6 polish: the flame's zones stand where they are on the wick, whatever its length: widest a
+  // millimetre over the wick's tip, the luminous zone's foot 1.2 mm under it (it wraps the tip).
+  u.uWidest.value = Math.min(0.6, Math.max(0.08, (WICK_TIP_Y + FLAME.widest - FLAME_REST.base) / L));
+  u.uFoot.value = Math.min(0.8, Math.max(0.02, (WICK_TIP_Y - FLAME.foot - FLAME_REST.base) / L));
   u.uShape.value[2] = bend;
   u.uShape.value[3] = f.neck;
   u.uState.value[0] = f.cut;
   u.uState.value[1] = f.cool;
   u.uState.value[2] = Math.max(0, f.intensity * fl.intensity);
   u.uState.value[3] = f.lit;
+  u.uBreath.value.set(f.tear, f.blue);
   // The bloom's twin shows only while there is a flame to glow (an ember alone does not bloom).
   r.twin.visible = u.uState.value[2] * sootFormed(f.lit) > 1e-3;
   // The ember sits on the tip where the charred braid has curled it.
@@ -540,8 +593,19 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   u.uWickFoot.value.set(r.wickTip.x, r.wickTip.y - 4 * MM_UNITS - r.shorten, r.wickTip.z).applyMatrix4(toNode);
   u.uEmber.value = ember;
   u.uPhase.value = fl.phase;
+  u.uWave.value = fl.wave;
+  // The bead on the curled tip: charred once lit, its ember's glow, grey as the ash forms.
+  const charred = r.wick.char.value;
+  r.bead.visible = charred > 0.5;
+  if (r.bead.visible) {
+    r.bead.position.copy(u.uWick.value);
+    const bm = r.bead.material as MeshStandardMaterial;
+    const a = r.wick.ash.value;
+    bm.color.setRGB(WICK.char[0] + (WICK.ash[0] - WICK.char[0]) * a, WICK.char[1] + (WICK.ash[1] - WICK.char[1]) * a, WICK.char[2] + (WICK.ash[2] - WICK.char[2]) * a);
+    bm.emissive.copy(r.wick.ember.value);
+  }
   // The volume's turbulence: carried on the live clock; the breath's gust tears the flame (by its lean), and a dying flame frays.
-  u.uNoise.value.set(fl.time, Math.min(1, Math.max(f.tilt / 1.1, 0.6 * f.cut)), 3.7 * r.index + 0.5);
+  u.uNoise.value.set(fl.time, Math.min(1, Math.max(f.tilt / 1.1, 0.6 * f.cut, 0.12 * fl.wave)), 3.7 * r.index + 0.5);
   tip.copy(u.uBase.value).addScaledVector(u.uAxisY.value, L).addScaledVector(u.uAxisX.value, -bend);
   u.uMid.value.copy(u.uBase.value).add(tip).multiplyScalar(0.5);
   // Holds the march's box: the flame, its widest radius and the turbulence's reach.
@@ -581,9 +645,22 @@ export class SmokeRig {
   private readonly strands: SmokeStrand[];
   private readonly attrs: Record<'position' | 'aPrev' | 'aNext' | 'aWidth' | 'aAlpha' | 'aAge' | 'aSeed' | 'aHot', BufferAttribute>;
   readonly material = createSmokeMaterial();
+  /**
+   * v1.6 polish: the smoke above its first few centimetres, as a ray-marched volume
+   * (models/birthdaySmoke.ts); the ribbons draw only the laminar stems and hand the vapour over.
+   */
+  readonly volume: SmokeVolume;
 
   /** `parent`: the room the smoke rises in (birthday_root): smoke stays where it was born, not on the carried cake. */
   constructor(parent: Object3D, private readonly candles: number) {
+    // The volume marches up to the opaque scene: the candles are all that can stand between the lens
+    // and smoke rising above the wicks, so only they draw in its depth pass, as their low-poly shadow
+    // stand-ins (2 k triangles each; the wax is 35 k, the cake's piping 1.4 M).
+    let stand = 0;
+    parent.traverse((o) => { if (o.userData.shadowProxy && /^candle_\d\d/.test(o.name)) { o.layers.enable(SCENE_DEPTH_LAYER); stand++; } });
+    // (A cake without the stand-ins, the tooling cake: the candles themselves.)
+    if (!stand) parent.traverse((o) => { if (/^candle_\d\d$/.test(o.name)) markDepthOccluders(o); });
+    this.volume = new SmokeVolume(parent);
     const strands = candles * SMOKE_STRAND_COUNT;
     const n = strands * SMOKE_POINT_COUNT * 2;
     const mk = (size: number) => new BufferAttribute(new Float32Array(n * size), size).setUsage(DynamicDrawUsage);
@@ -636,11 +713,15 @@ export class SmokeRig {
    * opacity drawn (0: nothing to see).
    */
   update(t: number, kind: SmokeKind, wickAt: WickSource, wake?: WakeAt): number {
+    this.volume.begin();
     if (!smokeAlive(t)) {
       this.mesh.visible = false;
+      this.volume.end(t);
       return 0;
     }
     this.wickAt = wickAt;
+    const tail = smokeTail(t);
+    const [r0, r1] = SMOKE_VOLUME.ribbon;
     let any = false, peak = 0;
     const P = SMOKE_POINT_COUNT;
     const { position, aPrev, aNext, aWidth, aAlpha, aAge, aSeed, aHot } = this.attrs;
@@ -655,8 +736,14 @@ export class SmokeRig {
         const st = this.strands[i * SMOKE_STRAND_COUNT + s]!;
         if (smokeStrand(i, s, t, at, st, kind, wake)) any = true;
         peak = Math.max(peak, st.peak);
+        const src = smokeSource(i, kind);
+        this.volume.addThread(st, [src.fade[0] * SMOKE_VOLUME.ageFade, src.fade[1] * SMOKE_VOLUME.ageFade], tail);
         const base = (i * SMOKE_STRAND_COUNT + s) * P;
+        let path = 0;
         for (let k = 0; k < P; k++) {
+          if (k > 0) path += Math.hypot(st.position[k * 3]! - st.position[k * 3 - 3]!, st.position[k * 3 + 1]! - st.position[k * 3 - 2]!, st.position[k * 3 + 2]! - st.position[k * 3 - 1]!);
+          // The ribbon is the thread's laminar stem only: past it the volume carries the vapour.
+          const pr = path / 5, stem = pr <= r0 ? 1 : pr >= r1 ? 0 : 1 - ((pr - r0) / (r1 - r0)) ** 2 * (3 - 2 * (pr - r0) / (r1 - r0));
           const kp = Math.max(0, k - 1), kn = Math.min(P - 1, k + 1);
           for (let side = 0; side < 2; side++) {
             const v = (base + k) * 2 + side;
@@ -666,7 +753,7 @@ export class SmokeRig {
               next[v * 3 + c] = st.position[kn * 3 + c]!;
             }
             wid[v] = st.width[k]!;
-            alp[v] = st.alpha[k]!;
+            alp[v] = st.alpha[k]! * stem;
             age[v] = st.age[k]!;
             // Noise coordinate travels with the parcel (its birth), distinct per thread.
             seed[v] = (t - st.age[k]!) * 2.3 + s * 7.31 + i * 3.77;
@@ -680,10 +767,12 @@ export class SmokeRig {
     }
     for (const a of Object.values(this.attrs)) a.needsUpdate = true;
     this.mesh.visible = any;
+    this.volume.end(t);
     return peak;
   }
 
   dispose(): void {
+    this.volume.dispose();
     this.geometry.dispose();
     (this.material as Material).dispose();
     this.mesh.removeFromParent();

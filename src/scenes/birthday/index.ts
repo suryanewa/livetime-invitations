@@ -2,7 +2,7 @@ import { Box3, type Camera, Euler, type Object3D, Quaternion, Vector3, type WebG
 import glbUrl from '../../../assets/scenes/birthday/birthday.glb?url';
 import { rigBirthday, type BirthdayRig } from '../../../models/birthday.ts';
 import { poseFlame } from '../../../models/birthdayFire.ts';
-import { BIN_POS, BIN_YAW, MASTER, CAKE_SCALE, WALL_Z } from '../../../models/birthdayContract.ts';
+import { BIN_POS, BIN_YAW, CANDLE, FLAME_FRAME, MASTER, CAKE_SCALE, WALL_Z } from '../../../models/birthdayContract.ts';
 import type { CakePreset } from '../../../models/cake.ts';
 import { BIN, binEntranceStart, binPlaceholder, flapAngles, openBinSilhouette } from '../../../models/disposalBin.ts';
 import { disposeImported, gltfLoader, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
@@ -21,7 +21,7 @@ import {
 } from './sequences.ts';
 import { type AnswerChange, changeTime, planAnswerChange, sampleAnswerChange } from './change.ts';
 import { birthdayPull } from './pull.ts';
-import { ashAt, EMBER, emberAt, FLAME_REST, flameScale, FLICKER, flicker, MPS, newFlicker, SMOKE, type SmokeKind, WAKE, type WakeAt, wickChar } from './fire.ts';
+import { ashAt, EMBER, emberAt, FLICKER, frameScale, flicker, MPS, newFlicker, SMOKE, type SmokeKind, WAKE, type WakeAt, wickChar } from './fire.ts';
 
 const UP = new Vector3(0, 1, 0);
 /** Half-step (s) of the carried cake's speed, for the smoke it strings out. */
@@ -195,14 +195,15 @@ export class BirthdayScene implements SceneInstance {
     this.root.updateMatrixWorld(true);
     const toRoot = this.root.matrixWorld.clone().invert();
     this.rig.candles.forEach((c, i) => {
+      // (The framing's envelope, FLAME_FRAME: v1.6 polish holds the camera where v1.5 put it.)
       const w = c.fire.wickTip;
-      const k = flameScale(i);
+      const k = frameScale(i);
       const at = (x: number, y: number, z: number) => pts.push(new Vector3(x, y, z).applyMatrix4(c.candle.matrixWorld).applyMatrix4(toRoot));
-      at(w.x, FLAME_REST.base + k * FLAME_REST.length, w.z);
-      const y = FLAME_REST.base + FLAME_REST.widest * k * FLAME_REST.length;
+      at(w.x, FLAME_FRAME.base + k * FLAME_FRAME.height, w.z);
+      const y = FLAME_FRAME.base + k * (CANDLE.wickBase + CANDLE.wickHeight - FLAME_FRAME.base);
       for (let n = 0; n < 8; n++) {
         const a = (n / 8) * Math.PI * 2;
-        at(w.x + Math.cos(a) * k * FLAME_REST.radius, y, w.z + Math.sin(a) * k * FLAME_REST.radius);
+        at(w.x + Math.cos(a) * k * FLAME_FRAME.radius, y, w.z + Math.sin(a) * k * FLAME_FRAME.radius);
       }
     });
     return pts;
@@ -480,6 +481,7 @@ export class BirthdayScene implements SceneInstance {
   /** Low tier for the imported stand, frosting and candle materials (the library handles the rest). */
   setLowDetail(enabled: boolean): void {
     setImportedLowDetail(this.root, enabled);
+    this.rig.smoke.volume.setLowDetail(enabled);
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
@@ -490,11 +492,14 @@ export class BirthdayScene implements SceneInstance {
     n.bin_root!.visible = true;
     for (const c of this.rig.candles) {
       c.fire.quad.visible = true;
+      c.fire.bead.visible = true;
       // The molten wax (hidden until the melt shows it) is warmed too.
       if (c.run) c.run.visible = true;
       if (c.pool) c.pool.visible = true;
     }
     this.rig.smoke.mesh.visible = true;
+    // v1.6 polish: the smoke volume's passes (splat, light, march, its noise) link in the next frames.
+    this.rig.smoke.volume.showForCompile();
     await renderer.compileAsync(scene, camera);
     this.rig.setPreset(this.preset === 'vanilla' ? 'cocoa' : 'vanilla');
     await renderer.compileAsync(scene, camera);

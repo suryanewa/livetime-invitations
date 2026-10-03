@@ -55,6 +55,15 @@ export interface SceneDepthClient {
 
 const clients = new Set<SceneDepthClient>();
 
+/** Lights put on the depth layer for one pass (and taken off it after). */
+const lit: Object3D[] = [];
+const enableLight = (o: Object3D) => {
+  if ((o as Object3D & { isLight?: boolean }).isLight && !o.layers.isEnabled(SCENE_DEPTH_LAYER)) {
+    o.layers.enable(SCENE_DEPTH_LAYER);
+    lit.push(o);
+  }
+};
+
 /** Register a client; returns its unregistration. */
 export function requestSceneDepth(client: SceneDepthClient): () => void {
   clients.add(client);
@@ -128,7 +137,21 @@ export class SceneDepth {
     scene.background = null;
     renderer.autoClear = true;
     renderer.setRenderTarget(this.target);
+    // The scene's lights take part (three keeps one light state per scene: a pass without them bumps
+    // its version, and every lit material then looks its program up again in the main pass, ≈0.5 ms
+    // a frame at the laptop size; the bloom pass does the same), but the shadow map is never drawn
+    // here (it is the main pass's, and may be due once).
+    scene.traverse(enableLight);
+    const shadows = renderer.shadowMap as WebGLRenderer['shadowMap'] | undefined;
+    const autoShadow = shadows?.autoUpdate ?? false, dueShadow = shadows?.needsUpdate ?? false;
+    if (shadows) shadows.autoUpdate = shadows.needsUpdate = false;
     renderer.render(scene, camera);
+    if (shadows) {
+      shadows.autoUpdate = autoShadow;
+      shadows.needsUpdate = dueShadow;
+    }
+    for (const l of lit) l.layers.disable(SCENE_DEPTH_LAYER);
+    lit.length = 0;
     renderer.setRenderTarget(prevTarget);
     renderer.autoClear = prevAutoClear;
     scene.background = prevBackground;

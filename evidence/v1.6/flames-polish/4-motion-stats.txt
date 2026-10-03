@@ -1,0 +1,18 @@
+v1.6 flames polish, fix 4 (motion). The flicker (src/scenes/birthday/fire.ts `flicker`, `restLean`).
+
+Model: no 11 Hz buzz (a lone flame in still air does not puff; the 10-12 Hz mode is three or more
+bundled flames: Kitahata et al. 2009, Okamoto et al. Sci. Rep. 6:36145). Per candle: a 1/f sway
+(six partials 0.31-2.4 Hz +-15 %, amplitude ~ f^-1/2, RMS 2 deg per plan component), length
+breathing (six partials 0.33-3.1 Hz, RMS 3.2 %, clamped at +-9 %), a rest lean of 2-4 deg in its
+own direction (stills too), a shared room draft (+-1 deg, 0.1-0.3 Hz); flutters: one 3 s cell at a
+time, 75 % of cells, one candle, 100-300 ms, 8-12 Hz flick of +-4 deg and +-7 % with a sin^2
+envelope and the varicose wave running up the flame only then. The room's lean bends the flame from
+its base (55 % axis tilt, 45 % tip bend).
+
+Statistics (unit, 60 s per candle): lean peaks 5.0-7.1 deg (incl. flutters), length RMS 3.2 %,
+peaks 8.5-9.0 %; flutter events every 3-4 s on the cake, never two at once in 600 s.
+
+Laptop 1280x720@2, 1 s at 60 fps (two 0.5 s pieces), per flame (device px):
+  height 16-31 px, tip-x range 0.35-1.72 px (most >= 0.5; v1.6 first build: 0.58 px in close-up,
+  < 0.3 px at this size), warm-area breathing +-1.6-4.3 %; the group strip's dominant frequencies
+  1-2 Hz (judge's run of the first build: a clean 10.9 Hz).

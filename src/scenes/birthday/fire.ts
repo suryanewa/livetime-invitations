@@ -1,4 +1,4 @@
-import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME } from '../../../models/birthdayContract.ts';
+import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME, WICK_EXPOSED } from '../../../models/birthdayContract.ts';
 import { CAMERA_ANGLES } from '../../render/camera.ts';
 import type { SequenceName } from '../../core/types.ts';
 import { LIGHT_FROM } from './placement.ts';
@@ -62,9 +62,9 @@ const smooth = (x: number) => { const t = clamp01(x); return t * t * (3 - 2 * t)
 const smoother = (x: number) => { const t = clamp01(x); return Math.min(1, t * t * t * (t * (6 * t - 15) + 10)); };
 
 // ── The steady flame (candle_NN space; FLAME_REST.base etc. are heights above the candle base) ──
-/** Candle top (the wax pool) and wick tip, heights in candle_NN space. */
+/** Candle top (the wax pool) and the burning wick's tip (v1.6 polish: 3 mm up), heights in candle_NN space. */
 export const POOL_Y = CANDLE.height;
-export const WICK_TIP_Y = CANDLE.wickBase + CANDLE.wickHeight;
+export const WICK_TIP_Y = POOL_Y + WICK_EXPOSED;
 
 /** The steady flame (sizes from the contract, models/birthdayContract.ts FLAME). */
 export const FLAME_REST = {
@@ -74,19 +74,30 @@ export const FLAME_REST = {
   length: FLAME.height,
   /** Half the widest width (5 mm). */
   radius: FLAME.radius,
-  /** Where it is widest (at the wick top), as a fraction of its length. */
-  widest: (WICK_TIP_Y - FLAME.base) / FLAME.height,
+  /** Where it is widest (a millimetre above the wick top), as a fraction of its length. */
+  widest: (WICK_TIP_Y + FLAME.widest - FLAME.base) / FLAME.height,
+  /** v1.6 polish: the luminous zone's foot (1.2 mm under the wick's tip: it wraps it), as a fraction of its length. */
+  foot: (WICK_TIP_Y - FLAME.foot - FLAME.base) / FLAME.height,
 } as const;
 
 /** Visible flame top above the candle base at rest. */
 export const FLAME_REST_TOP = FLAME_REST.base + FLAME_REST.length;
 
+/** The framing's per-candle size (v1.5's seeded ±7 %: the hero fit's envelope, models/birthdayContract.ts FLAME_FRAME). */
+export function frameScale(i: number): number {
+  return 1 + 0.07 * signed(i, 50);
+}
+
 /**
- * No two wicks stand the same height: candle `i`'s flame is this many times FLAME_REST (±7 %
- * seeded; Lf ∝ L^0.63, so ±0.5 mm of wick).
+ * No two wicks stand the same height: candle `i`'s flame is this many times FLAME_REST (v1.6
+ * polish: ±12 % seeded, the judge's ±10–15 %; Lf ∝ L^0.63, so ±0.6 mm of wick and its curl).
  */
 export function flameScale(i: number): number {
-  return 1 + 0.07 * signed(i, 50);
+  // Stratified: the six take −1 … +1 of the spread in a seeded order (independent draws of six
+  // clustered on one side, 0.91–1.02), with a little jitter.
+  const rank = CANDLE_SOCKETS.reduce((n, _, j) => n + (rand(j, 50) < rand(i, 50) ? 1 : 0), 0);
+  const k = CANDLE_COUNT > 1 ? (2 * rank) / (CANDLE_COUNT - 1) - 1 : 0;
+  return 1 + 0.12 * (0.85 * k + 0.15 * signed(i, 51));
 }
 
 /**
@@ -105,19 +116,31 @@ export function flameProfile(s: number, widest = FLAME_REST.widest): number {
 }
 
 // ── Live flicker (the only part `simulate` drives: a clock) ──────────────────
+/**
+ * v1.6 polish: a lone flame's life. A single candle in still air does not buzz: the regular
+ * 10–12 Hz puffing (Kitahata et al., J. Phys. Chem. A 2009; Okamoto et al., Sci. Rep. 6:36145)
+ * is the collective mode of three or more flames bundled together; a lone birthday-candle flame
+ * is steady and lives by the room's air (judge: v1.5's coherent 11 Hz tip bob of ±3 % read as a
+ * mechanical buzz in close-up and as nothing at the real sizes). So: a slow sway of a few degrees
+ * with a 1/f spectrum over 0.3–2.4 Hz, its own per candle; its length breathing over 0.3–3 Hz;
+ * a shared slow draft; and now and then (every ≈3 s somewhere on the cake, one candle at a time) a
+ * 100–300 ms flutter, the flame flicking at 8–12 Hz as a passing eddy reaches it.
+ */
 export const FLICKER = {
-  /** Buoyant flicker of a single candle in still air (10–12 Hz); per-candle detune ±4 %. */
-  hz: 11,
-  detune: 0.04,
-  /** Peak length change of the flicker (≈±3 %): a still-air flame is steady to the eye. */
-  amplitude: 0.03,
-  /**
-   * Room-draft sway: a shared draft (people round a cake) leans every flame the same way by up to
-   * ±2° at 0.1–0.3 Hz, and each flame wanders ±1° on its own at 0.2–0.7 Hz.
-   */
-  sway: (1 * Math.PI) / 180,
-  draft: (2 * Math.PI) / 180,
-  /** Gain ramp after settle() (seconds): flicker resumes without a pop. */
+  /** The flutter's frequency band (Hz). */
+  hz: 10,
+  detune: 0.2,
+  /** Peak length change of the steady flame's breathing and a flutter's stretch (fractions). */
+  amplitude: 0.09,
+  /** Length breathing, RMS (peaks ±6–8 %). */
+  breathe: 0.032,
+  /** Sway, RMS of each plan component (radians: the lean's peaks 3–5°). */
+  sway: (2 * Math.PI) / 180,
+  /** The shared room draft (radians, ±1°, 0.1–0.3 Hz). */
+  draft: (1 * Math.PI) / 180,
+  /** Flutters: one per `every` s somewhere on the cake (some skipped), lasting `length` s, leaning `lean` and stretching `stretch`. */
+  flutter: { every: 3, skip: 0.25, length: [0.1, 0.3] as const, lean: (4 * Math.PI) / 180, stretch: 0.07 },
+  /** Gain ramp after settle() (seconds): the flame comes to life without a pop. */
   resume: 0.35,
 } as const;
 
@@ -126,11 +149,12 @@ export interface Flicker {
   height: number;
   width: number;
   intensity: number;
-  /** Small tilt from room drafts (radians), as a vector in the cake's plan (x, z). */
+  /** Lean from the room's air (radians), as a vector in the cake's plan (x, z). */
   swayX: number;
   swayZ: number;
-  /** Phase of the travelling varicose wave (radians), for the shader's shimmer. */
+  /** Phase of a flutter's travelling varicose wave (radians), and its strength (0 none – 1 a full flutter). */
   phase: number;
+  wave: number;
   /**
    * v1.6: the live clock this was sampled at (s) and the flicker's gain (0 still, after settle()
    * and under reduced motion; 1 live): the volume's turbulence is carried on the clock and the
@@ -140,38 +164,88 @@ export interface Flicker {
   gain: number;
 }
 
+/** The sway's and the breathing's partials (Hz), per candle ±15 %: a 1/f spectrum (amplitude ∝ f^−½). */
+const SWAY_HZ = [0.31, 0.47, 0.71, 1.07, 1.6, 2.4] as const;
+const BREATHE_HZ = [0.33, 0.52, 0.83, 1.31, 2.07, 3.1] as const;
+const ONE_OVER_F = (hz: readonly number[]) => {
+  const a = hz.map((f) => 1 / Math.sqrt(f));
+  const rms = Math.sqrt(a.reduce((s2, x) => s2 + x * x, 0) / 2);
+  return a.map((x) => x / rms);
+};
+const SWAY_A = ONE_OVER_F(SWAY_HZ), BREATHE_A = ONE_OVER_F(BREATHE_HZ);
+
+/** The flutter in time cell `n` (FLICKER.flutter.every s): which candle, when it starts (s), how long, how fast; null: none. */
+function flutterIn(n: number): { candle: number; start: number; length: number; hz: number } | null {
+  const F = FLICKER.flutter;
+  if (rand(n, 70) < F.skip) return null;
+  const start = n * F.every + 0.2 + (F.every - 0.2 - F.length[1] - 0.1) * rand(n, 71);
+  return {
+    candle: Math.floor(rand(n, 72) * CANDLE_COUNT) % CANDLE_COUNT, start, length: F.length[0] + (F.length[1] - F.length[0]) * rand(n, 73),
+    hz: FLICKER.hz * (1 + FLICKER.detune * signed(n, 74)),
+  };
+}
+
 /**
  * Flicker of candle `i` at live time `t` (seconds of lit time on the scene's live clock), scaled
- * by `gain` (0 after settle(), 1 when running). Band-limited: a few detuned sines with slowly
- * modulated amplitude, so it never repeats visibly and has no frequency content above ≈13 Hz.
+ * by `gain` (0 after settle(), 1 when running): exactly the rest pose at gain 0.
  */
 export function flicker(i: number, t: number, gain: number, out: Flicker): Flicker {
-  const f = FLICKER.hz * (1 + FLICKER.detune * signed(i, 1));
-  const p1 = 6.283 * rand(i, 2), p2 = 6.283 * rand(i, 3), p3 = 6.283 * rand(i, 4);
-  // Slow amplitude modulation: the flicker swells and calms over a few seconds.
-  const env = 0.55 + 0.25 * Math.sin(2 * Math.PI * 0.27 * t + p2) + 0.2 * Math.sin(2 * Math.PI * 0.61 * t + p3);
-  const osc = 0.7 * Math.sin(2 * Math.PI * f * t + p1) + 0.3 * Math.sin(2 * Math.PI * f * 0.53 * t + p2);
-  const dh = FLICKER.amplitude * env * osc * gain;
-  out.height = 1 + dh;
-  // Nearly incompressible: a taller flame is a little thinner.
-  out.width = 1 - 0.45 * dh;
-  out.intensity = 1 + 0.7 * dh;
-  const s1 = Math.sin(2 * Math.PI * 0.23 * t + p3) * 0.6 + Math.sin(2 * Math.PI * 0.67 * t + p1) * 0.4;
-  const s2 = Math.sin(2 * Math.PI * 0.19 * t + p1) * 0.6 + Math.sin(2 * Math.PI * 0.53 * t + p2) * 0.4;
-  // The shared draft (same for every candle, a little later for those further across the cake).
+  let sx = 0, sz = 0, dh = 0;
+  for (let k = 0; k < SWAY_HZ.length; k++) {
+    const f = SWAY_HZ[k]! * (1 + 0.15 * signed(i, 80 + k));
+    sx += SWAY_A[k]! * Math.sin(2 * Math.PI * f * t + 6.283 * rand(i, 90 + k));
+    sz += SWAY_A[k]! * Math.sin(2 * Math.PI * f * 1.07 * t + 6.283 * rand(i, 100 + k));
+    const fb = BREATHE_HZ[k]! * (1 + 0.15 * signed(i, 110 + k));
+    dh += BREATHE_A[k]! * Math.sin(2 * Math.PI * fb * t + 6.283 * rand(i, 120 + k));
+  }
+  sx *= FLICKER.sway / Math.SQRT2;
+  sz *= FLICKER.sway / Math.SQRT2;
+  dh *= FLICKER.breathe;
+  // A flutter: this candle's, if the eddy is passing it now (a sin² envelope; the flame flicks and
+  // stretches, and a varicose wave runs up it).
+  let wave = 0, phase = 0;
+  const n = Math.floor(t / FLICKER.flutter.every);
+  const fe = t >= 0 ? flutterIn(n) : null;
+  if (fe && fe.candle === i && t >= fe.start && t < fe.start + fe.length) {
+    const u = (t - fe.start) / fe.length;
+    const env = Math.sin(Math.PI * u) ** 2;
+    const w = 2 * Math.PI * fe.hz * (t - fe.start);
+    const dir = 6.283 * rand(n, 75);
+    sx += FLICKER.flutter.lean * env * Math.sin(w) * Math.cos(dir);
+    sz += FLICKER.flutter.lean * env * Math.sin(w) * Math.sin(dir);
+    dh += FLICKER.flutter.stretch * env * Math.sin(w + 1.3);
+    wave = env;
+    phase = w;
+  }
+  // The shared draft (the same for every candle, a little later for those further across the cake).
   const lag = 0.15 * (CANDLE_SOCKETS[i]![0] ?? 0);
-  const d1 = 0.65 * Math.sin(2 * Math.PI * 0.13 * (t - lag) + 1.1) + 0.35 * Math.sin(2 * Math.PI * 0.29 * (t - lag) + 2.3);
-  const d2 = 0.65 * Math.sin(2 * Math.PI * 0.11 * (t - lag) + 0.4) + 0.35 * Math.sin(2 * Math.PI * 0.23 * (t - lag) + 4.0);
-  out.swayX = (FLICKER.sway * s1 + FLICKER.draft * d1) * gain;
-  out.swayZ = (FLICKER.sway * s2 + FLICKER.draft * 0.6 * d2) * gain;
-  out.phase = 2 * Math.PI * f * t + p1;
+  sx += FLICKER.draft * (0.65 * Math.sin(2 * Math.PI * 0.13 * (t - lag) + 1.1) + 0.35 * Math.sin(2 * Math.PI * 0.29 * (t - lag) + 2.3));
+  sz += FLICKER.draft * 0.6 * (0.65 * Math.sin(2 * Math.PI * 0.11 * (t - lag) + 0.4) + 0.35 * Math.sin(2 * Math.PI * 0.23 * (t - lag) + 4.0));
+  dh = Math.max(-FLICKER.amplitude, Math.min(FLICKER.amplitude, dh)) * gain;
+  out.height = 1 + dh;
+  // Nearly incompressible: a taller flame is a little thinner; its light breathes with it.
+  out.width = 1 - 0.45 * dh;
+  out.intensity = 1 + 0.5 * dh;
+  out.swayX = sx * gain;
+  out.swayZ = sz * gain;
+  out.phase = phase;
+  out.wave = wave * gain;
   out.time = t;
   out.gain = gain;
   return out;
 }
 
+/**
+ * v1.6 polish: no flame stands quite plumb: its curled wick and the cake's own air lean it 2–4° in
+ * its own direction (cake plan, radians), in stills too.
+ */
+export function restLean(i: number): [number, number] {
+  const a = ((2 + 2 * rand(i, 60)) * Math.PI) / 180, d = 6.283 * rand(i, 61);
+  return [a * Math.cos(d), a * Math.sin(d)];
+}
+
 export function newFlicker(): Flicker {
-  return { height: 1, width: 1, intensity: 1, swayX: 0, swayZ: 0, phase: 0, time: 0, gain: 0 };
+  return { height: 1, width: 1, intensity: 1, swayX: 0, swayZ: 0, phase: 0, wave: 0, time: 0, gain: 0 };
 }
 
 // ── Ignition (host) ──────────────────────────────────────────────────────────
@@ -226,9 +300,19 @@ export const BREATH = {
    * flow while it dims; the wick's vapour streams through the same place as the first smoke.
    */
   blowOff: 0.5,
-  carry: 0.35,
+  carry: 0.12,
   /** Largest lean drawn (rad): a flame laid nearly flat. */
   maxTilt: (76 * Math.PI) / 180,
+  /**
+   * v1.6 polish: the drawn-out flame (× length and × width at full flow, r = U/(U + w_b) → 0.76),
+   * the share of its lean that bends it from the base, how fast the luminous zone tears and is gone
+   * after lift-off (s), and the lifted base's blue sheet (× the burning cup's).
+   */
+  stretch: 0.9,
+  thin: 0.65,
+  bend: 0.55,
+  tear: 0.06,
+  sheet: 0.7,
 } as const;
 
 interface CandleBreath {
@@ -317,6 +401,13 @@ export interface FlameState {
   cut: number;
   /** Cooling of the detached gas: 0 burning (≈1,900 K), 1 dark. */
   cool: number;
+  /**
+   * v1.6 polish: the blow's tearing of the luminous zone into tongues (0 whole – 1 gone), and the
+   * blue sheath's strength (1 the burning flame's cup; after lift-off the dim sheet the lifted base
+   * is, fading to 0 as the flame goes out).
+   */
+  tear: number;
+  blue: number;
   /** Radiant output relative to the steady flame (light, melt). */
   intensity: number;
   /** No flame left at all. */
@@ -324,7 +415,7 @@ export interface FlameState {
 }
 
 export function newFlameState(): FlameState {
-  return { lit: 1, height: 1, width: 1, tilt: 0, dirX: 1, dirZ: 0, bend: 0, neck: 0, lift: 0, cut: 0, cool: 0, intensity: 1, out: false };
+  return { lit: 1, height: 1, width: 1, tilt: 0, dirX: 1, dirZ: 0, bend: 0, neck: 0, lift: 0, cut: 0, cool: 0, tear: 0, blue: 1, intensity: 1, out: false };
 }
 
 /** How much of a growing flame's soot (its yellow, its light) has formed, by its growth (shader: sootFormed). */
@@ -335,14 +426,14 @@ export function sootFormed(lit: number): number {
 /** A steady lit flame. */
 export function litFlame(out: FlameState): FlameState {
   out.lit = 1; out.height = 1; out.width = 1; out.tilt = 0; out.dirX = 1; out.dirZ = 0; out.bend = 0; out.neck = 0;
-  out.lift = 0; out.cut = 0; out.cool = 0; out.intensity = 1; out.out = false;
+  out.lift = 0; out.cut = 0; out.cool = 0; out.tear = 0; out.blue = 1; out.intensity = 1; out.out = false;
   return out;
 }
 
 /** No flame. */
 export function noFlame(out: FlameState): FlameState {
   litFlame(out);
-  out.lit = 0; out.height = 0; out.width = 0; out.cut = 1; out.cool = 1; out.intensity = 0; out.out = true;
+  out.lit = 0; out.height = 0; out.width = 0; out.cut = 1; out.cool = 1; out.tear = 1; out.blue = 0; out.intensity = 0; out.out = true;
   return out;
 }
 
@@ -391,22 +482,26 @@ export function flameState(i: number, t: number, sequence: SequenceName, out: Fl
   // The gust is not steady: a fast flutter of the lean (15–22 Hz, ±7 %), out of phase per candle.
   const flutter = 1 + 0.07 * Math.sin(2 * Math.PI * (15 + 7 * rand(i, 13)) * t + 6.283 * rand(i, 14));
   out.tilt = Math.min(BREATH.maxTilt, Math.atan(U / BREATH.buoyant) * flutter);
-  out.height = 1 + 0.45 * r;
-  out.width = 1 - 0.3 * r;
-  out.bend = 0.35 * r;
+  // v1.6 polish (judge: "a rigid tilt, then a yellow leaf drifts away"): the flame bends from its
+  // base (`bend`: the share of the lean that is the axis curving downstream, the base staying on
+  // the wick) and is drawn out into a thin tongue, up to ≈1.7 × as long and ≈0.55 × as wide.
+  out.height = 1 + BREATH.stretch * r;
+  out.width = 1 - BREATH.thin * r;
+  out.bend = BREATH.bend * smooth(r / 0.35);
   out.neck = smoother((U / BREATH.liftOff - 0.35) / 0.65);
   if (t > b.lift) {
-    // Off the wick: the lifted flame hovers a few millimetres downstream and dies from the base up;
-    // at blow-off the rest lets go and drifts with the flow, cooling: yellow, orange, dull red.
+    // Off the wick: the luminous zone, cut off from its fuel, tears into one or two orange tongues
+    // that shrink downstream and are gone within BREATH.tear s (its soot burns out in tens of
+    // milliseconds); the base lifts off as a dim blue sheet a few millimetres downstream, going out
+    // with the extinction wave (b.out) as before.
     const k = (t - b.lift) / b.out;
-    const tBlow = b.lift + BREATH.blowOff * b.out;
-    out.lift = BREATH.standoff * smooth(k / BREATH.blowOff) + BREATH.carry * smooth((k - BREATH.blowOff) / (1 - BREATH.blowOff)) * Math.max(0, breathDrift(i, tBlow, t));
-    out.cut = smooth(k);
-    // Cut off from its fuel the soot burns out and cools within tens of milliseconds: the flame
-    // dims as it shrinks (still yellow-orange: it never lingers as a red ghost), gone by 70 %.
-    out.cool = smooth((k - 0.1) / 0.6);
-    // Cut off from its fuel the flame shrinks as it dies.
-    out.height *= 1 - 0.45 * smooth(k);
+    const kt = (t - b.lift) / BREATH.tear;
+    out.lift = BREATH.standoff * smooth(k / BREATH.blowOff) + BREATH.carry * smooth((k - BREATH.blowOff) / (1 - BREATH.blowOff)) * Math.max(0, breathDrift(i, b.lift + BREATH.blowOff * b.out, t));
+    out.tear = smooth(kt);
+    out.cut = smooth(kt);
+    out.cool = smooth((kt - 0.3) / 0.7);
+    out.blue = BREATH.sheet * (1 - smooth(k));
+    out.height *= 1 - 0.3 * smooth(kt);
   }
   // Radiant output: the part of the flame still burning, at its temperature.
   out.intensity = (1 - out.cut) * (1 - out.cool) ** 2;
@@ -468,8 +563,12 @@ export function smokeSource(i: number, kind: SmokeKind = 'breath'): SmokeSource 
 }
 
 export const EMBER = {
-  /** Wick glow while the flame burns over it: its very tip, where it pokes into the hot mantle, a dull red (≈1,030 K). */
-  lit: 0.3,
+  /**
+   * Wick glow while the flame burns over it: its curled tip, where it pokes into the flame sheet,
+   * glows orange-red (v1.6 polish: ≈1,240 K, a bead in every macro photograph; v1.5's dull red,
+   * 1,030 K, left a black rod under the flame).
+   */
+  lit: 0.8,
   /** Fresh oxygen on the bare wick: it flares to its peak in 50 ms, then cools (e-folding 0.8 s). */
   flare: 0.05,
   decay: 0.8,
@@ -511,6 +610,14 @@ export const SMOKE = {
    * 3 s to 5.5 s.
    */
   burst: 0.3,
+  /**
+   * v1.6 polish: the burst's vapour × this (the first puff is the densest white of the sequence),
+   * and the puff's head: the thread leaves the wick (1 + puffWidth) × as wide, narrowing to the
+   * stem's width over puffFor s (3–5 mm for the first 0.2–0.5 s).
+   */
+  puff: 1.8,
+  puffWidth: 2.4,
+  puffFor: 0.45,
   decay: 4.5,
   stop: SMOKE_STOP,
   /** Plume: w = c·(z + z0)^(−1/3) (point-source plume, m/s with z in m), reached after τacc. */
@@ -536,7 +643,13 @@ export const SMOKE = {
    * Neighbouring plumes entrain each other's air and lean together (plume merging): from 5 cm up
    * each is drawn towards the candles' centre, by `merge` of its offset at 25 cm.
    */
-  merge: 0.55,
+  merge: 0.6,
+  /**
+   * v1.6 polish: from 4 cm, fully by 20 cm (judge: the six plumes merge into one veil above 6–10 cm;
+   * v1.5's 0.55 from 5 cm over 20 cm left six parallel columns to the top of the frame).
+   */
+  mergeFrom: 0.04,
+  mergeOver: 0.16,
   /** Swept smoke widens by this much per distance carried (the wick's wake keeps it narrow at first). */
   jetSpread: 0.06,
   /** Wick vapour rides the breath at 60 % of it (it leaves in the wick's own wake). */
@@ -571,7 +684,7 @@ export function smokeRate(i: number, t: number, kind: SmokeKind = 'breath'): num
   const src = smokeSource(i, kind);
   const a = t - src.bare;
   if (a <= 0) return 0;
-  return src.strength * smooth(a / src.rise) * ((1 - src.smoulder) * Math.exp(-a / (SMOKE.burst * src.slow)) + src.smoulder * Math.exp(-a / (SMOKE.decay * src.slow)))
+  return src.strength * smooth(a / src.rise) * (SMOKE.puff * (1 - src.smoulder) * Math.exp(-a / (SMOKE.burst * src.slow)) + src.smoulder * Math.exp(-a / (SMOKE.decay * src.slow)))
     * (1 - smooth((a - 0.55 * src.stop) / (0.45 * src.stop)));
 }
 
@@ -599,6 +712,15 @@ export interface SmokeStrand {
   alpha: Float32Array;
   /** Age (s) per point: drives the wisp noise in the shader. */
   age: Float32Array;
+  /**
+   * v1.6 polish (the smoke volume, models/birthdaySmoke.ts): the vapour each parcel carries, as the
+   * wick's emission rate at its birth (× the breath's dilution; 0 where none of it is seen), the
+   * height it has risen (m) and the thread's own width there (m: diffusion and the breath's jet, without
+   * the turbulent spread, which the volume draws as meander and folds).
+   */
+  rate: Float32Array;
+  rise: Float32Array;
+  full: Float32Array;
   /** Densest point's opacity (the scene stops drawing smoke nobody can see). */
   peak: number;
 }
@@ -609,6 +731,9 @@ export function newSmokeStrand(): SmokeStrand {
     width: new Float32Array(SMOKE_POINT_COUNT),
     alpha: new Float32Array(SMOKE_POINT_COUNT),
     age: new Float32Array(SMOKE_POINT_COUNT),
+    rate: new Float32Array(SMOKE_POINT_COUNT),
+    rise: new Float32Array(SMOKE_POINT_COUNT),
+    full: new Float32Array(SMOKE_POINT_COUNT),
     peak: 0,
   };
 }
@@ -718,7 +843,7 @@ export function smokeStrand(i: number, strand: number, t: number, wickAt: WickAt
       pz += wakeTmp[2];
     }
     // Neighbouring plumes lean together and merge higher up.
-    const pull = mergeK * smooth((zr - 0.05) / 0.2);
+    const pull = mergeK * smooth((zr - SMOKE.mergeFrom) / SMOKE.mergeOver);
     px += toCentreX * pull;
     pz += toCentreZ * pull;
     // Room draft: slow drift back-right, and a slow lean of the column that the old parcels carry.
@@ -773,19 +898,26 @@ export function smokeStrand(i: number, strand: number, t: number, wickAt: WickAt
     // Width (m): the thread thickens by diffusion, spreads turbulently above the transition and
     // in the breath's jet.
     // The first vapour off the wick rises as a starting plume: its head a thermal wider than the stem.
-    const head = 1 + 1.2 * (1 - smooth((birth - src.bare) / 0.12));
-    const w = (SMOKE.width0 * 1e-3 + SMOKE.widthGrow * src.diffuse * 1e-3 * Math.sqrt(a / 0.5)) * head + SMOKE.spread * Math.max(0, zr - zt) * grow + SMOKE.jetSpread * dm;
+    // v1.6 polish: the first vapour is the densest and thickest of the whole sequence (the wick and
+    // the pool at their hottest: a puff 3–5 mm wide for its first 0.2–0.5 s); the stem then
+    // thins as the wick cools and gives off less (judge: "after extinction a faint thin thread").
+    const head = 1 + SMOKE.puffWidth * (1 - smooth((birth - src.bare) / SMOKE.puffFor));
+    const core = (SMOKE.width0 * 1e-3 * (0.55 + 0.45 * Math.min(1, q)) + SMOKE.widthGrow * src.diffuse * 1e-3 * Math.sqrt(a / 0.5)) * head + SMOKE.jetSpread * dm;
+    const w = core + SMOKE.spread * Math.max(0, zr - zt) * grow;
     // Drawn no wider than SMOKE.maxWidth: a turbulent column breaks into wisps rather than widening as
     // one sheet (a wide ribbon folding over itself draws hard-edged planes); its opacity still thins
     // with the full width.
     out.width[k] = Math.min(w, SMOKE.maxWidth) * MPS * (strand === 0 ? 1 : 0.8);
     out.age[k] = a;
+    out.rise[k] = zr;
+    out.full[k] = core * (strand === 0 ? 1 : 0.8);
     // Opacity of the whole column here: the vapour condenses a millimetre above the ember (4 ms),
     // thins as it widens and fades with age; it leaves the wick dense even in the breath (in the
     // wick's own wake). The strands share its optical depth (Beer–Lambert): where they still
     // overlap, low down, they composite back to exactly the column's opacity.
     const dilute = (breath ? 1 / (1 + breathAt(i, birth) / 6) : 1) / (1 + moving / STRUNG_AT);
-    let depth = SMOKE.depth * q * dilute * smooth(a / 0.004) * Math.pow((SMOKE.width0 * 1e-3) / w, SMOKE.thin);
+    out.rate[k] = share * q * dilute;
+    let depth = SMOKE.depth * q * dilute * smooth(a / 0.004) * Math.pow((SMOKE.width0 * 1e-3 * head) / w, SMOKE.thin);
     depth *= (1 - smooth((a - src.fade[0]) / (src.fade[1] - src.fade[0]))) * tailFade;
     const alpha = 1 - Math.exp(-share * depth);
     out.alpha[k] = alpha;
@@ -802,6 +934,6 @@ export function smokeAlive(t: number): boolean {
 }
 
 /** Global fade of the tail's last 1.5 s: exactly 0 from SMOKE.end. */
-function smokeTail(t: number): number {
+export function smokeTail(t: number): number {
   return 1 - smooth((t - (SMOKE.end - 1.5)) / 1.5);
 }

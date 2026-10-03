@@ -193,22 +193,43 @@ export const LEAN_MAX = (1.8 * Math.PI) / 180;
  * wick top Wf = 3.38·L^0.201 mm; the master's wick stands L = 4.2 mm above the candle top, so
  * Lf ≈ 10 mm, Wf ≈ 4.5 mm, and a twisted birthday wick burns a little larger: the blue cup's
  * bottom 1 mm above the pool (the lowest ≈20 % of a thin wick is quenched), 13 mm from there to
- * the tip, 5 mm wide at the wick top. The master's own flame (0.152 tall, 3 cm) and v1.2's drawn
+ * the tip, 5 mm wide at the wick top. (v1.6 polish: a 15.5 mm flame on a 3 mm burning wick,
+ * `WICK_EXPOSED`; the luminous zone wraps the wick's curled tip.) The master's own flame (0.152 tall, 3 cm) and v1.2's drawn
  * 1.5× of it (4.5 cm) were 2–3× too large; the exported GLB carries no flame mesh, only the
  * `flame_NN` anchor at CANDLE.flameBase.
  */
 const MM = 0.005;
+/**
+ * v1.6 polish: the wick a burning candle shows, above its pool (the master's 4.2 mm wick is drawn
+ * this tall by the fire rig: models/birthdayFire.ts squashes its exposed part, so the GLB keeps the
+ * master's). A lit birthday wick burns back and curls into the flame: in photographs the bare black
+ * wick is a short stub under a flame four to five times its length (judge, v1.6: at 4.2 mm under a
+ * 13 mm flame it read as "a flame on a stick").
+ */
+export const WICK_EXPOSED = 3.0 * MM;
 export const FLAME = {
-  /** Bottom of the blue cup above the candle base. */
-  base: CANDLE.height + 1.0 * MM,
-  /** Base to tip. */
-  height: 13 * MM,
-  /** Half the widest width (5 mm). */
-  radius: 2.5 * MM,
+  /** Bottom of the blue cup above the candle base (0.8 mm above the pool). */
+  base: CANDLE.height + 0.8 * MM,
+  /** Base to tip (v1.6 polish: 15.5 mm; the luminous zone ≈12 mm, four times the bare wick). */
+  height: 15.5 * MM,
+  /** Half the widest width (5.2 mm). */
+  radius: 2.6 * MM,
+  /** The luminous (soot) zone's foot: this far below the wick's tip, so it wraps the curled tip. */
+  foot: 1.2 * MM,
+  /** The flame is widest this far above the wick's tip. */
+  widest: 1.0 * MM,
 } as const;
 
-/** Flame top above the candle base at full size (14 mm above the wax). */
-export const FLAME_TOP = FLAME.base + FLAME.height;
+/**
+ * The flames' envelope for the framing (the hero fit, `FLAME_TOP`): v1.5's flame (its cup 1 mm over
+ * the pool, 13 mm long, 2.5 mm in radius, ±7 % per candle). v1.6 polish: held, so the camera and
+ * every Birthday poster and backdrop stay where they are; the drawn flame (FLAME, 16.3 mm over the
+ * pool, ±12 %) reaches 2–4 mm higher, well inside the frame's margin.
+ */
+export const FLAME_FRAME = { base: CANDLE.height + 1.0 * MM, height: 13 * MM, radius: 2.5 * MM, spread: 0.07 } as const;
+
+/** The framing's flame top above the candle base (14 mm above the wax: FLAME_FRAME). */
+export const FLAME_TOP = FLAME_FRAME.base + FLAME_FRAME.height;
 
 /**
  * Complete motion bounds: stand, hovering candles, lit flames, the cake's arc over the rim and
