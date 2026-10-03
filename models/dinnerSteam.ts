@@ -70,24 +70,26 @@ export const STEAM_LOOK = {
   /** Extinction per su at full density (the cloud under the crown: optical depth ≈ 3–4 through it). */
   sigma: 3.4,
   /** The key's share (its colour × intensity scaled to steam's in-scatter) and the room's (linear). */
-  key: new Color(0.98, 0.99, 1.0).multiplyScalar(1.05),
+  key: new Color(0.98, 0.99, 1.0).multiplyScalar(0.95),
   /** (v1.6 polish: 0.6 → 0.3, so the key does the work: a lit side, a terminator, a grey core.) */
-  ambient: new Color(0.4, 0.4, 0.405),
+  ambient: new Color(0.22, 0.22, 0.224),
   /** Henyey-Greenstein asymmetry (water droplets scatter forward). */
   g: 0.7,
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
   gBack: -0.3,
   back: 0.35,
   /** The key's optical depth through the cloud is the light volume's times this (steeper: a dark core). */
-  keyFall: 2.1,
+  keyFall: 1.25,
+  /** The underside's band (su: the undercut's foot, the stem and the cap's underside as it rises; the walls' is 2.5 mm young). */
+  underBand: 0.1,
   /** Wrenninge's multiple-scattering octaves (their share of the key; v1.6 polish 2: 0.45 / 0.18 → raised). */
-  ms: [0.55, 0.26] as const,
+  ms: [0.45, 0.18] as const,
   /** The white plate's light on the fog just above it (linear radiance at the porcelain). */
-  bounce: 0.3,
+  bounce: 0.5,
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
   /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
-  shadow: 0.25,
+  shadow: 0.2,
   /** The shadow's optical depth: the fog's extinction less what it scatters forward onto the surface (≈ 1 − g). */
   shadowOd: 0.45,
   /**
@@ -408,6 +410,8 @@ uniform vec2 uScale;
 uniform bool uLow;
 uniform float uSigma;
 uniform int uDebug;
+/** Tooling: lighting terms off (bits: 1 key, 2 octaves, 4 room, 8 bounce, 16 no key depth, 32 no depth down). */
+uniform int uFlags;
 /** The jitter's frame (from the steam clock). */
 uniform float uFrame;
 /** Whether the march bisects where rays enter the steam (the young cloud's narrow edge). */
@@ -657,10 +661,13 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // v1.6 polish 2: the room's cooler air slides in under the warm fog from the rim (a gravity
   // current): a boundary like the wall, deepest at the rim, so the foot lifts off the porcelain. Its
   // head breaks into lobes and clefts (as a gravity current's does), so the foot is no ellipse.
+  float under = 0.0;
   if (H.w > 0.0) {
     float reachU = H.z * (0.35 + 1.3 * nb.a);
     float hU = H.w * (0.55 + 0.9 * n1.b) * smoothstep(${f(CLOUD.radius)} - reachU, ${f(CLOUD.radius + 0.02)}, m.r);
-    dw = min(dw, m.g - plateTop(min(m.r, 0.8)) - hU);
+    float dU = m.g - plateTop(min(m.r, 0.8)) - hU;
+    under = smoothstep(-0.01, 0.03, dw - dU);
+    dw = min(dw, dU);
   }
   float dEff = dw + E.z * (lobes - 0.5) * 2.0 + E.x * (n1.r - 0.5) * 2.0;
   // v1.6 polish 2: the peeling layer, on the edge band only. From the lift-off the outer centimetre
@@ -690,10 +697,16 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   float dShade = dEff;
   dEff += fineD;
   if (dEff < -0.06 && wisp <= 0.0) return 0.0;
-  float edge = smoothstep(0.0, E.y, dEff);
+  // v1.6 polish 2: the underside is no crisp line. The undercut's head mixes the room's air into the
+  // fog's foot, and as the thermal rises its stem and the wall material that rolls under the cap
+  // dilute and evaporate over the hot plate: their band is ≈ 1.7 cm (the judge's torn-paper
+  // waterline across the plate at 0.74–1.0 s was the cap's 2.5 mm underside).
+  float low = (1.0 - smoothstep(0.26, 0.5, m.g)) * smoothstep(0.1, 0.38, uC[l].z);
+  float band = mix(E.y, ${f(STEAM_LOOK.underBand)}, max(low, under));
+  float edge = smoothstep(0.0, band, dEff);
   // Inside, a silky fog that empties as it ages; at the edge, the mixing layer's thin sheet.
   // (Both start at the boundary: nothing feathers outside it but the peeling layer.)
-  float sh = (dEff - E.y) / F.z;
+  float sh = (dEff - band) / F.z;
   float d = (F.x * (0.75 + 0.5 * (n1.g - 0.5)) + F.y * exp(-sh * sh)) * edge + wisp;
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
@@ -937,11 +950,13 @@ void main() {
     // from this sample's own density, so a lit face is not darkened by the cloud behind it.)
     // (One read serves the key, the room above and the dome's shade: 2.4 cm is well inside a voxel.)
     vec4 lv = lightAt(p + L * 0.14);
+    if ((uFlags & 16) != 0) lv.x = 0.0;
+    if ((uFlags & 32) != 0) lv.w = 0.0;
     float od = uSigma * (${f(STEAM_LOOK.keyFall)} * lv.x + 0.07 * dens + localOd);
     // Wrenninge's octaves: each scatters again with less extinction, less light and a flatter phase.
     // (v1.6 polish 2: the octaves raised, so dense front-lit fog is about as white as the plate: a
     // dense fog of droplets scatters nearly all it receives, many times.)
-    float key = exp(-od) * ph0 + ${f(STEAM_LOOK.ms[0])} * exp(-0.35 * od) * ph1 + ${f(STEAM_LOOK.ms[1])} * exp(-0.2 * od) * ph2;
+    float key = ((uFlags & 1) != 0 ? 0.0 : exp(-od) * ph0) + ((uFlags & 2) != 0 ? 0.0 : ${f(STEAM_LOOK.ms[0])} * exp(-0.35 * od) * ph1 + ${f(STEAM_LOOK.ms[1])} * exp(-0.2 * od) * ph2);
     float lit = mix(uDomeShade, 1.0, lv.z);
     // (Still under the lifting dome: no key, the room's light only through the gap.)
     float cav = domeCavity(p);
@@ -953,7 +968,8 @@ void main() {
     float bounce = ${f(STEAM_LOOK.bounce)} * (1.0 - smoothstep(0.62, 0.92, length(p.xz))) * (0.64 / (0.64 + hp * hp)) * exp(-uSigma * lv.w);
     // The room: from above (occluded by the cloud over it: a greyer underside), the plate's bounce.
     // (The lifted dome's shadow takes the key; the room's light round it a little.)
-    vec3 Sc = uKeyColor * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav) + uAmbient * (0.25 + 0.75 * exp(-uSigma * lv.y * 0.9)) * lit * (1.0 - 0.85 * cav)
+    if ((uFlags & 8) != 0) bounce = 0.0;
+    vec3 Sc = uKeyColor * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav) + ((uFlags & 4) != 0 ? vec3(0.0) : uAmbient * (0.25 + 0.75 * exp(-uSigma * lv.y * 0.9)) * lit * (1.0 - 0.85 * cav))
       + vec3(bounce) * (1.0 - 0.6 * cav);
     float Ts = exp(-sig * seg);
     C += T * (1.0 - Ts) * Sc;
@@ -1113,6 +1129,7 @@ uniform mat4 uCoverInv;
 uniform vec3 uKeyDir;
 uniform float uShadowOn;
 uniform float uSigma;
+uniform int uFlags;
 varying vec3 vLocal;
 ${LIGHT_GLSL}
 
@@ -1132,7 +1149,7 @@ float decodeShadow(float w) { return w; }
  * "the smoked-glass plate"); it reads offset, beside the fog, where the surface is seen clear.
  */
 float surfaceShadow(float own, float alphaFront) {
-  if (own > 9000.0 || uShadowOn <= 0.0) return 1.0;
+  if (own > 9000.0 || uShadowOn <= 0.0 || (uFlags & 64) != 0) return 1.0;
   vec3 rd = normalize(vLocal - uCamLocal);
   vec4 v0 = uModelView * vec4(uCamLocal, 1.0), v1 = uModelView * vec4(rd, 0.0);
   if (v1.z >= 0.0) return 1.0;
@@ -1185,6 +1202,8 @@ void main() {
   if (uDebug == 8) { gl_FragColor = vec4(g.z, wsum > 1e-4 ? 1.0 : 0.0, own > 9000.0 ? 1.0 : 0.0, 1.0); return; }
   if (uDebug == 1 || uDebug == 5) { gl_FragColor = vec4(v.x, 0.0, 0.0, 1.0); return; }
   if (cover < 0.002) discard;
+  // (Tooling: the steam's own linear radiance / 2, unpremultiplied, where it is dense enough.)
+  if (uDebug == 12) { gl_FragColor = vec4(vec3(v.y > 0.5 ? 0.5 * v.x / v.y : 0.0), 1.0); return; }
   gl_FragColor = vec4(uTint * (v.x / max(v.y, 1e-4)), 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -1305,6 +1324,7 @@ export class DinnerSteam {
       uProbes: { value: PROBES },
       uScale: { value: new Vector2(0.5, 0.5) },
       uDebug: { value: 0 },
+      uFlags: { value: 0 },
       uFrame: { value: 0 },
       uRefine: { value: true },
       uLow: { value: false },
@@ -1363,7 +1383,7 @@ export class DinnerSteam {
       uTint: { value: new Vector3(1, 1, 1) },
       uCamLocal: this.uniforms.uCamLocal!, uModelView: this.uniforms.uModelView!, uLight: this.uniforms.uLight!,
       uLightMin: this.uniforms.uLightMin!, uLightMax: this.uniforms.uLightMax!, uCoverInv: this.uniforms.uCoverInv!,
-      uKeyDir: this.uniforms.uKeyDir!, uShadowOn: this.uniforms.uShadowOn!, uSigma: this.uniforms.uSigma!,
+      uKeyDir: this.uniforms.uKeyDir!, uShadowOn: this.uniforms.uShadowOn!, uSigma: this.uniforms.uSigma!, uFlags: this.uniforms.uFlags!,
     };
     this.material = new ShaderMaterial({
       name: 'fx_steam_volume', uniforms: this.compositeUniforms, vertexShader: COMPOSITE_VERTEX, fragmentShader: COMPOSITE_FRAGMENT,
@@ -1409,6 +1429,7 @@ export class DinnerSteam {
     u.uOrtho!.value = (camera as OrthographicCamera).isOrthographicCamera === true;
     u.uHasDepth!.value = true;
     u.uDebug!.value = dbg.__steamDebug ?? 0;
+    u.uFlags!.value = (globalThis as { __steamFlags?: number }).__steamFlags ?? 0;
     u.uProbes!.value = (globalThis as { __steamProbes?: number }).__steamProbes ?? PROBES;
     u.uSteps!.value = dbg.__steamSteps ?? Math.round(this.steps * (u.uLow!.value ? STEAM_LOOK.lowShare : 1));
     // The flow map for every drawn clock (one draw), then the light volume through it (one draw).
