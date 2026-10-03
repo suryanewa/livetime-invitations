@@ -70,9 +70,9 @@ export const STEAM_LOOK = {
   /** Extinction per su at full density (the cloud under the crown: optical depth ≈ 3–4 through it). */
   sigma: 3.4,
   /** The key's share (its colour × intensity scaled to steam's in-scatter) and the room's (linear). */
-  key: new Color(0.98, 0.99, 1.0).multiplyScalar(1.25),
+  key: new Color(0.98, 0.99, 1.0).multiplyScalar(1.05),
   /** (v1.6 polish: 0.6 → 0.3, so the key does the work: a lit side, a terminator, a grey core.) */
-  ambient: new Color(0.3, 0.3, 0.305),
+  ambient: new Color(0.4, 0.4, 0.405),
   /** Henyey-Greenstein asymmetry (water droplets scatter forward). */
   g: 0.7,
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
@@ -80,10 +80,16 @@ export const STEAM_LOOK = {
   back: 0.35,
   /** The key's optical depth through the cloud is the light volume's times this (steeper: a dark core). */
   keyFall: 2.1,
+  /** Wrenninge's multiple-scattering octaves (their share of the key; v1.6 polish 2: 0.45 / 0.18 → raised). */
+  ms: [0.55, 0.26] as const,
+  /** The white plate's light on the fog just above it (linear radiance at the porcelain). */
+  bounce: 0.3,
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
   /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
-  shadow: 0.42,
+  shadow: 0.25,
+  /** The shadow's optical depth: the fog's extinction less what it scatters forward onto the surface (≈ 1 − g). */
+  shadowOd: 0.45,
   /**
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
@@ -323,6 +329,42 @@ void main() {
 }
 `;
 
+// ── Light helpers (the march and the composite) ─────────────────────────────────
+/** The dome's wall, the light volume's lookup and the lifted dome's shadow (uLight, uLightMin/Max, uCoverInv, uKeyDir). */
+const LIGHT_GLSL = /* glsl */ `
+/** The dome's outer radius at height y in its own frame (the superellipse fitted to its profile). */
+float domeWall(float y) {
+  float t = clamp(y / ${f(COVER.domeHeight)}, 0.0, 1.0);
+  return ${f(COVER.radius)} * pow(1.0 - pow(t, 2.2), 1.0 / 2.2);
+}
+/** The light volume's atlas: N³ voxels over the proxy box, z-slices tiled COLS across. */
+const float LN = ${LIGHT_N}.0;
+const float LCOLS = ${LIGHT_COLS}.0;
+const float LROWS = ${LIGHT_ROWS}.0;
+vec4 lightAt(vec3 p) {
+  vec3 u = clamp((p - uLightMin) / max(uLightMax - uLightMin, vec3(1e-4)), 0.0, 1.0);
+  vec2 xy = clamp(u.xy * LN, 0.5, LN - 0.5);
+  float fz = clamp(u.z * LN - 0.5, 0.0, LN - 1.0);
+  float z0 = floor(fz), z1 = min(z0 + 1.0, LN - 1.0);
+  vec2 a = (vec2(mod(z0, LCOLS), floor(z0 / LCOLS)) * LN + xy) / vec2(LCOLS * LN, LROWS * LN);
+  vec2 b = (vec2(mod(z1, LCOLS), floor(z1 / LCOLS)) * LN + xy) / vec2(LCOLS * LN, LROWS * LN);
+  return mix(texture(uLight, a), texture(uLight, b), fz - z0);
+}
+
+/** The lifted dome's shadow from the key (its ellipsoid, a soft penumbra; v1.5 steamLight). */
+float domeLit(vec3 p) {
+  vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
+  vec3 sc = vec3(1.0 / 0.655, 1.0 / 0.645, 1.0 / 0.655);
+  vec3 o = cv * sc;
+  vec3 kd = normalize(mat3(uCoverInv) * uKeyDir * sc);
+  float along = -dot(o, kd);
+  vec3 near = o + kd * along;
+  float shade = (1.0 - smoothstep(0.82, 1.12, length(near))) * smoothstep(0.0, 0.15, along) * smoothstep(-0.25, 0.0, near.y);
+  return 1.0 - shade;
+}
+
+`;
+
 // ── The volume ──────────────────────────────────────────────────────────────────
 const VOLUME_VERTEX = /* glsl */ `
 uniform vec3 uBoxMin;
@@ -406,6 +448,7 @@ const float RHO_MAX = ${f(RHO_MAX)};
 const float Y_MAX = ${f(Y_MAX)};
 const float LAYERS = ${STEAM_LAYERS}.0;
 ${FLOW_GLSL}
+${LIGHT_GLSL}
 
 float sat(float x) { return clamp(x, 0.0, 1.0); }
 
@@ -483,12 +526,6 @@ float cloudMean(vec3 p, int l) {
   return m.a > 0.0 ? seat(m.r, m.g, uF[l].w, 0.0) * m.b : 0.0;
 }
 
-/** The cloud on clock l at p: the turbulence and the draught undone, the map read, the noise at the material point. */
-/** The dome's outer radius at height y in its own frame (the superellipse fitted to its profile). */
-float domeWall(float y) {
-  float t = clamp(y / ${f(COVER.domeHeight)}, 0.0, 1.0);
-  return ${f(COVER.radius)} * pow(1.0 - pow(t, 2.2), 1.0 / 2.2);
-}
 
 /**
  * How much the lifted dome still encloses p (v1.6 polish: the fog seen through the opening gap was
@@ -689,34 +726,8 @@ float veilMean(vec3 p, int l) {
   return 0.5 * ${f(VEIL.strength)} * src * smoothstep(0.0, ${f(VEIL.base)}, h) * exp(-h / ${f(VEIL.evaporate)}) * pow(${f(VEIL.radius)} / w, 2.0) * (1.0 - smoothstep(0.45 * w, w, r));
 }
 
-/** The light volume's atlas: N³ voxels over the proxy box, z-slices tiled COLS across. */
-const float LN = ${LIGHT_N}.0;
-const float LCOLS = ${LIGHT_COLS}.0;
-const float LROWS = ${LIGHT_ROWS}.0;
-vec3 lightAt(vec3 p) {
-  vec3 u = clamp((p - uLightMin) / max(uLightMax - uLightMin, vec3(1e-4)), 0.0, 1.0);
-  vec2 xy = clamp(u.xy * LN, 0.5, LN - 0.5);
-  float fz = clamp(u.z * LN - 0.5, 0.0, LN - 1.0);
-  float z0 = floor(fz), z1 = min(z0 + 1.0, LN - 1.0);
-  vec2 a = (vec2(mod(z0, LCOLS), floor(z0 / LCOLS)) * LN + xy) / vec2(LCOLS * LN, LROWS * LN);
-  vec2 b = (vec2(mod(z1, LCOLS), floor(z1 / LCOLS)) * LN + xy) / vec2(LCOLS * LN, LROWS * LN);
-  return mix(texture(uLight, a).rgb, texture(uLight, b).rgb, fz - z0);
-}
-
 /** Henyey-Greenstein. */
 float hg(float c, float g) { float g2 = g * g; return (1.0 - g2) / (4.0 * 3.14159265 * pow(1.0 + g2 - 2.0 * g * c, 1.5)); }
-
-/** The lifted dome's shadow from the key (its ellipsoid, a soft penumbra; v1.5 steamLight). */
-float domeLit(vec3 p) {
-  vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
-  vec3 sc = vec3(1.0 / 0.655, 1.0 / 0.645, 1.0 / 0.655);
-  vec3 o = cv * sc;
-  vec3 kd = normalize(mat3(uCoverInv) * uKeyDir * sc);
-  float along = -dot(o, kd);
-  vec3 near = o + kd * along;
-  float shade = (1.0 - smoothstep(0.82, 1.12, length(near))) * smoothstep(0.0, 0.15, along) * smoothstep(-0.25, 0.0, near.y);
-  return 1.0 - shade;
-}
 
 /**
  * The march's per-pixel start: an integer hash of the pixel (a fixed dither, deterministic). White,
@@ -781,7 +792,13 @@ void main() {
     float s = (float(i) + 0.5) * 0.16;
     up += meanAt(p + vec3(0.0, s, 0.0)) * 0.16;
   }
-  gl_FragColor = vec4(od, up, domeLit(p), 1.0);
+  // (v1.6 polish 2) Down to the plate: how much fog the white plate's light crosses to reach here.
+  float down = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float s = (float(i) + 0.5) * 0.07;
+    down += meanAt(p - vec3(0.0, s, 0.0)) * 0.07;
+  }
+  gl_FragColor = vec4(od, up, domeLit(p), down);
 }
 `;
 
@@ -851,24 +868,8 @@ void main() {
       if (v1.z < 0.0) { float ts = (-used - v0.z) / v1.z; tSurf = min(tSurf, ts); t1 = min(t1, ts); }
     }
   }
-  // The steam's shadow on what the ray meets (the plate, the cloche, the table): the key is part of
-  // their light, and the light volume knows how much steam lies between them and it.
+  // (v1.6 polish 2: the steam's shadow on what the ray meets is the composite's, at full resolution.)
   float shadow = 1.0;
-  if (tSurf < 1e8) {
-    vec3 ps = ro + rd * tSurf;
-    // (A margin: the table's points sit exactly on the box's floor, and rounding must not flip them.)
-    // Not on the cloche itself: the cloud inside it cannot shade its outside, and the silver's own
-    // light is its reflections.
-    vec3 cs = (uCoverInv * vec4(ps, 1.0)).xyz;
-    bool onDome = cs.y > -0.03 && cs.y < ${f(COVER.height + 0.02)} && length(cs.xz) < max(domeWall(max(cs.y, 0.0)), 0.14) + 0.04;
-    if (!onDome && all(greaterThanEqual(ps, uLightMin - 0.02)) && all(lessThanEqual(ps, uLightMax + 0.02))) {
-      // Faded towards the box's sides, so its edge never draws a line.
-      vec3 e = min(ps - uLightMin, uLightMax - ps);
-      float inside = smoothstep(-0.02, 0.12, min(e.x, e.z));
-      // (Where the cloche already shades the key, the steam takes nothing more.)
-      shadow = 1.0 - ${f(STEAM_LOOK.shadow)} * uShadowOn * inside * domeLit(ps) * (1.0 - exp(-uSigma * lightAt(ps).x));
-    }
-  }
   if (t1 <= t0) { gl_FragColor = vec4(0.0, 0.0, used, packShadow(shadow, 0.0)); return; }
   // Probes: where along the ray anything can show (the dilated mean, the veil's column), so the
   // march's steps all fall where the steam is.
@@ -935,18 +936,25 @@ void main() {
     // (The volume's voxels are ≈ 2 cm: read from 2.4 cm towards the key, and take the first stretch
     // from this sample's own density, so a lit face is not darkened by the cloud behind it.)
     // (One read serves the key, the room above and the dome's shade: 2.4 cm is well inside a voxel.)
-    vec3 lv = lightAt(p + L * 0.14);
+    vec4 lv = lightAt(p + L * 0.14);
     float od = uSigma * (${f(STEAM_LOOK.keyFall)} * lv.x + 0.07 * dens + localOd);
     // Wrenninge's octaves: each scatters again with less extinction, less light and a flatter phase.
-    float key = exp(-od) * ph0 + 0.45 * exp(-0.35 * od) * ph1 + 0.18 * exp(-0.12 * od) * ph2;
+    // (v1.6 polish 2: the octaves raised, so dense front-lit fog is about as white as the plate: a
+    // dense fog of droplets scatters nearly all it receives, many times.)
+    float key = exp(-od) * ph0 + ${f(STEAM_LOOK.ms[0])} * exp(-0.35 * od) * ph1 + ${f(STEAM_LOOK.ms[1])} * exp(-0.2 * od) * ph2;
     float lit = mix(uDomeShade, 1.0, lv.z);
     // (Still under the lifting dome: no key, the room's light only through the gap.)
     float cav = domeCavity(p);
     // The room from every side (less under the cloud's own cover), and the white plate's bounce from below.
-    float bounce = 0.12 * (1.0 - smoothstep(0.05, 0.9, p.y)) * (1.0 - smoothstep(0.7, 1.0, length(p.xz)));
+    // (v1.6 polish 2: the white plate under the fog fills most of the lower sky of the air just above
+    // it, and lights its underside: as bright as the plate seen through the fog below it lets it be.)
+    // (A disc of radius ≈ 0.8 su seen from hp above its middle: its view factor a²/(a² + h²).)
+    float hp = max(0.0, p.y - ${f(PLATE_PROFILE[0]![1])});
+    float bounce = ${f(STEAM_LOOK.bounce)} * (1.0 - smoothstep(0.62, 0.92, length(p.xz))) * (0.64 / (0.64 + hp * hp)) * exp(-uSigma * lv.w);
     // The room: from above (occluded by the cloud over it: a greyer underside), the plate's bounce.
     // (The lifted dome's shadow takes the key; the room's light round it a little.)
-    vec3 Sc = uKeyColor * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav) + uAmbient * (0.25 + 0.75 * exp(-uSigma * lv.y * 0.9) + bounce) * lit * (1.0 - 0.85 * cav);
+    vec3 Sc = uKeyColor * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav) + uAmbient * (0.25 + 0.75 * exp(-uSigma * lv.y * 0.9)) * lit * (1.0 - 0.85 * cav)
+      + vec3(bounce) * (1.0 - 0.6 * cav);
     float Ts = exp(-sig * seg);
     C += T * (1.0 - Ts) * Sc;
     // (The steam's depth along the ray, weighted by what it shows: where the resolve reprojects from.)
@@ -1096,6 +1104,17 @@ uniform vec2 uNearFar;
 uniform vec3 uTint;
 uniform vec2 uScale;
 uniform int uDebug;
+uniform vec3 uCamLocal;
+uniform mat4 uModelView;
+uniform sampler2D uLight;
+uniform vec3 uLightMin;
+uniform vec3 uLightMax;
+uniform mat4 uCoverInv;
+uniform vec3 uKeyDir;
+uniform float uShadowOn;
+uniform float uSigma;
+varying vec3 vLocal;
+${LIGHT_GLSL}
 
 float viewDistance(float dz) {
   float n = uNearFar.x, fa = uNearFar.y;
@@ -1103,6 +1122,31 @@ float viewDistance(float dz) {
 }
 /** The march's fourth channel: the steam's shadow on what the ray meets. */
 float decodeShadow(float w) { return w; }
+
+/**
+ * The steam's shadow on what this pixel shows (the plate, the table; not the cloche), at full
+ * resolution (v1.6 polish 2). The key is part of their light and the light volume knows how much
+ * steam lies between them and it. Droplets scatter forward (g ≈ 0.7–0.85), so what a fog takes from
+ * the key mostly reaches the surface under it diffused: the shadow is the fog's extinction less its
+ * forward share, and where the fog itself stands in front of the surface there is none (the judge:
+ * "the smoked-glass plate"); it reads offset, beside the fog, where the surface is seen clear.
+ */
+float surfaceShadow(float own, float alphaFront) {
+  if (own > 9000.0 || uShadowOn <= 0.0) return 1.0;
+  vec3 rd = normalize(vLocal - uCamLocal);
+  vec4 v0 = uModelView * vec4(uCamLocal, 1.0), v1 = uModelView * vec4(rd, 0.0);
+  if (v1.z >= 0.0) return 1.0;
+  vec3 ps = uCamLocal + rd * ((-own - v0.z) / v1.z);
+  vec3 cs = (uCoverInv * vec4(ps, 1.0)).xyz;
+  if (cs.y > -0.03 && cs.y < ${f(COVER.height + 0.02)} && length(cs.xz) < max(domeWall(max(cs.y, 0.0)), 0.14) + 0.04) return 1.0;
+  if (any(lessThan(ps, uLightMin - 0.02)) || any(greaterThan(ps, uLightMax + 0.02))) return 1.0;
+  // Faded towards the light volume's sides, so its edge never draws a line.
+  vec3 e = min(ps - uLightMin, uLightMax - ps);
+  float inside = smoothstep(-0.02, 0.12, min(e.x, e.z));
+  float clear = 1.0 - smoothstep(0.03, 0.3, alphaFront);
+  // (Where the cloche already shades the key, the steam takes nothing more.)
+  return 1.0 - ${f(STEAM_LOOK.shadow)} * uShadowOn * inside * clear * domeLit(ps) * (1.0 - exp(-uSigma * ${f(STEAM_LOOK.shadowOd)} * lightAt(ps).x));
+}
 
 void main() {
   if (!uReady || uDebug == 7) discard;
@@ -1136,6 +1180,7 @@ void main() {
   vec3 g = wsum > 1e-4 ? acc / wsum : bestV;
   vec2 v = g.xy;
   // The steam veils what is behind by its coverage; its shadow darkens what it falls on further.
+  g.z = surfaceShadow(own, v.y);
   float cover = 1.0 - (1.0 - v.y) * g.z;
   if (uDebug == 8) { gl_FragColor = vec4(g.z, wsum > 1e-4 ? 1.0 : 0.0, own > 9000.0 ? 1.0 : 0.0, 1.0); return; }
   if (uDebug == 1 || uDebug == 5) { gl_FragColor = vec4(v.x, 0.0, 0.0, 1.0); return; }
@@ -1316,6 +1361,9 @@ export class DinnerSteam {
       uScale: this.uniforms.uScale!,
       uReady: { value: false },
       uTint: { value: new Vector3(1, 1, 1) },
+      uCamLocal: this.uniforms.uCamLocal!, uModelView: this.uniforms.uModelView!, uLight: this.uniforms.uLight!,
+      uLightMin: this.uniforms.uLightMin!, uLightMax: this.uniforms.uLightMax!, uCoverInv: this.uniforms.uCoverInv!,
+      uKeyDir: this.uniforms.uKeyDir!, uShadowOn: this.uniforms.uShadowOn!, uSigma: this.uniforms.uSigma!,
     };
     this.material = new ShaderMaterial({
       name: 'fx_steam_volume', uniforms: this.compositeUniforms, vertexShader: COMPOSITE_VERTEX, fragmentShader: COMPOSITE_FRAGMENT,
