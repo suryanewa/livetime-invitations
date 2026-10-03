@@ -241,6 +241,99 @@ vapour (shorter life, smaller cap). **Not re-reviewed after these fixes** (the s
 machine at load average ≈ 66); the final reveal frames (`final/reveal-62fps`, 62.5 fps to 6 s) were rendered with
 all of them but the last shadow strength (16 %, from 30 %), which was checked on three frames.
 
+## Polish round: the judge's fixes (`v1.6/steam-polish`)
+
+An independent VFX judge scored the version above **4/10 at laptop size, 5/10 at phone size**: the timing was right
+(it stands, drifts, forms a cap, tears and thins, with no pops) but it did not read as steam: "a frosted
+cotton-wool ball with a crawling sand grain over it", the dome's shape held for ≈ 0.1 s and half invisible over the
+white plate. Eleven tells, five fixes. Each fix is its own commit; frames are rendered with the judge's own script
+(`frames.ts`: the real controller on a 16 ms virtual clock, laptop 1280 × 720 @2, phone 390 × 844 @3).
+
+1. **A sharp, lobed edge and a silky interior** (`cloud()`, `cloudLook`). The density is no longer the mean
+   perturbed by noise: it is the signed distance to the cavity's wall *in material space* (carried, stretched and
+   rolled with the air), moved by billows (convex Perlin-Worley lobes, cells 2.6 / 1.3 / 0.66 cm, folded by the
+   large field, drawn out 1.6× along the rise; displacement 4.7 mm young → 1.2 cm) and a larger swell (1.3 mm →
+   1.3 cm), remapped through a narrow band: **2.5 mm young, widening to 1.4 cm** as the room's air mixes in. Inside,
+   a silky fog (density 1.3 young, ±25 % large-scale variation); at the boundary, the mixing layer's thin sheet,
+   which starts at the boundary (nothing feathers outside it). The march finds where each ray enters the steam by
+   bisection (3 steps, an eighth of a step) while the edge is narrow, and the composite upsamples bilinearly by
+   depth (the 4 × 4 B-spline gather softened the edge by ≈ 4 px).
+2. **No grain** (`RESOLVE_FRAGMENT`). The march's start moves every frame along a golden-ratio sequence seeded by the
+   steam clock (frame = round(τ·60): a capture at a given τ is byte-identical across runs, checked), and a resolve
+   pass blends each half-resolution pixel into a history (two half-float targets, ping-pong) fetched **where that
+   steam was on the previous frame**: the steam's opacity-weighted depth along the ray (packed with the shadow in a
+   float target) gives its point; its material coordinates come from this frame's flow map and the analytic forward
+   map with the previous frame's state gives where it was (the veil and the spill rise instead); the previous
+   camera projects it. New frame's share 10 %, history clipped to the neighbourhood's mean ± 1.6 σ, dropped where
+   the opaque scene in front changed under the steam or the clock jumped. No octave finer than 6.6 mm (≈ 18 device
+   px at laptop size, 22 at phone size); the Worley cells' borders are rounded (a smooth minimum: their creases read
+   as a crawling web); the veil's sheets have smooth crests (they were the speckle at the cloud's base). A bug found
+   on the way (in the first version too): the material point was built as `vec3(dir * r, y)`, putting the height in
+   z, so the noise's anisotropy and the change-of-mind sweep used a horizontal axis as height.
+3. **Lit as a body.** Room light 0.6 → **0.3** (occluded from above: a greyer underside); key 0.8 → 1.25 and its
+   optical depth through the cloud 1.5 → **2.1×** the light volume's, which now carries the cloud's *visible* share
+   (an emptied cloud no longer shades like a full one), read 2.4 cm towards the key plus the sample's own first
+   stretch (the coarse volume's smear darkened lit faces). A **two-lobe phase**: Henyey-Greenstein g 0.7 forward and
+   g −0.3 backward at 35 % (was g 0.45 pulled 60 % towards isotropic); Wrenninge octaves 0.45·e^(−0.35τ) (g halved)
+   and 0.18·e^(−0.12τ) (isotropic). The billows' own shade is three times deeper (lit tops, shaded creases). The
+   steam's shadow on the plate and the table 16 % → **42 %** of the key, from the lift-off. The light volume no longer
+   counts the fog still enclosed by the dome (it shadowed everything just outside the silver a second time).
+4. **The release, then the shape held.** The spill is a sheet that curls out of the raised gap (a roll 1–1.5 cm
+   proud of the wall) and climbs the hot wall, thickening as it rises, its face torn into lobes, three times denser
+   and wrapped further round the raised side (Gaussian 0.8 rad): visible 0.19–0.38 s on the front-right. The fog
+   seen through the opening gap is shaded by the dome (no key under the silver, the room's light only through the
+   gap, less higher up), and the lifted dome's shadow takes the key fully (it took 18 %). The thermal starts at
+   **0.4 s** (was 0.3) with a slower buoyant start (0.3 s), and the slump, the stem, the roll, the sway and the
+   draught's lean wait (lean from 0.65 s): **the fog stands in the dome's shape from the lift-off to ≈ 0.75 s**, its
+   walls within 1.5 cm of the cavity's at 0.72 s (tested), its top drawn up into the dome's wake, no sideways drift.
+5. **Less vapour and a real roll.** The cap spreads 0.08 per unit of rise (was 0.22), the draught leans it half as
+   much (0.07): **at its peak the cap is within the plate** (outline + lean + mean edge reach ≤ 0.8 su while it has
+   substance: tested; 0.93× the plate's radius at 1.1 s, 1.0× at 1.3 s as it evaporates; the judge measured 1.2–1.4×). The fog inside empties by 1.2 s, evaporation starts at
+   0.2 s of the thermal, the cloud is gone 0.5 s sooner (life 2.0 s); the veil's first rush is smaller and shorter
+   with a longer, flatter tail so its smooth wisps show to 4–5 s. Coverage against the first version (laptop, steam
+   opacity summed over the frame, the no-steam twins byte-identical): **1.01× at 0.74 s (the hold), 1.03× at 0.99 s,
+   0.69× at 1.2 s, 0.69× at 1.6 s**. The vortex ring rolls 5.2 rad (was 3.4) about a tighter core (0.2 su) and keeps
+   its fog longest (a denser, self-shaded core; its rolled lip outlines the cap in the coverage view at 1.2 s). On a
+   change of mind the returning cover shoves the fog it left outward and down round its wall and, as its rim closes
+   on the plate, pushes a jet along the porcelain, both torn by the noise.
+
+**Cost** (`scripts/_scratch/gpu-bench.ts`, the first owner's A/B: steam on/off interleaved frame by frame, 10th
+percentiles; one session, load 3–5, the first version's build in the integration worktree on another port; τ 0.3 /
+0.6 / 1.2 s): at 1400² the first version **1.4 / 2.0 / 2.0 ms**, this one **1.9 / 2.1 / 1.7 ms** (later, at load 7, after
+the thin-steam steps went 15 → 18: 1.9 / 2.2 / 1.9 ms); at 2000², this one 2.0 / 2.2 / 1.9 ms (the first version's page
+timed out there in that session; earlier the same day, at load ≈ 5, it measured 1.9 / 2.4 / 3.2 ms at τ 0.5 / 1.0 /
+1.5 s). Under this load the first version reads ≈ 1.6–1.8× its quiet-machine numbers (0.8–1.2 ms), so this one is
+≈ 1.1–1.3 ms on a quiet machine, within the 1.5 ms budget; a quiet-machine run is still owed. What paid for the
+resolve and the bisection: one light-volume read per sample, the billows' self-shade only while young, the
+thin-steam step count once the fog inside has gone (0.75 s of the thermal; the dense count was in force to 1.15 s),
+the bisection only for the young edge, the march budget 400 k pixels (was 460 k). Zero cost with no steam, as before,
+and the march and its history now give their memory back when no steam shows. Steps: dense 22, thin 18, veil 13
+(Low tier 60 %).
+
+**The tells**, re-judged on the judge's own views (`evidence/v1.6/steam-polish/`, not committed):
+
+- Gone: (1) cotton wool: a firm lobed boundary over a silky fog (`crops/dome-0.43-0.74.png`); (2) the crawling grain
+  (`crops/grain-1.6s-x2.png`, `crops/absdiff-1.6.png`: the frame difference is coherent motion, not speckle); (3) the
+  dome's shape holds ≈ 0.3 s with no drift and reads by its outline, its greyer lower side and its offset shadow;
+  (5) flat lighting: lit side, terminator, grey underside; (6) far too much vapour: the cap stays within the plate,
+  0.69× the vapour at 1.2 s, the phone's header clear (`sheets/phone-0.48-1.6.png`); (9) grainy veil: smooth
+  wisps to ≈ 4 s.
+- Improved, not gone: (4) the spill reads as a turbulent sheet on the front-right 0.19–0.38 s (`crops/spill-0.27-0.37.png`),
+  but the fog below the rim through the gap is lit from the front (the key is front-left, so that face is
+  genuinely lit) and still reads pale over the white plate; (7) the roll: the rolled lip shows in the coverage and
+  as a curl on the cap's right edge at 1.06–1.22 s, but through a thin translucent cap the darker ring core is weak;
+  (8) the plate at 1.0–1.6 s shows a softer shade (the cap is high, so its offset shadow falls mostly off the plate,
+  back-right); (10) the returning cover displaces the fog into a shell round its wall (`sheets/decline-0.5-return.png`),
+  but the shove reads smooth and the gap's jet is too small to read at this size; (11) the cloud in front of the
+  departing silver now has a firm edge, but still veils the silver's lower right (real occlusion from this camera).
+
+**Tests.** `tests/dinner-steam.test.ts` 21 (new: the hold at 0.72 s, no lean before 0.65 s, the cap within the plate,
+the fog gone and evaporation under way by 1.2 s, the young band ≤ 3 mm widening ≥ 2.5×, lobes ≥ 3 mm, the roll past
+half a turn by 1.2 s; the veil's tail at 4 s now < 45 % of 1.2 s, was 25 %); `tests/scene-depth.test.ts` 5 (the stage
+hook test stubs the bloom and haze hooks merged at integration: it failed on `v1.6/integration`);
+`tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6, `tests/browser/scene-depth.spec.ts` 5/5;
+`pnpm typecheck` clean.
+
 ## Decisions
 
 - **A material field, not particles.** Every sample asks where its air came from (the analytic flow's inverse), so
@@ -255,6 +348,9 @@ all of them but the last shadow strength (16 %, from 30 %), which was checked on
 - **The accepted still keeps no steam** (v1.5's decision stands): posters and reduced motion unchanged.
 
 ## Known gaps
+
+(Of the version above. The polish round closes the soft edge, the missing temporal accumulation, the weak
+spill and, in part, the weak curl; what remains is listed under its tells.)
 
 - **Not re-reviewed after the round-1 fixes**, and the final frame cost not re-measured (machine load).
 - **The curled mushroom rim is weak on screen**; the cap reads as swelling and rounding more than curling.

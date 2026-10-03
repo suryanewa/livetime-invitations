@@ -68,8 +68,13 @@ export const CLOUD = {
   floorGrow: 0.1,
   /** Densest under the crown (warm saturated air rises; the dome's cool wall condenses it): the base keeps this share. */
   baseDensity: 0.55,
-  /** τ (s) at which the thermal clock starts: the rim ≈ 5 cm up and moving off. */
-  release: 0.3,
+  /**
+   * τ (s) at which the thermal clock starts: the dome is clearing the cloud's side (it is clear of
+   * the plate's middle by 0.44 s). Before it, and for a beat after it, the fog stands in the dome's
+   * shape (v1.6 polish: the judge saw the hold last 0.1 s; it now stands ≈ 0.3 s, its walls within
+   * a centimetre, its top drawn up into the dome's wake).
+   */
+  release: 0.4,
   /** The dome's drag: the crown's air follows its lift by this share, and its path by `side`, while it is over the cloud. */
   dragUp: 0.32,
   dragSide: 0.1,
@@ -77,12 +82,12 @@ export const CLOUD = {
   overlap: [0.15, 0.7] as const,
   /** The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s. */
   riseW: 1.45,
-  riseStart: 0.25,
+  riseStart: 0.3,
   riseMix: 0.9,
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
   base: 0,
   /** The cap's radius grows by this per su of rise (a thermal's entrainment, α ≈ 0.25, over R ≈ 0.63); the stem narrows by up to `stem`. */
-  capGrow: 0.22,
+  capGrow: 0.08,
   stem: 0.3,
   /** The cap flattens by up to this share of its height as it rises. */
   squash: 0.12,
@@ -93,9 +98,9 @@ export const CLOUD = {
   /** The vortex ring's core in the cloud at the seat: (share of the radius, height su). */
   ringAt: [0.78, 0.34] as const,
   /** The vortex ring: its roll (rad) and time constant (s), its core's reach (su). */
-  roll: 3.4,
-  rollTime: 1.0,
-  ringCore: 0.26,
+  roll: 5.2,
+  rollTime: 0.7,
+  ringCore: 0.2,
   /** The base's outward slump over the plate's rim (su) and its time constant (s). */
   skirt: 0.42,
   skirtTime: 0.45,
@@ -103,15 +108,15 @@ export const CLOUD = {
   turb: [0.015, 0.15] as const,
   turbTime: 1.0,
   /** The room's draught leans the rising cloud (su of lean per su of height). */
-  lean: 0.14,
+  lean: 0.07,
   /** Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). */
-  erode: [0.35, 2.1] as const,
+  erode: [0.2, 1.3] as const,
   /** The cloud is gone by this age (s), faded out over the last `fadeOut`. */
-  life: 2.5,
-  fadeOut: 0.7,
+  life: 2.0,
+  fadeOut: 0.6,
   /** Visible steam evaporates as it rises: e^(−(y − evapFrom)/evaporate) above evapFrom (su). */
   evapFrom: 0.9,
-  evaporate: 1.3,
+  evaporate: 0.9,
 } as const;
 
 /** The room's draught: away from the cloche set down behind-left, across the view. */
@@ -127,7 +132,7 @@ export const SPILL = {
   /** It climbs the wall at this speed (su/s, ≈ 25 cm/s: the exchange outflow caught by the hot wall, drawn up by the lifting dome). */
   rise: 1.5,
   /** Spread round the raised rim (rad, Gaussian width). */
-  spread: 0.6,
+  spread: 0.8,
   /** Its source: the raised rim's gap (su) at which it is full. */
   fullGap: 0.09,
   /** It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). */
@@ -171,12 +176,12 @@ export const VEIL = {
   t0: 0.3,
   ramp: 0.3,
   /** The first rush decays over `decay`; a `tail` share decays over `tailDecay` (s). */
-  decay: 0.7,
-  tail: 0.5,
-  tailDecay: 1.1,
+  decay: 0.4,
+  tail: 0.55,
+  tailDecay: 1.6,
   /** Visible density goes as the flow to this power (thin steam keeps a few bright ribbons), and the plate stops steaming visibly between these τ. */
-  gather: 0.5,
-  end: [4.0, 5.3] as const,
+  gather: 0.4,
+  end: [4.4, 5.5] as const,
   /** A change of mind: the source dies away over this (s). */
   cut: 0.15,
   /** It rises at this speed (su/s, ≈ 19 cm/s) and forms this far off the porcelain (su). */
@@ -191,7 +196,7 @@ export const VEIL = {
   /** Evaporation with height (su). */
   evaporate: 0.85,
   /** Mean density of the veil at its source (the cloud's is 1). */
-  strength: 3.2,
+  strength: 1.6,
 } as const;
 
 /** One of the steam's clocks, as the shader takes it. */
@@ -330,16 +335,17 @@ export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinit
   out.rise = U;
   out.cap = 1 + CLOUD.capGrow * U;
   out.squash = CLOUD.squash * smooth(0, 1.4, a);
-  out.stem = 1 - CLOUD.stem * smooth(0, 1.2, a);
-  out.skirt = CLOUD.skirt * (1 - Math.exp(-a / CLOUD.skirtTime)) * smooth(0, 0.35, a);
-  out.roll = CLOUD.roll * (1 - Math.exp(-a / CLOUD.rollTime)) * smooth(0, 0.4, a);
+  // (The hold: nothing slumps, narrows, rolls, sways or leans for the first ≈ 0.1–0.25 s of the thermal.)
+  out.stem = 1 - CLOUD.stem * smooth(0.1, 1.3, a);
+  out.skirt = CLOUD.skirt * (1 - Math.exp(-a / CLOUD.skirtTime)) * smooth(0.25, 0.65, a);
+  out.roll = CLOUD.roll * (1 - Math.exp(-a / CLOUD.rollTime)) * smooth(0.1, 0.5, a);
   // The ring's core sits inside the cap's edge (where the dome's shoulder was), carried with it.
   const Ys = CLOUD.ringAt[1], Ps = CLOUD.ringAt[0] * CLOUD.radius;
   out.ringR = Ps * out.cap;
   out.ringY = Ys + U * riseWeight(Ys) * centreWeight(Ps) + out.dragUp * dragWeight(Ys) * dragCentre(Ps) - out.squash * capIntegral(Ys);
   out.ringSigma = CLOUD.ringCore * (1 + 0.4 * (out.cap - 1));
-  out.turb = CLOUD.turb[0] + (CLOUD.turb[1] - CLOUD.turb[0]) * (1 - Math.exp(-a / CLOUD.turbTime)) * smooth(0, 0.3, a);
-  out.lean.copy(LEAN_DIR).multiplyScalar(CLOUD.lean * smooth(0.1, 1.6, a));
+  out.turb = CLOUD.turb[0] + (CLOUD.turb[1] - CLOUD.turb[0]) * (1 - Math.exp(-a / CLOUD.turbTime)) * smooth(0.15, 0.5, a);
+  out.lean.copy(LEAN_DIR).multiplyScalar(CLOUD.lean * smooth(0.25, 1.8, a));
   out.erode = 0.97 * Math.pow(smooth(CLOUD.erode[0], CLOUD.erode[1], a), 0.85);
   out.fade = 1 - smooth(CLOUD.life - CLOUD.fadeOut, CLOUD.life, a);
   out.floor = CLOUD.floor + CLOUD.floorGrow * smooth(0, 1.0, a);
@@ -571,23 +577,24 @@ export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infin
 }
 
 /**
- * The cloud's look at its thermal age (the shader's per-clock uniforms): how far the turbulence
- * moves its mixture, the threshold above which air keeps its droplets (raised by evaporation), the
- * turbulence's own warp, the finer octave's share, the fog inside and its soft width, and the
- * mixing sheet's width and strength. Young (just out of the dome) it is fog with a soft edge; then
- * the room's air folds its edge into thin, bright sheets and empties the inside.
+ * The cloud's look at its thermal age (the shader's per-clock uniforms; v1.6 polish). The cloud's
+ * edge is where its saturated air meets the room's dry air: a boundary, not a fuzz. The shader
+ * takes the signed distance to the cavity's wall in material space (so it is carried, stretched
+ * and rolled with the air), moves it by billows (`billow`: convex lobes 1–2 cm across, cauliflower
+ * edges) and a larger turbulent swell (`amp`), and remaps it through a narrow band (`band`: ≈ 2.5 mm
+ * young, widening to ≈ 1 cm as the room's air mixes in). Inside is a silky fog (`core`) that empties
+ * as it ages; at the boundary the mixing layer keeps a thin sheet (`sheet`, `sheetWidth`): steam's
+ * bright folds. `warp` folds the lobes by the large field.
  */
-export interface CloudLook { amp: number; threshold: number; warp: number; fine: number; core: number; coreWidth: number; sheetWidth: number; sheet: number }
-export function cloudLook(age: number, erode: number, out: CloudLook = { amp: 0, threshold: 0, warp: 0, fine: 0, core: 0, coreWidth: 0, sheetWidth: 0, sheet: 0 }): CloudLook {
-  const young = 1 - smooth(0.1, 1.2, age);
-  out.amp = 0.6 + 0.25 * smooth(0, 1.4, age);
-  out.threshold = 0.3 + 0.32 * erode;
-  out.warp = 1 + 1.4 * smooth(0, 1.2, age) - 0.6 * smooth(1.2, 2.4, age);
-  out.fine = 0.1 + 0.15 * erode;
-  out.core = 0.8 + (0.08 - 0.8) * smooth(0.1, 1.3, age);
-  out.coreWidth = 0.12 + 0.03 * young;
-  out.sheetWidth = 0.08 + 0.02 * young;
-  out.sheet = (0.75 - 0.4 * young) * (1 - 0.55 * smooth(0.8, 2.0, age));
+export interface CloudLook { amp: number; band: number; billow: number; warp: number; core: number; sheet: number; sheetWidth: number }
+export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, band: 0, billow: 0, warp: 0, core: 0, sheet: 0, sheetWidth: 0 }): CloudLook {
+  out.amp = 0.008 + 0.07 * smooth(0.35, 1.5, age);
+  out.band = 0.015 + 0.065 * smooth(0.3, 1.3, age);
+  out.billow = 0.028 + 0.042 * smooth(0.25, 1.3, age);
+  out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
+  out.core = 1.3 + (0.04 - 1.3) * smooth(0.2, 0.85, age);
+  out.sheet = 0.35 + 0.1 * smooth(0.15, 0.5, age) - 0.33 * smooth(0.4, 1.05, age);
+  out.sheetWidth = 0.012 + 0.05 * smooth(0.3, 1.3, age);
   return out;
 }
 
@@ -631,7 +638,7 @@ const OUTLINE: readonly [number, number][] = (() => {
 })();
 
 const fw: [number, number] = [0, 0];
-const TMP_V = new Vector3();
+const BOUNDS_LOOK = cloudLook(0);
 /**
  * The volume's bounds on a clock (plate-centred su, conservative): the cloud's outline carried by
  * the flow (plus the turbulence, the noise's reach and the lean), and the veil as far as it has
@@ -655,7 +662,9 @@ export function steamBounds(
       yMin = Math.min(yMin, fw[1]);
       yMax = Math.max(yMax, fw[1]);
     }
-    const m = 0.1 + 1.6 * s.turb;
+    // (The turbulence's warp, and the billows and swell that move the edge in material space.)
+    const look = cloudLook(s.age, s.erode, BOUNDS_LOOK);
+    const m = 0.1 + 1.6 * s.turb + look.amp + look.billow;
     const lean = s.lean.length() * Math.max(0, yMax - 0.15);
     const r = rMax + m + lean + s.dragSide.length();
     cloudMin.set(-r, Math.max(0, yMin - m), -r);

@@ -107,6 +107,33 @@ describe('Dinner steam field (v1.6)', () => {
     expect(later.cap).toBeGreaterThan(seat.cap * 1.15);
   });
 
+  it('v1.6 polish: holds the dome\'s shape ≈ 0.3 s with no drift, then a cap no wider than the plate that thins by 1.2 s', () => {
+    // The dome is clear of the cloud by ≈ 0.45 s; at 0.72 s the walls still stand within a centimetre
+    // and a half of the cavity's, the base has not slumped, and nothing leans or drifts sideways.
+    const seat = outline(0), held = outline(0.72);
+    expect(Math.abs(held.cap - seat.cap) * SU_CM).toBeLessThan(1.5);
+    expect(Math.abs(held.low - seat.low) * SU_CM).toBeLessThan(1.5);
+    for (const tau of [0.45, 0.55, 0.65]) expect(cloudState(tau).lean.length() * SU_CM).toBeLessThan(0.05);
+    // While it has substance (until evaporation has taken most of it), the cap's widest (its roll, the
+    // draught's lean at its height and the edge's mean reach included) stays within the plate.
+    let widest = 0;
+    for (let tau = 0.5; cloudState(tau).erode < 0.6; tau += 0.05) {
+      const s = cloudState(tau), o = outline(tau), look = cloudLook(s.age, s.erode);
+      widest = Math.max(widest, o.cap + s.lean.length() * Math.max(0, o.top - 0.15) + 0.5 * (look.amp + look.billow));
+    }
+    expect(widest).toBeLessThanOrEqual(PLATE.radius);
+    // Less vapour: by 1.2 s the fog inside has mostly gone (the sheets carry what is left), and evaporation is under way.
+    const at12 = cloudState(1.2);
+    expect(cloudLook(at12.age, at12.erode).core).toBeLessThan(0.25);
+    expect(at12.erode).toBeGreaterThan(0.3);
+    // The edge: a narrow band (≈ 2.5 mm) while young, widening as the room's air mixes in, carved by 1–2 cm lobes.
+    expect(cloudLook(0).band * SU_CM).toBeLessThan(0.3);
+    expect(cloudLook(1.5).band).toBeGreaterThan(cloudLook(0).band * 2.5);
+    expect(cloudLook(0).billow * SU_CM).toBeGreaterThan(0.3);
+    // The vortex ring rolls the cap's edge over more than half a turn by 1.2 s.
+    expect(at12.roll).toBeGreaterThan(Math.PI);
+  });
+
   it('its base rolls outward and down over the plate\'s rim', () => {
     const s0 = outline(0), s1 = outline(1.3);
     expect(s0.base[0]).toBeLessThan(PLATE.giltRadius);
@@ -168,12 +195,13 @@ describe('Dinner steam field (v1.6)', () => {
   it('tears into wisps and evaporates within a few seconds; the plate keeps breathing a thin veil to ≈ 4.5 s, gone by STEAM_END', () => {
     // The cloud's look: young it is fog with a soft edge; then its edge folds into sheets and its inside empties.
     expect(cloudLook(0.1, 0).core).toBeGreaterThan(cloudLook(1.5, 0.3).core * 3);
-    expect(cloudState(0.3 + CLOUD.life).fade).toBe(0);
+    expect(cloudState(CLOUD.release + CLOUD.life).fade).toBe(0);
     expect(cloudState(1.5).erode).toBeGreaterThan(cloudState(0.8).erode);
     const veilMax = (tau: number) => Math.max(...[0.1, 0.3, 0.5, 0.8, 1.1].map((h) => veilDensity(h, tau)));
     expect(veilMax(1.2)).toBeGreaterThan(0.2);
     expect(veilMax(4.0)).toBeGreaterThan(0.02);
-    expect(veilMax(4.0)).toBeLessThan(0.25 * veilMax(1.2));
+    // (v1.6 polish: the plate keeps a few thin wisps through 3–5 s.)
+    expect(veilMax(4.0)).toBeLessThan(0.45 * veilMax(1.2));
     for (let h = 0; h <= VEIL.length; h += 0.02) expect(veilDensity(h, STEAM_END)).toBeLessThanOrEqual(STEAM_GONE * 1.01);
     expect(STEAM_END).toBeGreaterThanOrEqual(CLOUD.release + CLOUD.life);
     expect(STEAM_END).toBeGreaterThan(DURATIONS.accept + 4);
