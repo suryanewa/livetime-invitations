@@ -61,15 +61,18 @@ changed.
     first build's foot sat at the envelope's widest point: a flat-bottomed bullet ("tombstone",
     judge round 2) at the real sizes;
   - the wick stands in the dark zone below it, inside the blue cup, as in the macro photograph;
-  - its outer sheet is crisp, the last fifth of its radius thinning exponentially and ≈300 K
-    cooler: an **amber rim** a few pixels wide (never sharper than 1.2 px: no stair-steps on a
-    9 px flame);
+  - its outer sheet is crisp, the last fifth of its radius thinning exponentially and ≈430 K
+    cooler: an **amber rim** whose colour ramp and cut are never narrower than ≈2 px (the 11 Hz
+    flicker moves the edge by fractions of a pixel; a 1 px rim crawled: judge round 3);
+  - **never under ≈1.1 px across**: a flame thinner than a pixel falls between the pixels'
+    samples (at 192 px one of the six blinked out: judge round 3), so its radius is held at
+    1.1 px with its light spread over the wider body (flux kept: emission × (R/R′)²);
   - the soot burns out before the profile closes: a **rounded orange apex** (≈380 K cooler);
     the just-formed soot at the luminous foot is ≈220 K cooler (orange);
   - the **blue sheath** is a thin shell (0.86–1.06 of the radius) under the luminous foot only,
     never added over the soot (blue + yellow drew a lilac seam), closed under the flame and ending
     above the volume's lower bound (no seam on the wick), saturated (green ≈0.45 of blue) and
-    dim: about a tenth of v1.5's over the wall, faded out where its limb covers less than a pixel
+    dim: about a tenth of v1.5's over the wall, faded out where its limb covers less than ≈2 px
     (at the showcase's sizes against the daylit wall it is all but invisible, as to a camera;
     v1.5's was a lavender bulb, the first v1.6 build's a pale "bowtie");
   - **turbulence**: value noise in the flame's own frame (millimetres), carried up the flame on
@@ -96,7 +99,8 @@ changed.
   rim cuts the wall's blue to amber instead of washing to peach; the flame in front of the blue
   frosting stays warm (it went white-lavender with v1.5's `screen`); the faint outer sheet stays
   transparent (no dark ring). The absorption goes with the radiant output (a dying flame thins
-  away, never a dark ghost: the first build drew the blown-off body as a brown smudge).
+  away, never a dark ghost: the first build drew the blown-off body as a brown smudge) and with
+  the soot's own glow (the cooler soot at the luminous foot no longer darkens the wall to olive).
 - **Dying flames** fade much faster than they cool (radiance × (1 − cool)³ on top of the
   intensity; soot's radiance falls about as T⁵ and its soot burns out): the blown-off body goes
   yellow → amber and thins, never a white blade.
@@ -252,3 +256,83 @@ quiet run's; the differences are what matter.
 - Every frame still well under the 16.8 ms p95; on a phone GPU (≈4–6× slower) the fire's share
   would be ≈5–10 ms; Normal's pixel-ratio step and the Low tier (3 levels, no haze) take it from
   there. Not measured on a phone (none attached to this machine).
+
+## The adversarial pass (a hostile VFX supervisor, three rounds, frames only)
+
+| | round 1 | round 2 | round 3 |
+|---|---|---|---|
+| Macro | 5 | 6 | 7 |
+| Laptop | 6 | 6.5 | 7.5 ("signable: a warm gold teardrop with a cream core and a rounded foot") |
+| Phone | 6 | 6.5 | 7.5 |
+| 540 card | 6 | 7 | 7.5 |
+| 192 thumbnail | 4 | 3 | 4 (fixed after: the sub-pixel dropout) |
+| Motion (live) | 7 | 7 | 6.5 (rim crawl; fixed after: the 2 px ramp) |
+| The blow (rendering) | 3 | 4 | 6 |
+| The light | 6 | 6 | 6 |
+
+What each round found and what changed: round 1 (a white blob with a salmon halo; a lilac collar
+round the wick and the bright zone reaching below its tip; the blown-off body a white blade; haze
+tearing the candles in the gust; a 1 px edge) → the cream core and amber rim, the domed foot
+above the wick, the blue off the soot, dying flames fading, haze collapsing in the gust, the
+ember out of the bloom. Round 2 (per-channel clipping: a lemon body and a peach apex; a white tab
+over the frosting; no glow at 192; a flat-bottomed bullet; a pale blue "bowtie") → the x/(1 + x)
+shoulder, the alpha from the flame's brightness, the luminous teardrop, the stronger footprint
+floor, the dimmer, thresholded blue, the cubic fade of dying flames, the orange ember. Round 3
+(the rim crawling in motion, one flame dropping out at 192, a lemon rim line, olive pixels at the
+foot, a lavender seam) → the 2 px rim, the 1.1 px minimum radius, the cooler rim, the
+glow-weighted absorption, the blue's 2 px threshold; measured after: the 192 flame that dropped
+out reads (255, 253, 174); the frame-to-frame change round the live flames is the flicker's own
+(identical with the haze on or off).
+
+Its remaining tells, recorded, not fixed here:
+
+- **The smoke** (the loudest tell left in the whole sequence, judge round 3: six white threads of
+  constant width that hang for 1.5 s; cross-hatched white bands in the gust) is v1.5's
+  (`docs/scenes/birthday-v1.5-fire.md`), and the brief keeps the smoke as it is. Its look (an
+  absorbing, scattering medium, opacity falling with age and height, breaking up after 5–10 cm,
+  blue-grey where unlit) is the obvious next pass; the steam owner's raymarched volume is the
+  technique.
+- **The wick's tip at macro** is the master's mesh with a flat cut end: a ball of light on a stick
+  at 60×. A curled bead glowing on its outward side is a geometry change (the cake owner's master).
+- **The blue cup in the dark**: the sheath is thresholded by its pixel size so the daylit product
+  shows none; in a dark room (`flame-light-alone-dark-room.png`) it is gone too. Fading it by its
+  contrast against what is behind would need the scene's colour (or depth) under the flame.
+- **Cross-candle shadow spokes**: dropped for cost (above); invisible in daylight at every real
+  size (judge rounds 2 and 3).
+- **Soft depth fade** of a blown-off body passing behind a rosette: the occlusion is correct (judge
+  round 3 retracted it); a 1–2 mm soft fade would need the scene's depth (the steam owner's depth
+  target, once merged).
+
+## Verification
+
+- `pnpm typecheck`; `pnpm test` (see the report: 30 files); new `tests/flameRender.test.ts` (6):
+  the volume's step budget and its twin (bloom layer only, the same uniforms), bloom and haze
+  no-ops on a renderer nothing registered on (it throws on any use), a burning flame registers
+  its glow and its haze only while live (none settled, under reduced motion; the volume's clock
+  0), nothing once blown out (the twins hidden), the breath's turbulence and the box holding it,
+  the light patch (one BRDF evaluation, the wax glow only on wax, the occluder uniforms bound),
+  the scene posing every candle and the top tier as occluders. `tests/birthdayFire.test.ts`: the
+  ember's colour bounds follow the new response (bright orange, never red and green clipped).
+- `pnpm test:browser` (`BASE_URL=http://127.0.0.1:5602`): new `tests/browser/bloom.spec.ts` (3):
+  Party host-ready and the stage-colour measurement byte-identical with the bloom on and off (no
+  pass), Birthday's lit cake one pass and a different picture, its empty stage and the blown-out
+  cake none, the haze live and never under reduced motion; `collection.spec.ts` (30 switches, no
+  texture accumulates: the bloom's and the haze's targets are freed when unused, found by the
+  suite); `posters.spec.ts` (the recaptured Birthday posters and thumbnail);
+  `resilience.spec.ts` (no program links after ready: the twin, the bloom and the haze programs
+  are linked in the warm frame).
+- Looked at, against the references: the macro next to Sunderland's photograph and v1.5; the
+  laptop, phone, 540 and 192 sizes; 60 fps strips through the real controller (lit, the blow, the
+  2 s smoke hand-over); one flame through the blow every 32 ms; ignition and the snuff; the
+  flames' light alone in a dark room; the haze off/on/difference; three bloom strengths.
+
+## Evidence (`evidence/v1.6/flames/`)
+
+`macro-sunderland-v15-v16.png`, `macro-z30-nobloom-z30-z60-z10.png`, `laptop-1280x720@2x.webp`,
+`laptop-flames-x3.png`, `laptop-flames-v15-vs-v16-x3.png`, `phone-390x844@3x-frame.webp`,
+`phone-flames-x3.png`, `still-540@1.webp`, `still-540@2.webp`, `still-720@1.webp`,
+`thumbnail-192-x3-nearest.png`, `lit-60fps-strip-real-controller.png` (+ `.mp4`),
+`blow-60fps-strip-real-controller.png`, `smoke-handover-60fps-strip-real-controller.png`,
+`blow-2s-real-controller.mp4`, `blow-closeup-every-32ms.png`, `ignition-and-snuff-closeups.png`,
+`flame-light-alone-dark-room.png`, `heat-haze-off-on-difference.png`,
+`bloom-strengths-0.06-0.1-0.14.png`, `frame-cost.txt`.
