@@ -1,4 +1,4 @@
-import { BufferGeometry, Float32BufferAttribute, type IUniform, type Material, type Mesh, type Object3D, ShaderChunk, Vector3, Vector4 } from 'three';
+import { BufferGeometry, type Color, Float32BufferAttribute, type IUniform, type Material, type Mesh, type Object3D, ShaderChunk, Vector3, Vector4 } from 'three';
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, MASTER, CAKE_SCALE } from './birthdayContract.ts';
 
 /**
@@ -7,14 +7,13 @@ import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, MASTER, CAKE_SCALE } from './birt
  *
  * - (the bin's light on the cake inside it is models/disposalBin.ts patchBinVisibility, chained
  *   after these and the flame light by models/birthday.ts; v1.2.1–v1.4 had a darkening ramp here);
- * - subsurface (frosting body and piping): buttercream is a fat-and-sugar foam, light enters it,
- *   so the key's terminator is soft and coloured by the frosting itself. A wrapped-diffuse term
- *   on the direct light only (the image-based light is already soft), tinted by the material;
+ * - subsurface (`subsurfacePatch`, the molten wax since v1.6; the frosting's is in `foodPatch`): a
+ *   wrapped-diffuse term on the direct light, tinted by the material;
  * - press (frosting body): each candle pushes a dimple and a raised, slightly lumpy collar of
  *   displaced buttercream into the top tier as it goes in (CakePress.press), and the frosting
  *   right round it glosses a little as the flame warms it (CakePress.gloss);
- * - ridges (piping, rosettes): the per-vertex convexity `_ridge` makes crests a touch glossier
- *   and grooves a touch matter, and puts the very slight sheen on the crests;
+ * - food (v1.6, `foodPatch`; frosting body, piping, rosettes, smears): the film food look, below
+ *   (subsurface, translucency, coloured shade, baked occlusion, sugar glints, colour and satin);
  * - melt (each candle its own material): the rounded lip, the pool in its cup, the bead and the
  *   run down the low side, the top burning down (src/scenes/birthday/melt.ts drives it).
  *
@@ -60,6 +59,8 @@ type Patch = {
   afterLightsSetup?: string;
   /** After `#include <normal_fragment_maps>`: may edit `normal` (view space). */
   afterNormal?: string;
+  /** After the scene's own lights (lights_fragment_begin), before the image-based light and any lights added later (the flames). */
+  afterSceneLights?: string;
   /** After `#include <lights_fragment_end>`: may scale `reflectedLight`'s indirect terms (occlusion). */
   afterLights?: string;
   /** Extra direct diffuse inside RE_Direct_Physical (geometryNormal, directLight, material in scope). */
@@ -87,6 +88,7 @@ export function patchMaterial(material: Material, patches: Patch[]): void {
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${join('afterRoughness')}`)
       .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>\n${join('afterLightsSetup')}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${join('afterNormal')}`)
+      .replace('#include <lights_fragment_maps>', `${join('afterSceneLights')}\n#include <lights_fragment_maps>`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${join('afterLights')}`)
       .replace('#include <opaque_fragment>', `${join('beforeOpaque')}\n#include <opaque_fragment>`);
     if (direct.trim()) {
@@ -224,13 +226,10 @@ float cakeDy; vec2 cakeGrad;`,
   };
 }
 
-// ── Ridges (piping, rosettes) ──────────────────────────────────────────────────────
+// ── Sugar grain and noise (used by foodPatch) ───────────────────────────────────────
 /**
- * Satin, not clay (v1.5 polish): buttercream is fat and sugar, its piped crests carry a soft broad
- * highlight and the grooves stay matt. Roughness follows the per-vertex convexity `_ridge` from
- * 0.62 in the grooves to 0.36 on the crests (absolute, over the material's own), the very slight
- * sheen lives on the crests, and a fine grain (≈ 0.6 mm, ±8 µm, faded out where a pixel covers it)
- * breaks the perfectly smooth, moulded read of the rosettes' and shells' faces.
+ * The fine grain (≈ 0.6 mm, ±8 µm, faded out where a pixel covers it) that breaks the perfectly
+ * smooth, moulded read of piped faces; `groove`/`crest` are v1.5's ridge roughness (v1.6: FOOD).
  */
 export const RIDGE = { groove: 0.62, crest: 0.36, grain: { freq: 330, amp: 0.00004 } } as const;
 
@@ -251,25 +250,267 @@ vec3 cakeBump(vec3 surfPos, vec3 surfNorm, float h, float faceDir) {
 }
 `;
 
-export function ridgePatch(mesh: Mesh): Patch {
+// ── v1.6: the film food shader (the Hollywood pass) ─────────────────────────────────
+/**
+ * Buttercream is a foam of fat and sugar: light enters it, scatters a few millimetres and comes out
+ * coloured by it, so its terminator is soft and saturated, its thin crests glow, its shadows are
+ * coloured, and a cut-out flat colour with one specular lobe reads as plastic. What this patch does,
+ * per fragment, on the frosting (body, piping, rosettes; the sugar pearls get the occlusion only):
+ *
+ * - subsurface, as pre-integrated scattering (Penner & Borshukov 2011) approximated analytically: the
+ *   diffuse falls off with a wrap whose width grows with how *thin* the surface is (the piping's baked
+ *   thickness, the body's screen-space curvature), the light that wraps past the terminator tinted by
+ *   the frosting's own saturated colour, added where the plain lambert is dark and not where it is
+ *   bright (Ratatouille's non-linear blend: no washed-out highlights); the diffuse sees a softened
+ *   normal (fine relief shows in the specular, not in the scattered light);
+ * - translucency (Barré-Brisebois & Bouchard 2011): light from behind a thin part comes through it,
+ *   exp(−thickness / ℓ), strongest looking into the light, tinted by the fat;
+ * - coloured shadows: the room's light the frosting does receive is multiply-scattered, so in shade
+ *   it is more saturated than the albedo; thin parts glow a little in the room's light too;
+ * - occlusion: the baked occlusion (piping per vertex, the body's unique map) on the room's light and,
+ *   at a fraction, on the key (the shadow map cannot resolve a 2 mm crease);
+ * - a sugar micro-glint layer: sparse sub-millimetre crystals in cake space, each with its own facet,
+ *   that catch the key (and the flames) only when their facet lines up; faded where a crystal is
+ *   smaller than the pixel (no sparkle aliasing);
+ * - colour: never one flat colour; warmer and lighter on thin crests, cooler and deeper in grooves and
+ *   creases, a slow hand-mixed mottle; satin roughness from crest (glossier) to groove and crease (matt).
+ */
+export interface FoodLook {
+  /** Base wrap (flat surface) and how much thinness widens it. */
+  wrap: number;
+  wrapThin: number;
+  /** How much of the wrapped light is added (0–1). */
+  scatter: number;
+  /** Translucency mean free path (mm), strength (back light), distortion and power. */
+  transMm: number;
+  trans: number;
+  transDistort: number;
+  transPower: number;
+  /** Saturation of the scattered light (1 = the albedo) and of the room's light in shade. */
+  sssSat: number;
+  shadeSat: number;
+  /** Colour variation: crest warmth/lightness, groove depth, mottle (fractions). */
+  crestLift: number;
+  grooveDeep: number;
+  mottle: number;
+  /** Roughness: crests, grooves, the crease's extra. */
+  roughCrest: number;
+  roughGroove: number;
+  roughCrease: number;
+  /** Sugar glints: density (fraction of cells), cell (mm), strength. 0 = none. */
+  glint: number;
+  glintCell: number;
+  glintStrength: number;
+  /** Fraction of the occlusion applied to the key's diffuse (micro-shadowing). */
+  keyOcclusion: number;
+  /** A warm fat tint mixed into the scattered light (white piping: butter). */
+  fatTint: [number, number, number];
+  fat: number;
+}
+
+/** Thickness range of the packed `_FOOD` attribute (mm): scripts/masters/recipes/birthdayFinish.ts FOOD_THICK_MM. */
+export const FOOD_THICK_MM = 16;
+
+export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodLook> = {
+  body: {
+    wrap: 0.32, wrapThin: 0.7, scatter: 0.75, transMm: 2.6, trans: 0.5, transDistort: 0.35, transPower: 3,
+    sssSat: 1.35, shadeSat: 1.18, crestLift: 0.05, grooveDeep: 0.1, mottle: 0.028,
+    roughCrest: 0.42, roughGroove: 0.6, roughCrease: 0.12, glint: 0.55, glintCell: 0.16, glintStrength: 1.6, keyOcclusion: 0.45,
+    fatTint: [1, 0.93, 0.8], fat: 0.12,
+  },
+  piping: {
+    wrap: 0.38, wrapThin: 0.85, scatter: 0.8, transMm: 2.6, trans: 0.75, transDistort: 0.3, transPower: 3,
+    sssSat: 1.3, shadeSat: 1.15, crestLift: 0.06, grooveDeep: 0.09, mottle: 0.022,
+    roughCrest: 0.34, roughGroove: 0.62, roughCrease: 0.1, glint: 0.55, glintCell: 0.16, glintStrength: 1.4, keyOcclusion: 0.4,
+    fatTint: [1, 0.9, 0.74], fat: 0.35,
+  },
+  // Chocolate ganache buttercream: darker, more absorbing (shorter scatter, deep red-brown light),
+  // glossier satin, no visible sugar.
+  cocoaBody: {
+    wrap: 0.2, wrapThin: 0.45, scatter: 0.6, transMm: 1.4, trans: 0.35, transDistort: 0.3, transPower: 4,
+    sssSat: 1.5, shadeSat: 1.2, crestLift: 0.06, grooveDeep: 0.14, mottle: 0.03,
+    roughCrest: 0.3, roughGroove: 0.5, roughCrease: 0.1, glint: 0, glintCell: 0.3, glintStrength: 0, keyOcclusion: 0.5,
+    fatTint: [1, 0.72, 0.55], fat: 0.25,
+  },
+  cocoaPiping: {
+    wrap: 0.24, wrapThin: 0.55, scatter: 0.65, transMm: 1.5, trans: 0.45, transDistort: 0.3, transPower: 4,
+    sssSat: 1.45, shadeSat: 1.18, crestLift: 0.07, grooveDeep: 0.15, mottle: 0.025,
+    roughCrest: 0.26, roughGroove: 0.5, roughCrease: 0.1, glint: 0, glintCell: 0.3, glintStrength: 0, keyOcclusion: 0.55,
+    fatTint: [1, 0.7, 0.5], fat: 0.25,
+  },
+};
+
+const FOOD_NOISE = /* glsl */ `${CAKE_NOISE}
+vec3 cakeHash33(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.xxy + p.yxx) * p.zyx); }
+vec3 cakeSaturate(vec3 c, float k) { float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); return max(vec3(0.0), mix(vec3(l), c, k)); }
+`;
+
+/**
+ * The food look for a frosting material. `kind`: 'body' (the tiers: a normal map, the unique
+ * occlusion map, screen-space curvature) or 'piping' (piping and rosettes: per-vertex ridge,
+ * occlusion and thickness). `albedo` is the material's own colour (linear), the scattered light's hue.
+ */
+export function foodPatch(mesh: Mesh, kind: 'body' | 'piping', look: FoodLook, albedo: Color): Patch {
   const f = (x: number) => x.toFixed(6);
+  const v3 = (c: readonly number[]) => `vec3(${f(c[0]!)}, ${f(c[1]!)}, ${f(c[2]!)})`;
+  // The scattered light's tint: the albedo saturated (multiple scattering deepens a dyed medium),
+  // normalised to its peak, with a little of the fat's own warmth.
+  const peak = Math.max(albedo.r, albedo.g, albedo.b, 1e-6);
+  const base = [albedo.r / peak, albedo.g / peak, albedo.b / peak];
+  const lum = 0.2126 * base[0]! + 0.7152 * base[1]! + 0.0722 * base[2]!;
+  const sat = base.map((c) => Math.max(0, lum + (c - lum) * look.sssSat));
+  const sPeak = Math.max(...sat, 1e-6);
+  const tint = sat.map((c, i) => (c / sPeak) * (1 - look.fat) + look.fatTint[i]! * look.fat);
+  const piping = kind === 'piping';
+  const glint = look.glint > 0;
+  const cell = look.glintCell * 0.005; // mm → scene units (1 unit = 20 cm)
   return {
-    key: 'ridge2',
-    uniforms: { ...quantUniforms(mesh) },
-    vertexHead: 'attribute float _ridge;\nvarying float vCakeRidge;\nvarying vec3 vCakeP;\nuniform vec3 uQS; uniform vec3 uQO;',
-    vertexEnd: 'vCakeRidge = _ridge;\nvCakeP = transformed * uQS + uQO;',
-    fragmentHead: `varying float vCakeRidge;\nvarying vec3 vCakeP;\n${CAKE_NOISE}`,
-    afterRoughness: `roughnessFactor = mix(${f(RIDGE.groove)}, ${f(RIDGE.crest)}, smoothstep(-0.6, 0.9, vCakeRidge));`,
+    key: `food-${kind}-${look === FOOD.cocoaBody || look === FOOD.cocoaPiping ? 'cocoa' : 'blue'}`,
+    uniforms: { ...quantUniformsFood(mesh) },
+    vertexHead: `uniform vec3 uFoodQS; uniform vec3 uFoodQO;
+varying vec3 vFoodP;
+${piping ? 'attribute vec4 _food; varying float vFoodRidge; varying float vFoodAO; varying float vFoodThick;' : ''}`,
+    vertexEnd: `vFoodP = transformed * uFoodQS + uFoodQO;
+${piping ? `vFoodRidge = _food.x * 2.0 - 1.0; vFoodAO = _food.y; vFoodThick = _food.z * ${FOOD_THICK_MM.toFixed(1)};` : ''}`,
+    fragmentHead: `varying vec3 vFoodP;
+${piping ? 'varying float vFoodRidge; varying float vFoodAO; varying float vFoodThick;' : ''}
+${FOOD_NOISE}
+// Per-fragment state the lighting reads (set after the normal is known).
+float foodThin; float foodAO; float foodContact; vec3 foodDiffN; vec3 foodGlintP; float foodGlintFade; float foodGlintFade2; vec3 foodGlintT; vec3 foodGlintB;
+// The scene's own lights (the key): translucency and glints; the flames' small lights get the scattering only.
+bool foodScene = true;`,
+    afterMap: `{
+  // Never one flat colour: a slow mottle of hand-mixed colour (2–4 cm), warm-cool.
+  float m1 = cakeNoise(vFoodP * 34.0) - 0.5, m2 = cakeNoise(vFoodP * 91.0 + 7.1) - 0.5;
+  float mot = (m1 * 0.75 + m2 * 0.35) * ${f(look.mottle * 2)};
+  diffuseColor.rgb *= 1.0 + mot;
+  diffuseColor.rgb = cakeSaturate(diffuseColor.rgb, 1.0 + 2.5 * mot);
+  ${piping ? `
+  // Crests: thin, lighter and warmer (light gets out before the dye absorbs it); grooves and
+  // creases: deeper, a touch more saturated and cooler.
+  float crest = max(vFoodRidge, 0.0), groove = max(-vFoodRidge, 0.0);
+  float crease = 1.0 - smoothstep(0.35, 0.9, vFoodAO);
+  diffuseColor.rgb = mix(diffuseColor.rgb, min(diffuseColor.rgb * 1.06 + 0.02 * ${v3(look.fatTint)}, vec3(1.0)), ${f(look.crestLift * 6)} * crest * 0.18);
+  diffuseColor.rgb = cakeSaturate(diffuseColor.rgb, 1.0 + 0.6 * ${f(look.grooveDeep)} * (groove + crease)) * (1.0 - ${f(look.grooveDeep)} * (0.35 * groove + 0.3 * crease));` : `
+  #ifdef USE_AOMAP
+    vec2 foodC = texture2D(aoMap, vAoMapUv).rg;
+    float crease = 1.0 - foodC.g;
+    diffuseColor.rgb = cakeSaturate(diffuseColor.rgb, 1.0 + 0.5 * crease) * (1.0 - ${f(look.grooveDeep)} * 0.8 * crease);
+  #endif`}
+}`,
+    afterRoughness: piping
+      ? `roughnessFactor = mix(${f(look.roughGroove)}, ${f(look.roughCrest)}, smoothstep(-0.6, 0.85, vFoodRidge)) + ${f(look.roughCrease)} * (1.0 - smoothstep(0.3, 0.85, vFoodAO));`
+      : `#ifdef USE_AOMAP
+  roughnessFactor = roughnessFactor * ${f(look.roughCrest / 0.42)} + ${f(look.roughCrease)} * (1.0 - texture2D(aoMap, vAoMapUv).g);
+#endif`,
     afterNormal: `{
-  vec3 gp = vCakeP * ${f(RIDGE.grain.freq)};
-  float px = length(fwidth(gp));
-  float fadeG = 1.0 - smoothstep(0.35, 0.9, px);
-  if (fadeG > 0.0) {
-    float h = ${f(RIDGE.grain.amp)} * fadeG * (cakeNoise(gp) + 0.5 * cakeNoise(gp * 2.17 + 3.1));
-    normal = cakeBump(-vViewPosition, normal, h, faceDirection);
+  // Thinness: the piping's baked thickness (and its tooth crests); the body's curvature (a rounded
+  // edge scatters more than a flat side).
+  ${piping
+      ? 'foodThin = clamp(exp(-vFoodThick / 3.2) + 0.3 * max(vFoodRidge, 0.0), 0.0, 1.0); foodAO = vFoodAO; foodContact = smoothstep(0.25, 0.9, vFoodAO);'
+      : `vec3 nG = normalize(vNormal);
+  float curv = length(fwidth(nG)) / max(length(fwidth(vViewPosition)), 1e-6);
+  foodThin = clamp(curv * 0.004, 0.0, 0.55);
+  foodAO = 1.0; foodContact = 1.0;
+  #ifdef USE_AOMAP
+    vec2 aoc = texture2D(aoMap, vAoMapUv).rg;
+    foodAO = aoc.r; foodContact = aoc.g;
+  #endif`}
+  // Sugar grain (≈ 0.5 mm, ±${(RIDGE.grain.amp * 200).toFixed(0)} µm), faded out where a pixel covers it.
+  {
+    vec3 gp = vFoodP * ${f(RIDGE.grain.freq)};
+    float px = length(fwidth(gp));
+    float fadeG = 1.0 - smoothstep(0.35, 0.9, px);
+    if (fadeG > 0.0) normal = cakeBump(-vViewPosition, normal, ${f(RIDGE.grain.amp)} * fadeG * (cakeNoise(gp) + 0.5 * cakeNoise(gp * 2.17 + 3.1)), faceDirection);
+  }
+  // The scattered light sees a softened normal (relief shows in the specular, not in the diffuse).
+  foodDiffN = normalize(mix(normal, normalize(vNormal) * faceDirection, 0.55));
+  ${glint ? `foodGlintP = vFoodP / ${f(cell)};
+  float fp = length(fwidth(foodGlintP));
+  foodGlintFade = 1.0 - smoothstep(0.55, 1.25, fp);
+  foodGlintFade2 = 1.0 - smoothstep(0.55, 1.25, fp * 0.3);
+  foodGlintT = normalize(cross(normal, abs(normal.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+  foodGlintB = cross(normal, foodGlintT);` : ''}
+}`,
+    directDiffuse: `{
+  // Pre-integrated scattering (analytic): a wrap whose width grows with thinness, the wrapped light
+  // tinted by the frosting, added where the lambert is dark.
+  float nlS = dot(foodDiffN, directLight.direction);
+  float w = ${f(look.wrap)} + ${f(look.wrapThin)} * foodThin;
+  float wrapped = saturate((nlS + w) / (1.0 + w));
+  wrapped *= wrapped * (3.0 - 2.0 * wrapped) * 0.5 + 0.5 * wrapped;
+  float lam = saturate(nlS);
+  float extra = max(wrapped - lam, 0.0) * ${f(look.scatter)};
+  vec3 foodTint = ${v3(tint)};
+  vec3 albedoD = BRDF_Lambert( material.diffuseContribution );
+  // The plain lambert term above used the fine normal; move part of it to the softened one.
+  reflectedLight.directDiffuse += (lam - saturate(dot(geometryNormal, directLight.direction))) * 0.5 * directLight.color * albedoD * ( 1.0 - F );
+  reflectedLight.directDiffuse += extra * directLight.color * foodTint * albedoD * ( 1.0 - F );
+  if (foodScene) {
+  // Translucency: light behind a thin part comes through it.
+  float T = exp(-${piping ? 'vFoodThick' : '6.0'} / ${f(look.transMm)}) * (0.35 + 0.65 * foodThin);
+  vec3 lt = directLight.direction + foodDiffN * ${f(look.transDistort)};
+  float back = pow(saturate(dot(geometryViewDir, -lt)), ${f(look.transPower)}) + 0.25 * saturate(-nlS);
+  reflectedLight.directDiffuse += back * T * ${f(look.trans)} * directLight.color * foodTint * albedoD;
+  ${glint ? `
+  // Sugar glints: two sizes of crystal (fine ones seen close up, rarer coarse ones that read as a
+  // pixel's sparkle at laptop size), one per cell if any, each with its own facet anywhere within
+  // ≈ 55° of the surface; a crystal lights only when its facet lines up with the half vector.
+  vec3 hv = normalize(directLight.direction + geometryViewDir);
+  float nlG = saturate(dot(geometryNormal, directLight.direction));
+  for (int li = 0; li < 2; li++) {
+    float scale = li == 0 ? 1.0 : 0.3;
+    float fade = li == 0 ? foodGlintFade : foodGlintFade2;
+    if (fade <= 0.0) continue;
+    vec3 gp = foodGlintP * scale + float(li) * 17.3;
+    vec3 r = cakeHash33(floor(gp));
+    if (r.x >= (li == 0 ? ${f(look.glint)} : ${f(look.glint * 0.35)})) continue;
+    vec3 fr = fract(gp) - 0.5 - (r.yzx - 0.5) * 0.3;
+    float spot = exp(-dot(fr, fr) * 20.0);
+    vec3 q = cakeHash33(floor(gp) + 41.7) * 2.0 - 1.0;
+    vec3 tn = normalize(geometryNormal + (foodGlintT * q.x + foodGlintB * q.y) * 1.45);
+    float d = pow(saturate(dot(tn, hv)), 380.0);
+    reflectedLight.directSpecular += directLight.color * nlG * d * spot * ${f(look.glintStrength)} * (li == 0 ? 1.0 : 0.7) * fade * foodContact;
+  }` : ''}
   }
 }`,
-    afterLightsSetup: '#ifdef USE_SHEEN\nmaterial.sheenColor *= 0.3 + 1.1 * max(vCakeRidge, 0.0);\n#endif',
+    afterSceneLights: 'foodScene = false;',
+    afterLightsSetup: piping ? '#ifdef USE_SHEEN\nmaterial.sheenColor *= 0.3 + 1.1 * max(vFoodRidge, 0.0);\n#endif' : '',
+    afterLights: `{
+  // Occlusion: the room's light (the body's aoMap does this in three's own aomap chunk), the key at a
+  // fraction (micro-shadowing in the creases).
+  // Light diffuses into a crease through the frosting itself: occluded light is coloured, never black.
+  vec3 foodTintA = ${v3(tint)};
+  ${piping ? `float aoI = mix(0.36, 1.0, vFoodAO);
+  reflectedLight.indirectDiffuse *= mix(foodTintA * aoI, vec3(1.0), aoI);
+  reflectedLight.indirectSpecular *= mix(1.0, vFoodAO * vFoodAO, 0.85);` : ''}
+  float aoK = ${piping ? 'mix(0.55, 1.0, vFoodAO)' : 'foodContact * (0.6 + 0.4 * foodAO)'};
+  reflectedLight.directDiffuse *= mix(vec3(1.0), mix(foodTintA * aoK, vec3(1.0), aoK), ${f(look.keyOcclusion)});
+  reflectedLight.directSpecular *= mix(1.0, ${piping ? 'vFoodAO' : 'foodContact'}, ${f(look.keyOcclusion * 0.8)});
+  // Coloured shade: the room's light comes out multiply scattered, more saturated than the albedo;
+  // thin parts glow a little in it (light through them from all round).
+  vec3 foodTintI = ${v3(tint)};
+  reflectedLight.indirectDiffuse = cakeSaturate(reflectedLight.indirectDiffuse, ${f(look.shadeSat)});
+  reflectedLight.indirectDiffuse *= 1.0 + 0.35 * foodThin * foodTintI;
+}`,
+  };
+}
+
+function quantUniformsFood(mesh: Object3D): Record<string, IUniform> {
+  const q = quantUniforms(mesh);
+  return { uFoodQS: q.uQS, uFoodQO: q.uQO };
+}
+
+/** The sugar pearls: their baked occlusion (they sit in the frosting, between ropes). */
+export function pearlPatch(): Patch {
+  return {
+    key: 'pearl-ao',
+    vertexHead: 'attribute vec4 _food; varying float vPearlAO;',
+    vertexEnd: 'vPearlAO = _food.y;',
+    fragmentHead: 'varying float vPearlAO;',
+    afterLights: `reflectedLight.indirectDiffuse *= vPearlAO;
+  reflectedLight.indirectSpecular *= mix(1.0, vPearlAO, 0.8);
+  reflectedLight.directDiffuse *= mix(1.0, vPearlAO, 0.35);`,
   };
 }
 

@@ -62,6 +62,13 @@ import { finishCake } from './birthdayFinish.ts';
  *   a `_RIDGE` convexity. Candles re-tessellated from the master's own twisted six-flute surface
  *   (128 around, 0.39 mm rows) with a `_PROFILE` the melt shader deforms (models/cakeShaders.ts).
  *   CAKE_RADIUS and the crown height were re-measured after the finish (models/birthdayContract.ts).
+ * - v1.6 (the Hollywood pass; docs/scenes/birthday-v1.6-cake.md): the finish regenerates every piped
+ *   part as sculpted star-tip sweeps (birthdayPiping.ts) at the master's placements, rounds the tiers'
+ *   top edges into a 6–6.5 mm bead with a hand-pushed lip, adds the scraper's hand waves (≈ ±2 mm on
+ *   the silhouette), knife chatter and the turntable's spiral to the relief, bakes occlusion and
+ *   thickness (birthdayBake.ts: per vertex `_FOOD` on the piping, a unique contact map on uv1 for the
+ *   body) and leaves a smear of the coat and a crumb or two on the plate (`cake_smears`, the stand's;
+ *   its cocoa variant below). The runtime's film food shader is models/cakeShaders.ts foodPatch.
  */
 
 const lin = (hex: string): [number, number, number, number] => {
@@ -87,9 +94,13 @@ const candleNodes: Record<string, NodeMap> = Object.fromEntries(
 
 const frostingPolicy = (key: keyof typeof FROSTING): MaterialPolicy => ({ rename: FROSTING[key], baseColorFactor: lin(PALETTE.vanilla[key]) });
 
-const cocoa: MaterialVariantSpec[] = (Object.keys(FROSTING) as (keyof typeof FROSTING)[]).map((key) => ({
-  variant: 'cocoa', of: FROSTING[key], name: `${FROSTING[key]}_cocoa`, baseColorFactor: lin(PALETTE.cocoa[key]),
-}));
+const cocoa: MaterialVariantSpec[] = [
+  ...(Object.keys(FROSTING) as (keyof typeof FROSTING)[]).map((key) => ({
+    variant: 'cocoa', of: FROSTING[key], name: `${FROSTING[key]}_cocoa`, baseColorFactor: lin(PALETTE.cocoa[key]),
+  })),
+  // v1.6: the smear of the coat on the plate (birthdayFinish.ts) is the body's colour.
+  { variant: 'cocoa', of: 'cake_smear', name: 'cake_smear_cocoa', baseColorFactor: lin(PALETTE.cocoa.body) },
+];
 
 export const recipe: SceneRecipe = {
   scene: 'birthday',
@@ -128,8 +139,7 @@ export const recipe: SceneRecipe = {
   ],
   variants: ['vanilla', 'cocoa'],
   materialVariants: cocoa,
-  // The generated roughness map stays exact (its 0.45–0.70 range is the point; lossy WebP overshot it).
-  // The generated roughness map stays exact (its 0.45–0.70 range is the point; lossy WebP overshot it).
+  // The generated roughness map stays exact (its 0.40–0.66 range is the point; lossy WebP overshot it).
   textures: { maxSize: 2048, quality: 90, lossless: ['cake_buttercream/metallicRoughnessTexture'] },
   contract: BIRTHDAY_GLB_NODES,
 };

@@ -7,7 +7,7 @@ import { buildCakeGeometry, type CakePreset } from './cake.ts';
 import { attachBin, BIN, BIN_CONTACT, binLight, buildDisposalBin, detachBin, patchBinVisibility } from './disposalBin.ts';
 import type { MaterialVariants } from './imported.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
-import { BIN_SHADE, type BinShade, type CakePress, type CandleMelt, contactPatch, meltPatch, newCakePress, patchMaterial, type PlateContact, plateContactPatch, poolGeometry, poolPatch, pressPatch, ridgePatch, runGeometry, runPatch, subsurfacePatch } from './cakeShaders.ts';
+import { BIN_SHADE, type BinShade, type CakePress, type CandleMelt, contactPatch, FOOD, foodPatch, meltPatch, newCakePress, patchMaterial, pearlPatch, type PlateContact, plateContactPatch, poolGeometry, poolPatch, pressPatch, runGeometry, runPatch, subsurfacePatch } from './cakeShaders.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
 /**
@@ -96,12 +96,11 @@ function patchFrosting(material: Material, press: CakePress, mesh: Mesh | null):
   const role = material.userData.frosting as string | undefined;
   if (!mesh) return;
   const c = (material as MeshStandardMaterial).color ?? new Color(1, 1, 1);
-  const peak = Math.max(c.r, c.g, c.b, 1e-6);
-  const deep: [number, number, number] = [c.r / peak, c.g / peak, c.b / peak];
-  const cream = peak > 0.9 && Math.min(c.r, c.g, c.b) / peak > 0.9;
-  if (role === 'body') patchMaterial(material, [subsurfacePatch(0.4, deep.map((x) => 0.7 * x) as [number, number, number]), pressPatch(mesh, press), contactPatch(mesh)]);
-  else if (role === 'piping') patchMaterial(material, [subsurfacePatch(0.5, (cream ? [1, 0.88, 0.74] : deep).map((x) => 0.7 * x) as [number, number, number]), ridgePatch(mesh), contactPatch(mesh)]);
-  else if (role === 'pearl') patchMaterial(material, [contactPatch(mesh)]);
+  const cocoa = /_cocoa$/.test(material.name);
+  // v1.6: the film food shader (models/cakeShaders.ts foodPatch), then the press and the plate contact.
+  if (role === 'body') patchMaterial(material, [foodPatch(mesh, 'body', cocoa ? FOOD.cocoaBody : FOOD.body, c), pressPatch(mesh, press), contactPatch(mesh)]);
+  else if (role === 'piping') patchMaterial(material, [foodPatch(mesh, 'piping', cocoa ? FOOD.cocoaPiping : FOOD.piping, c), contactPatch(mesh)]);
+  else if (role === 'pearl') patchMaterial(material, [pearlPatch(), contactPatch(mesh)]);
 }
 
 /** The joined frosting mesh each frosting material (either preset) is drawn on. */
@@ -174,7 +173,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
   const binShade: BinShade = { rimY: { value: BIN.rimTop }, on: { value: 0 } };
   const press = newCakePress();
   const cakeMaterials = new Set<Material>();
-  const isCake = (m: Material) => m.name.startsWith('cake_') && !m.name.startsWith('cake_stand');
+  const isCake = (m: Material) => m.name.startsWith('cake_') && !m.name.startsWith('cake_stand') && !m.name.startsWith('cake_smear');
   // Candle wax is patched per candle below (each candle melts on its own).
   const isWax = (m: Material) => m.name.startsWith('cake_candle');
   nodes.cake_secondary!.traverse((o) => {
@@ -183,6 +182,10 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
   });
   for (const m of variants?.materials ?? []) if (isCake(m) && !isWax(m)) cakeMaterials.add(m);
   const frosting = frostingMeshes(root);
+  // v1.6: the tiers draw first, so the depth they leave rejects the piping's buried undersides and
+  // feet before they are shaded.
+  const tiers = frosting.get('cake_buttercream');
+  if (tiers) tiers.renderOrder = -1;
   for (const m of cakeMaterials) patchFrosting(m, press, frosting.get(m.name.replace(/_cocoa$/, '')) ?? null);
   // The plate round the cake's foot darkens a little where the bead border rests on it.
   const plate: PlateContact = { lift: { value: 0 }, foot: { value: new Vector3(0, 0, 0.66) } };
@@ -195,6 +198,18 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
   const waxClones: Material[] = [];
   /** Every cake material the flames light (frosting, each candle's wax), patched once at the end. */
   const lit = new Set<Material>(cakeMaterials);
+  // v1.6: the smear of the coat and the crumbs on the plate (the stand's own: they stay on it). The
+  // food look as the body's, by their own vertex occlusion; lit by the flames, never in the bin.
+  const smears = root.getObjectByName('cake_smears') as Mesh | undefined;
+  const smearLit: Material[] = [];
+  if (smears?.isMesh) {
+    const own = [smears.material as Material, ...(variants?.materials ?? []).filter((m) => m.name.startsWith('cake_smear'))];
+    for (const m of new Set(own)) {
+      const cocoa = /_cocoa$/.test(m.name);
+      patchMaterial(m, [foodPatch(smears, 'piping', cocoa ? FOOD.cocoaBody : FOOD.body, (m as MeshStandardMaterial).color)]);
+      smearLit.push(m);
+    }
+  }
   const flameLights = createFlameLights();
 
   // v1.5 fire (#4): each GLB lathe flame becomes a volumetric flame with its light; one ribbon
@@ -260,6 +275,7 @@ export function rigBirthday(root: Object3D, binRoot: Object3D, lib: ModelContext
     patchFlameLight(m, flameLights);
     patchBinVisibility(m, light, binShade.on);
   }
+  for (const m of smearLit) patchFlameLight(m, flameLights);
 
   const flapL = root.getObjectByName('bin_flap_l')!;
   const flapR = root.getObjectByName('bin_flap_r')!;
