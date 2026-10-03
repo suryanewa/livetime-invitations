@@ -1,8 +1,7 @@
 import { Box3, type Camera, Matrix4, Plane, Quaternion, Raycaster, Vector2, Vector3, type Object3D, type WebGLRenderer } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/business/business.glb?url';
 import { BUSINESS_WORLD_SCALE, CARD, PENDULUM, rigBusiness, type BusinessRig, type CardTemplate, type StatusLit } from '../../../models/business.ts';
-import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
+import { disposeImported, gltfLoader, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { keycardBusinessRig, type KeycardRig } from '../../../models/keycard.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { silhouettePoints } from '../../render/framing.ts';
@@ -410,7 +409,7 @@ export const businessScene: SceneModule = {
   category: 'business',
   async load({ config, library, signal }: SceneLoadContext): Promise<SceneInstance> {
     if (config.category !== 'business') throw new Error('business scene given another config');
-    const gltf = await new GLTFLoader().parseAsync(await fetchGlb(glbUrl, signal), '');
+    const gltf = await gltfLoader().parseAsync(await fetchGlb(glbUrl, signal), '');
     const root = gltf.scene.getObjectByName('business_root');
     if (!root) throw Object.assign(new Error('missing business_root'), { reason: 'asset-failure' as const });
     // Card templates live in the GLB (KHR_materials_variants); read them before detaching the root.

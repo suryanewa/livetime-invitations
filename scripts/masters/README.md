@@ -80,8 +80,10 @@ A recipe with `masters: []` (the stubs) exports exactly as before: builder only,
 7. **`recipe.materialVariants`**: presets written as KHR_materials_variants.
 8. **Contract check**: every name in `recipe.contract` must exist exactly once (else the export fails).
 9. Chain (`optimizeComposed` in compose.ts, shared with `tests/masters.test.ts`): `dedup → weld →
-   prune(keepLeaves, keepAttributes) → texture policy → quantize(POSITION, NORMAL) → unpartition`,
-   then the report.
+   prune(keepLeaves, keepAttributes) → texture policy → quantize(POSITION, NORMAL) → unpartition`.
+10. **Geometry compression** (v1.6, §12): `compressGeometry` marks the document for
+    EXT_meshopt_compression and the writer encodes every vertex stream and index buffer; then the
+    report (sizes without and with it).
 
 Masters merge **after** the builder, so a master may anchor to any builder node; a later master may
 anchor to nodes created or renamed by an earlier one.
@@ -179,7 +181,7 @@ materialVariants: [{ variant: 'cream', of: 'ball_leather', name: 'ball_leather_c
 first); the result is stored as a second image, other maps are shared. Use `baseColorFactor` for a
 plain tint. At runtime:
 ```ts
-const gltf = await new GLTFLoader().parseAsync(buffer, '');
+const gltf = await gltfLoader().parseAsync(buffer, '');   // models/imported.ts (meshopt decoder set)
 const variants = await loadMaterialVariants(gltf);   // before root.removeFromParent()
 bindMaterialsByName(root, library);
 prepareImported(root, library, variants.materials);
@@ -224,6 +226,8 @@ pass: the report gives the cost, do not trade fidelity for it.
 
 ### 10. Runtime checklist for a scene that imports masters
 
+0. Parse with `gltfLoader()` from models/imported.ts, never `new GLTFLoader()`: the GLBs are
+   meshopt-compressed (§12) and that shared loader carries the decoder.
 1. `loadMaterialVariants(gltf)` (if the recipe has variants) before detaching the root.
 2. `bindMaterialsByName(root, library)` then `prepareImported(root, library, variants.materials)`.
 3. `applyShadowProxies(root)` in the rig if you generated proxies (and `disposeShadowProxies` on dispose).
@@ -245,7 +249,39 @@ pass: the report gives the cost, do not trade fidelity for it.
 prints the node tree with recipe paths, triangles, materials and exact boxes × scale. Put measured
 numbers in `models/<scene>Contract.ts` with a comment saying they come from the master, and add a
 test that reads the exported GLB (`createIO`, `findNode`, `boxIn` from compose.ts) and checks them,
-as `tests/sports.test.ts` ("Sports runtime GLB matches the contract") does.
+as `tests/sports.test.ts` ("Sports runtime GLB matches the contract") does. `createIO()` registers
+the meshopt codec, so a test sees the decoded streams exactly as the uncompressed export had them.
+
+### 12. Geometry compression (v1.6)
+
+One pipeline option, `GEOMETRY_COMPRESSION` in compose.ts (`'meshopt'`, the default, or `'none'`),
+applies to every scene GLB and the shared bin as the last step before writing; `pnpm models
+--compression=none <scene>` writes the same document without it for A/B checks (it reproduces the
+uncompressed GLBs of v1.6/cake byte for byte). What `'meshopt'` does, and does not do:
+
+- **EXT_meshopt_compression, required** (no uncompressed fallback): every buffer view of vertex
+  attributes and indices goes through meshopt's byte codecs (`QUANTIZE` method, codec version 0 as
+  the extension specifies). **No filters**: normals are not re-encoded octahedrally and positions not
+  exponentially, so the decoded accessors are **bit-identical** to the uncompressed export's.
+- **No reorder**: vertices and triangles keep the export's order (alpha-blended surfaces draw
+  exactly as before). The index codec may rotate a triangle's three corners; the winding is kept.
+  Measured: meshopt's size-targeted reorder made the cake 1.4 MiB *larger* (its swept piping is
+  already in strip order) and the bin and dinner larger too; only Sports gained (−245 KiB gzip).
+- **No new quantisation.** The chain's KHR_mesh_quantization stays as it was (14-bit positions per
+  mesh, worst rounding 0.008–0.025 mm at 1 unit = 20 cm, under the 0.05 mm bar; 10-bit normals;
+  UVs, tangents and custom attributes as before). 13-bit positions would still pass the bar but
+  saved only 11 KiB raw / 238 KiB gzip on the cake; octahedral 8-bit normals would change shading.
+- **Deterministic**: the encoder is a pure function of the document. Two full exports were byte-identical
+  (Business, Party, Dinner, Sports, the bin); for Birthday the uncompressed export reproduced the
+  committed bytes and encoding the same document twice gives identical bytes (`tests/masters.test.ts`
+  checks the same on the synthetic master).
+- **Runtime**: three's `MeshoptDecoder` (`three/addons/libs/meshopt_decoder.module.js`, WASM inlined
+  in the module, so the build needs no extra file) set once on the shared `gltfLoader()`. It decodes
+  on the main thread inside `parseAsync`; the cost per scene is in docs/asset-manifest.md.
+- **Readers**: `createIO()` registers the encoder and decoder (awaited once at module load), so
+  `inspect.ts`, the tests and any script read and write compressed GLBs transparently. A tool that
+  reads the JSON chunk directly sees `EXT_meshopt_compression` on the buffer views instead of raw
+  arrays.
 
 ## Worked example: Sports (`recipes/sports.ts`)
 
@@ -300,6 +336,8 @@ contract node found. The report:
   GLB 8071.3 KiB raw · 6159.2 KiB gzip
   contract nodes missing: none
 ```
+(v1.2 figures. Since v1.6 the GLB line reads `GLB 5823.2 KiB raw · 5023.0 KiB gzip · geometry
+compression meshopt (uncompressed 8541.2 KiB raw · 6575.0 KiB gzip)`.)
 
 Runtime: `src/scenes/sports/index.ts` (variants, prepareImported, setLowDetail, disposeImported) and
 `models/sports.ts` (`rigSports(root, lib, preset, variants)`, `rigNet`: the master net's cord lattice simulated and skinned, models/sportsNet.ts).
@@ -309,10 +347,10 @@ Runtime: `src/scenes/sports/index.ts` (variants, prepareImported, setLowDetail, 
 | File | Role |
 | --- | --- |
 | `types.ts` | Recipe types (every field documented) |
-| `compose.ts` | The importer: `composeMasters`, `optimizeComposed` (the export chain), `applyTexturePolicy` / `textureDecision`, measuring helpers (`boxIn`, `boxPoint`, `findNode`) |
+| `compose.ts` | The importer: `composeMasters`, `optimizeComposed` (the export chain), `applyTexturePolicy` / `textureDecision`, `compressGeometry` / `GEOMETRY_COMPRESSION` (§12), `createIO` (with the meshopt codec), measuring helpers (`boxIn`, `boxPoint`, `findNode`) |
 | `../../tests/masters.test.ts` | End-to-end importer test on a synthetic master (pivots through quantisation, joins, exact LUTs, WebP declaration) |
-| `report.ts` | Export report (triangles, draw calls, textures and GPU MiB, GLB raw/gzip KiB, contract) |
+| `report.ts` | Export report (triangles, draw calls, textures and GPU MiB, GLB raw/gzip KiB with and without geometry compression, contract) |
 | `inspect.ts` | Master inspector for writing recipes |
 | `sharp.ts` | sharp, resolved through @gltf-transform/functions (no new dependency) |
 | `recipes/*.ts` | One recipe per scene; `recipes/index.ts` registers all five |
-| `../../models/imported.ts` | Runtime: `prepareImported`, `setImportedLowDetail`, `loadMaterialVariants`, `disposeImported` |
+| `../../models/imported.ts` | Runtime: `gltfLoader` (the shared loader with the meshopt decoder), `prepareImported`, `setImportedLowDetail`, `loadMaterialVariants`, `disposeImported` |

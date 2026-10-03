@@ -1,12 +1,11 @@
 import { Box3, type Camera, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
   BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netRestRadius, POLE, recoilPoint, RIM, RIM_CENTER, RIM_LOCAL, rigSports, SPORTS_WALL_Z, SPORTS_WORLD_SCALE, STAND, type BallPreset, type SportsRig,
 } from '../../../models/sports.ts';
 import type { BallContact, HoopSprings, NetSim } from '../../../models/sportsNet.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
-import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
+import { disposeImported, gltfLoader, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { silhouettePoints } from '../../render/framing.ts';
 import { finalPose, type SceneInstance, type SceneLoadContext, type SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
@@ -401,7 +400,7 @@ export const sportsScene: SceneModule = {
   category: 'sports',
   async load({ config, library, signal }: SceneLoadContext): Promise<SceneInstance> {
     if (config.category !== 'sports') throw new Error('sports scene given another config');
-    const gltf = await new GLTFLoader().parseAsync(await fetchGlb(glbUrl, signal), '');
+    const gltf = await gltfLoader().parseAsync(await fetchGlb(glbUrl, signal), '');
     const root = gltf.scene.getObjectByName('sports_root');
     if (!root) throw Object.assign(new Error('missing sports_root'), { reason: 'asset-failure' as const });
     // Ball presets live in the GLB (KHR_materials_variants); read them before detaching the root.

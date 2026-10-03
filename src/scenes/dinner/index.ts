@@ -1,5 +1,4 @@
 import { Box3, type Camera, Euler, type Object3D, Vector3, type WebGLRenderer } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/dinner/dinner.glb?url';
 import {
   COVER, COVER_PROFILE, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_START, DINNER_BIN_YAW, DINNER_WORLD_SCALE, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
@@ -7,7 +6,7 @@ import {
 } from '../../../models/dinner.ts';
 import { binEntranceStart, binPlaceholder, flapAngles, openBinSilhouette } from '../../../models/disposalBin.ts';
 import { DinnerSteam, STEAM_LAYERS } from '../../../models/dinnerSteam.ts';
-import { disposeImported, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
+import { disposeImported, gltfLoader, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { silhouettePoints } from '../../render/framing.ts';
 import { markDepthOccluders } from '../../render/sceneDepth.ts';
@@ -406,7 +405,7 @@ export const dinnerScene: SceneModule = {
     // framing silhouette is computed from its design while the dish downloads.
     const dishFetch = fetchGlb(glbUrl, signal);
     openBinSilhouette(DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE);
-    const dish = await new GLTFLoader().parseAsync(await dishFetch, '');
+    const dish = await gltfLoader().parseAsync(await dishFetch, '');
     const root = dish.scene.getObjectByName('dinner_root');
     if (!root) throw Object.assign(new Error('missing dinner nodes'), { reason: 'asset-failure' as const });
     root.removeFromParent();

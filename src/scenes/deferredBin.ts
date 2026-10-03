@@ -1,7 +1,7 @@
 import { type Material, type Mesh, type Object3D, type Texture, Vector3 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import binUrl from '../../assets/shared/disposal-bin.glb?url';
 import { fillBin } from '../../models/disposalBin.ts';
+import { gltfLoader } from '../../models/imported.ts';
 import { bindMaterialsByName } from '../../models/types.ts';
 import type { MaterialLibrary } from '../render/materials.ts';
 import type { DeferredContext } from '../core/sequence.ts';
@@ -75,7 +75,7 @@ export class DeferredBin {
       if (!library) throw new Error('DeferredBin: a placeholder bin needs the scene\'s material library');
       const res = await fetch(binUrl, { signal: this.abort.signal, priority: 'low' } as RequestInit);
       if (!res.ok) throw Object.assign(new Error(`asset ${res.status}`), { reason: 'asset-failure' as const });
-      const gltf = await new GLTFLoader().parseAsync(await res.arrayBuffer(), '');
+      const gltf = await gltfLoader().parseAsync(await res.arrayBuffer(), '');
       const loaded = gltf.scene.getObjectByName('bin_root');
       if (!loaded) throw Object.assign(new Error('missing bin_root'), { reason: 'asset-failure' as const });
       if (this.disposed) {
