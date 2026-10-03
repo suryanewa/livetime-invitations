@@ -5,12 +5,12 @@ import { blackbodyAt, createFlameMaterial, SMOKE_RADIANCE, sootRadiance } from '
 import { rigBirthday } from '../models/birthday.ts';
 import { CANDLE_LIGHT } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
-import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, STAND_TOP } from '../models/birthdayContract.ts';
+import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME_FRAME, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
 import { CARRY_FROM, DURATIONS, IGNITE_START, ON_STAND } from '../src/scenes/birthday/poses.ts';
 import {
-  ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
+  ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, frameScale, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
   POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
@@ -380,10 +380,14 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
       expect(c.flame.children.some((o) => (o as Mesh).isMesh && o.userData.fx)).toBe(true);
       expect(c.flame.getObjectByName(`${c.flame.name}_mesh`)).toBeUndefined();
     }
-    // Hero top: the steady flame's tip (the GLB's 1.5× lathe and the fire's quads are not counted).
+    // Hero top: the framing's flame envelope (v1.6 polish holds v1.5's: FLAME_FRAME, frameScale;
+    // the GLB's 1.5× lathe and the fire's quads are not counted).
     const top = Math.max(...scene.heroPoints!.map((p) => p.y));
-    const tallest = Math.max(...rig.candles.map((_, i) => flameScale(i)));
-    expect(top).toBeCloseTo(STAND_TOP + CANDLE.seat + FLAME_REST.base + tallest * FLAME_REST.length, 3);
+    const tallest = Math.max(...rig.candles.map((_, i) => frameScale(i)));
+    expect(top).toBeCloseTo(STAND_TOP + CANDLE.seat + FLAME_FRAME.base + tallest * FLAME_FRAME.height, 3);
+    // The drawn flame reaches at most a few millimetres above it.
+    const drawn = Math.max(...rig.candles.map((_, i) => flameScale(i))) * FLAME_REST.length + FLAME_REST.base;
+    expect((drawn - (FLAME_FRAME.base + tallest * FLAME_FRAME.height)) / MM).toBeLessThan(5);
   });
 
   it('lit: settling while the flames burn (they flicker), still after settle(); the light follows the flame', () => {
