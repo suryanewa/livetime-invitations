@@ -1533,6 +1533,31 @@ async function bakeLight(doc: Document, nodes: Node[], log: (line: string) => vo
         thickMin = Math.min(thickMin, thick[i]!); thickMax = Math.max(thickMax, thick[i]!);
       }
     }
+    // v1.6 polish (fix 4): one-ring averages over the mesh: 24 rays leave a vertex's occlusion noisy by
+    // a few per cent, and the inward march finds a small dome's far side from one vertex and misses it
+    // (to the 15 mm cap) from the next: its faces showed as grey facets (translucency on, off).
+    {
+      const idx = prim.getIndices()!.getArray()!;
+      const smoothV = (v: Float32Array, passes: number) => {
+        for (let pass = 0; pass < passes; pass++) {
+          const acc = new Float32Array(n), cnt = new Float32Array(n);
+          for (let t = 0; t < idx.length; t += 3) {
+            const a = idx[t]!, b = idx[t + 1]!, c = idx[t + 2]!;
+            acc[a] = acc[a]! + v[b]! + v[c]!; cnt[a] = cnt[a]! + 2;
+            acc[b] = acc[b]! + v[a]! + v[c]!; cnt[b] = cnt[b]! + 2;
+            acc[c] = acc[c]! + v[a]! + v[b]!; cnt[c] = cnt[c]! + 2;
+          }
+          for (let i = 0; i < n; i++) if (cnt[i]! > 0) v[i] = 0.5 * v[i]! + 0.5 * (acc[i]! / cnt[i]!);
+        }
+      };
+      smoothV(ao, 2);
+      if (!pearl) {
+        // (In log: a few cap-length outliers must not lift a thin neighbourhood.)
+        for (let i = 0; i < n; i++) thick[i] = Math.log(Math.max(thick[i]!, 0.3));
+        smoothV(thick, 5);
+        for (let i = 0; i < n; i++) thick[i] = Math.exp(thick[i]!);
+      }
+    }
     verts += n;
     // Packed for the runtime (models/cakeShaders.ts foodPatch): one normalised RGBA8 attribute, x the
     // tooth ridge (−1…1 → 0…1), y the occlusion, z the thickness over FOOD_THICK_MM, w unused.
