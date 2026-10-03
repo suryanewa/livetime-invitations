@@ -1,0 +1,3 @@
+scripts/cake-perf.ts http://127.0.0.1:5605 polish (M2 Pro, Chrome headless, Metal; 2026-10-03, after fixes 2-5)
+polish laptop · materials: own 2.58 vs plain 2.57 ms (patches +0.01) · bench (120) min 1.56 q25 1.58 med 1.59 ms: frames 758 p50 16.70 p95 16.70 p99 16.80 max 16.8 ms · GPU render at guest-ready (169 frames) p50 17.66 p95 24.79 ms · buffer 2108×1185 @1.647019614671031
+polish phone · materials: own 1.89 vs plain 1.89 ms (patches +0.01) · bench (120) min 1.50 q25 1.78 med 2.16 ms: frames 757 p50 16.70 p95 16.70 p99 16.80 max 16.8 ms · GPU render at guest-ready (169 frames) p50 18.38 p95 25.87 ms · buffer 780×1688 @2

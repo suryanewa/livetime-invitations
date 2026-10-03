@@ -125,17 +125,22 @@ describe('Birthday v1.6 sculpted piping', () => {
     expect(p[8]!).toBeGreaterThan(p[100]! - 0.05);
   });
 
-  it('a dot is a pressed-in dome with a pulled peak that droops', () => {
-    const m = pipedDot([0, 0, 0], [0, 0, 1], [0, -1, 0], 2.6 * MM, 11);
-    let top: V3 = [0, 0, -Infinity], minZ = Infinity;
-    for (let i = 0; i < m.pos.length; i += 3) {
-      if (m.pos[i + 2]! > top[2]) top = [m.pos[i]!, m.pos[i + 1]!, m.pos[i + 2]!];
-      minZ = Math.min(minZ, m.pos[i + 2]!);
+  it('a dot is a pressed-in dome with a pulled peak, each leaning its own way (v1.6 polish: not all down)', () => {
+    const quadrants = new Set<number>();
+    for (let seed = 11; seed < 23; seed++) {
+      const m = pipedDot([0, 0, 0], [0, 0, 1], [0, -1, 0], 2.6 * MM, seed);
+      let top: V3 = [0, 0, -Infinity], minZ = Infinity;
+      for (let i = 0; i < m.pos.length; i += 3) {
+        if (m.pos[i + 2]! > top[2]) top = [m.pos[i]!, m.pos[i + 1]!, m.pos[i + 2]!];
+        minZ = Math.min(minZ, m.pos[i + 2]!);
+      }
+      expect(top[2]).toBeGreaterThan(2 * MM);
+      expect(minZ).toBeLessThan(-0.2 * MM);
+      // The peak is pulled off the dome's centre.
+      expect(Math.hypot(top[0], top[1])).toBeGreaterThan(0.05 * MM);
+      quadrants.add((top[0] > 0 ? 1 : 0) + (top[1] > 0 ? 2 : 0));
     }
-    expect(top[2]).toBeGreaterThan(2 * MM);
-    expect(minZ).toBeLessThan(-0.2 * MM);
-    // The peak has drooped down (−y) from the centre.
-    expect(top[1]).toBeLessThan(0);
+    expect(quadrants.size).toBeGreaterThanOrEqual(3);
   });
 });
 
