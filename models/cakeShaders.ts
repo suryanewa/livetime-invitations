@@ -431,7 +431,7 @@ export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodL
  * (× pitch); `relief` and `value` their height (× the coat's `wave`) and colour, `noise` the
  * hand-mixed mid-scale colour that replaced the old rings.
  */
-export const TOP_ARCS = { pitch: [0.05, 0.083], segMin: 0.9, segVar: 1.6, gaps: 0.58, lipLen: 0.012, drift: 0.35, relief: 1.0, value: 1.0, noise: 1.45 } as const;
+export const TOP_ARCS = { pitch: [0.05, 0.083], segMin: 0.9, segVar: 1.6, gaps: 0.58, lipLen: 0.012, drift: 0.35, relief: 1.0, value: 1.1, noise: 1.9 } as const;
 
 const FOOD_NOISE = /* glsl */ `${CAKE_NOISE}
 vec3 cakeHash33(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.xxy + p.yxx) * p.zyx); }
