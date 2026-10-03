@@ -8,12 +8,12 @@
 import { join, resolve } from 'node:path';
 import { type Document, type Material, type Node, NodeIO, type Primitive, type Scene, type Texture } from '@gltf-transform/core';
 import {
-  ALL_EXTENSIONS, EXTTextureWebP, KHRMaterialsEmissiveStrength, KHRMaterialsVariants, type EmissiveStrength, type MappingList,
+  ALL_EXTENSIONS, EXTMeshoptCompression, EXTTextureWebP, KHRMaterialsEmissiveStrength, KHRMaterialsVariants, type EmissiveStrength, type MappingList,
 } from '@gltf-transform/extensions';
 import {
   compressTexture, dedup, joinPrimitives, listTextureSlots, mergeDocuments, prune, quantize, simplifyPrimitive, transformMesh, transformPrimitive, unpartition, weld, weldPrimitive,
 } from '@gltf-transform/functions';
-import { MeshoptSimplifier } from 'meshoptimizer';
+import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { loadSharp } from './sharp.ts';
 import type { BoxPoint, CreateNode, MasterRecipe, MaterialPolicy, NodePoint, RawImage, SceneRecipe, Vec3 } from './types.ts';
@@ -21,8 +21,15 @@ import type { BoxPoint, CreateNode, MasterRecipe, MaterialPolicy, NodePoint, Raw
 export const MASTERS_DIR = join(import.meta.dirname, '..', '..', 'models', 'masters');
 export const SCENE_TOP = '@scene';
 
+// v1.6: every runtime GLB is written with EXT_meshopt_compression (see `compressGeometry`), so
+// every reader and writer needs the codec. Both are WASM; wait for them once, here.
+await Promise.all([MeshoptEncoder.ready, MeshoptDecoder.ready]);
+
+/** NodeIO with every extension and the meshopt codec (reads and writes compressed GLBs). */
 export function createIO(): NodeIO {
-  return new NodeIO().registerExtensions(ALL_EXTENSIONS);
+  return new NodeIO()
+    .registerExtensions(ALL_EXTENSIONS)
+    .registerDependencies({ 'meshopt.encoder': MeshoptEncoder, 'meshopt.decoder': MeshoptDecoder });
 }
 
 // ── Matrices (three's Matrix4 is column-major, like glTF) ───────────────────────────
@@ -690,10 +697,41 @@ export async function applyTexturePolicy(doc: Document, recipe: SceneRecipe, log
 /**
  * The chain after composition (shared by `pnpm models` and the tests): dedup → weld →
  * prune(keepLeaves, keepAttributes) → texture policy → quantize(POSITION, NORMAL) → unpartition.
- * UVs stay float (masters' atlases and the builder's signature tiling alike).
+ * UVs stay float (masters' atlases and the builder's signature tiling alike). The writer then
+ * applies `compressGeometry` (v1.6, meshopt; lossless on top of this quantisation).
  */
 export async function optimizeComposed(doc: Document, recipe: SceneRecipe, log: ComposeLog): Promise<void> {
   await doc.transform(dedup(), weld(), prune({ keepLeaves: true, keepAttributes: true }));
   await applyTexturePolicy(doc, recipe, log);
   await doc.transform(quantize({ pattern: /^(POSITION|NORMAL)$/, quantizePosition: 14, quantizeNormal: 10 }), unpartition());
+}
+
+// ── Geometry compression (v1.6) ───────────────────────────────────────────────────────
+/**
+ * The one pipeline option for geometry compression, applied to every scene GLB and the shared
+ * bin as the last step before writing (`compressGeometry`). `pnpm models --compression=none`
+ * writes the same document without it, for A/B checks.
+ *
+ * - `'meshopt'` (default): EXT_meshopt_compression, declared required, with the QUANTIZE method:
+ *   every vertex stream and index buffer goes through meshopt's byte codecs with **no filters**
+ *   (no octahedral normals, no exponential positions) and **no reorder**, so the decoded
+ *   accessors are bit-identical to the uncompressed export's, in the same vertex and triangle
+ *   order (the index codec may rotate a triangle's corners, keeping its winding). Quantisation
+ *   stays exactly what `optimizeComposed` does (14-bit positions, 10-bit normals, KHR_mesh_quantization).
+ * - `'none'`: the uncompressed form every GLB had before v1.6 (KHR_mesh_quantization only).
+ *
+ * Why no reorder and no further quantisation (measured on the v1.6 exports, docs/asset-manifest.md):
+ * meshopt's size-targeted reorder made the cake 1.4 MiB larger (its swept piping is already in
+ * coherent strip order); 13-bit positions saved 11 KiB raw / 238 KiB gzip on the cake while
+ * moving vertices; octahedral 8-bit normals would change the shading.
+ */
+export type GeometryCompression = 'meshopt' | 'none';
+export const GEOMETRY_COMPRESSION: GeometryCompression = 'meshopt';
+
+/** Marks the document for meshopt compression on write (or leaves it as is for `'none'`). */
+export function compressGeometry(doc: Document, mode: GeometryCompression = GEOMETRY_COMPRESSION): void {
+  if (mode === 'none' || !doc.getRoot().listAccessors().length) return;
+  doc.createExtension(EXTMeshoptCompression)
+    .setRequired(true)
+    .setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
 }

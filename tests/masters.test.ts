@@ -4,13 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Document, type Texture } from '@gltf-transform/core';
 import { KHRMaterialsAnisotropy } from '@gltf-transform/extensions';
-import { boxIn, composeMasters, createIO, createSceneNodes, findNode, LUT_EDGE, optimizeComposed } from '../scripts/masters/compose.ts';
+import { boxIn, composeMasters, compressGeometry, createIO, createSceneNodes, findNode, LUT_EDGE, optimizeComposed } from '../scripts/masters/compose.ts';
 import { loadSharp } from '../scripts/masters/sharp.ts';
 import type { SceneRecipe } from '../scripts/masters/types.ts';
 
 /**
  * The master importer end to end on a synthetic master: compose → the export chain (quantize
- * included) → GLB bytes → read back, exactly as `pnpm models` does.
+ * included) → geometry compression (meshopt, v1.6) → GLB bytes → read back, exactly as
+ * `pnpm models` does.
  */
 
 /** Deterministic pseudo-random bytes (LCG). */
@@ -109,8 +110,41 @@ describe('master importer: export chain on a synthetic master', async () => {
   createSceneNodes(doc, recipe.create!);
   await composeMasters(doc, recipe, () => {});
   await optimizeComposed(doc, recipe, () => {});
-  const out = await createIO().readBinary(await createIO().writeBinary(doc));
+  const plain = await createIO().writeBinary(doc);
+  compressGeometry(doc);
+  const glb = await createIO().writeBinary(doc);
+  const out = await createIO().readBinary(glb);
   const used = out.getRoot().listExtensionsUsed();
+
+  it('compresses geometry with meshopt (required, no filters) and decodes to the uncompressed streams bit for bit', async () => {
+    const meshopt = used.find((e) => e.extensionName === 'EXT_meshopt_compression');
+    expect(meshopt?.isRequired()).toBe(true);
+    // (No size check here: two boxes are smaller than the extension's JSON. The real GLBs: docs/asset-manifest.md.)
+    const json = JSON.parse(new TextDecoder().decode(glb.subarray(20, 20 + new DataView(glb.buffer, glb.byteOffset).getUint32(12, true))));
+    const views = (json.bufferViews as { extensions?: { EXT_meshopt_compression?: { filter?: string } } }[]).map((v) => v.extensions?.EXT_meshopt_compression).filter(Boolean);
+    expect(views.length).toBeGreaterThan(0);
+    expect(views.every((v) => v!.filter === undefined)).toBe(true);
+    // Same vertex and triangle order: every attribute equal; each triangle the same corners, at
+    // most rotated by the index codec (winding kept).
+    const ref = await createIO().readBinary(plain);
+    const prims = (d: typeof out) => d.getRoot().listMeshes().flatMap((m) => m.listPrimitives());
+    expect(prims(out).length).toBe(prims(ref).length);
+    prims(ref).forEach((a, i) => {
+      const b = prims(out)[i]!;
+      expect(b.listSemantics()).toEqual(a.listSemantics());
+      for (const sem of a.listSemantics()) expect(Array.from(b.getAttribute(sem)!.getArray()!)).toEqual(Array.from(a.getAttribute(sem)!.getArray()!));
+      const ia = a.getIndices()!.getArray()!, ib = b.getIndices()!.getArray()!;
+      expect(ib.length).toBe(ia.length);
+      for (let t = 0; t < ia.length; t += 3) {
+        const tri = [ia[t]!, ia[t + 1]!, ia[t + 2]!], got = [ib[t]!, ib[t + 1]!, ib[t + 2]!];
+        expect([0, 1, 2].some((r) => tri.every((v, k) => v === got[(k + r) % 3]))).toBe(true);
+      }
+    });
+  });
+
+  it('the compressed export is deterministic', async () => {
+    expect(Buffer.compare(Buffer.from(await createIO().writeBinary(doc)), Buffer.from(glb))).toBe(0);
+  });
 
   it('really quantises (the case that used to undo a pivot)', () => {
     expect(used.map((e) => e.extensionName)).toContain('KHR_mesh_quantization');

@@ -1,11 +1,10 @@
 import { Box3, type Camera, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/party/party.glb?url';
 import {
   armPoint, FRAME_MARGIN_X, LID, LID_CLOSED_BOX, PLATTER, PLATTER_TOP, PLAYER, RECORD, rigRecordPlayer, setStatusLit, TONEARM, type RecordLabel, type RecordPlayerRig,
 } from '../../../models/recordPlayer.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
-import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
+import { disposeImported, gltfLoader, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { silhouettePoints } from '../../render/framing.ts';
 import type { SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
@@ -274,7 +273,7 @@ export const partyScene: SceneModule = {
   category: 'party',
   async load({ config, library, signal }: SceneLoadContext): Promise<SceneInstance> {
     if (config.category !== 'party') throw new Error('party scene given another config');
-    const gltf = await new GLTFLoader().parseAsync(await fetchGlb(glbUrl, signal), '');
+    const gltf = await gltfLoader().parseAsync(await fetchGlb(glbUrl, signal), '');
     const root = gltf.scene.getObjectByName('party_root');
     if (!root) throw Object.assign(new Error('missing party_root'), { reason: 'asset-failure' as const });
     // Label presets live in the GLB (KHR_materials_variants); read them before detaching the root.

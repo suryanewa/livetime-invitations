@@ -1,6 +1,19 @@
 import { type Material, type Mesh, MeshPhysicalMaterial, MeshStandardMaterial, type Object3D, type Texture } from 'three';
-import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { type GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import type { MaterialLibrary } from '../src/render/materials.ts';
+
+let sharedLoader: GLTFLoader | null = null;
+
+/**
+ * The one GLTFLoader every runtime GLB goes through (the five scenes and the deferred bin), with
+ * three's MeshoptDecoder set once: since v1.6 the exported GLBs carry EXT_meshopt_compression
+ * (scripts/masters/compose.ts `compressGeometry`). The decoder's WASM is inlined in its module,
+ * so the bundle needs no extra file; it decodes on the main thread while the GLB is parsed.
+ */
+export function gltfLoader(): GLTFLoader {
+  return (sharedLoader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder));
+}
 
 /**
  * Runtime side of the master import path (scripts/masters/). Imported scan-to-CAD materials are

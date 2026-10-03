@@ -1,12 +1,11 @@
 import { Box3, type Camera, Euler, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import glbUrl from '../../../assets/scenes/birthday/birthday.glb?url';
 import { rigBirthday, type BirthdayRig } from '../../../models/birthday.ts';
 import { poseFlame } from '../../../models/birthdayFire.ts';
 import { BIN_POS, BIN_YAW, MASTER, CAKE_SCALE, WALL_Z } from '../../../models/birthdayContract.ts';
 import type { CakePreset } from '../../../models/cake.ts';
 import { BIN, binEntranceStart, binPlaceholder, flapAngles, openBinSilhouette } from '../../../models/disposalBin.ts';
-import { disposeImported, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
+import { disposeImported, gltfLoader, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { silhouettePoints } from '../../render/framing.ts';
 import type { DeferredContext, SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
@@ -620,7 +619,7 @@ export const birthdayScene: SceneModule = {
     // framing silhouette is computed from its design while the cake downloads.
     const cakeFetch = fetchGlb(glbUrl, signal);
     openBinSilhouette(BIN_POS, BIN_YAW);
-    const cake = await new GLTFLoader().parseAsync(await cakeFetch, '');
+    const cake = await gltfLoader().parseAsync(await cakeFetch, '');
     const root = cake.scene.getObjectByName('birthday_root');
     if (!root) throw Object.assign(new Error('missing birthday nodes'), { reason: 'asset-failure' as const });
     // Frosting presets live in the GLB (KHR_materials_variants); read them before detaching the root.
