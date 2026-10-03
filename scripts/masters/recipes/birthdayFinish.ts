@@ -323,6 +323,18 @@ export function finishPoint(p: V3, tier: TierId, kind: Kind, out: V3 = [0, 0, 0]
 }
 
 /** Applies `map` to positions and transforms normals by its Jacobian (n' ∝ cof(J)·n). */
+/** v1.6 polish 2: moves each run of `per` vertices (one pearl) by the map at its centre, rigidly. */
+function deformRigid(pos: Float32Array, per: number, map: (p: V3, out: V3) => V3): void {
+  const c: V3 = [0, 0, 0], o: V3 = [0, 0, 0];
+  for (let s = 0; s < pos.length / 3; s += per) {
+    const n = Math.min(per, pos.length / 3 - s);
+    c[0] = c[1] = c[2] = 0;
+    for (let i = s; i < s + n; i++) { c[0] += pos[3 * i]! / n; c[1] += pos[3 * i + 1]! / n; c[2] += pos[3 * i + 2]! / n; }
+    map(c, o);
+    for (let i = s; i < s + n; i++) { pos[3 * i] = pos[3 * i]! + o[0] - c[0]; pos[3 * i + 1] = pos[3 * i + 1]! + o[1] - c[1]; pos[3 * i + 2] = pos[3 * i + 2]! + o[2] - c[2]; }
+  }
+}
+
 function deform(pos: Float32Array, nrm: Float32Array | null, map: (p: V3, out: V3) => V3): void {
   const p: V3 = [0, 0, 0], a: V3 = [0, 0, 0], b: V3 = [0, 0, 0];
   const J = new Float64Array(9);
@@ -1123,6 +1135,8 @@ function localOf(c: Component, R: number): Local {
 }
 
 /** Fine spheres (sugar pearls), each a dragée a hair out of round. */
+/** Vertices of one pearl (pearlSpheres: (RINGS + 1) × (SEG + 1)). */
+const PEARL_VERTS = 14 * 21;
 function pearlSpheres(list: { c: V3; r: number }[], seed: number): Mesh {
   const m: Mesh = { pos: [], nrm: [], uv: [], idx: [] };
   const SEG = 20, RINGS = 13;
@@ -1343,7 +1357,19 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
           let { c: ctr, r } = fitSphere(pts);
           const box = (c.max[0] - c.min[0] + c.max[1] - c.min[1] + c.max[2] - c.min[2]) / 6;
           if (!(r > 0.3 * box && r < 2.5 * box) || dist(ctr, c.centroid) > 2 * box) { ctr = c.centroid; r = box; }
-          pearls.push({ c: ctr, r: r * (1 + 0.06 * g.s()), cap: part === 'border_pearls' ? 3 : 1.4 });
+          const size = 1 + 0.06 * g.s();
+          if (part === 'border_pearls') {
+            // v1.6 polish 2 (the re-judge's optional item): a shell border is not dotted at every junction:
+            // a third of the dragées left off, the rest set by hand (±10 % in size, off the junction by
+            // up to a tenth of their radius along and across the border).
+            const h = stream(seed0 + 7919 * k + 5);
+            if (h.r() < 0.33) return;
+            const t: V3 = norm([-ctr[2], 0, ctr[0]]);
+            ctr = add(add(ctr, mul(t, 0.1 * r * h.s())), mul(norm([ctr[0], 0, ctr[2]]), 0.1 * r * h.s()));
+            pearls.push({ c: ctr, r: r * (1 + 0.1 * h.s()), cap: 3 });
+            return;
+          }
+          pearls.push({ c: ctr, r: r * size, cap: 1.4 });
         });
         break;
       }
@@ -1365,22 +1391,28 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
   // v1.6 polish (fix 3): every sugar pearl bedded in what it was pressed into, once all the piping is
   // built: lifted out along the way it faces until the piping holds only its lowest part (no piping
   // through its visible side: the "bitten" pearls), the frosting round it its fillet.
-  let lifted = 0, maxLift = 0, buried = 0;
+  let lifted = 0, maxLift = 0, buried = 0, merged = 0;
+  // v1.6 polish 2: two dragées the bedding lifted into each other read as one egg (the column tops):
+  // the smaller of an overlapping pair is left off.
+  const placed: { c: V3; r: number }[] = [];
   for (const d of deferred) {
     const kept: typeof d.pearls = [];
     for (const pr of d.pearls) {
       const t = hash.bed(pr.c, pr.r, pr.d, pr.cap, !!pr.optional);
       // One the piping has closed over (a shell border's dragée under the next head) is not there.
       if (t < 0) { buried++; continue; }
+      const hit = placed.find((q) => dist(q.c, pr.c) < 0.85 * (q.r + pr.r));
+      if (hit && hit.r >= pr.r) { merged++; continue; }
       if (t > 0) { lifted++; maxLift = Math.max(maxLift, t / pr.r); }
       kept.push(pr);
+      placed.push(pr);
     }
     d.pearls = kept;
     const m = pearlSpheres(d.pearls, d.seed);
     setGeometry(doc, d.prim, m);
     log(`  piping ${d.name}: ${d.pearls.length} dragées (${d.before} → ${m.pos.length / 3} vertices)`);
   }
-  log(`  pearls bedded: ${lifted} lifted out of the piping (up to ${maxLift.toFixed(2)} r), ${buried} buried under it (left out)`);
+  log(`  pearls bedded: ${lifted} lifted out of the piping (up to ${maxLift.toFixed(2)} r), ${buried} buried under it (left out), ${merged} overlapping a larger one (left out)`);
 }
 
 /** The piping's vertices in a uniform grid (scan units), for bedding the pearls. */
@@ -1709,7 +1741,12 @@ export async function finishCake(doc: Document, log: (line: string) => void): Pr
         d.pos = read(prim.getAttribute('POSITION')!);
         d.nrm = read(prim.getAttribute('NORMAL')!);
       }
-      deform(d.pos, d.nrm, (p, out) => finishPoint(p, info.tier, info.kind, out));
+      // v1.6 polish 2: a sugar pearl is hard: it moves with the field, it is not stretched by it (the
+      // bays' drop changes over a pearl's height at the column tops: the egg-shaped dragées).
+      const part = node.getName().replace(/^tier_(top|bottom)_?/, '');
+      const pearlPrim = part === 'pearls' || part === 'border_pearls' || ((part === 'rosettes' || part === 'top_rosettes') && prim !== node.getMesh()!.listPrimitives()[0]);
+      if (pearlPrim) deformRigid(d.pos, PEARL_VERTS, (p, out) => finishPoint(p, info.tier, info.kind, out));
+      else deform(d.pos, d.nrm, (p, out) => finishPoint(p, info.tier, info.kind, out));
       prim.setAttribute('POSITION', accessor(doc, 'VEC3', d.pos));
       prim.setAttribute('NORMAL', accessor(doc, 'VEC3', d.nrm));
       for (let i = 0; i < d.pos.length; i += 3) { maxR = Math.max(maxR, Math.hypot(d.pos[i]!, d.pos[i + 2]!)); top = Math.max(top, d.pos[i + 1]!); }
