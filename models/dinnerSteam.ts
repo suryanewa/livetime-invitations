@@ -330,6 +330,8 @@ uniform vec3 uSpillMax[${STEAM_LAYERS}];
 /** The light volume's box (the clouds and the veils: it never jumps when the spill's box goes). */
 uniform vec3 uLightMin;
 uniform vec3 uLightMax;
+/** The steam's shadow on the scene: none while the cloud is still enclosed by the cloche. */
+uniform float uShadowOn;
 uniform int uSteps;
 uniform int uProbes;
 /** The march's resolution over the drawing buffer's (≈ 0.42–0.5 a side). */
@@ -698,11 +700,16 @@ void main() {
   if (tSurf < 1e8) {
     vec3 ps = ro + rd * tSurf;
     // (A margin: the table's points sit exactly on the box's floor, and rounding must not flip them.)
-    if (all(greaterThanEqual(ps, uLightMin - 0.02)) && all(lessThanEqual(ps, uLightMax + 0.02))) {
+    // Not on the cloche itself: the cloud inside it cannot shade its outside, and the silver's own
+    // light is its reflections.
+    vec3 cs = (uCoverInv * vec4(ps, 1.0)).xyz;
+    bool onDome = cs.y > -0.03 && cs.y < ${f(COVER.height + 0.02)} && length(cs.xz) < max(domeWall(max(cs.y, 0.0)), 0.14) + 0.04;
+    if (!onDome && all(greaterThanEqual(ps, uLightMin - 0.02)) && all(lessThanEqual(ps, uLightMax + 0.02))) {
       // Faded towards the box's sides, so its edge never draws a line.
       vec3 e = min(ps - uLightMin, uLightMax - ps);
       float inside = smoothstep(-0.02, 0.12, min(e.x, e.z));
-      shadow = 1.0 - ${f(STEAM_LOOK.shadow)} * inside * (1.0 - exp(-uSigma * lightAt(ps).x));
+      // (Where the cloche already shades the key, the steam takes nothing more.)
+      shadow = 1.0 - ${f(STEAM_LOOK.shadow)} * uShadowOn * inside * domeLit(ps) * (1.0 - exp(-uSigma * lightAt(ps).x));
     }
   }
   if (t1 <= t0) { gl_FragColor = vec4(0.0, 0.0, used, shadow); return; }
@@ -932,7 +939,7 @@ export class DinnerSteam {
       uBoxMin: { value: new Vector3(-1, 0, -1) },
       uBoxMax: { value: new Vector3(1, 2, 1) },
       uCloudMin: { value: v3() }, uCloudMax: { value: v3() }, uVeilMin: { value: v3() }, uVeilMax: { value: v3() },
-      uSpillMin: { value: v3() }, uSpillMax: { value: v3() }, uLightMin: { value: new Vector3() }, uLightMax: { value: new Vector3(1, 1, 1) },
+      uSpillMin: { value: v3() }, uSpillMax: { value: v3() }, uLightMin: { value: new Vector3() }, uLightMax: { value: new Vector3(1, 1, 1) }, uShadowOn: { value: 0 },
       uSteps: { value: STEAM_LOOK.steps.dense },
       uProbes: { value: PROBES },
       uScale: { value: new Vector2(0.5, 0.5) },
@@ -1102,6 +1109,7 @@ export class DinnerSteam {
     const limMin = TMP_A.set(-BOX_MAX, 0, -BOX_MAX), limMax = TMP_B.set(BOX_MAX, Y_MAX, BOX_MAX);
     let any = false;
     let steps: number = STEAM_LOOK.steps.veil;
+    let shadowOn = 0;
     this.clocks.forEach((c, l) => {
       const drawn = c.tau !== null && c.fade > 0;
       // An empty box (min > max) is never entered.
@@ -1117,6 +1125,7 @@ export class DinnerSteam {
       const present = s.present && s.fade > 0;
       A[l]!.set(tau, 1, c.fade, present ? 1 : 0);
       if (present) steps = Math.max(steps, s.age < 1.15 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
+      shadowOn = Math.max(shadowOn, present ? Math.min(1, s.age / 0.15) : 1);
       B[l]!.set(s.dragSide.x, s.dragSide.y, s.lean.x, s.lean.y);
       Cc[l]!.set(s.turb, s.erode, s.age, s.rise);
       const look = cloudLook(s.age, s.erode, this.look);
@@ -1157,6 +1166,7 @@ export class DinnerSteam {
       }
     });
     this.steps = steps;
+    this.uniforms.uShadowOn!.value = shadowOn;
     if (!any) {
       min.set(-1, 0, -1);
       max.set(1, 1, 1);
