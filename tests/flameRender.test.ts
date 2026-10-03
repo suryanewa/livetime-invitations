@@ -132,7 +132,16 @@ describe('v1.6 flames: the volume, the bloom and the haze', () => {
     const out = strictRenderer();
     draw(out);
     expect(pendingBloom(out)).toBeNull();
-    expect(hazeColumns(out).length).toBe(0);
+    // The hot wick goes on heating the plume (the haze runs on into the first vapour from the
+    // ember), but only while the scene is live: settled here, none shimmers.
+    expect(hazeColumns(out).every((h) => h.strength === 0)).toBe(true);
+    for (let k = 0; k < 120; k++) scene.simulate(1 / 120);
+    scene.sample('accept', 0.9);
+    scene.beforeRender();
+    const plume = strictRenderer();
+    draw(plume);
+    expect(pendingBloom(plume)).toBeNull();
+    expect(hazeColumns(plume).some((h) => h.strength > 0.1)).toBe(true);
   });
 
   it('the breath tears the flame (turbulence follows its lean) and the box holds it', () => {

@@ -400,6 +400,8 @@ export class BirthdayScene implements SceneInstance {
     this.rig.candles.forEach((c, i) => {
       const flame = f.flames[i]!;
       flicker(i, this.liveTime, flame.intensity > 0 ? gain : 0, this.flicker);
+      // v1.6: whether the scene is live, for the heat haze that runs on into the plume once out.
+      this.flicker.gain = gain;
       // The wick glows inside a burning flame; bare after the breath, it flares and cools to ash.
       const ember = sm ? emberAt(i, sm.clock, sm.kind) : EMBER.lit * flame.lit * (flame.out ? 0 : 1);
       const char = wickChar((f.litTime[i] ?? 0) + this.liveLit);
