@@ -413,10 +413,10 @@ function legacyFlameMaterial(name: string, core: string, rim: string): ShaderMat
 }
 
 /**
- * Candle flame (v1.5, Birthday #4): a ray-marched diffusion flame on a camera-facing quad that the
- * Birthday rig drives (models/birthday.ts), coloured by soot's Planck radiance at each point's
- * temperature and tone mapped as the HDR emitter it is (src/render/flame.ts). No colour tokens:
- * the colours come from temperature.
+ * Candle flame (v1.5, Birthday #4; v1.6 a ray-marched volume with an HDR twin for the bloom): a
+ * diffusion flame the Birthday rig drives (models/birthdayFire.ts), coloured by soot's Planck
+ * radiance at each point's temperature through a camera's response (src/render/flame.ts). No
+ * colour tokens: the colours come from temperature.
  */
 function flameMaterial(name: string): ShaderMaterial {
   return createFlameMaterial(name);

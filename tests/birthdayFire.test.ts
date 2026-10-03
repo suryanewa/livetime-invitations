@@ -556,14 +556,16 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     scene.beforeRender();
     expect(w.char.value).toBe(1);
     expect(w.ash.value).toBe(0);
-    // The breath: the bared wick's ember flares (bright orange: red saturated, green part way, no
-    // salmon wash), then greys to ash on the live clock.
+    // The breath: the bared wick's ember flares (bright orange: red near saturation, green part way,
+    // no salmon wash; v1.6: through the flame's shoulder, never red and green clipped together, a
+    // yellow LED), then greys to ash on the live clock.
     scene.sample('accept', BREATH_AT[3]!.lift + 0.05);
     scene.beforeRender();
     const e = w.ember.value;
-    expect(e.r).toBeGreaterThan(0.9);
+    expect(e.r).toBeGreaterThan(0.75);
+    expect(e.r).toBeLessThan(0.97);
     expect(e.g / e.r).toBeGreaterThan(0.2);
-    expect(e.g / e.r).toBeLessThan(0.75);
+    expect(e.g / e.r).toBeLessThan(0.6);
     expect(e.b / e.r).toBeLessThan(0.1);
     expect(w.ash.value).toBe(0);
     scene.sample('accept', DURATIONS.accept - 1 / 120);

@@ -1,0 +1,22 @@
+Frame cost, M2 Pro, Chrome/Metal, lit guest-ready Birthday, live (flicker, haze). Each frame waited on
+with a 1-pixel readPixels; alternating 12-frame batches per case, median of 50 batches.
+The machine was shared with the other owners' dev servers and browsers: absolute times run
+~1.5-2 ms above a quiet run (quiet laptop full frame: 6.0 ms); the differences are the costs.
+Bloom = full - no bloom; haze = full - no haze; volumes = (no bloom, no haze) - (no flames);
+light = (no flames) - (no flames, no flame light). See docs/scenes/birthday-v1.6-flames.md.
+
+laptop 1280x720 CSS @2x (2,560x1,440 capped to 2.5 MP: 2,108x1,186)
+full                                 8.475 ms
+no bloom                             8.067 ms
+no haze                              7.892 ms
+no bloom, no haze                    7.008 ms
+no flames (no march, bloom, haze)    7.258 ms
+no flames, no flame light            6.417 ms
+
+phone 390x844 CSS @2 (Normal tier cap; 780x1,688)
+full                                 8.017 ms
+no bloom                             6.908 ms
+no haze                              7.192 ms
+no bloom, no haze                    6.433 ms
+no flames (no march, bloom, haze)    6.400 ms
+no flames, no flame light            5.692 ms
