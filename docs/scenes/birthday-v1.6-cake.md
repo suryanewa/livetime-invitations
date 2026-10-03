@@ -198,3 +198,97 @@ cylinder's corner, v1.5 1.7).
 
 Posters (`tests/browser/posters.spec.ts`) fail until the integrator regenerates the Birthday posters, thumbnails and
 backdrops: the cake changed.
+
+## Polish round (2026-10-03: the VFX judge's five fixes)
+
+A VFX judge scored the build above 5.5–6.5 at the showcase sizes and 3.5–4.5 in macro and asked for five fixes. Frames
+through the live stage from the judge's own cameras (`judge.mjs`: laptop crop, square 540, phone crop and the macros
+hero-close, swag-z, rosette-z, rosette-side3q, shells-z, top-edge, body-upper-z, base, far-edge, crown-row, crown-z,
+smear-z, sockets-front, plus rosette-edge for the silhouette): `evidence/v1.6/cake-polish/` (`before/` is fix 1's
+state, `final/`, side-by-side `compare-*.webp`, cocoa in `final/cocoa-*`, `perf.txt`).
+
+1. **The coat** (`67cfd13`): satin range 0.30–0.44 (cocoa 0.15–0.26, piping 0.20–0.38) with a slow ±0.07 drift,
+   scraper streaks round the side and wandering turntable streaks on the top (±3–5 %), hand-mixed hue drift, a lighter
+   top, unique hand relief in the shader (±0.35 mm, 2× on the top), clustered pinholes, glints within ≈ 22° of the
+   grain normal; the atlas without its crater rings and corduroy chatter.
+2. **No twins** (`birthdayPiping.ts`, `birthdayFinish.ts` regeneratePiping):
+   - rosettes ±15 % in size (was ±5 %), tipped ±8° about a random axis, the start anywhere round; the pearl set
+     0.06–0.22 R off the centre, one rosette in eight without one (30 of 38 keep theirs);
+   - the side rosettes' rope, where it overhangs the edge, carries the star's teeth all round (`Foot.back`,
+     `Tip.wrap`), and their backs (`backMound`) are the coil seen from behind: 4–4.8 loops of rope (≈ 0.16 R deep)
+     with finer teeth on them, 0.74 R across (was a smooth 0.9 R dome);
+   - crown rosettes are domed swirls (`domedSwirl`): 1.35–1.75 turns from the outside in, each loop riding up on the
+     last (the dome 1.7–2.1 × the rope's height), the rope thinning 40 % as the pressure eases, its section square to
+     the climb, pulled off in a tapered peak that leans the way the bag left, a star kiss closing the eye;
+   - dots ±20 % in size, the peak leaning anywhere (±160° from down, 0.3–0.75 of its pull), finer (16 × 40);
+   - swag bays hang ±2.6 mm at the low point (each bay together, ±0.5 mm a strand), strands ±12 % thick, 10–20 % fuller
+     where the loop bottoms out.
+3. **Shells and pearls**:
+   - shells are one chain: 1.6 slots long (was 1.42), the head at 35 %, the back rising out of the last tail (from 25 %
+     of the head), the tail fuller (exponent 1.3) running on under the next head and 25 % lower; 9–10 teeth, crest 0.5,
+     amp 0.30 (crisper, converging on the tail); the bottom border slumped onto the plate (`Foot.bulge` 0.3, the upper
+     border 0.15); the plate's crease (`plateContactPatch`): a ≈ 1 mm dark line on the key and the room's light, darkest
+     in the gaps between heads;
+   - every pearl is bedded once all the piping is built (`PipingHash.bed`): lifted out, up and away from the piping
+     round it (or along its rosette's axis), until the piping holds only its lowest 30 %; a shell border's dragée now
+     sits on the chain where a head meets the last tail; rosette pearls on the eye's kiss, crown pearls pressed into the
+     dome beside the peak;
+   - the dragée is a sugar shell (`pearlPatch`, `patchFrosting`): roughness 0.34, clearcoat 0.5 at 0.16 (was 1 at 0.04:
+     the chrome), iridescence ≤ 0.3, a little sheen, each pearl's own tint (ivory to a breath of blue, ±2 %) and dents
+     (≈ 1 mm); its occlusion floored at 60 % and coloured by the frosting it sits in.
+4. **Macro geometry**:
+   - rosette centres: the path never turns tighter than 1.12 × the rope's half-width (the folds were the crumpled
+     centres), the start blob 18 % fat (was 35 %, taller than the tail riding over it), the tail lies on its own first
+     loop (lifted by 90 % of the loop's height) on the outside, never back across the centre, and the eye is a star
+     kiss (8 teeth);
+   - swag ends tucked 0.8 h into the coat over their first and last 7 % (no white end between a rosette's loops);
+   - silhouettes: swag strands 4.6 samples a tooth (was 4) at 1.6 mm along (was 1.4), crest 0.42 and amp 0.23 (deeper,
+     narrower grooves); the rope border's teeth rounder (crest 0.55, amp 0.19, 6 samples a tooth) and its beads softer
+     (12 %, was 20 %): no row of spikes three-quarter on;
+   - grooves and creases shaded towards the frosting's own scattered colour squared (`FoodLook.grooveTint`: piping
+     0.32, body 0.3), never a cool grey;
+   - the coat's contact: the room's 10 mm occlusion at half strength (`aoMapIntensity` 0.5) and the key's occlusion only
+     on the 1–2 mm contact (`smoothstep(0.15, 0.95, contact)`): no centimetre halo, no quilting;
+   - the smear a film (13–20 mm, ≤ 0.3 mm, feathered to nothing, streaked and fingered along the drag, its edge
+     see-through over the plate: the material is drawn transparent from the film's thickness, carried in the ridge
+     channel), 3 mm further out (it lay under the slumped shells); crumbs lumpy and pitted (`crumb`);
+   - tassels and columns: tooth depth ±28–30 % drifting along, the skirts 0.35 → 1 → 0.7 with a 10 % tail, and a pulled
+     hem (`pulledLine` `hem`): each pleat drawn down its own way (crests further than grooves, smooth round the hem);
+   - the bake's per-vertex occlusion (2 passes) and thickness (5 passes, in log) averaged over each piece's one-ring:
+     the inward march found a small dome's far side from one vertex and missed it from the next, and the translucency
+     switched on and off in grey facets (the dots, the rosettes' eyes).
+5. **Light and colour**:
+   - white piping ivory (`ivoryK`, by how unsaturated the material is: the blue rosettes keep their hue): albedo
+     × (1, 0.985, 0.95) and its shade × (1.02, 1, 0.95); a lit swag crest at hero-close 232, 227, 217 (was 220, 223, 231),
+     a shell crest 246, 243, 235;
+   - a thin-edge glow (`FoodLook.rim`: piping 0.55, body 0.25): thin parts seen edge-on against a light, on the key and
+     the flames; the flames now also shine through thin piping in front of them (`flameTrans` 0.9, the key's `trans`
+     0.75);
+   - the warm pool on the top coat (`FLAME_POOL`, gain 2.0, wrap 0.5) in the body's own patch: each flame's light on
+     the top tier's top through every candle as a soft upright occluder (its own: the dark disc at its foot; the other
+     five: soft spokes), reading the flames' shared uniforms by reference (models/birthdayFire.ts untouched; the flame
+     lights are created before the frosting is patched); plus a broader scattered lift of the flames' own light
+     (`flameGain` body 0.5, piping 1.2). The top coat at sockets-front 169, 192, 244 → 188, 199, 244.
+   - **Rig, noted (not changed):** the shared `neutral-room` key is frontal for the decorated face; the material carries
+     the relief and the pool now carries the top, but a key 30–40° to the side (or a rim) would give the piping the
+     raking light the photographs have. That is the rig's owner's call.
+
+Geometry and contract after the round: 1,786,792 triangles (fix 1: 1,601,496; the side rosettes' all-round teeth and
+coil backs, the shell chain's 44 rows and the swirls are most of it); `MASTER.cakeRadius` 0.63567 (the rosettes and the
+slumped border reach the bin limit, now 0.6 mm short of it so the cake stays 27.7 cm ± 1 %), `MASTER.cakeTop` 0.65176
+(the swirls' peaks and pearls); sockets, collar, dimple, melt and the bin clearance unchanged (tests). Frame cost
+(`perf.txt`): the frosting's patches +0.01 ms at both sizes, 60 fps (p99 16.8 ms).
+
+What the judge would still find, and why:
+
+- side rosettes seen edge-on at the silhouette (rosette-edge, the laptop's left edge) are stacked ridged loops, closer to
+  a real coil but busier than a photograph's; their far-side backs read as ridged mounds, not every loop;
+- where a rosette's tail rides over its start there is a short step in the rope (two toothed ropes intersecting);
+- the pool is a warm cast over the whole top more than distinct pools: six flames 5 cm up overlap (physically right);
+  the other candles' shadows are faint at the showcase sizes;
+- the smear is still small in the judge's smear-z frame (a shell's slumped foot covers its start);
+- the frontal key (above).
+
+Tests: `tests/birthdayPiping.test.ts` (8; the dot test now asks for peaks leaning their own ways, ≥ 3 quadrants over 12
+seeds), `tests/birthday.test.ts` 34, `tests/masters.test.ts` 5, `tests/world-scale.test.ts` 7, `tests/bin.test.ts` 18,
+`tests/browser/birthday.spec.ts` 7, `pnpm typecheck` clean. Posters still need the integrator's regeneration.
