@@ -1,4 +1,4 @@
-import { AddEquation, AdditiveBlending, Color, CustomBlending, DoubleSide, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector3, Vector4 } from 'three';
+import { AddEquation, Color, CustomBlending, DoubleSide, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector3, Vector4 } from 'three';
 
 /**
  * Candle flame and smoke shaders (v1.5, Birthday #4; the flame rebuilt as a volume in v1.6, the
@@ -135,7 +135,7 @@ export interface FlameUniforms {
  * after the rig's exposure where the line of sight grazes its shell (≈20× the lit greige cove,
  * which a candle flame of ≈10⁴ cd/m² in a ≈2,500 lx room is), ≈5–7 straight through it.
  */
-export const FLAME_GAIN = 1900;
+export const FLAME_GAIN = 700;
 /**
  * Soot's absorption per scene unit at full soot loading: a candle flame is optically thin (a few
  * per cent), but its far side seen through the near one is a little dimmer, which is what gives
@@ -154,7 +154,7 @@ export const FLAME_CROSSTALK = 0.025;
  * `floor` × the flame's luminous output and nothing, faded out as the flame grows past `fade` px tall
  * (a large flame blooms from its own radiance).
  */
-export const FLAME_BLOOM_FLOOR = { sigma: 1.1, floor: 26, fade: [18, 60] as const } as const;
+export const FLAME_BLOOM_FLOOR = { sigma: 1.1, floor: 36, fade: [18, 60] as const } as const;
 
 /** Shared GLSL: the flame's field and march. `HDR` is defined for the bloom pass's twin. */
 const FLAME_FRAGMENT = /* glsl */ `
@@ -325,8 +325,14 @@ const FLAME_FRAGMENT = /* glsl */ `
     soot *= sootFormed(lit);
     // Temperature: hottest soot mid-flame; cooler at the tip and the outer mantle; just-formed soot
     // at the zone's foot is cooler (orange); the cut-off gas cools.
-    float T = 1900.0 - 380.0 * smoothstep(0.5, 1.0, s) - 430.0 * smoothstep(0.6, 1.0, rr);
+    float T = 1900.0 - 420.0 * smoothstep(0.45, 1.0, s) - 430.0 * smoothstep(0.6, 1.0, rr);
     T -= 220.0 * (1.0 - smoothstep(sf, sm + 0.1, s));
+    // v1.6 polish: the hot core. The soot is densest and hottest low in the luminous zone, just
+    // above where the dark core closes, and narrower than it: only there does a photograph clip
+    // to white (judge: a white core within 40–50 % of the width and low; golden above and round it).
+    float core = exp(-pow((s - (sm + 0.04)) / 0.16, 2.0)) * (1.0 - smoothstep(0.2, 0.62, rr));
+    T += 150.0 * core;
+    soot *= 1.0 + 1.2 * core;
     T -= 330.0 * cool;
     T -= 260.0 * (1.0 - lit);
     j = soot * blackbody(T);
@@ -416,9 +422,11 @@ const FLAME_FRAGMENT = /* glsl */ `
     // sensor's footprint floor.
     vec3 seen = sensor / (1.0 + sensor);
     Lx = mix(Lx, seen * (yl / max(dot(seen, vec3(0.2126, 0.7152, 0.0722)), 1e-4)), 0.5);
+    // (Its own radiance, without the floor, in alpha: the composite keeps the glare off the flame.)
+    float own = dot(Lx, vec3(0.2126, 0.7152, 0.0722));
     vec2 dp = gl_FragCoord.xy - uFloor.xy;
     Lx += uFloor.w * exp(-0.5 * dot(dp, dp) / (uFloor.z * uFloor.z)) * vec3(1.0, 0.62, 0.25);
-    gl_FragColor = vec4(Lx, 1.0);
+    gl_FragColor = vec4(Lx, own);
   #else
     // Ember: the wick tip's glow (σ 0.5 mm round it), evaluated in closed form along the ray, an
     // orange point (its own response, without the flame's path to white; not a bloom source: the
@@ -430,14 +438,18 @@ const FLAME_FRAGMENT = /* glsl */ `
     float Te = 900.0 + 420.0 * uEmber;
     // Its hottest channel stays under 1 before the response: orange, then red, then nothing.
     sensor += step(1e-3, uEmber) * 70.0 * exp(-dperp2 / (se * se)) * blackbody(Te) * uExposure;
-    // The camera's shoulder, per channel: x / (1 + x) never clips two channels together (no lemon:
-    // red stays above green through the yellow body), a cream core, an amber rim.
-    vec3 film = sensor / (1.0 + sensor);
+    // The camera's shoulder, per channel (v1.6 polish: 1 − e^−x, a sensor's: red saturates while
+    // green is still well down, so the body is golden, G/R ≈ 0.8, and only the hot core goes white
+    // through the crosstalk; x / (1 + x) compressed every channel towards a lemon-cream).
+    vec3 film = 1.0 - exp(-sensor);
     // Premultiplied over what is behind: soot's absorption is the flame's alpha (the limb, where
     // the line of sight runs longest through the soot shell, holds its colour against a bright
     // wall), and where it is bright it outshines what is behind (a film's response to a highlight
     // over a lit wall: the wall's blue does not wash its rim to peach).
-    float yf = 1.0 - dot(film, vec3(0.2126, 0.7152, 0.0722));
+    // (v1.6 polish: by its brightest channel, so the golden body and the orange tip keep their
+    // colour over the light wall and the blue frosting; by luminance the wall washed the tip to
+    // peach and the frosting turned the rim lavender.)
+    float yf = 1.0 - max(film.r, max(film.g, film.b));
     float a = 1.0 - Tr * yf * yf;
     gl_FragColor = vec4(film, a);
     #include <colorspace_fragment>
@@ -532,7 +544,13 @@ export function createFlameBloomMaterial(flame: ShaderMaterial & { uniforms: Fla
     depthWrite: false,
     depthTest: false,
     side: DoubleSide,
-    blending: AdditiveBlending,
+    // Added, its alpha too (the emitters' own radiance: src/render/bloom.ts keeps the glare off them).
+    blending: CustomBlending,
+    blendEquation: AddEquation,
+    blendSrc: OneFactor,
+    blendDst: OneFactor,
+    blendSrcAlpha: OneFactor,
+    blendDstAlpha: OneFactor,
   });
   m.toneMapped = false;
   return m as ShaderMaterial & { uniforms: FlameUniforms };
