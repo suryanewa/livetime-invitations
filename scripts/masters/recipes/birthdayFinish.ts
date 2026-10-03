@@ -50,7 +50,7 @@ import { BIN } from '../../../models/disposalBin.ts';
 import { loadSharp } from '../sharp.ts';
 import { Baker, Occupancy } from './birthdayBake.ts';
 import {
-  add, appendMesh, backMound, baseSmears, dot, emptyMesh, len, MM, mul, norm, pipedDot, type PipeMesh, pulledLine, recomputeNormals as recomputePipeNormals, ropeBorder, seedOf, shell, spiralRosette, STAR, stream, sub, swagStrand,
+  add, appendMesh, backMound, baseSmears, cross, domedSwirl, dot, emptyMesh, hash1, len, MM, mul, norm, pipedDot, type PipeMesh, pulledLine, recomputeNormals as recomputePipeNormals, rotate, ropeBorder, seedOf, shell, spiralRosette, STAR, stream, sub, swagStrand,
 } from './birthdayPiping.ts';
 
 type V3 = [number, number, number];
@@ -1199,7 +1199,16 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
     switch (part) {
       case 'swags': {
         const strands = masterStrands(prims[0]!, R);
-        strands.forEach((st, k) => appendMesh(out, swagStrand(st.feet, st.normals, 0.95 * st.w, 0.92 * st.h, seed0 + 7919 * k)));
+        // v1.6 polish (fix 2): each bay hangs its own way (±2.6 mm at the low point, the bay's strands
+        // together, ±0.5 mm each): the strands grouped into bays by their middles' angle.
+        const bw = (2 * Math.PI) / BAYS[tier].count;
+        const xs = strands.map((st) => { const m = st.feet[st.feet.length >> 1]!; return Math.atan2(m[2], m[0]) / bw; });
+        const phase = Math.atan2(xs.reduce((a, x) => a + Math.sin(2 * Math.PI * x), 0), xs.reduce((a, x) => a + Math.cos(2 * Math.PI * x), 0)) / (2 * Math.PI);
+        strands.forEach((st, k) => {
+          const bay = ((Math.round(xs[k]! - phase) % BAYS[tier].count) + BAYS[tier].count) % BAYS[tier].count;
+          const drop = (2.6 * (2 * hash1(bay, seed0 + 17) - 1) + 0.5 * stream(seed0 + 41 * k).s()) * MM;
+          appendMesh(out, swagStrand(st.feet, st.normals, 0.95 * st.w, 0.92 * st.h, seed0 + 7919 * k, { drop }));
+        });
         break;
       }
       case 'drops': {
@@ -1230,7 +1239,8 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
           const r = R(yc);
           const n: V3 = [Math.cos(c.theta), 0, Math.sin(c.theta)];
           const size = 0.5 * Math.max(c.tMax - c.tMin, c.yMax - c.yMin);
-          appendMesh(out, pipedDot([r * n[0], yc, r * n[2]], n, [0, -1, 0], 0.92 * size, seed0 + 409 * k));
+          // v1.6 polish (fix 2): ±20 % in size, each dot its own.
+          appendMesh(out, pipedDot([r * n[0], yc, r * n[2]], n, [0, -1, 0], 0.92 * size * (1 + 0.2 * stream(seed0 + 409 * k + 3).s()), seed0 + 409 * k));
         });
         break;
       }
@@ -1273,29 +1283,44 @@ function regeneratePiping(doc: Document, nodes: Node[], profiles: Record<TierId,
           const radial: V3 = [Math.cos(c.theta), 0, Math.sin(c.theta)];
           const pc = pearlComps.reduce((best, p) => (len(sub(p.centroid, c.centroid)) < len(sub(best.centroid, c.centroid)) ? p : best), pearlComps[0]!);
           const pr = pc ? (pc.max[1] - pc.min[1]) / 2 : 0.012;
+          // v1.6 polish (fix 2): no two alike: ±15 % in size, tipped up to ±8° off the design, the
+          // pearl set off the centre by hand, and one rosette in four or five left without one.
+          const tilt = (axis: V3): V3 => {
+            const side = norm(cross(axis, Math.abs(axis[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
+            return norm(rotate(axis, norm(rotate(side, axis, g.r() * 2 * Math.PI)), (8 * Math.PI / 180) * g.s()));
+          };
+          const pearlAt = (top: V3, axis: V3, R0: number, sink: number) => {
+            const side = norm(cross(axis, Math.abs(axis[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
+            const d = norm(rotate(side, axis, g.r() * 2 * Math.PI));
+            const keep = g.r() > 0.22;
+            const at = add(add(top, mul(axis, -sink * pr)), mul(d, R0 * (0.06 + 0.16 * g.r())));
+            if (keep) pearls.push({ c: at, r: pr * (1 + 0.08 * g.s()) });
+          };
           if (crown) {
-            // Small rosettes round the top's edge, tipped a little outward over it.
+            // Small rosettes round the top's edge, tipped a little outward over it: domed swirls
+            // (each loop riding up on the last) pulled off in a tapered tail.
             const rr = T.R + (c.rMin + c.rMax) / 2;
             const centre: V3 = [rr * radial[0], T.y1 - 0.003, rr * radial[2]];
-            const axis = norm(add([0, 1, 0], mul(radial, 0.06 + 0.04 * g.s())));
+            const axis = tilt(norm(add([0, 1, 0], mul(radial, 0.06 + 0.04 * g.s()))));
             const size = 0.5 * (c.tMax - c.tMin);
-            const { mesh, top } = spiralRosette(centre, axis, radial, size * (1 + 0.05 * g.s()), seed0 + 613 * k, { rope: 0.4, turns: 1.2, fine: 0.75 });
+            const R0 = size * (1 + 0.15 * g.s());
+            const { mesh, top } = domedSwirl(centre, axis, radial, R0, seed0 + 613 * k);
             appendMesh(out, mesh);
-            pearls.push({ c: add(top, mul(axis, -0.35 * pr)), r: pr * (1 + 0.04 * g.s()) });
+            pearlAt(top, axis, R0, 0.45);
           } else {
             // Big rosettes on the tier's top edge, facing out and a little up.
             const yr = yc - 0.007;
             const r0 = R(yr);
             const centre: V3 = [r0 * radial[0], yr, r0 * radial[2]];
-            const axis = norm(add(radial, [0, 0.16 + 0.06 * g.s(), 0]));
+            const axis = tilt(norm(add(radial, [0, 0.16 + 0.06 * g.s(), 0])));
             const size = 0.5 * Math.max(c.tMax - c.tMin, c.yMax - c.yMin);
-            const R0 = size * (1 + 0.05 * g.s());
+            const R0 = size * (1 + 0.15 * g.s());
             const { mesh, top } = spiralRosette(centre, axis, [0, 1, 0], R0, seed0 + 619 * k, { rope: 0.4, turns: 1.25, droop: [0, -0.9 * MM * (1 + 0.4 * g.s()), 0], rest: restOn(profiles[tier]) });
             appendMesh(out, mesh);
-            // Its back: the soft mound of buttercream it was piped onto the edge with (seen from
-            // behind, over the far side of the top), not the flat underside of a coil.
+            // Its back: the buttercream it was piped onto the edge with (seen from behind, over the
+            // far side of the top), ridged by the same star tip, not the flat underside of a coil.
             appendMesh(out, backMound(centre, axis, R0, seed0 + 631 * k));
-            pearls.push({ c: add(top, mul(axis, -0.3 * pr)), r: pr * (1 + 0.04 * g.s()) });
+            pearlAt(top, axis, R0, 0.3);
           }
         });
         break;
