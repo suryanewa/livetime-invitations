@@ -586,7 +586,7 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   out.band = 0.015 + 0.045 * smooth(0.35, 1.7, age);
   out.billow = 0.028 + 0.042 * smooth(0.25, 1.3, age);
   out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
-  out.core = 0.85 + (0.07 - 0.85) * smooth(0.3, 1.4, age);
+  out.core = 1.3 + (0.07 - 1.3) * smooth(0.3, 1.4, age);
   out.sheet = 0.35 + 0.4 * smooth(0.3, 1.0, age) - 0.3 * smooth(1.2, 2.3, age);
   out.sheetWidth = 0.012 + 0.035 * smooth(0.3, 1.7, age);
   return out;

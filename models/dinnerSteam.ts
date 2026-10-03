@@ -70,14 +70,20 @@ export const STEAM_LOOK = {
   /** Extinction per su at full density (the cloud under the crown: optical depth ≈ 3–4 through it). */
   sigma: 3.4,
   /** The key's share (its colour × intensity scaled to steam's in-scatter) and the room's (linear). */
-  key: new Color(0.98, 0.99, 1.0).multiplyScalar(0.8),
-  ambient: new Color(0.6, 0.6, 0.61),
+  key: new Color(0.98, 0.99, 1.0).multiplyScalar(1.25),
+  /** (v1.6 polish: 0.6 → 0.3, so the key does the work: a lit side, a terminator, a grey core.) */
+  ambient: new Color(0.3, 0.3, 0.305),
   /** Henyey-Greenstein asymmetry (water droplets scatter forward). */
-  g: 0.45,
+  g: 0.7,
+  /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
+  gBack: -0.3,
+  back: 0.35,
+  /** The key's optical depth through the cloud is the light volume's times this (steeper: a dark core). */
+  keyFall: 2.1,
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
   /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
-  shadow: 0.16,
+  shadow: 0.42,
   /**
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
@@ -552,15 +558,16 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // fog: a firm, lobed edge rather than a feathered matte.
   vec3 Xs = X * vec3(1.15, 0.8, 1.15) + vec3(0.31, 0.17 + 0.04 * tau, 0.53);
   vec4 n1 = texture(uNoise, Xs * 0.55);
-  vec3 Xb = X * vec3(2.5, 1.5, 2.5) + (n1.rgb - 0.5) * E.w + vec3(0.71, 0.05 * tau, 0.23);
+  vec3 Xb = X * vec3(1.6, 1.0, 1.6) + (n1.rgb - 0.5) * E.w + vec3(0.71, 0.05 * tau, 0.23);
   vec4 nb = texture(uNoise, Xb);
   float lobes = nb.b + 0.3 * (nb.a - 0.5) * detail;
   float dEff = seatDistance(m.r, m.g) + E.z * (lobes - 0.5) * 2.0 + E.x * (n1.r - 0.5) * 2.0;
   if (dEff < -0.06) return 0.0;
   float edge = smoothstep(0.0, E.y, dEff);
   // Inside, a silky fog that empties as it ages; at the edge, the mixing layer's thin sheet.
-  float sh = (dEff - 0.5 * E.y) / F.z;
-  float d = F.x * (0.75 + 0.5 * (n1.g - 0.5)) * edge + F.y * exp(-sh * sh);
+  // (Both start at the boundary: nothing feathers outside it.)
+  float sh = (dEff - E.y) / F.z;
+  float d = (F.x * (0.75 + 0.5 * (n1.g - 0.5)) + F.y * exp(-sh * sh)) * edge;
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
   // sheets gather into a few larger wisps.
@@ -572,7 +579,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // The billows' own shade: the edge a little way towards the key.
   if (d > 0.02 && detail > 0.0 && uC[l].z < 1.2) {
     vec4 nl = texture(uNoise, Xb + L * 0.2);
-    shadeOd = 0.08 * sat((dEff + E.z * (nl.b - nb.b) * 2.0) / 0.06);
+    shadeOd = 0.24 * sat((dEff + E.z * (nl.b - nb.b) * 2.0) / 0.06);
   }
   return d;
 }
@@ -660,7 +667,8 @@ float meanAt(vec3 p) {
   for (int l = 0; l < ${STEAM_LAYERS}; l++) {
     if (uA[l].y <= 0.0) continue;
     // (The veil's mean overstates a few thin ribbons' shade: a third of it.)
-    m += (cloudMean(p, l) + 0.35 * veilMean(p, l)) * uA[l].z;
+    // (The cloud's visible share: its fog, and a part of its sheets, as it empties with age.)
+    m += (cloudMean(p, l) * clamp(uF[l].x + 0.35 * uF[l].y, 0.1, 1.6) + 0.35 * veilMean(p, l)) * uA[l].z;
   }
   return m;
 }
@@ -798,7 +806,11 @@ void main() {
   float cosT = dot(rd, L);
   // Phase: forward-leaning single scattering blended towards isotropic for the multiple-scattering octaves.
   // (Dense steam scatters many times: its effective phase is much flatter than a droplet's.)
-  float ph0 = mix(hg(cosT, uG), 1.0 / (4.0 * 3.14159265), 0.6), ph1 = hg(cosT, uG * 0.3), ph2 = 1.0 / (4.0 * 3.14159265);
+  // A two-lobe phase (v1.6 polish): water droplets' forward lobe (g 0.7) and a weaker backward lobe,
+  // so front-lit steam returns some light without the phase going flat; the multiple-scattering
+  // octaves halve the asymmetry, then isotropic.
+  float ph0 = mix(hg(cosT, uG), hg(cosT, ${f(STEAM_LOOK.gBack)}), ${f(STEAM_LOOK.back)});
+  float ph1 = mix(hg(cosT, 0.5 * uG), hg(cosT, ${f(0.5 * STEAM_LOOK.gBack)}), ${f(STEAM_LOOK.back)}), ph2 = 1.0 / (4.0 * 3.14159265);
   float detail = uLow || uDebug == 9 ? 0.0 : 1.0;
   vec3 C = vec3(0.0);
   float T = 1.0, wt = 0.0, tw = 0.0, rw = 0.0;
@@ -829,13 +841,14 @@ void main() {
     // The light volume: the optical depth to the key through the cloud's mean and to the room
     // above, and the lifted dome's shade; the billows' own shade from the local tap.
     vec3 lv = lightAt(p);
-    float od = uSigma * (1.5 * lv.x + 0.03 * dens + localOd);
+    float od = uSigma * (${f(STEAM_LOOK.keyFall)} * lv.x + 0.03 * dens + localOd);
     // Wrenninge's octaves: each scatters again with less extinction, less light and a flatter phase.
-    float key = exp(-od) * ph0 + 0.5 * exp(-0.3 * od) * ph1 + 0.25 * exp(-0.1 * od) * ph2;
+    float key = exp(-od) * ph0 + 0.45 * exp(-0.35 * od) * ph1 + 0.18 * exp(-0.12 * od) * ph2;
     float lit = mix(uDomeShade, 1.0, lv.z);
     // The room from every side (less under the cloud's own cover), and the white plate's bounce from below.
-    float bounce = 0.22 * (1.0 - smoothstep(0.05, 0.9, p.y)) * (1.0 - smoothstep(0.7, 1.0, length(p.xz)));
-    vec3 Sc = (uKeyColor * (4.0 * 3.14159265) * key + uAmbient * (0.3 + 0.7 * exp(-uSigma * lv.y * 0.8) + bounce)) * lit;
+    float bounce = 0.12 * (1.0 - smoothstep(0.05, 0.9, p.y)) * (1.0 - smoothstep(0.7, 1.0, length(p.xz)));
+    // The room: from above (occluded by the cloud over it: a greyer underside), the plate's bounce.
+    vec3 Sc = uKeyColor * (4.0 * 3.14159265) * key * lit + uAmbient * (0.25 + 0.75 * exp(-uSigma * lv.y * 0.9) + bounce) * mix(1.0, lit, 0.5);
     float Ts = exp(-sig * seg);
     C += T * (1.0 - Ts) * Sc;
     // (The steam's depth along the ray, weighted by what it shows: where the resolve reprojects from.)
