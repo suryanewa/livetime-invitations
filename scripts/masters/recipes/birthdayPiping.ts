@@ -668,9 +668,9 @@ export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, op
     // it is pressed a little into that loop (no free edge where it rides on its shoulder).
     const fade = Math.max(smooth(1 - tailF, 1, s), 0.8 * smooth(once - 0.04, once + 0.1, s));
     const covered = coveredAt(s), sq = squash(s);
-    feet.push({ c: pcs[i]!, n: up, t: T[i]!, w: rope * 0.98 * p * k * (1.4 - 0.4 * sq), h: hk * sq, sink: 0.9 * MM * (k > 0 ? Math.max(k, 0.3) : 0) + 0.3 * lifts[i]! * onStart, tw: tw0 + 1.1 * s * dirS, amp: amp * (1 - 0.85 * fade) * (1 - 0.9 * covered), flare: 0.25 * flareK[i]! * (1 - onStart) + 0.08 * onStart });
+    feet.push({ c: pcs[i]!, n: up, t: T[i]!, w: rope * 0.98 * p * k * (1.4 - 0.4 * sq), h: hk * sq, sink: 0.9 * MM * (k > 0 ? Math.max(k, 0.3) : 0) + 0.3 * lifts[i]! * onStart, tw: tw0 + ROSETTE_TIP.twist * s * dirS, amp: amp * (1 - 0.85 * fade) * (1 - 0.9 * covered), flare: 0.25 * flareK[i]! * (1 - onStart) + 0.08 * onStart });
   }
-  const mesh = sweep(feet, { teeth: ROSETTE_TIP.teeth + Math.floor(g.r() * 2), crest: ROSETTE_TIP.crest, toothJitter: 0.18, toothDrift: 2.5, perTooth: opts.fine ? 3.5 : 4.4, hidden: 6 }, seed);
+  const mesh = sweep(feet, { teeth: ROSETTE_TIP.teeth + Math.floor(g.r() * 2), crest: ROSETTE_TIP.crest, toothJitter: 0.12, toothDrift: 1.4, perTooth: opts.fine ? 3.5 : 4.4, hidden: 6 }, seed);
   // The centre: the star kiss the bag pushed out before it moved off, filling the eye of the coil up to
   // the loops' crests (v1.6 polish 2: no crater ring round it).
   appendMesh(mesh, pipedDot(add(add(c, off), mul(n, ROSETTE_TIP.kissZ * R)), n, u, ROSETTE_TIP.kissR * R, seed + 23, [10, 40], 8));
@@ -695,7 +695,7 @@ export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, op
  * v1.6 polish 2: the side rosettes' star and kiss. `teeth` (+0–1 each), `crest`, `amp` (±0.05 each),
  * the tail's share of the rope (`tail`), the kiss's base above the surface and its radius (× R).
  */
-export const ROSETTE_TIP = { teeth: 10, crest: 0.45, amp: 0.44, tail: 0.2, kissZ: 0.22, kissR: 0.46, grow: 0.18, tailOut: -0.05 } as const;
+export const ROSETTE_TIP = { teeth: 10, crest: 0.45, amp: 0.44, tail: 0.2, kissZ: 0.22, kissR: 0.46, grow: 0.18, tailOut: -0.05, twist: 0.45 } as const;
 
 /**
  * v1.6 polish (the judge's fix 2): a crown rosette as a star-tip swirl, as it is piped on a cake's top
