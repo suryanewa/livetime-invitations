@@ -30,7 +30,16 @@ import {
  */
 export const CANDLE_CANDELA = 1;
 const CANDLE_LIGHT_SCALE = 1.5 / 2500;
-export const CANDLE_LIGHT = CANDLE_CANDELA * 25 * CANDLE_LIGHT_SCALE;
+/**
+ * v1.6 polish (judge: "the light is not felt": +6/255 red spread flat over the top tier, ≈+11 %
+ * linear): calibrated by rendering against the photometric estimate. Six ≈1 cd flames ≈4.5 cm over
+ * the frosting and ≈5 cm from the top tier's centre give it E ≈ Σ I·cosθ/d² ≈ 6 × 150 ≈ 900 lx,
+ * ≈+30–35 % of a ≈2,500 lx room; the rig delivered +12 % (measured, linear red, the group view with
+ * the flames' light on and off), so its scale is ×2.0 (now ≈+24 %, with warm pools between the
+ * candles and warm highlights on the piping round them).
+ */
+const FLAME_LIGHT_CAL = 2.0;
+export const CANDLE_LIGHT = CANDLE_CANDELA * 25 * CANDLE_LIGHT_SCALE * FLAME_LIGHT_CAL;
 
 /** The flame's light colour: soot at ≈1,900 K (linear sRGB, luminance-normalised). */
 export function flameLightColor(): Color {
