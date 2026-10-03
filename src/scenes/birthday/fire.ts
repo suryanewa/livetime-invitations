@@ -111,19 +111,31 @@ export function flameProfile(s: number, widest = FLAME_REST.widest): number {
 }
 
 // ── Live flicker (the only part `simulate` drives: a clock) ──────────────────
+/**
+ * v1.6 polish: a lone flame's life. A single candle in still air does not buzz: the regular
+ * 10–12 Hz puffing (Kitahata et al., J. Phys. Chem. A 2009; Okamoto et al., Sci. Rep. 6:36145)
+ * is the collective mode of three or more flames bundled together; a lone birthday-candle flame
+ * is steady and lives by the room's air (judge: v1.5's coherent 11 Hz tip bob of ±3 % read as a
+ * mechanical buzz in close-up and as nothing at the real sizes). So: a slow sway of a few degrees
+ * with a 1/f spectrum over 0.3–2.4 Hz, its own per candle; its length breathing over 0.3–3 Hz;
+ * a shared slow draft; and now and then (every ≈3 s somewhere on the cake, one candle at a time) a
+ * 100–300 ms flutter, the flame flicking at 8–12 Hz as a passing eddy reaches it.
+ */
 export const FLICKER = {
-  /** Buoyant flicker of a single candle in still air (10–12 Hz); per-candle detune ±4 %. */
-  hz: 11,
-  detune: 0.04,
-  /** Peak length change of the flicker (≈±3 %): a still-air flame is steady to the eye. */
-  amplitude: 0.03,
-  /**
-   * Room-draft sway: a shared draft (people round a cake) leans every flame the same way by up to
-   * ±2° at 0.1–0.3 Hz, and each flame wanders ±1° on its own at 0.2–0.7 Hz.
-   */
-  sway: (1 * Math.PI) / 180,
-  draft: (2 * Math.PI) / 180,
-  /** Gain ramp after settle() (seconds): flicker resumes without a pop. */
+  /** The flutter's frequency band (Hz). */
+  hz: 10,
+  detune: 0.2,
+  /** Peak length change of the steady flame's breathing and a flutter's stretch (fractions). */
+  amplitude: 0.09,
+  /** Length breathing, RMS (peaks ±6–8 %). */
+  breathe: 0.032,
+  /** Sway, RMS of each plan component (radians: the lean's peaks 3–5°). */
+  sway: (1.6 * Math.PI) / 180,
+  /** The shared room draft (radians, ±1°, 0.1–0.3 Hz). */
+  draft: (1 * Math.PI) / 180,
+  /** Flutters: one per `every` s somewhere on the cake (some skipped), lasting `length` s, leaning `lean` and stretching `stretch`. */
+  flutter: { every: 3, skip: 0.25, length: [0.1, 0.3] as const, lean: (4 * Math.PI) / 180, stretch: 0.07 },
+  /** Gain ramp after settle() (seconds): the flame comes to life without a pop. */
   resume: 0.35,
 } as const;
 
@@ -132,11 +144,12 @@ export interface Flicker {
   height: number;
   width: number;
   intensity: number;
-  /** Small tilt from room drafts (radians), as a vector in the cake's plan (x, z). */
+  /** Lean from the room's air (radians), as a vector in the cake's plan (x, z). */
   swayX: number;
   swayZ: number;
-  /** Phase of the travelling varicose wave (radians), for the shader's shimmer. */
+  /** Phase of a flutter's travelling varicose wave (radians), and its strength (0 none – 1 a full flutter). */
   phase: number;
+  wave: number;
   /**
    * v1.6: the live clock this was sampled at (s) and the flicker's gain (0 still, after settle()
    * and under reduced motion; 1 live): the volume's turbulence is carried on the clock and the
@@ -146,38 +159,88 @@ export interface Flicker {
   gain: number;
 }
 
+/** The sway's and the breathing's partials (Hz), per candle ±15 %: a 1/f spectrum (amplitude ∝ f^−½). */
+const SWAY_HZ = [0.31, 0.47, 0.71, 1.07, 1.6, 2.4] as const;
+const BREATHE_HZ = [0.33, 0.52, 0.83, 1.31, 2.07, 3.1] as const;
+const ONE_OVER_F = (hz: readonly number[]) => {
+  const a = hz.map((f) => 1 / Math.sqrt(f));
+  const rms = Math.sqrt(a.reduce((s2, x) => s2 + x * x, 0) / 2);
+  return a.map((x) => x / rms);
+};
+const SWAY_A = ONE_OVER_F(SWAY_HZ), BREATHE_A = ONE_OVER_F(BREATHE_HZ);
+
+/** The flutter in time cell `n` (FLICKER.flutter.every s): which candle, when it starts (s), how long, how fast; null: none. */
+function flutterIn(n: number): { candle: number; start: number; length: number; hz: number } | null {
+  const F = FLICKER.flutter;
+  if (rand(n, 70) < F.skip) return null;
+  const start = n * F.every + 0.2 + (F.every - 0.2 - F.length[1] - 0.1) * rand(n, 71);
+  return {
+    candle: Math.floor(rand(n, 72) * CANDLE_COUNT) % CANDLE_COUNT, start, length: F.length[0] + (F.length[1] - F.length[0]) * rand(n, 73),
+    hz: FLICKER.hz * (1 + FLICKER.detune * signed(n, 74)),
+  };
+}
+
 /**
  * Flicker of candle `i` at live time `t` (seconds of lit time on the scene's live clock), scaled
- * by `gain` (0 after settle(), 1 when running). Band-limited: a few detuned sines with slowly
- * modulated amplitude, so it never repeats visibly and has no frequency content above ≈13 Hz.
+ * by `gain` (0 after settle(), 1 when running): exactly the rest pose at gain 0.
  */
 export function flicker(i: number, t: number, gain: number, out: Flicker): Flicker {
-  const f = FLICKER.hz * (1 + FLICKER.detune * signed(i, 1));
-  const p1 = 6.283 * rand(i, 2), p2 = 6.283 * rand(i, 3), p3 = 6.283 * rand(i, 4);
-  // Slow amplitude modulation: the flicker swells and calms over a few seconds.
-  const env = 0.55 + 0.25 * Math.sin(2 * Math.PI * 0.27 * t + p2) + 0.2 * Math.sin(2 * Math.PI * 0.61 * t + p3);
-  const osc = 0.7 * Math.sin(2 * Math.PI * f * t + p1) + 0.3 * Math.sin(2 * Math.PI * f * 0.53 * t + p2);
-  const dh = FLICKER.amplitude * env * osc * gain;
-  out.height = 1 + dh;
-  // Nearly incompressible: a taller flame is a little thinner.
-  out.width = 1 - 0.45 * dh;
-  out.intensity = 1 + 0.7 * dh;
-  const s1 = Math.sin(2 * Math.PI * 0.23 * t + p3) * 0.6 + Math.sin(2 * Math.PI * 0.67 * t + p1) * 0.4;
-  const s2 = Math.sin(2 * Math.PI * 0.19 * t + p1) * 0.6 + Math.sin(2 * Math.PI * 0.53 * t + p2) * 0.4;
-  // The shared draft (same for every candle, a little later for those further across the cake).
+  let sx = 0, sz = 0, dh = 0;
+  for (let k = 0; k < SWAY_HZ.length; k++) {
+    const f = SWAY_HZ[k]! * (1 + 0.15 * signed(i, 80 + k));
+    sx += SWAY_A[k]! * Math.sin(2 * Math.PI * f * t + 6.283 * rand(i, 90 + k));
+    sz += SWAY_A[k]! * Math.sin(2 * Math.PI * f * 1.07 * t + 6.283 * rand(i, 100 + k));
+    const fb = BREATHE_HZ[k]! * (1 + 0.15 * signed(i, 110 + k));
+    dh += BREATHE_A[k]! * Math.sin(2 * Math.PI * fb * t + 6.283 * rand(i, 120 + k));
+  }
+  sx *= FLICKER.sway / Math.SQRT2;
+  sz *= FLICKER.sway / Math.SQRT2;
+  dh *= FLICKER.breathe;
+  // A flutter: this candle's, if the eddy is passing it now (a sin² envelope; the flame flicks and
+  // stretches, and a varicose wave runs up it).
+  let wave = 0, phase = 0;
+  const n = Math.floor(t / FLICKER.flutter.every);
+  const fe = t >= 0 ? flutterIn(n) : null;
+  if (fe && fe.candle === i && t >= fe.start && t < fe.start + fe.length) {
+    const u = (t - fe.start) / fe.length;
+    const env = Math.sin(Math.PI * u) ** 2;
+    const w = 2 * Math.PI * fe.hz * (t - fe.start);
+    const dir = 6.283 * rand(n, 75);
+    sx += FLICKER.flutter.lean * env * Math.sin(w) * Math.cos(dir);
+    sz += FLICKER.flutter.lean * env * Math.sin(w) * Math.sin(dir);
+    dh += FLICKER.flutter.stretch * env * Math.sin(w + 1.3);
+    wave = env;
+    phase = w;
+  }
+  // The shared draft (the same for every candle, a little later for those further across the cake).
   const lag = 0.15 * (CANDLE_SOCKETS[i]![0] ?? 0);
-  const d1 = 0.65 * Math.sin(2 * Math.PI * 0.13 * (t - lag) + 1.1) + 0.35 * Math.sin(2 * Math.PI * 0.29 * (t - lag) + 2.3);
-  const d2 = 0.65 * Math.sin(2 * Math.PI * 0.11 * (t - lag) + 0.4) + 0.35 * Math.sin(2 * Math.PI * 0.23 * (t - lag) + 4.0);
-  out.swayX = (FLICKER.sway * s1 + FLICKER.draft * d1) * gain;
-  out.swayZ = (FLICKER.sway * s2 + FLICKER.draft * 0.6 * d2) * gain;
-  out.phase = 2 * Math.PI * f * t + p1;
+  sx += FLICKER.draft * (0.65 * Math.sin(2 * Math.PI * 0.13 * (t - lag) + 1.1) + 0.35 * Math.sin(2 * Math.PI * 0.29 * (t - lag) + 2.3));
+  sz += FLICKER.draft * 0.6 * (0.65 * Math.sin(2 * Math.PI * 0.11 * (t - lag) + 0.4) + 0.35 * Math.sin(2 * Math.PI * 0.23 * (t - lag) + 4.0));
+  dh = Math.max(-FLICKER.amplitude, Math.min(FLICKER.amplitude, dh)) * gain;
+  out.height = 1 + dh;
+  // Nearly incompressible: a taller flame is a little thinner; its light breathes with it.
+  out.width = 1 - 0.45 * dh;
+  out.intensity = 1 + 0.5 * dh;
+  out.swayX = sx * gain;
+  out.swayZ = sz * gain;
+  out.phase = phase;
+  out.wave = wave * gain;
   out.time = t;
   out.gain = gain;
   return out;
 }
 
+/**
+ * v1.6 polish: no flame stands quite plumb: its curled wick and the cake's own air lean it 2–4° in
+ * its own direction (cake plan, radians), in stills too.
+ */
+export function restLean(i: number): [number, number] {
+  const a = ((2 + 2 * rand(i, 60)) * Math.PI) / 180, d = 6.283 * rand(i, 61);
+  return [a * Math.cos(d), a * Math.sin(d)];
+}
+
 export function newFlicker(): Flicker {
-  return { height: 1, width: 1, intensity: 1, swayX: 0, swayZ: 0, phase: 0, time: 0, gain: 0 };
+  return { height: 1, width: 1, intensity: 1, swayX: 0, swayZ: 0, phase: 0, wave: 0, time: 0, gain: 0 };
 }
 
 // ── Ignition (host) ──────────────────────────────────────────────────────────

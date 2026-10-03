@@ -112,6 +112,8 @@ export interface FlameUniforms {
   uWickR: { value: number };
   uEmber: { value: number };
   uPhase: { value: number };
+  /** v1.6 polish: a flutter's strength (0–1): the varicose wave runs up the flame only then. */
+  uWave: { value: number };
   uWidest: { value: number };
   /** v1.6 polish: the luminous zone's foot (a fraction of the length: 1.2 mm under the wick's tip). */
   uFoot: { value: number };
@@ -173,6 +175,7 @@ const FLAME_FRAGMENT = /* glsl */ `
   uniform float uWickR;
   uniform float uEmber;
   uniform float uPhase;
+  uniform float uWave;
   uniform float uWidest;
   uniform float uFoot;
   uniform float uGain;
@@ -275,14 +278,15 @@ const FLAME_FRAGMENT = /* glsl */ `
     vec3 q = vec3(x, y, z) / MM;
     q.y -= uNoise.x * (14.0 + 120.0 * turb);
     float tip = smoothstep(0.12, 1.0, s);
-    float amp = (0.12 + 2.4 * turb) * tip * tip;
+    float amp = (0.22 + 2.4 * turb) * tip * tip;
     vec3 qa = q * vec3(0.32, 0.13, 0.32) + vec3(uNoise.z, 0.0, 2.7 * uNoise.z);
     x += amp * MM * vnoise(qa);
     z += amp * MM * vnoise(qa + vec3(17.3, 3.1, 9.7));
     // The axis curls back towards vertical (bend); the flame necks at its base.
     x += uShape.z * s * s;
     // Varicose flicker wave travelling up the flame (the buoyant vortices' pinch), ±3 %.
-    float wave = 1.0 + 0.03 * sin(uPhase - 7.0 * s) * smoothstep(0.15, 0.6, s);
+    // (v1.6 polish: only in a flutter; a lone flame in still air has no 11 Hz buzz.)
+    float wave = 1.0 + 0.05 * uWave * sin(uPhase - 7.0 * s) * smoothstep(0.15, 0.6, s);
     float rough = 1.0 + (0.015 + 0.12 * turb) * s * vnoise(q * 0.55 + vec3(3.1, 0.0, uNoise.z));
     // Never under ≈1.1 px across (a flame thinner than a pixel falls between the pixels' samples:
     // at the thumbnail one would blink out), its light spread over the wider body (flux kept).
@@ -500,6 +504,7 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
     uWickR: { value: 0.0015 },
     uEmber: { value: 0 },
     uPhase: { value: 0 },
+    uWave: { value: 0 },
     uWidest: { value: 0.25 },
     uFoot: { value: 0.07 },
     uGain: { value: FLAME_GAIN },

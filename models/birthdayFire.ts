@@ -10,7 +10,7 @@ import { addHaze } from '../src/render/heatHaze.ts';
 import { SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
 import { SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
 import {
-  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, POOL_Y, rand, WICK_TIP_Y, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
+  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, POOL_Y, rand, restLean, WICK_TIP_Y, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /**
@@ -486,7 +486,7 @@ const qCake = new Quaternion();
 const toNode = new Matrix4();
 const up = new Vector3();
 const flow = new Vector3();
-const sway = new Vector3();
+const swayV = new Vector3();
 const dirH = new Vector3();
 const anchor = new Vector3();
 const tip = new Vector3();
@@ -538,9 +538,14 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   // Candle space → the node's frame (its position, lowered with the melt, and its rotation).
   r.node.updateMatrix();
   toNode.copy(r.node.matrix).invert();
-  // Lean = breath lean along the flow + room-draft sway.
-  sway.set(fl.swayX, 0, fl.swayZ).addScaledVector(up, -fl.swayX * up.x - fl.swayZ * up.z);
-  dirH.copy(flow).multiplyScalar(f.tilt).add(sway);
+  // Lean = breath lean along the flow + the room's sway + the flame's own rest lean (v1.6 polish:
+  // 2–4°, in stills too). The room's lean bends the flame from its base rather than tipping it:
+  // 55 % of it tilts the axis, the rest is the tip's bend (the base stays on the wick).
+  const [lx, lz] = restLean(r.index);
+  swayV.set(fl.swayX + lx, 0, fl.swayZ + lz).applyQuaternion(qCake).applyQuaternion(qInv);
+  swayV.addScaledVector(up, -swayV.dot(up));
+  const swayA = swayV.length();
+  dirH.copy(flow).multiplyScalar(f.tilt).addScaledVector(swayV, 0.55);
   let tilt = dirH.length();
   if (tilt > 1e-6) dirH.divideScalar(tilt);
   else { dirH.copy(flow); tilt = 0; }
@@ -551,7 +556,8 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   const size = flameScale(r.index);
   const L = FLAME_REST.length * size * Math.max(f.height, 1e-3) * fl.height;
   const R = FLAME_REST.radius * size * Math.max(f.width, 1e-3) * fl.width;
-  const bend = 0.5 * L * tilt * f.bend;
+  // (The breath's curl of the tip back up, less the room's bend along the lean.)
+  const bend = 0.5 * L * tilt * f.bend - 0.45 * L * swayA * (swayA > 1e-9 ? swayV.dot(dirH) / swayA : 0);
   // Base: on the wick's axis at the cup's height, carried downstream once it has lifted off.
   anchor.set(r.wickTip.x, FLAME_REST.base - r.shorten, r.wickTip.z).applyMatrix4(toNode);
   u.uBase.value.copy(anchor).addScaledVector(flow, f.lift);
@@ -575,6 +581,7 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   u.uWickFoot.value.set(r.wickTip.x, r.wickTip.y - 4 * MM_UNITS - r.shorten, r.wickTip.z).applyMatrix4(toNode);
   u.uEmber.value = ember;
   u.uPhase.value = fl.phase;
+  u.uWave.value = fl.wave;
   // The bead on the curled tip: charred once lit, its ember's glow, grey as the ash forms.
   const charred = r.wick.char.value;
   r.bead.visible = charred > 0.5;
@@ -586,7 +593,7 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
     bm.emissive.copy(r.wick.ember.value);
   }
   // The volume's turbulence: carried on the live clock; the breath's gust tears the flame (by its lean), and a dying flame frays.
-  u.uNoise.value.set(fl.time, Math.min(1, Math.max(f.tilt / 1.1, 0.6 * f.cut)), 3.7 * r.index + 0.5);
+  u.uNoise.value.set(fl.time, Math.min(1, Math.max(f.tilt / 1.1, 0.6 * f.cut, 0.12 * fl.wave)), 3.7 * r.index + 0.5);
   tip.copy(u.uBase.value).addScaledVector(u.uAxisY.value, L).addScaledVector(u.uAxisX.value, -bend);
   u.uMid.value.copy(u.uBase.value).add(tip).multiplyScalar(0.5);
   // Holds the march's box: the flame, its widest radius and the turbulence's reach.
