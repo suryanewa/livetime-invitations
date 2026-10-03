@@ -97,12 +97,16 @@ describe('Scene depth (v1.6)', () => {
 
   it('the stage calls the hook once per render, before its own render', () => {
     const calls: string[] = [];
+    // The merged v1.6 stage also carries the bloom and the heat haze (no-ops here): the depth pass
+    // and its clients must still come first, before the bloom's own emitter pass and the main render.
     const fake = {
       sceneDepth: { render: () => { calls.push('depth'); return false; } },
+      bloom: { prepare: () => { calls.push('bloom'); return false; }, composite: () => calls.push('composite') },
+      haze: { apply: () => calls.push('haze') },
       renderer: { render: () => calls.push('main') },
       scene: new Scene(), camera: new PerspectiveCamera(),
     };
     Stage.prototype.render.call(fake as unknown as Stage);
-    expect(calls).toEqual(['depth', 'main']);
+    expect(calls).toEqual(['depth', 'bloom', 'main', 'haze']);
   });
 });
