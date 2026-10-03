@@ -76,7 +76,7 @@ export const STEAM_LOOK = {
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
   /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
-  shadow: 0.3,
+  shadow: 0.16,
   /**
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
@@ -625,7 +625,8 @@ float meanAt(vec3 p) {
   float m = 0.0;
   for (int l = 0; l < ${STEAM_LAYERS}; l++) {
     if (uA[l].y <= 0.0) continue;
-    m += (cloudMean(p, l) + veilMean(p, l)) * uA[l].z;
+    // (The veil's mean overstates a few thin ribbons' shade: a third of it.)
+    m += (cloudMean(p, l) + 0.35 * veilMean(p, l)) * uA[l].z;
   }
   return m;
 }
