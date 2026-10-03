@@ -336,3 +336,90 @@ Its remaining tells, recorded, not fixed here:
 `blow-2s-real-controller.mp4`, `blow-closeup-every-32ms.png`, `ignition-and-snuff-closeups.png`,
 `flame-light-alone-dark-room.png`, `heat-haze-off-on-difference.png`,
 `bloom-strengths-0.06-0.1-0.14.png`, `frame-cost.txt`.
+
+## Smoke pass (v1.6, after the flames)
+
+The owner's note above named v1.5's smoke as the loudest tell left. This pass changes only how the
+smoke is drawn. Its physics is v1.5's and has not changed (`src/scenes/birthday/fire.ts` is the same as
+at `2ff6bfd`): the hand-over at extinction, the rise speeds, the plume that runs laminar and then
+wavers, the shared stir after the breath, the 3–5.5 s smoulder and the change-of-mind carry.
+
+**What the smoke is now** (`src/render/flame.ts` `createSmokeMaterial`, `models/birthdayFire.ts`
+`SmokeRig`):
+- Each strand is still a camera-facing strip. It is shaded as a soft **thick tube**: Beer–Lambert
+  optical depth from the physics' opacity, a soft chord across it, and premultiplied blending in
+  display space.
+- **Lighting** (`SMOKE_LIGHT`): single scattering of the rig's key, found per scene (the light that
+  casts the shadow). It uses a Henyey–Greenstein phase with g = 0.3 and is self-shadowed along the
+  light's path through the tube, so a thick stem's far side is darker. The room light, less what
+  the column hides from itself, is added, at albedo 0.95. Under room light alone a thin wisp is
+  about as bright as the wall. The key makes it brighter, so it reads over the cove, the frosting
+  and the shaded plate.
+- **Last glow** (`SMOKE_GLOW`, the `aHot` attribute): parcels that leave the wick in the first
+  40 ms carry the soot's 1,500 K glow, which fades over 35 ms. A snuff passes on a quarter of it.
+- **Heat haze**: the haze runs on into the plume from the cooling ember at 0.6 × its glow
+  (`HAZE.plume`). It only runs while the scene is live (`flicker.gain`), never in stills.
+- **Added in this pass, `547e22f`.** Where a thread turns back on itself on screen (the first
+  vapour's head curling over in the gust), the strip now **pinches through the fold**: its width
+  goes down by `smoothstep(-0.2, 0.8, cos turn)`. Before, it flung its corners out past the fold.
+  The cross-section Gaussian is also lowered so that it reaches exactly 0 at the strip's edge
+  (it used to leave 8 %).
+
+**The hostile look.** All frames come from the real controller. The references were Wikimedia
+Commons photographs, viewed beside the frames and not stored in the repo:
+*"Candle with smoke".JPG* (Arivumathi, CC BY-SA 3.0: a candle just blown out in a room, against a
+light wall), *Kerze -- 2021 -- 5491/5487/6000.jpg* (D. Rabich, CC BY-SA 4.0), *Candle smoke structure
+1.jpg* (Tigerzeng, CC BY-SA 4.0) and *2017-365-91 Smoking Candle* (cogdogblog, CC0).
+- *Fixed: hard-edged white tabs at every plume's head* in the gust (0.3–0.8 s), a few pixels
+  wide at laptop size and plain at close-up. The obvious cause, the strip's cut-off head, was not
+  it: the physics already ramps the head's opacity in over 25 ms. An attribute test (only the last
+  8 parcels drawn, then all but them) showed that the tabs were folds: the head curls back (cusps
+  in the dumped screen path), and the strip's corners spread out past the cusp. After the fix the
+  large wedges are gone. Small soft knots remain where a fold doubles the density, which reads as
+  a curl: `fold-tabs-before-after-3600px.png`, `laptop-plume-heads-before-after-x2.png`.
+- *Hand-over: continuous.* Frame by frame at 16 ms, the blown-off body thins away, and within one
+  frame a pale thread leaves the glowing ember (bare + 16–32 ms). It runs as one thread with no
+  gap, as in the photographs. The 35 ms warm tint of the last glow cannot be seen at 60 fps
+  (`handover-96-336ms-every-16ms-real-controller.png`).
+- *Lit and soft:* the threads are soft-edged. They are a little brighter than the wall and a
+  little cool (thin wax aerosol). There is no banding in the smoke: at 6× contrast the only bands
+  are the wall's own 8-bit gradient. A cross-section of the densest fresh column, 20 px above the
+  ember at 3,600 px, peaks at 226 over the wall's 210, and its peak sits off-centre towards the
+  key. No dark core shows, because the threads are optically thin, as real candle smoke is
+  against a lit wall.
+- *Reads at laptop size:* yes. There are six threads, swept to the right by the breath, then
+  rising (`laptop-1280x720@2x-smoke-0.52s.webp`, `-1.72s.webp`).
+- *Accepted still:* no smoke. On the reduced-motion accepted still, the largest lift above the
+  cake is 4 levels (the wall's gradient). Against the committed `vanilla-accepted.webp` the mean
+  absolute difference is 1.0 (WebP). The live pose 8 s after Accept is clean.
+
+**Gaps (recorded, not fixed here):**
+- **Threads that look like tubes, 1–3 s.** From 1 s to 3 s six white threads of near-constant
+  width stand straight up to the top of the frame and fade by about 3.5 s. Two things cause this,
+  and both belong to the physics, which this pass keeps: `SMOKE.maxWidth` caps the drawn width at
+  4 mm, and the age fade is [1.2, 2.5] s. In the light-wall photograph the smoke is a faint grey
+  veil after about 10 cm, with folded sheets that are bright where seen edge-on. A strip cannot
+  draw a sheet seen face-on; a ribbon drawn wider folds into hard planes, which is why v1.5 capped
+  it. The technique that fixes it is the steam owner's raymarched density volume, applied to the
+  plume (after integration). A rendering stopgap would be stronger breakup or thinning with height
+  in the shader; it was not tried, because it changes how long the smoke reads, which the physics
+  sets.
+- **Residual slivers** of 1–2 px at very high magnification (20× the hero frame), where a fold
+  falls between two parcels. They cannot be seen at the real sizes or at 3,600 px.
+- **The smoke over the light wall is brighter than in the photograph.** This was chosen for
+  legibility: v1.5's judge found smoke matched to the wall vanished.
+- **Not done in this pass:** frame cost and the browser suites. The coordinator stopped them
+  because the shared machine was under load (load average 9–26). Only `pnpm typecheck` was run
+  last, and it passes. Before this pass's commit, the unit files passed on `547e22f`:
+  `birthdayFire` 28/28, `flameRender` 6/6, `birthday` 33/33. `birthday.spec` was cut off twice:
+  once by a dev server that had died, then by the 3-minute limit. `bloom.spec` and the smoke's
+  on/off frame cost (budget ≤ 1.0 ms) are left for integration. The shader adds a few ALU per
+  vertex: 1,152 vertices and two dot products. The fragment cost is the same as before.
+
+**Evidence** (`evidence/v1.6/flames/smoke/`): `blow-smoke-0-4s-every-128ms-real-controller.png` and
+`handover-96-336ms-every-16ms-real-controller.png` (both from the full 0–4 s strip, captured at
+62.5 fps through `controller.captureStill(540, 2)` on a fake clock);
+`close-centre-candle-plus-0.3s-after-extinction.png`, `close-centre-candle-plus-1.5s-after-extinction.png`
+(`captureStill(1200, 3)` crops); `fold-tabs-before-after-3600px.png`,
+`laptop-plume-heads-before-after-x2.png`; `laptop-1280x720@2x-lit.webp`, `-smoke-0.52s.webp`,
+`-smoke-1.72s.webp`, `-accepted-8s.webp`; `accepted-still-reduced-motion-540@2.png`.

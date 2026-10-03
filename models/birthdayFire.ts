@@ -1,14 +1,14 @@
 import {
-  Box3, BufferAttribute, BufferGeometry, type Camera, Color, DynamicDrawUsage, type Material, Matrix3, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, Vector2,
+  Box3, BufferAttribute, BufferGeometry, type Camera, Color, type Light, DynamicDrawUsage, type Material, Matrix3, Matrix4, Mesh, type MeshStandardMaterial, type Object3D, type PlaneGeometry, Quaternion, type ShaderMaterial, Vector2,
   Vector3, Vector4, type WebGLRenderer,
 } from 'three';
 import type { MaterialLibrary } from '../src/render/materials.ts';
 import { CANDLE } from './birthdayContract.ts';
 import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
-import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, sootRadiance } from '../src/render/flame.ts';
+import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, SMOKE_GLOW, sootRadiance } from '../src/render/flame.ts';
 import { addHaze } from '../src/render/heatHaze.ts';
 import {
-  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, rand, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeStrand, type SmokeStrand, sootFormed, type WakeAt, type WickAt,
+  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, rand, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, sootFormed, type WakeAt, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /**
@@ -301,7 +301,7 @@ const hazeUp = new Vector3();
  * and `height` × its rest length tall, from just under its tip; its light behind bent by up to
  * `px` CSS px (laptop: 2–4 device px).
  */
-export const HAZE = { width: 6, height: 4.5, px: 1.2 } as const;
+export const HAZE = { width: 6, height: 4.5, px: 1.2, plume: 0.6 } as const;
 /**
  * Wick ember radiance scale (on soot's 1,900 K = 1 scale): a freshly bared ember (1,320 K) is a
  * bright orange point; at its in-flame glow (EMBER.lit) a dim red tip in the dark zone.
@@ -411,18 +411,23 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   quad.onBeforeRender = (renderer: WebGLRenderer, _s, camera) => {
     const { sx, sy, dpr, scale, pxPerUnit, output } = face(renderer, camera);
     // Into a target (tooling) nothing is registered: the bloom and the haze are the stage's own.
-    if (renderer.getRenderTarget() !== null || output <= 1e-3) return;
-    // Its glow's reach, for the bloom's composite.
+    const ember = u.uEmber.value;
+    if (renderer.getRenderTarget() !== null || (output <= 1e-3 && ember <= 0.05)) return;
+    // Its glow's reach, for the bloom's composite (a flame only: an ember does not bloom).
     const h = u.uHalf.value * pxPerUnit * 1.5;
-    emitBloom(renderer, [sx - h, sy - h, sx + h, sy + h]);
-    // The heat haze over it: a column from just under its tip along its axis, while live.
+    if (output > 1e-3) emitBloom(renderer, [sx - h, sy - h, sx + h, sy + h]);
+    // The heat haze over it: a column from just under its tip along its axis, while live; once
+    // the flame is out the hot wick goes on heating the air the first vapour rises in, so the haze
+    // runs on into the plume from the ember (fading as it cools: ≈1–2 s).
     const L = u.uShape.value[0], R = u.uShape.value[1];
-    hazeFoot.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.85 * L).addScaledVector(u.uAxisX.value, -u.uShape.value[2] * 0.5).applyMatrix4(quad.matrixWorld);
-    hazeUp.copy(u.uAxisY.value).transformDirection(quad.matrixWorld);
+    if (output > 1e-3) hazeFoot.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.85 * L).addScaledVector(u.uAxisX.value, -u.uShape.value[2] * 0.5).applyMatrix4(quad.matrixWorld);
+    else hazeFoot.copy(u.uWick.value).addScaledVector(up.set(0, 1, 0).transformDirection(inv), 0.002).applyMatrix4(quad.matrixWorld);
+    hazeUp.copy(output > 1e-3 ? u.uAxisY.value : up.set(0, 1, 0).transformDirection(inv)).transformDirection(quad.matrixWorld);
+    const heat = Math.max(Math.min(1, output), HAZE.plume * ember);
     addHaze(renderer, index, {
       foot: hazeFoot, up: hazeUp, width: HAZE.width * R * scale, height: HAZE.height * FLAME_REST.length * scale,
       // The breath blows the hot gas away and mixes it cold within a few millimetres: no plume, no haze.
-      strength: HAZE.px * dpr * live.gain * Math.min(1, output) * (1 - u.uNoise.value.y) ** 2, time: live.time, seed: 7.3 * index + 1.1,
+      strength: HAZE.px * dpr * live.gain * heat * (1 - u.uNoise.value.y) ** 2, time: live.time, seed: 7.3 * index + 1.1,
     });
   };
   node.add(quad);
@@ -546,6 +551,23 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   r.lights.pos.value[r.index]!.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.42 * L).applyMatrix4(r.node.matrixWorld);
 }
 
+const smokeAt = new Vector3();
+const keyAt = new Vector3();
+const keys = new WeakMap<Object3D, Light | null>();
+/** The stage's key: the light that casts the shadow (or the brightest), looked up once per scene. */
+function keyLight(scene: Object3D): Light | null {
+  let k = keys.get(scene);
+  if (k !== undefined) return k;
+  k = null;
+  scene.traverse((o) => {
+    const l = o as Light;
+    if (!l.isLight || (l as Light & { isAmbientLight?: boolean }).isAmbientLight || (l as Light & { isHemisphereLight?: boolean }).isHemisphereLight) return;
+    if (!k || (l.castShadow && !k.castShadow) || (l.castShadow === k.castShadow && l.intensity > k.intensity)) k = l;
+  });
+  keys.set(scene, k);
+  return k;
+}
+
 /** Candle i's wick tip for smoke born at `birth` (SmokeRig.update; fire.ts WickAt). */
 export type WickSource = (i: number, birth: number, out: [number, number, number]) => number | void;
 
@@ -557,7 +579,7 @@ export class SmokeRig {
   readonly mesh: Mesh;
   private readonly geometry = new BufferGeometry();
   private readonly strands: SmokeStrand[];
-  private readonly attrs: Record<'position' | 'aPrev' | 'aNext' | 'aWidth' | 'aAlpha' | 'aAge' | 'aSeed', BufferAttribute>;
+  private readonly attrs: Record<'position' | 'aPrev' | 'aNext' | 'aWidth' | 'aAlpha' | 'aAge' | 'aSeed' | 'aHot', BufferAttribute>;
   readonly material = createSmokeMaterial();
 
   /** `parent`: the room the smoke rises in (birthday_root): smoke stays where it was born, not on the carried cake. */
@@ -565,7 +587,7 @@ export class SmokeRig {
     const strands = candles * SMOKE_STRAND_COUNT;
     const n = strands * SMOKE_POINT_COUNT * 2;
     const mk = (size: number) => new BufferAttribute(new Float32Array(n * size), size).setUsage(DynamicDrawUsage);
-    this.attrs = { position: mk(3), aPrev: mk(3), aNext: mk(3), aWidth: mk(1), aAlpha: mk(1), aAge: mk(1), aSeed: mk(1) };
+    this.attrs = { position: mk(3), aPrev: mk(3), aNext: mk(3), aWidth: mk(1), aAlpha: mk(1), aAge: mk(1), aSeed: mk(1), aHot: mk(1) };
     for (const [k, a] of Object.entries(this.attrs)) this.geometry.setAttribute(k, a);
     const side = new Float32Array(n);
     for (let v = 0; v < n; v++) side[v] = v % 2 ? 1 : -1;
@@ -586,8 +608,18 @@ export class SmokeRig {
     this.mesh.renderOrder = 3;
     this.mesh.frustumCulled = false;
     this.mesh.visible = false;
-    this.mesh.onBeforeRender = (renderer) => {
-      this.material.uniforms.uViewportH.value = renderer.getContext().drawingBufferHeight;
+    this.mesh.onBeforeRender = (renderer, scene, camera) => {
+      const u = this.material.uniforms;
+      u.uViewportH.value = renderer.getContext().drawingBufferHeight;
+      // The rig's key (the shadow-casting light): its direction from the smoke, in view space, and
+      // its irradiance (three's decay-0 spot: intensity × colour wherever its cone reaches).
+      const key = keyLight(scene);
+      if (key) {
+        this.mesh.getWorldPosition(smokeAt);
+        key.getWorldPosition(keyAt);
+        u.uKeyDir.value.copy(keyAt).sub(smokeAt).normalize().transformDirection(camera.matrixWorldInverse);
+        u.uKey.value.copy(key.color).multiplyScalar(key.intensity);
+      }
     };
     parent.add(this.mesh);
   }
@@ -611,11 +643,14 @@ export class SmokeRig {
     this.wickAt = wickAt;
     let any = false, peak = 0;
     const P = SMOKE_POINT_COUNT;
-    const { position, aPrev, aNext, aWidth, aAlpha, aAge, aSeed } = this.attrs;
+    const { position, aPrev, aNext, aWidth, aAlpha, aAge, aSeed, aHot } = this.attrs;
     const pos = position.array as Float32Array, prev = aPrev.array as Float32Array, next = aNext.array as Float32Array;
-    const wid = aWidth.array as Float32Array, alp = aAlpha.array as Float32Array, age = aAge.array as Float32Array, seed = aSeed.array as Float32Array;
+    const wid = aWidth.array as Float32Array, alp = aAlpha.array as Float32Array, age = aAge.array as Float32Array, seed = aSeed.array as Float32Array, hot = aHot.array as Float32Array;
     for (let i = 0; i < this.candles; i++) {
       const at = this.at[i]!;
+      const bare = smokeSource(i, kind).bare;
+      // A starved (snuffed) flame dies blue and dim: little glow passes to its wisp.
+      const glowK = kind === 'breath' ? 1 : 0.25;
       for (let s = 0; s < SMOKE_STRAND_COUNT; s++) {
         const st = this.strands[i * SMOKE_STRAND_COUNT + s]!;
         if (smokeStrand(i, s, t, at, st, kind, wake)) any = true;
@@ -635,6 +670,10 @@ export class SmokeRig {
             age[v] = st.age[k]!;
             // Noise coordinate travels with the parcel (its birth), distinct per thread.
             seed[v] = (t - st.age[k]!) * 2.3 + s * 7.31 + i * 3.77;
+            // The flame's last glow in the first vapour (src/render/flame.ts SMOKE_GLOW): parcels
+            // born as the flame lets go, cooling over their first few hundredths of a second.
+            const born = t - st.age[k]! - bare;
+            hot[v] = born >= 0 && born < SMOKE_GLOW.born ? glowK * (1 - born / SMOKE_GLOW.born) * Math.exp(-st.age[k]! / SMOKE_GLOW.fade) : 0;
           }
         }
       }
