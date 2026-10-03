@@ -89,6 +89,37 @@ Still open:
 - The shared-code follow-ups the scene docs route to the foundation owner: a scene path for interruptions in `visualDirector.ts`, a stage-level fix for the shadow-depth texture leak, and recipe options for load-time finishes.
 - `docs/coverage.md` regenerates cleanly (`node --experimental-strip-types scripts/coverage-table.ts`, 650 rows), but the output is unchanged because `docs/coverage.json` still records the checkpoint 5 audit. Its rows were not re-audited for v1.2 (for example the 60k-triangle budget row, the three-candle rows and the Dinner food rows).
 
+## Hollywood pass (v1.6)
+
+Written 2026-10-03. Surya, on v1.5: the cake "still has a plasticky, too perfect and geometric shape / texture",
+the flames "aren't bad, but are unconvincing", the steam "needs to realistically accumulate under the cloche and
+somewhat match its shape when it's lifted" — each "Hollywood CGI level work". Brief: `docs/hollywood-pass-brief.md`.
+Read `docs/style-reference.md` v1.6 (what each rebuild is), `docs/qualification.md` v1.6 (the VFX judges' scores
+and demanded fixes), and the three scene records `docs/scenes/birthday-v1.6-cake.md`,
+`docs/scenes/birthday-v1.6-flames.md`, `docs/scenes/dinner-v1.6-steam.md`.
+
+Shape of the work: three owners in parallel worktrees (`v1.6/cake`, `v1.6/flames`, `v1.6/steam`), an integration
+branch (`v1.6/integration`, worktree `.claude/worktrees/v16-int`, port 5508) merged cake → flames → steam with one
+hand-resolved conflict in `src/render/stage.ts` (the depth pass runs first, then bloom prepare, scene, haze,
+composite), a meshopt side task (`v1.6/meshopt`), one VFX judge per object (read-only, own frames, against
+photographs and film references), then a fresh polish owner per object working from the judge's ranked tells
+(`v1.6/cake-polish`, `v1.6/steam-polish`; the flames' smoke pass on `v1.6/flames`), then a second judging.
+
+Infrastructure lesson (also in the orchestrator's memory): subagents were killed by a 10-minute watchdog whenever
+they awaited their own background renders/tests or ran a >10-minute call on the shared, heavily loaded machine
+(load average 30–90 with several rendering sessions); brief them to commit WIP often, keep calls under ~3
+minutes, never await a background run, and write long files in pieces.
+
+Still open at the time of writing (updated when the pass closes):
+- the polish rounds and the second judging (see `docs/qualification.md` v1.6);
+- a second full `pnpm models birthday` to confirm the compressed export is deterministic (the meshopt owner could
+  not finish one under load; the uncompressed export reproduced the committed bytes and the codec is deterministic);
+- `docs/coverage.md` §8 still says "KHR_mesh_quantization with no decoder" (generated from `coverage.json`);
+- the Business reader's pictogram and the Party key are not wired to the bloom (`markBloom`: one line each; it
+  changes Business's posters and adds a pass on every lit Business frame — Surya's call);
+- the judges' shared-rig note: the key is too frontal for the decorated cake face; a raking key or a soft top/back
+  light would help every food shot — not done, it changes every scene.
+
 ## Perfection pass (v1.5)
 
 Written 2026-10-02. Surya's twelve edits on v1.4 (`docs/perfection-pass-brief.md`, verbatim, with the owner of

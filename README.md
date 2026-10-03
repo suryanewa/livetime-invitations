@@ -11,6 +11,8 @@ pnpm dev        # showcase at http://127.0.0.1:5199/  (?scene=party|birthday|spo
 
 Since v1.4 the showcase is fullscreen: the scene fills the viewport and the UI floats over it (a side dock on landscape screens, a bottom sheet on portrait ones). Embeds choose with `createInvitation({ layout: 'square' | 'fullscreen' })`; square stays the default (`docs/integration.md`).
 
+v1.6 (2026-10-03) is the Hollywood pass: the cake's piping is regenerated as hand-piped star-tip rope under a baked-light food shader, the flames are raymarched volumes with a selective HDR bloom and heat haze, the steam is a raymarched volume that starts as the dome's cavity, and every runtime GLB is meshopt-compressed (`docs/style-reference.md` v1.6; `docs/hollywood-pass-brief.md`; `docs/scenes/*-v1.6*.md`).
+
 v1.5 (2026-10-02) is the perfection pass: the record plays on at 33⅓ rpm after acceptance, the candles are real-size flames that blow out into smoke and melt the wax, the cake is hand-finished buttercream, the ball bounces and the net is simulated, steam spills from under the cloche, the bin is a real pedal bin and the reader's status is a backlit pictogram; the camera pulls back only for the decline. `docs/style-reference.md` v1.5 has the table of the twelve edits; `docs/perfection-pass-brief.md` the brief; `docs/scenes/<scene>-v1.5*.md` each owner's record.
 
 On a local host the showcase also takes `?rig=<name>` to light the scene with another studio rig from `src/render/rigs/` (`neutral-room` is the production rig; `product-studio`, `daylight-table`, `livetime-warm` and `v1.1` are kept for comparison), and `&camera=ortho` for the v1.1 orthographic camera.
@@ -41,7 +43,7 @@ Requires Node ≥ 22.12 and pnpm 11 (pinned in `package.json`). Tests: `pnpm tes
 ## Documentation
 
 - [Integration guide](docs/integration.md): embedding, configuration, responses (idempotency and ordering), fallbacks, lifecycle.
-- [Style reference](docs/style-reference.md): v1.5, the perfection pass (the twelve edits, the decline pull-back, the stage at 2 device pixels), v1.4 (one world scale, the hero framing rule), v1.3, the studio pass (the production rig, the perspective lens, the grades removed, the stage token), over v1.2 (the objects as the scan-to-CAD masters per scene), the interface (v1.1) and the palette (v1.0).
+- [Style reference](docs/style-reference.md): v1.6, the Hollywood pass (the cake, the flames, the steam, meshopt), v1.5, the perfection pass (the twelve edits, the decline pull-back, the stage at 2 device pixels), v1.4 (one world scale, the hero framing rule), v1.3, the studio pass (the production rig, the perspective lens, the grades removed, the stage token), over v1.2 (the objects as the scan-to-CAD masters per scene), the interface (v1.1) and the palette (v1.0).
 - [Asset manifest](docs/asset-manifest.md): provenance and licence of every model, texture and dependency.
 - [Qualification record](docs/qualification.md): device coverage, measurements (v1.5 frame pacing at 2 device pixels on laptop and phone; v1.3 re-measured under the new studio, budgets waived), the v1.5 judging of the twelve edits, the rig judging, known limitations.
 - [Coverage table](docs/coverage.md): every Master and sub-spec requirement linked to a result or a recorded exception (regenerate with `node --experimental-strip-types scripts/coverage-table.ts`). It still reflects the checkpoint 5 audit; it has not been re-audited for v1.2 (the three-candle, Dinner food and triangle-budget rows are superseded by `docs/qualification.md` v1.2).
