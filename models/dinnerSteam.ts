@@ -977,8 +977,9 @@ void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
   ivec2 lim = textureSize(uCur, 0) - 1;
   vec4 c = texelFetch(uCur, px, 0);
-  // (A pixel the march did not draw keeps the cleared .w < 1: no shadow there.)
-  float shadow = c.w >= 1.0 ? unpackShadow(c.w) : 1.0;
+  // (A pixel the march did not draw keeps the cleared .w = 1: no shadow there. A drawn pixel's
+  // packed shadow is ≥ 512: the steam takes at most STEAM_LOOK.shadow of the light.)
+  float shadow = c.w >= 2.0 ? unpackShadow(c.w) : 1.0;
   vec2 res = c.xy;
   if (uHistValid) {
     vec2 m1 = vec2(0.0), m2 = vec2(0.0);
@@ -994,7 +995,7 @@ void main() {
     vec2 uv = (vec2(px) + 0.5) / vec2(lim + 1);
     vec2 puv = uv;
     // The steam's point: this pixel's, or (at an edge it has just left) its densest neighbour's.
-    float depth = bestW >= 1.0 ? unpackDepth(bestW) : 0.0;
+    float depth = bestW >= 2.0 ? unpackDepth(bestW) : 0.0;
     float viewZ = 1e4;
     if (bestA > 0.002 && depth > 0.0) {
       vec4 fa = uInvVPL * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
