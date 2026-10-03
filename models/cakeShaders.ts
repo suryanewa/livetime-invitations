@@ -306,6 +306,26 @@ export interface FoodLook {
   /** A warm fat tint mixed into the scattered light (white piping: butter). */
   fatTint: [number, number, number];
   fat: number;
+  /**
+   * v1.6 polish (the judge's fix 1), the coat (body) only: its satin roughness (the generated map's
+   * 0.40–0.66 remapped to [lo, hi]) and a slow ±`coatRoughVar` over 2–6 cm (the window's reflection
+   * breaks where the scraper and the knife left it glossier or matter); the scraper's colour streaks
+   * (value, along the circumference on the sides and round the turntable on the top), a hand-mixed
+   * hue drift (blotches of 1–4 cm), the top's value against the side's (`topLift`), sparse clustered
+   * pinholes (`pinholes`: fraction of 3.5 mm cells inside a cluster, radius `pinholeMm`), and how far
+   * a sugar crystal's facet strays from the grain's normal (`glintSpread`, all frosting).
+   */
+  coatRough: [number, number];
+  coatRoughVar: number;
+  streak: number;
+  hue: number;
+  topLift: number;
+  pinholes: number;
+  pinholeMm: [number, number];
+  glintSpread: number;
+  /** The coat's hand relief (mm, ±), and how much of the normal the scattered light softens (0–1). */
+  wave: number;
+  diffSoft: number;
 }
 
 /** Thickness range of the packed `_FOOD` attribute (mm): scripts/masters/recipes/birthdayFinish.ts FOOD_THICK_MM. */
@@ -317,12 +337,14 @@ export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodL
     sssSat: 1.35, shadeSat: 1.18, crestLift: 0.05, grooveDeep: 0.1, mottle: 0.028,
     roughCrest: 0.42, roughGroove: 0.6, roughCrease: 0.12, glint: 0.55, glintCell: 0.16, glintStrength: 1.6, keyOcclusion: 0.45,
     fatTint: [1, 0.93, 0.8], fat: 0.12,
+    coatRough: [0.3, 0.44], coatRoughVar: 0.07, streak: 0.14, hue: 0.04, topLift: 0.06, pinholes: 0.35, pinholeMm: [0.2, 0.75], glintSpread: 0.4, wave: 0.35, diffSoft: 0.3,
   },
   piping: {
     wrap: 0.38, wrapThin: 0.85, scatter: 0.8, transMm: 2.6, trans: 0.75, transDistort: 0.3, transPower: 3,
     sssSat: 1.3, shadeSat: 1.15, crestLift: 0.06, grooveDeep: 0.09, mottle: 0.022,
     roughCrest: 0.34, roughGroove: 0.62, roughCrease: 0.1, glint: 0.55, glintCell: 0.16, glintStrength: 1.4, keyOcclusion: 0.4,
     fatTint: [1, 0.9, 0.74], fat: 0.35,
+    coatRough: [0.3, 0.44], coatRoughVar: 0, streak: 0, hue: 0, topLift: 0, pinholes: 0, pinholeMm: [0.2, 0.75], glintSpread: 0.45, wave: 0, diffSoft: 0.55,
   },
   // Chocolate ganache buttercream: darker, more absorbing (shorter scatter, deep red-brown light),
   // glossier satin, no visible sugar.
@@ -331,12 +353,14 @@ export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodL
     sssSat: 1.5, shadeSat: 1.2, crestLift: 0.06, grooveDeep: 0.14, mottle: 0.03,
     roughCrest: 0.3, roughGroove: 0.5, roughCrease: 0.1, glint: 0, glintCell: 0.3, glintStrength: 0, keyOcclusion: 0.5,
     fatTint: [1, 0.72, 0.55], fat: 0.25,
+    coatRough: [0.15, 0.26], coatRoughVar: 0.05, streak: 0.06, hue: 0.02, topLift: 0, pinholes: 0.2, pinholeMm: [0.2, 0.6], glintSpread: 0.4, wave: 0.3, diffSoft: 0.3,
   },
   cocoaPiping: {
     wrap: 0.24, wrapThin: 0.55, scatter: 0.65, transMm: 1.5, trans: 0.45, transDistort: 0.3, transPower: 4,
     sssSat: 1.45, shadeSat: 1.18, crestLift: 0.07, grooveDeep: 0.15, mottle: 0.025,
     roughCrest: 0.26, roughGroove: 0.5, roughCrease: 0.1, glint: 0, glintCell: 0.3, glintStrength: 0, keyOcclusion: 0.55,
     fatTint: [1, 0.7, 0.5], fat: 0.25,
+    coatRough: [0.15, 0.26], coatRoughVar: 0, streak: 0, hue: 0, topLift: 0, pinholes: 0, pinholeMm: [0.2, 0.6], glintSpread: 0.4, wave: 0, diffSoft: 0.55,
   },
 };
 
@@ -364,16 +388,20 @@ export function foodPatch(mesh: Mesh, kind: 'body' | 'piping', look: FoodLook, a
   const piping = kind === 'piping';
   const glint = look.glint > 0;
   const cell = look.glintCell * 0.005; // mm → scene units (1 unit = 20 cm)
+  const lookName = (Object.keys(FOOD) as (keyof typeof FOOD)[]).find((k) => FOOD[k] === look) ?? 'custom';
+  const coat = !piping;
   return {
-    key: `food-${kind}-${look === FOOD.cocoaBody || look === FOOD.cocoaPiping ? 'cocoa' : 'blue'}`,
+    key: `food-${kind}-${lookName}`,
     uniforms: { ...quantUniformsFood(mesh) },
     vertexHead: `uniform vec3 uFoodQS; uniform vec3 uFoodQO;
 varying vec3 vFoodP;
-${piping ? 'attribute vec4 _food; varying float vFoodRidge; varying float vFoodAO; varying float vFoodThick;' : ''}`,
+${piping ? 'attribute vec4 _food; varying float vFoodRidge; varying float vFoodAO; varying float vFoodThick;' : 'varying vec3 vFoodN;'}`,
     vertexEnd: `vFoodP = transformed * uFoodQS + uFoodQO;
+${coat ? 'vFoodN = objectNormal / uFoodQS;' : ''}
 ${piping ? `vFoodRidge = _food.x * 2.0 - 1.0; vFoodAO = _food.y; vFoodThick = _food.z * ${FOOD_THICK_MM.toFixed(1)};` : ''}`,
     fragmentHead: `varying vec3 vFoodP;
-${piping ? 'varying float vFoodRidge; varying float vFoodAO; varying float vFoodThick;' : ''}
+${piping ? 'varying float vFoodRidge; varying float vFoodAO; varying float vFoodThick;' : 'varying vec3 vFoodN;'}
+float foodPin = 0.0; float foodTop = 0.0;
 ${FOOD_NOISE}
 // Per-fragment state the lighting reads (set after the normal is known).
 float foodThin; float foodAO; float foodContact; vec3 foodDiffN; vec3 foodGlintP; float foodGlintFade; float foodGlintFade2; vec3 foodGlintT; vec3 foodGlintB;
@@ -396,13 +424,48 @@ bool foodScene = true;`,
     vec2 foodC = texture2D(aoMap, vAoMapUv).rg;
     float crease = 1.0 - foodC.g;
     diffuseColor.rgb = cakeSaturate(diffuseColor.rgb, 1.0 + 0.5 * crease) * (1.0 - ${f(look.grooveDeep)} * 0.8 * crease);
-  #endif`}
+  #endif
+  // v1.6 polish: a hand-coated coat is not one film of one colour. The scraper drags slightly
+  // different cream round the side (streaks long round the circumference, a few mm tall), the
+  // turntable and the knife do the same on the top; the colour was mixed by hand (blotches of 1–4 cm
+  // a touch lavender or a touch cyan); and the scraper opened air pockets, in clusters.
+  {
+    float onTop = smoothstep(0.55, 0.85, normalize(vFoodN).y);
+    foodTop = onTop;
+    vec3 P = vFoodP;
+    float rr = length(P.xz);
+    float sS = (cakeNoise(vec3(P.x * 7.0, P.y * 60.0, P.z * 7.0)) - 0.5) + 0.55 * (cakeNoise(vec3(P.x * 18.0, P.y * 150.0, P.z * 18.0) + 3.7) - 0.5);
+    float sT = (cakeNoise(vec3(P.x * 12.0, P.z * 12.0, rr * 70.0)) - 0.5) + 0.5 * (cakeNoise(vec3(P.x * 30.0, P.z * 30.0, rr * 160.0) + 5.1) - 0.5);
+    float blot = (cakeNoise(P * 6.0 + 11.0) - 0.5) + 0.5 * (cakeNoise(P * 14.0 + 23.0) - 0.5);
+    float hueN = (cakeNoise(P * 9.0 + 41.0) - 0.5) + 0.4 * (cakeNoise(P * 21.0 + 5.0) - 0.5);
+    diffuseColor.rgb *= 1.0 + ${f(look.streak)} * (mix(sS, 2.0 * sT, onTop) + (0.6 + 0.4 * onTop) * blot) + ${f(look.topLift)} * onTop;
+    diffuseColor.rgb *= 1.0 + ${f(look.hue)} * (1.0 + 0.5 * onTop) * hueN * vec3(1.0, -0.6, 0.15);
+    ${look.pinholes > 0 ? `// Pinholes: one at most per 3.5 mm cell (cake space), only inside a cluster; the centre off the
+    // surface by up to a fraction of a millimetre, so the hole the surface cuts through it varies.
+    vec3 cp = P / 0.0175;
+    vec3 ci = floor(cp);
+    vec3 hp = cakeHash33(ci + 5.3);
+    float cl = smoothstep(0.45, 0.75, cakeNoise(P * 11.0 + 2.0));
+    if (hp.x < ${f(look.pinholes)} * cl) {
+      vec3 c = ci + 0.3 + 0.4 * cakeHash33(ci + 9.1);
+      float r = mix(${f(look.pinholeMm[0] / 3.5)}, ${f(look.pinholeMm[1] / 3.5)}, hp.y * hp.y);
+      foodPin = 1.0 - smoothstep(0.5 * r, r, length(cp - c));
+    }
+    diffuseColor.rgb *= 1.0 - 0.28 * foodPin;` : ''}
+  }`}
 }`,
     afterRoughness: piping
       ? `roughnessFactor = mix(${f(look.roughGroove)}, ${f(look.roughCrest)}, smoothstep(-0.6, 0.85, vFoodRidge)) + ${f(look.roughCrease)} * (1.0 - smoothstep(0.3, 0.85, vFoodAO));`
-      : `#ifdef USE_AOMAP
-  roughnessFactor = roughnessFactor * ${f(look.roughCrest / 0.42)} + ${f(look.roughCrease)} * (1.0 - texture2D(aoMap, vAoMapUv).g);
-#endif`,
+      : `{
+  // v1.6 polish: satin, so the window shows in it: the generated map (0.40–0.66) remapped to the coat's
+  // range, a slow drift over 2–6 cm, matt in the creases and the pinholes.
+  float rm = clamp((roughnessFactor - 0.40) / 0.26, 0.0, 1.0);
+  float lf = (cakeNoise(vFoodP * 5.0 + 1.3) - 0.5) + 0.5 * (cakeNoise(vFoodP * 13.0 + 4.1) - 0.5);
+  roughnessFactor = mix(${f(look.coatRough[0])}, ${f(look.coatRough[1])}, rm) + ${f(2 * look.coatRoughVar)} * lf + 0.2 * foodPin;
+  #ifdef USE_AOMAP
+  roughnessFactor += ${f(look.roughCrease)} * (1.0 - texture2D(aoMap, vAoMapUv).g);
+  #endif
+}`,
     afterNormal: `{
   // Thinness: the piping's baked thickness (and its tooth crests); the body's curvature (a rounded
   // edge scatters more than a flat side).
@@ -415,7 +478,20 @@ bool foodScene = true;`,
   #ifdef USE_AOMAP
     vec2 aoc = texture2D(aoMap, vAoMapUv).rg;
     foodAO = aoc.r; foodContact = aoc.g;
-  #endif`}
+  #endif
+  // v1.6 polish: the hand's relief at the scale the eye reads at a distance (a few mm to a few cm,
+  // ±${(look.wave * 1000).toFixed(0)} µm, unique round the cake: no atlas repeat): on the sides the scraper's
+  // passes (bands round the cake, a few millimetres to a centimetre tall, drifting along it); on the
+  // top the knife's strokes and the turntable's rings. Under the raking key a 3–5° slope is a 5–8 %
+  // change of light: what makes a coat read as spread by hand rather than moulded.
+  {
+    vec3 P = vFoodP;
+    float rr = length(P.xz);
+    float hS = (cakeNoise(vec3(P.x * 6.0, P.y * 42.0, P.z * 6.0)) - 0.5) + 0.6 * (cakeNoise(vec3(P.x * 14.0, P.y * 90.0, P.z * 14.0) + 2.3) - 0.5) + 0.5 * (cakeNoise(P * 9.0 + 6.1) - 0.5);
+    float hT = (cakeNoise(vec3(P.x * 9.0, P.z * 9.0, rr * 40.0)) - 0.5) + 0.6 * (cakeNoise(vec3(P.x * 22.0, P.z * 22.0, rr * 70.0) + 8.4) - 0.5) + 0.5 * (cakeNoise(P * 7.0 + 3.3) - 0.5);
+    float hW = ${f(look.wave * 0.005)} * mix(hS, 2.0 * hT, foodTop) * foodContact;
+    normal = cakeBump(-vViewPosition, normal, hW, faceDirection);
+  }`}
   // Sugar grain (≈ 0.5 mm, ±${(RIDGE.grain.amp * 200).toFixed(0)} µm), faded out where a pixel covers it.
   {
     vec3 gp = vFoodP * ${f(RIDGE.grain.freq)};
@@ -423,8 +499,10 @@ bool foodScene = true;`,
     float fadeG = 1.0 - smoothstep(0.35, 0.9, px);
     if (fadeG > 0.0) normal = cakeBump(-vViewPosition, normal, ${f(RIDGE.grain.amp)} * fadeG * (cakeNoise(gp) + 0.5 * cakeNoise(gp * 2.17 + 3.1)), faceDirection);
   }
+  // A pinhole is a pit (≈ 0.3 mm deep).
+  ${coat && look.pinholes > 0 ? 'if (foodPin > 0.0) normal = cakeBump(-vViewPosition, normal, -0.0015 * foodPin, faceDirection);' : ''}
   // The scattered light sees a softened normal (relief shows in the specular, not in the diffuse).
-  foodDiffN = normalize(mix(normal, normalize(vNormal) * faceDirection, 0.55));
+  foodDiffN = normalize(mix(normal, normalize(vNormal) * faceDirection, ${f(look.diffSoft)}));
   ${glint ? `foodGlintP = vFoodP / ${f(cell)};
   float fp = length(fwidth(foodGlintP));
   foodGlintFade = 1.0 - smoothstep(0.55, 1.25, fp);
@@ -468,7 +546,9 @@ bool foodScene = true;`,
     vec3 fr = fract(gp) - 0.5 - (r.yzx - 0.5) * 0.3;
     float spot = exp(-dot(fr, fr) * 20.0);
     vec3 q = cakeHash33(floor(gp) + 41.7) * 2.0 - 1.0;
-    vec3 tn = normalize(geometryNormal + (foodGlintT * q.x + foodGlintB * q.y) * 1.45);
+    // v1.6 polish: a crystal's facet lies near the grain's own normal (geometryNormal is the bumped
+    // one), so the sparkle gathers in the satin highlight instead of specking the whole coat.
+    vec3 tn = normalize(geometryNormal + (foodGlintT * q.x + foodGlintB * q.y) * ${f(look.glintSpread)});
     float d = pow(saturate(dot(tn, hv)), 380.0);
     reflectedLight.directSpecular += directLight.color * nlG * d * spot * ${f(look.glintStrength)} * (li == 0 ? 1.0 : 0.7) * fade * foodContact;
   }` : ''}
