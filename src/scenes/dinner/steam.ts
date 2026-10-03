@@ -571,23 +571,24 @@ export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infin
 }
 
 /**
- * The cloud's look at its thermal age (the shader's per-clock uniforms): how far the turbulence
- * moves its mixture, the threshold above which air keeps its droplets (raised by evaporation), the
- * turbulence's own warp, the finer octave's share, the fog inside and its soft width, and the
- * mixing sheet's width and strength. Young (just out of the dome) it is fog with a soft edge; then
- * the room's air folds its edge into thin, bright sheets and empties the inside.
+ * The cloud's look at its thermal age (the shader's per-clock uniforms; v1.6 polish). The cloud's
+ * edge is where its saturated air meets the room's dry air: a boundary, not a fuzz. The shader
+ * takes the signed distance to the cavity's wall in material space (so it is carried, stretched
+ * and rolled with the air), moves it by billows (`billow`: convex lobes 1–2 cm across, cauliflower
+ * edges) and a larger turbulent swell (`amp`), and remaps it through a narrow band (`band`: ≈ 2.5 mm
+ * young, widening to ≈ 1 cm as the room's air mixes in). Inside is a silky fog (`core`) that empties
+ * as it ages; at the boundary the mixing layer keeps a thin sheet (`sheet`, `sheetWidth`): steam's
+ * bright folds. `warp` folds the lobes by the large field.
  */
-export interface CloudLook { amp: number; threshold: number; warp: number; fine: number; core: number; coreWidth: number; sheetWidth: number; sheet: number }
-export function cloudLook(age: number, erode: number, out: CloudLook = { amp: 0, threshold: 0, warp: 0, fine: 0, core: 0, coreWidth: 0, sheetWidth: 0, sheet: 0 }): CloudLook {
-  const young = 1 - smooth(0.1, 1.2, age);
-  out.amp = 0.6 + 0.25 * smooth(0, 1.4, age);
-  out.threshold = 0.3 + 0.32 * erode;
-  out.warp = 1 + 1.4 * smooth(0, 1.2, age) - 0.6 * smooth(1.2, 2.4, age);
-  out.fine = 0.1 + 0.15 * erode;
-  out.core = 0.8 + (0.08 - 0.8) * smooth(0.1, 1.3, age);
-  out.coreWidth = 0.12 + 0.03 * young;
-  out.sheetWidth = 0.08 + 0.02 * young;
-  out.sheet = (0.75 - 0.4 * young) * (1 - 0.55 * smooth(0.8, 2.0, age));
+export interface CloudLook { amp: number; band: number; billow: number; warp: number; core: number; sheet: number; sheetWidth: number }
+export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, band: 0, billow: 0, warp: 0, core: 0, sheet: 0, sheetWidth: 0 }): CloudLook {
+  out.amp = 0.008 + 0.07 * smooth(0.35, 1.5, age);
+  out.band = 0.015 + 0.045 * smooth(0.35, 1.7, age);
+  out.billow = 0.028 + 0.042 * smooth(0.25, 1.3, age);
+  out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
+  out.core = 0.85 + (0.07 - 0.85) * smooth(0.3, 1.4, age);
+  out.sheet = 0.35 + 0.4 * smooth(0.3, 1.0, age) - 0.3 * smooth(1.2, 2.3, age);
+  out.sheetWidth = 0.012 + 0.035 * smooth(0.3, 1.7, age);
   return out;
 }
 
@@ -631,7 +632,7 @@ const OUTLINE: readonly [number, number][] = (() => {
 })();
 
 const fw: [number, number] = [0, 0];
-const TMP_V = new Vector3();
+const BOUNDS_LOOK = cloudLook(0);
 /**
  * The volume's bounds on a clock (plate-centred su, conservative): the cloud's outline carried by
  * the flow (plus the turbulence, the noise's reach and the lean), and the veil as far as it has
@@ -655,7 +656,9 @@ export function steamBounds(
       yMin = Math.min(yMin, fw[1]);
       yMax = Math.max(yMax, fw[1]);
     }
-    const m = 0.1 + 1.6 * s.turb;
+    // (The turbulence's warp, and the billows and swell that move the edge in material space.)
+    const look = cloudLook(s.age, s.erode, BOUNDS_LOOK);
+    const m = 0.1 + 1.6 * s.turb + look.amp + look.billow;
     const lean = s.lean.length() * Math.max(0, yMax - 0.15);
     const r = rMax + m + lean + s.dragSide.length();
     cloudMin.set(-r, Math.max(0, yMin - m), -r);
