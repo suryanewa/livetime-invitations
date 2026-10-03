@@ -1,4 +1,4 @@
-import { AddEquation, AdditiveBlending, Color, CustomBlending, DoubleSide, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector3, Vector4 } from 'three';
+import { AddEquation, AdditiveBlending, Color, CustomBlending, DoubleSide, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, Vector3, Vector4 } from 'three';
 
 /**
  * Candle flame and smoke shaders (v1.5, Birthday #4; the flame rebuilt as a volume in v1.6, the
@@ -527,16 +527,38 @@ export function createFlameBloomMaterial(flame: ShaderMaterial & { uniforms: Fla
 export interface SmokeUniforms {
   uViewportH: { value: number };
   uMinPx: { value: number };
-  uColor: { value: Color };
   uTime: { value: number };
+  /** The key light (view space, towards it) and its irradiance (colour × intensity). */
+  uKeyDir: { value: Vector3 };
+  uKey: { value: Color };
+  /** The room's light on the smoke (its radiance at an unshadowed parcel). */
+  uRoom: { value: Color };
 }
 
 /**
- * Smoke radiance (linear, before the tone curve): wax aerosol is white (sub-micron droplets scatter
- * nearly all the light they catch, faintly bluish), so where it is dense it is brighter than the
- * greige cove behind it (≈ 0.6 albedo): ≈ 245 of 255 on screen against the wall's ≈ 210 (v1.5
- * judge: '#c9c9cb' matched the wall and vanished). A thread reads as a pale wisp over the wall and
- * stands out more over shade, the bin or cocoa.
+ * How the smoke is lit (v1.6). Wax aerosol (sub-micron droplets, albedo ≈ 0.95) scatters the light
+ * it catches, a little forwards (Henyey–Greenstein g), so it is lit, not a flat white: under the
+ * room's light alone a thin wisp has about the wall's radiance (all but invisible against the lit
+ * cove, bright over the shaded plate and the frosting, as real smoke is), the edges the key grazes
+ * are brighter, and a dense stem is darker (it shadows itself from the key and the room). `room` is
+ * the room's radiance at a parcel (linear, before exposure: the greige wall's ≈ 0.58 over its
+ * albedo, a little cool); `key` scales the rig's key irradiance × the phase (× 4π: isotropic is 1);
+ * `occlusion` is the room light a parcel's own column hides (× its optical depth).
+ */
+export const SMOKE_LIGHT = { room: [0.6, 0.62, 0.66] as const, key: 0.6, g: 0.3, occlusion: 0.28, albedo: 0.95 } as const;
+
+/**
+ * The flame's last glow in the first vapour (v1.6): parcels that leave the wick within `born` s of
+ * the flame letting go carry its soot's glow (≈1,500 K, `radiance` on the exposed scale), fading
+ * over their first `fade` s of age: the dying flame's emission falls as the vapour's scattering
+ * rises (it condenses within 4 ms), so flame and smoke are one thread with no gap.
+ */
+export const SMOKE_GLOW = { born: 0.07, fade: 0.06, radiance: 2.2 } as const;
+
+/**
+ * v1.5's flat smoke radiance (white, brighter than the wall: ≈ 245 of 255 on screen against the
+ * wall's ≈ 210). v1.6 lights the smoke instead (SMOKE_LIGHT); a thin wisp's key-lit edge stays
+ * near this white.
  */
 export const SMOKE_RADIANCE = [1.4, 1.414, 1.456] as const;
 
@@ -544,12 +566,20 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
   const uniforms: SmokeUniforms = {
     uViewportH: { value: 1000 },
     uMinPx: { value: 1.3 },
-    uColor: { value: new Color().setRGB(...SMOKE_RADIANCE) },
     uTime: { value: 0 },
+    uKeyDir: { value: new Vector3(-0.3, 0.6, 0.7).normalize() },
+    uKey: { value: new Color(1.5, 1.5, 1.5) },
+    uRoom: { value: new Color().setRGB(...SMOKE_LIGHT.room) },
   };
+  const hot = blackbodyAt(1500, new Color());
+  hot.multiplyScalar(SMOKE_GLOW.radiance / Math.max(1e-6, hot.r));
   const m = new ShaderMaterial({
     name: 'fx_smoke',
     uniforms: uniforms as unknown as ShaderMaterial['uniforms'],
+    defines: {
+      SMOKE_G: SMOKE_LIGHT.g.toFixed(3), SMOKE_KEY: SMOKE_LIGHT.key.toFixed(3), SMOKE_OCC: SMOKE_LIGHT.occlusion.toFixed(3), SMOKE_ALBEDO: SMOKE_LIGHT.albedo.toFixed(3),
+      SMOKE_GLOW_RGB: `vec3(${hot.r.toFixed(4)}, ${hot.g.toFixed(4)}, ${hot.b.toFixed(4)})`,
+    },
     vertexShader: /* glsl */ `
       attribute vec3 aPrev;
       attribute vec3 aNext;
@@ -558,12 +588,16 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
       attribute float aAlpha;
       attribute float aAge;
       attribute float aSeed;
+      attribute float aHot;
       uniform float uViewportH;
       uniform float uMinPx;
-      varying float vAlpha;
+      varying float vTau;
       varying float vAcross;
       varying float vAge;
       varying float vAlong;
+      varying float vHot;
+      varying vec3 vSide;
+      varying vec3 vView;
       void main() {
         vec4 c = modelViewMatrix * vec4(position, 1.0);
         vec3 tp = (modelViewMatrix * vec4(aPrev, 1.0)).xyz;
@@ -572,10 +606,11 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
         vec3 view = normalize(-c.xyz);
         float pxPerUnit = uViewportH * 0.5 * projectionMatrix[1][1] / max(1e-5, -c.z);
         float w = aWidth;
-        float a = aAlpha;
+        // The column's optical depth through its middle (the physics' opacity, Beer–Lambert).
+        float tau = -log(max(1.0 - min(aAlpha, 0.995), 1e-4));
         float px = w * pxPerUnit;
         // Never thinner than uMinPx: widen and keep the same amount of smoke (no shimmer).
-        if (px < uMinPx) { a *= px / uMinPx; w = uMinPx / pxPerUnit; }
+        if (px < uMinPx) { tau *= px / uMinPx; w = uMinPx / pxPerUnit; }
         // Across the thread on screen: perpendicular to its projected tangent. Where it points at
         // the camera that tangent shrinks under a pixel and its direction is noise: only there it
         // blends towards the screen horizontal (a rising thread's own side), so an end-on stretch
@@ -587,39 +622,80 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
         vec3 side = (al > 1e-12 ? across / al : vec3(1.0, 0.0, 0.0)) * sure + vec3(1.0 - sure, 0.0, 0.0);
         float sl = length(side);
         side = sl > 1e-6 ? side / sl : vec3(1.0, 0.0, 0.0);
-        // The Gaussian cross-section reaches past the nominal width.
-        c.xyz += side * aSide * w * 1.1;
+        // The tube's soft section reaches past its radius.
+        c.xyz += side * aSide * w * 1.25;
         gl_Position = projectionMatrix * c;
-        vAlpha = a;
+        vTau = tau;
         vAcross = aSide;
         vAge = aAge;
         vAlong = aSeed;
+        vHot = aHot;
+        vSide = side;
+        vView = view;
       }`,
     fragmentShader: /* glsl */ `
-      uniform vec3 uColor;
       uniform float uTime;
-      varying float vAlpha;
+      uniform vec3 uKeyDir;
+      uniform vec3 uKey;
+      uniform vec3 uRoom;
+      varying float vTau;
       varying float vAcross;
       varying float vAge;
       varying float vAlong;
+      varying float vHot;
+      varying vec3 vSide;
+      varying vec3 vView;
       float h(float n) { return fract(sin(n) * 43758.5453); }
       float n1(float x) { float i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(h(i), h(i + 1.0), f); }
+      float h2(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+      float n2(vec2 q) { vec2 i = floor(q), f = fract(q), u = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), u.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), u.x), u.y); }
       void main() {
-        // Cross-section: Gaussian, ±2.2σ across the strip.
-        float x = vAcross * 1.1;
-        float prof = exp(-2.4 * x * x);
-        // Older smoke breaks into streaky wisps (noise along the thread, advected with it).
-        float wisp = mix(1.0, 0.35 + 1.1 * n1(vAlong * 9.0 + vAcross * 1.7) * n1(vAlong * 23.0 - vAcross * 2.3 + 3.1), smoothstep(0.15, 0.7, vAge));
-        float a = clamp(vAlpha * prof * wisp, 0.0, 1.0);
-        gl_FragColor = vec4(uColor, a);
+        // A tube of smoke seen across it: x is the position across in its radius (the strip reaches
+        // 1.25 radii), the line of sight's path through it a soft chord (no edge to the strip).
+        float x = vAcross * 1.25;
+        float chord = sqrt(max(1.0 - x * x, 0.0));
+        float soft = exp(-1.6 * x * x);
+        // Older smoke breaks up: streaks along the thread (advected with it) and a finer churn
+        // across it, growing with age: a column stops reading as a rod within a second.
+        float older = smoothstep(0.12, 0.9, vAge);
+        float streak = 0.35 + 1.1 * n1(vAlong * 9.0 + vAcross * 1.7) * n1(vAlong * 23.0 - vAcross * 2.3 + 3.1);
+        float churn = 0.55 + 0.9 * n2(vec2(vAlong * 31.0, vAcross * 2.6 + vAge * 1.3));
+        float breakup = mix(1.0, streak * churn, older);
+        float tau = vTau * mix(soft, chord * soft * 1.35, 0.5) * breakup;
+        float a = 1.0 - exp(-tau);
+        if (a < 1e-4) discard;
+        // Single scattering of the key, shadowed by the tube itself: the light's path from where it
+        // enters the tube to the middle of this line of sight (the circle across the thread), so the
+        // edge the key grazes is bright and the far side of a thick column dark.
+        vec3 L = normalize(uKeyDir);
+        float la = dot(L, vSide), lv = dot(L, vView);
+        float lp = length(vec2(la, lv));
+        vec2 dl = lp > 1e-4 ? vec2(la, lv) / lp : vec2(0.0, 1.0);
+        float xi = clamp(x, -1.0, 1.0);
+        float tl = -xi * dl.x + sqrt(max(xi * xi * dl.x * dl.x - xi * xi + 1.0, 0.0));
+        float tauL = 0.5 * vTau * tl / max(lp, 0.35) * breakup;
+        float g = SMOKE_G;
+        float phase = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * dot(-L, vView), 1.5);
+        vec3 key = uKey * SMOKE_KEY * phase * exp(-tauL);
+        // The room's light, less what the column hides from itself.
+        vec3 room = uRoom * exp(-SMOKE_OCC * vTau * chord);
+        vec3 src = SMOKE_ALBEDO * (key + room);
+        // The flame's last glow in the first vapour (emission per unit of its density), fading as it cools.
+        src += vHot * SMOKE_GLOW_RGB;
+        // Premultiplied over what is behind, in display space (as the scene's own blending is).
+        gl_FragColor = vec4(src, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
+        gl_FragColor = vec4(gl_FragColor.rgb * a, a);
       }`,
     transparent: true,
     depthWrite: false,
     depthTest: true,
     side: DoubleSide,
-    blending: NormalBlending,
+    blending: CustomBlending,
+    blendEquation: AddEquation,
+    blendSrc: OneFactor,
+    blendDst: OneMinusSrcAlphaFactor,
   });
   m.toneMapped = true;
   return m as ShaderMaterial & { uniforms: SmokeUniforms };
