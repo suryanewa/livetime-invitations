@@ -622,8 +622,16 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
         vec3 side = (al > 1e-12 ? across / al : vec3(1.0, 0.0, 0.0)) * sure + vec3(1.0 - sure, 0.0, 0.0);
         float sl = length(side);
         side = sl > 1e-6 ? side / sl : vec3(1.0, 0.0, 0.0);
+        // A fold: where the thread turns back on itself on screen (the first vapour's head curling
+        // over in the gust) the strip pinches through the turn instead of flinging its corners out
+        // past it (v1.6 smoke pass: hard-edged white tabs at the plumes' heads).
+        vec3 d1 = c.xyz - tp, d2 = tn - c.xyz;
+        d1 -= view * dot(d1, view);
+        d2 -= view * dot(d2, view);
+        float l12 = length(d1) * length(d2);
+        float pinch = smoothstep(-0.2, 0.8, l12 > 1e-12 ? dot(d1, d2) / l12 : 1.0);
         // The tube's soft section reaches past its radius.
-        c.xyz += side * aSide * w * 1.25;
+        c.xyz += side * aSide * w * 1.25 * pinch;
         gl_Position = projectionMatrix * c;
         vTau = tau;
         vAcross = aSide;
@@ -654,7 +662,9 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
         // 1.25 radii), the line of sight's path through it a soft chord (no edge to the strip).
         float x = vAcross * 1.25;
         float chord = sqrt(max(1.0 - x * x, 0.0));
-        float soft = exp(-1.6 * x * x);
+        // Gaussian, lowered to reach exactly 0 at the strip's edge (it left 8 %: a dense thread's
+        // strip showed its straight boundary where it folded).
+        float soft = max(exp(-1.6 * x * x) - 0.0821, 0.0) * 1.0894;
         // Older smoke breaks up: streaks along the thread (advected with it) and a finer churn
         // across it, growing with age: a column stops reading as a rod within a second.
         float older = smoothstep(0.12, 0.9, vAge);
