@@ -130,7 +130,7 @@ export const FLICKER = {
   /** Length breathing, RMS (peaks ±6–8 %). */
   breathe: 0.032,
   /** Sway, RMS of each plan component (radians: the lean's peaks 3–5°). */
-  sway: (1.6 * Math.PI) / 180,
+  sway: (2 * Math.PI) / 180,
   /** The shared room draft (radians, ±1°, 0.1–0.3 Hz). */
   draft: (1 * Math.PI) / 180,
   /** Flutters: one per `every` s somewhere on the cake (some skipped), lasting `length` s, leaning `lean` and stretching `stretch`. */

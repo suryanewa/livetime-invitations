@@ -50,31 +50,54 @@ describe('Birthday fire: the flame', () => {
     expect((FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length - POOL_Y) / top).toBeLessThan(0.25);
   });
 
-  it('flickers at 10–12 Hz with a few per cent of length, sways a few degrees in the room\'s draft, and is exactly still at gain 0', () => {
+  it('lives by the room\'s air: a slow 1/f sway of a few degrees and breathing of its length, no 11 Hz buzz, a rare flutter one candle at a time; exactly still at gain 0', () => {
+    // v1.6 polish (judge: v1.5's coherent 10.9 Hz tip bob read as a mechanical buzz; a lone flame
+    // in still air does not puff at 10–12 Hz, three or more bundled ones do: Okamoto et al. 2016).
     const fl = newFlicker();
+    const dt = 0.005, T = 60;
     for (let i = 0; i < CANDLE_COUNT; i++) {
-      // Dominant frequency from zero crossings of the length over 4 s at 1 kHz.
+      let maxLean = 0, s2 = 0, n = 0, maxDh = 0, hiPow = 0, loPow = 0;
       const xs: number[] = [];
-      let maxDh = 0, maxSway = 0;
-      for (let k = 0; k < 4000; k++) {
-        flicker(i, k / 1000, 1, fl);
-        xs.push(fl.height - 1);
+      for (let t = 0; t < T; t += dt) {
+        flicker(i, t, 1, fl);
+        maxLean = Math.max(maxLean, Math.hypot(fl.swayX, fl.swayZ));
         maxDh = Math.max(maxDh, Math.abs(fl.height - 1));
-        maxSway = Math.max(maxSway, Math.hypot(fl.swayX, fl.swayZ));
+        s2 += (fl.height - 1) ** 2;
+        n++;
+        if (fl.wave === 0) xs.push(fl.swayX);
       }
-      // The fast component: subtract a 60 ms moving average (drops the slow sub-harmonic).
-      const hi = xs.map((x, k) => x - xs.slice(Math.max(0, k - 30), k + 30).reduce((a, b) => a + b, 0) / (Math.min(xs.length, k + 30) - Math.max(0, k - 30)));
-      let crossings = 0;
-      for (let k = 100; k < 3900; k++) if (hi[k - 1]! < 0 && hi[k]! >= 0) crossings++;
-      const hz = crossings / 3.8;
-      expect(hz).toBeGreaterThan(9.5);
-      expect(hz).toBeLessThan(12.5);
+      // Lean peaks of 3–7° (sway and flutters), length breathing ±3 % RMS, never past ±9 %.
+      expect((maxLean * 180) / Math.PI).toBeGreaterThan(3);
+      expect((maxLean * 180) / Math.PI).toBeLessThan(7.5);
+      expect(Math.sqrt(s2 / n)).toBeGreaterThan(0.02);
+      expect(Math.sqrt(s2 / n)).toBeLessThan(0.045);
       expect(maxDh).toBeLessThanOrEqual(FLICKER.amplitude + 1e-9);
-      expect(maxDh).toBeGreaterThan(0.01);
-      expect(maxSway).toBeLessThan((3.5 * Math.PI) / 180);
+      // Outside flutters the sway is slow: its frame-to-frame (5 ms) change is a small share of
+      // its swing (no buzz), i.e. nearly all its power lies under a few hertz.
+      for (let k = 1; k < xs.length; k++) { hiPow += (xs[k]! - xs[k - 1]!) ** 2; loPow += xs[k]! ** 2; }
+      const hz = Math.sqrt(hiPow / loPow) / (2 * Math.PI * dt);
+      expect(hz).toBeLessThan(3);
+      expect(hz).toBeGreaterThan(0.3);
       flicker(i, 1.234, 0, fl);
-      for (const [v, rest] of [[fl.height, 1], [fl.width, 1], [fl.intensity, 1], [fl.swayX, 0], [fl.swayZ, 0]] as const) expect(Math.abs(v - rest)).toBe(0);
+      for (const [v, rest] of [[fl.height, 1], [fl.width, 1], [fl.intensity, 1], [fl.swayX, 0], [fl.swayZ, 0], [fl.wave, 0]] as const) expect(Math.abs(v - rest)).toBe(0);
     }
+    // Flutters: 100–300 ms, every few seconds somewhere on the cake, never two candles at once.
+    let events = 0, both = 0, longest = 0, shortest = Infinity;
+    const runs = new Array(CANDLE_COUNT).fill(0);
+    for (let t = 0; t < 300; t += 0.002) {
+      let k = 0;
+      for (let i = 0; i < CANDLE_COUNT; i++) {
+        flicker(i, t, 1, fl);
+        if (fl.wave > 0) { k++; if (runs[i] === 0) events++; runs[i] += 0.002; }
+        else if (runs[i] > 0) { longest = Math.max(longest, runs[i]); shortest = Math.min(shortest, runs[i]); runs[i] = 0; }
+      }
+      if (k > 1) both++;
+    }
+    expect(both).toBe(0);
+    expect(events).toBeGreaterThan(300 / 6);
+    expect(events).toBeLessThan(300 / 2);
+    expect(longest).toBeLessThanOrEqual(0.302);
+    expect(shortest).toBeGreaterThanOrEqual(0.098);
   });
 
   it('is coloured by temperature: 1,900 K soot is orange-white, and gas cooled to 1,300 K is under 1 % as bright', () => {
