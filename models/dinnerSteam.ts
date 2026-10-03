@@ -287,7 +287,7 @@ void main() {
   }
   float dil = min(1.0, 1.0 / (stretch * S * S)) * (1.0 - s3.z * (1.0 - smoothstep(0.12, 0.42, Y)));
   float evap = exp(-max(0.0, y0 - ${f(CLOUD.evapFrom)}) / ${f(CLOUD.evaporate)});
-  float k = dil * evap * s2.w;
+  float k = dil * evap * s2.w * smoothstep(0.0, 0.012, y0 - slumpSurface(rho0));
   gl_FragColor = vec4(P, Y, seat(P, Y, s3.x, 0.0) * k, seat(P, Y, s3.x, s3.y + 0.03) * k);
 }
 `;
@@ -761,7 +761,7 @@ float viewDistance(float dz) {
 }
 
 void main() {
-  if (!uReady) discard;
+  if (!uReady || uDebug == 7) discard;
   float own = 1e4;
   if (uHasDepth) {
     float dz = texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r;

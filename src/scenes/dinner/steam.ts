@@ -93,9 +93,9 @@ export const CLOUD = {
   /** The vortex ring's core in the cloud at the seat: (share of the radius, height su). */
   ringAt: [0.78, 0.34] as const,
   /** The vortex ring: its roll (rad) and time constant (s), its core's reach (su). */
-  roll: 2.8,
+  roll: 3.4,
   rollTime: 1.0,
-  ringCore: 0.22,
+  ringCore: 0.26,
   /** The base's outward slump over the plate's rim (su) and its time constant (s). */
   skirt: 0.42,
   skirtTime: 0.45,
@@ -471,7 +471,9 @@ export function cloudDensity(p: Vector3, s: CloudState): number {
   if (!s.present || s.fade <= 0) return 0;
   if (p.y < 0) return 0;
   cloudMaterial(p, s, mat);
-  return cloudSeat(mat.X, s.floor) * Math.min(1, mat.dilution) * evaporation(p.y) * s.fade;
+  // (Never in the porcelain: the flow's roll can carry the edge of the base down onto it.)
+  const above = smooth(0, 0.012, p.y - slumpSurface(Math.hypot(p.x, p.z)));
+  return cloudSeat(mat.X, s.floor) * Math.min(1, mat.dilution) * evaporation(p.y) * s.fade * above;
 }
 
 // ── The veil: the plate's thin column ─────────────────────────────────────────
