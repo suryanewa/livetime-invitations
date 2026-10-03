@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Color, Euler, Group, Matrix4, MeshStandardMaterial, Vector3 } from 'three';
-import { COVER, COVER_PROFILE, dinnerBounds, PLATE, plateTop } from '../models/dinnerContract.ts';
+import { Color, Group, MeshStandardMaterial, Vector2, Vector3 } from 'three';
+import { COVER, COVER_PROFILE, COVER_SEATED, dinnerBounds, PLATE, plateTop } from '../models/dinnerContract.ts';
 import type { DinnerRig } from '../models/dinner.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { VisualDirector } from '../src/core/visualDirector.ts';
@@ -8,15 +8,16 @@ import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { DinnerScene } from '../src/scenes/dinner/index.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  buildPlumes, buildPuffs, domeClearance, newPuffState, PLUME, plumeCenter, plumeDensity, POCKET_CLEAR, PUFF_COUNTS, PUFF_KINDS, leftSteamEnd, plumeSource, wakeFade, puffAt, riseAt, STEAM_END, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade,
-  steamPlumes, steamPuffs, VIEW_RIGHT,
+  axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, dragAt, leftSteamEnd, RAISED_DIR, riseAt, SPILL, spillFade,
+  spillSource, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
 } from '../src/scenes/dinner/steam.ts';
 
 /**
- * Dinner v1.5: the steam released by the reveal (Surya: "steam under the cloche after unveiling
- * it"). The plan is checked against the reveal's choreography and the physics it claims; the
- * scene's steam clock is driven through the real VisualDirector, stepping `simulate` the way the
- * controller's fixed stepper does.
+ * Dinner v1.6: the steam under the cloche as a volume (Surya: "it needs to realistically accumulate
+ * under the cloche and somewhat match its shape when it's lifted"). The field's plan is checked
+ * against the cloche, the reveal's choreography and the physics it claims, through its CPU mirror
+ * (the smooth envelope the shader adds its turbulence to); the scene's steam clocks are driven
+ * through the real VisualDirector, stepping `simulate` the way the controller's fixed stepper does.
  */
 
 const SU_CM = 16.875; // one Dinner scene unit (DINNER_WORLD_SCALE × 20 cm)
@@ -32,168 +33,181 @@ function domeRadius(y: number): number {
   }
   return 0;
 }
-/** Is the scene-space point inside the dome as the accept poses it at t? */
-function insideDome(p: Vector3, t: number): boolean {
-  const f = sampleSequence('accept', t, newFrame());
-  const q = p.clone().applyMatrix4(new Matrix4().makeRotationFromEuler(new Euler(f.coverTiltX, 0, f.coverTilt)).setPosition(f.coverPos).invert());
-  return q.y >= 0 && q.y <= COVER_PROFILE[COVER_PROFILE.length - 1]![1] && Math.hypot(q.x, q.z) <= domeRadius(q.y);
+/** The forward-mapped cavity outline at τ: its top, the widest of its upper half and of its base. */
+function outline(tau: number) {
+  const s = cloudState(tau);
+  const { radius: R, height: H, power: p, rim } = CLOUD;
+  let top = 0, cap = 0, low = 0;
+  for (let i = 0; i <= 60; i++) {
+    const q = (i / 60) * H, P = R * Math.pow(Math.max(0, 1 - Math.pow(q / H, p)), 1 / p);
+    const [r, y] = axisForward(P, rim + q, s);
+    top = Math.max(top, y);
+    if (q > 0.35) cap = Math.max(cap, r);
+  }
+  low = axisForward(0.6, 0.1, s)[0];
+  return { top, cap, low, base: axisForward(0.6, 0.1, s) };
 }
 
-describe('Dinner steam plan (v1.5)', () => {
-  it('is one deterministic plan: the same puffs and plumes every build, all finite', () => {
-    expect(buildPuffs()).toEqual(steamPuffs());
-    expect(buildPlumes()).toEqual(steamPlumes());
-    for (const k of PUFF_KINDS) expect(steamPuffs().filter((p) => p.kind === k)).toHaveLength(PUFF_COUNTS[k]);
-    for (const p of steamPuffs()) {
-      for (const v of [p.t0, p.life, p.rise, p.size, p.grow, p.peak, ...p.pos.toArray(), ...p.vel.toArray()]) expect(Number.isFinite(v)).toBe(true);
-      expect(p.t0).toBeGreaterThanOrEqual(0);
+describe('Dinner steam field (v1.6)', () => {
+  it('is a pure function of the steam clock: the same state and the same density every time, all finite', () => {
+    const p = new Vector3(0.2, 0.5, -0.1);
+    for (const tau of [0, 0.3, 0.6, 1.2, 2.5]) {
+      expect(cloudState(tau)).toEqual(cloudState(tau));
+      expect(cloudDensity(p, cloudState(tau))).toBe(cloudDensity(p, cloudState(tau)));
+      const s = cloudState(tau);
+      for (const v of [s.rise, s.dragUp, s.cap, s.stem, s.skirt, s.roll, s.ringR, s.ringY, s.turb, s.erode, s.fade]) expect(Number.isFinite(v)).toBe(true);
     }
   });
 
-  it('spills first from under the raised (guest) side, while the far rim is still on the plate', () => {
-    const first = [...steamPuffs()].sort((a, b) => a.t0 - b.t0);
-    // Everything before lift-off clears the plate (≈ 0.2 s) is the spill.
-    for (const p of first.filter((p) => p.t0 < 0.2)) expect(p.kind).toBe('spill');
-    expect(first[0]!.t0).toBeLessThan(ACCEPT.tipPeak);
-    // The far rim (+REVEAL_DIR) is the pivot then: still on the plate when the spill begins.
-    const f = sampleSequence('accept', first[0]!.t0, newFrame());
-    const far = new Vector3(REVEAL_DIR.x * COVER.lipRadius, 0, REVEAL_DIR.z * COVER.lipRadius).applyEuler(new Euler(f.coverTiltX, 0, f.coverTilt)).add(f.coverPos);
-    expect(far.y - plateTop(Math.hypot(far.x, far.z))).toBeLessThan(0.002);
-    // Spread round the raised side (its gap is widest there): all within 75°, mean within 30°.
-    const spill = steamPuffs().filter((p) => p.kind === 'spill');
-    let mx = 0, mz = 0;
-    for (const p of spill) {
-      const cos = -(p.out.x * REVEAL_DIR.x + p.out.z * REVEAL_DIR.z);
-      expect(cos).toBeGreaterThan(Math.cos((75 * Math.PI) / 180));
-      mx += p.out.x;
-      mz += p.out.z;
+  it('accumulates under the cloche: at the seat the cloud is the dome\'s cavity, dense under the crown, clear just above the porcelain', () => {
+    const s = cloudState(0);
+    // Inside the cloche, above the plate: fog (densest under the crown).
+    for (const [r, y] of [[0, 0.6], [0.3, 0.4], [0.45, 0.2], [0.2, 0.12]] as const) {
+      expect(cloudDensity(new Vector3(r, y, 0), s), `${r}, ${y}`).toBeGreaterThan(0.4);
     }
-    expect(-(mx * REVEAL_DIR.x + mz * REVEAL_DIR.z) / Math.hypot(mx, mz)).toBeGreaterThan(Math.cos(Math.PI / 6));
+    expect(cloudDensity(new Vector3(0, 0.62, 0), s)).toBeGreaterThan(cloudDensity(new Vector3(0, 0.1, 0), s));
+    // Outside the dome, above its crown, and on the porcelain itself: none.
+    for (let i = 0; i < 400; i++) {
+      const a = i * 2.399, r = 0.05 + (i % 20) * 0.045, y = ((i * 7) % 40) * 0.025;
+      const p = new Vector3(Math.cos(a) * r, y, Math.sin(a) * r);
+      const inside = y - COVER_SEATED.y < 0 ? r < COVER.lipRadius : r < domeRadius(y - COVER_SEATED.y);
+      if (!inside) expect(cloudDensity(p, s), `${r.toFixed(2)}, ${y.toFixed(2)}`).toBe(0);
+    }
+    expect(cloudSeat(new Vector3(0.2, plateTop(0.2) + 0.002, 0))).toBeLessThan(0.05);
   });
 
-  it('the pocket is the air the dome held: released inside it as it is carried off, shown once the shell is clear', () => {
-    const toCover = (t: number) => {
-      const f = sampleSequence('accept', t, newFrame());
-      return new Matrix4().makeRotationFromEuler(new Euler(f.coverTiltX, 0, f.coverTilt)).setPosition(f.coverPos).invert();
-    };
-    for (const p of steamPuffs().filter((q) => q.kind === 'pocket')) {
-      // Released as the dome is carried off (0.30–0.50 s), shown at least POCKET_CLEAR later.
-      expect(p.t0).toBeGreaterThanOrEqual(0.3 + POCKET_CLEAR);
-      expect(p.t0).toBeLessThanOrEqual(0.9);
-      // Where it came from: the dome, just before it shows (within its plan circle, near its height).
-      const q = p.pos.clone().applyMatrix4(toCover(p.t0 - POCKET_CLEAR));
-      expect(Math.hypot(q.x, q.z)).toBeLessThan(COVER.radius + 0.35);
-      // When it shows: clear of the dome by 40 % of its size (no steam traces the dome's outline).
-      expect(insideDome(p.pos, p.t0)).toBe(false);
-      expect(domeClearance(p.pos, p.t0), `pocket t0 ${p.t0.toFixed(3)}`).toBeGreaterThan(p.size * 0.4);
-    }
+  it('the lifting dome drags its top up a little while it is over the plate, then lets go', () => {
+    expect(dragAt(0.2)).toBeGreaterThan(0);
+    expect(dragAt(0.6) * SU_CM).toBeGreaterThan(1);
+    expect(dragAt(0.6) * SU_CM).toBeLessThan(4);
+    // Once the dome is clear of the plate (≈ 0.45 s) it drags nothing more.
+    expect(dragAt(1.0)).toBeCloseTo(dragAt(0.5), 3);
+    const side = new Vector2();
+    dragAt(1.0, side);
+    // Along the dome's path (back-left), a centimetre or so.
+    expect(side.x * REVEAL_DIR.x + side.y * REVEAL_DIR.z).toBeGreaterThan(0);
+    expect(side.length() * SU_CM).toBeLessThan(2.5);
   });
 
-  it('the dome sheds a trail from its trailing (guest) rim as it travels, and squeezes a puff out as it lands', () => {
-    for (const p of steamPuffs().filter((q) => q.kind === 'trail')) {
-      expect(p.t0).toBeGreaterThan(ACCEPT.liftFrom);
-      expect(p.t0).toBeLessThan(ACCEPT.touch);
-      // On the side away from the dome's travel (the guest side, towards the camera).
-      expect(-(p.out.x * REVEAL_DIR.x + p.out.z * REVEAL_DIR.z)).toBeGreaterThan(0.3);
-    }
-    const rest = sampleSequence('accept', ACCEPT.flat, newFrame()).coverPos;
-    for (const p of steamPuffs().filter((q) => q.kind === 'landing')) {
-      // As the trailing side comes down (touch → flat), at the rim of the landed dome, low.
-      expect(p.t0).toBeGreaterThan(ACCEPT.touch - 0.02);
-      expect(p.t0).toBeLessThan(ACCEPT.flat + 0.02);
-      expect(Math.hypot(p.pos.x - rest.x, p.pos.z - rest.z)).toBeGreaterThan(COVER.radius);
-      expect(p.pos.y).toBeLessThan(0.07);
-    }
+  it('keeps the dome\'s shape for a beat once the dome has cleared it, then mushrooms', () => {
+    // The dome is clear of the plate's middle by 0.45 s.
+    const f = sampleSequence('accept', 0.45, newFrame());
+    expect(Math.hypot(f.coverPos.x, f.coverPos.z)).toBeGreaterThan(0.7);
+    const seat = outline(0), held = outline(0.45), later = outline(1.3);
+    // Its outline then is the cavity's within a centimetre and a half, its top drawn up into a peak after
+    // the dome, 1–5 cm (of a 10.6 cm dome).
+    expect(Math.abs(held.cap - seat.cap) * SU_CM).toBeLessThan(1.5);
+    expect(Math.abs(held.low - seat.low) * SU_CM).toBeLessThan(1.5);
+    expect((held.top - seat.top) * SU_CM).toBeGreaterThan(1);
+    expect((held.top - seat.top) * SU_CM).toBeLessThan(5);
+    // A buoyant bubble starts from rest: the top has risen under a centimetre and a half 0.2 s after the release.
+    expect(riseAt(0.2) * SU_CM).toBeLessThan(1.5);
+    // Then the cap rises and spreads while the stem narrows: a mushroom.
+    expect((later.top - held.top) * SU_CM).toBeGreaterThan(8);
+    expect(later.cap).toBeGreaterThan(seat.cap * 1.15);
   });
 
-  it('no puff is born in or sinks into the plate or the table', () => {
-    const s = newPuffState();
-    for (const p of steamPuffs()) {
-      for (let tau = p.t0; tau <= p.t0 + p.life; tau += 0.01) {
-        const c = puffAt(p, tau, s)!.center;
-        const r = Math.hypot(c.x, c.z);
-        expect(c.y, `${p.kind} t0 ${p.t0.toFixed(3)} at ${tau.toFixed(2)}`).toBeGreaterThan(r < 0.8 ? plateTop(r) : 0);
-      }
-    }
-    for (const p of steamPlumes()) expect(p.base.y).toBeCloseTo(plateTop(Math.hypot(p.base.x, p.base.z)), 6);
+  it('its base rolls outward and down over the plate\'s rim', () => {
+    const s0 = outline(0), s1 = outline(1.3);
+    expect(s0.base[0]).toBeLessThan(PLATE.giltRadius);
+    // The base's outer air has slumped out to the gilt rim and beyond, no higher than the rim.
+    expect(s1.base[0]).toBeGreaterThan(PLATE.giltRadius);
+    expect(s1.base[1]).toBeLessThan(PLATE.rimHeight + 0.05);
+    // ... and the vortex ring rolls the cap's edge: the cloud's widest point is in its upper half.
+    expect(outline(1.3).cap).toBeGreaterThan(axisForward(0.4, 0.3, cloudState(1.3))[0]);
   });
 
-  it('rises like the warm air off a hot dish: at most 30 cm/s, decelerating as it mixes in; the column at 20–25 cm/s', () => {
-    const a = newPuffState(), b = newPuffState();
+  it('rises like the warm air off a hot dish: at most 25 cm/s, slowing as it mixes in', () => {
     let vmax = 0;
-    for (const p of steamPuffs()) {
-      for (let t = p.t0 + 0.1; t < p.t0 + p.life - 0.01; t += 0.01) vmax = Math.max(vmax, (puffAt(p, t + 0.01, b)!.center.y - puffAt(p, t, a)!.center.y) / 0.01);
-    }
-    expect(vmax * SU_CM).toBeLessThan(30);
-    // The buoyant rise peaks early and slows as it entrains room air.
-    const w = (t: number) => (riseAt(1, t + 0.005) - riseAt(1, t - 0.005)) / 0.01;
-    expect(w(1.0)).toBeLessThan(w(0.4));
-    for (const p of steamPlumes()) {
-      expect(p.rise * SU_CM).toBeGreaterThanOrEqual(20);
-      expect(p.rise * SU_CM).toBeLessThanOrEqual(25);
-    }
+    for (let a = 0; a < 3; a += 0.01) vmax = Math.max(vmax, (riseAt(a + 0.01) - riseAt(a)) / 0.01);
+    expect(vmax * SU_CM).toBeLessThan(25);
+    expect(vmax * SU_CM).toBeGreaterThan(8);
+    const w = (a: number) => (riseAt(a + 0.005) - riseAt(a - 0.005)) / 0.01;
+    expect(w(2.0)).toBeLessThan(w(0.7));
   });
 
-  it('the column is a broad sheet over the well (60–85 % of its width), not a strand', () => {
-    // Across the camera's view (its horizontal is 20° off the scene's x), each sheet's half-width
-    // either side of its base.
-    const right = VIEW_RIGHT;
-    const lo = Math.min(...steamPlumes().map((p) => p.base.dot(right) - p.width));
-    const hi = Math.max(...steamPlumes().map((p) => p.base.dot(right) + p.width));
-    const share = (hi - lo) / (2 * PLATE.wellRadius);
-    expect(share).toBeGreaterThan(0.6);
-    expect(share).toBeLessThan(0.85);
-    // Side by side, overlapping: no gap between neighbouring sheets.
-    const sorted = [...steamPlumes()].sort((a, b) => a.base.dot(right) - b.base.dot(right));
-    for (let i = 1; i < sorted.length; i++) {
-      expect(sorted[i]!.base.dot(right) - sorted[i]!.width).toBeLessThan(sorted[i - 1]!.base.dot(right) + sorted[i - 1]!.width);
-    }
-  });
-
-  it('the column grows up off the plate, shows strongly for 1–2 s after the reveal, then a thin tail to ≈ 4 s, gone by STEAM_END', () => {
-    const maxDensity = (tau: number, h0 = 0, h1: number = PLUME.length) => {
-      let m = 0;
-      for (const p of steamPlumes()) for (let h = h0; h <= h1; h += 0.02) m = Math.max(m, plumeDensity(p, h, tau));
-      return m;
-    };
-    // Dense above the plate's far rim (h ≳ 0.3 su from the camera) through the second after the
-    // reveal, thinning; a thin tail still there at 4 s (p99.9 ≈ 11 levels of 255 over the cove,
-    // measured: the thin steam breaks into filaments that keep their light), a twentieth of the
-    // peak; below STEAM_GONE everywhere (gone) by STEAM_END.
-    expect(maxDensity(1.2, 0.3, 0.9)).toBeGreaterThan(0.3);
-    expect(maxDensity(1.8, 0.3, 0.9)).toBeGreaterThan(0.15);
-    expect(maxDensity(1.8)).toBeLessThan(maxDensity(1.2));
-    expect(maxDensity(4.0, 0.3, 0.9)).toBeGreaterThan(0.03);
-    expect(maxDensity(4.0)).toBeLessThan(0.1 * maxDensity(1.0));
-    expect(maxDensity(STEAM_END)).toBeLessThanOrEqual(STEAM_GONE * 1.01);
-    for (const p of steamPuffs()) expect(p.t0 + p.life).toBeLessThanOrEqual(STEAM_END);
-    expect(STEAM_END).toBeGreaterThan(DURATIONS.accept + 4);
-    expect(STEAM_END).toBeLessThan(DURATIONS.accept + 5.5);
-    // It grows up off the plate at its rise speed (nothing above the front), and once the source
-    // has peaked the formed sheet (h ≥ PLUME.base) only thins.
-    for (const p of steamPlumes()) {
-      const tau = p.t0 + 0.4;
-      expect(plumeDensity(p, 0.5 * p.rise * 0.4, tau)).toBeGreaterThan(0);
-      expect(plumeDensity(p, p.rise * 0.4 + 0.01, tau)).toBe(0);
-      for (let t = p.t0 + PLUME.ramp + PLUME.base / p.rise; t < STEAM_END; t += 0.05) {
-        expect(plumeDensity(p, PLUME.base, t + 0.05)).toBeLessThanOrEqual(plumeDensity(p, PLUME.base, t));
-      }
-    }
-    // The centreline starts on the plate and, wherever the sheet shows (density ≥ 1 %), meander
-    // and wake lean together never slope it past 45° (it shears with the path; steeper would
-    // smear it sideways).
-    const c = new Vector3(), d = new Vector3();
-    for (const q of steamPlumes()) {
-      expect(plumeCenter(q, 0, 1, c).distanceTo(q.base)).toBeLessThan(1e-9);
-      for (let tau = 0.4; tau <= 2.5; tau += 0.1) {
-        for (let h = 0; h < PLUME.length; h += 0.02) {
-          if (plumeDensity(q, h, tau) < 0.01) continue;
-          plumeCenter(q, h, tau, c);
-          plumeCenter(q, h + 0.02, tau, d);
-          expect(Math.hypot(d.x - c.x, d.z - c.z) / 0.02).toBeLessThan(1);
+  it('the shader\'s inverse map undoes the flow: forward(inverse(p)) = p wherever the cloud is', () => {
+    let worst = 0;
+    for (const tau of [0.4, 0.8, 1.2, 1.8]) {
+      const s = cloudState(tau);
+      for (let r = 0.02; r < 1.2; r += 0.05) {
+        for (let y = 0.05; y < 2.2; y += 0.05) {
+          if (cloudDensity(new Vector3(r, y, 0), s) <= 0) continue;
+          const [P, Y] = axisInverse(r, y, s);
+          const [r2, y2] = axisForward(P, Y, s);
+          worst = Math.max(worst, Math.hypot(r2 - r, y2 - y));
         }
       }
     }
+    // Within half a centimetre (the bisections' tolerance).
+    expect(worst * SU_CM).toBeLessThan(0.5);
+  });
+
+  it('nothing in or under the plate or the table; the bounds hold all of it', () => {
+    const min = new Vector3(), max = new Vector3(), vmin = new Vector3(), vmax = new Vector3();
+    for (const tau of [0, 0.35, 0.6, 1.0, 1.6, 2.4]) {
+      const s = cloudState(tau);
+      steamBounds(s, { tau, emitStart: -Infinity, emitEnd: Infinity }, min, max, vmin, vmax);
+      for (let i = 0; i < 1500; i++) {
+        const a = i * 2.399, r = (i % 30) * 0.045, y = ((i * 13) % 60) * 0.045;
+        const p = new Vector3(Math.cos(a) * r, y, Math.sin(a) * r);
+        const d = cloudDensity(p, s);
+        if (y < (r < PLATE.radius ? plateTop(r) : 0)) expect(d, `τ ${tau} at ${r.toFixed(2)}, ${y.toFixed(2)}`).toBe(0);
+        if (d > 0.01) {
+          expect(p.x).toBeGreaterThanOrEqual(min.x);
+          expect(p.x).toBeLessThanOrEqual(max.x);
+          expect(p.y).toBeLessThanOrEqual(max.y);
+          expect(p.z).toBeGreaterThanOrEqual(min.z);
+          expect(p.z).toBeLessThanOrEqual(max.z);
+        }
+      }
+    }
+    expect(veilDensity(-0.01, 1)).toBe(0);
+  });
+
+  it('tears into wisps and evaporates within a few seconds; the plate keeps breathing a thin veil to ≈ 4.5 s, gone by STEAM_END', () => {
+    // The cloud's look: young it is fog with a soft edge; then its edge folds into sheets and its inside empties.
+    expect(cloudLook(0.1, 0).core).toBeGreaterThan(cloudLook(1.5, 0.3).core * 3);
+    expect(cloudState(0.3 + CLOUD.life).fade).toBe(0);
+    expect(cloudState(1.5).erode).toBeGreaterThan(cloudState(0.8).erode);
+    const veilMax = (tau: number) => Math.max(...[0.1, 0.3, 0.5, 0.8, 1.1].map((h) => veilDensity(h, tau)));
+    expect(veilMax(1.2)).toBeGreaterThan(0.2);
+    expect(veilMax(4.0)).toBeGreaterThan(0.02);
+    expect(veilMax(4.0)).toBeLessThan(0.25 * veilMax(1.2));
+    for (let h = 0; h <= VEIL.length; h += 0.02) expect(veilDensity(h, STEAM_END)).toBeLessThanOrEqual(STEAM_GONE * 1.01);
+    expect(STEAM_END).toBeGreaterThanOrEqual(CLOUD.release + CLOUD.life);
+    expect(STEAM_END).toBeGreaterThan(DURATIONS.accept + 4);
+    expect(STEAM_END).toBeLessThan(DURATIONS.accept + 5.5);
+  });
+
+  it('spills first from under the raised (guest) side while the far rim is still on the plate, until the dome lifts off', () => {
+    expect(RAISED_DIR.x * REVEAL_DIR.x + RAISED_DIR.y * REVEAL_DIR.z).toBeLessThan(-0.99);
+    const first = [0.02, 0.04, 0.06, 0.08, 0.1].find((t) => spillSource(t) > 0.05)!;
+    expect(first).toBeLessThan(ACCEPT.tipPeak);
+    // The far rim is the pivot then: still on the plate.
+    const f = sampleSequence('accept', first, newFrame());
+    expect(f.coverPos.y - COVER_SEATED.y).toBeLessThan(0.03);
+    expect(spillSource(ACCEPT.tipPeak)).toBeGreaterThan(0.9);
+    expect(spillSource(0.31)).toBe(0);
+    expect(spillFade(SPILL.fade[1])).toBe(0);
+  });
+
+  it('a reveal resumed part-way carries no new cloud (its cloud was left behind); a release window stops the veil softly', () => {
+    expect(cloudState(0.8, 0.4).present).toBe(false);
+    expect(cloudState(0.8).present).toBe(true);
+    // The veil's source dies away over VEIL.cut after the cut, continuously.
+    const cut = 1.0;
+    for (let t = cut - 0.05; t < cut + VEIL.cut + 0.05; t += 0.005) {
+      expect(Math.abs(veilSource(t + 0.005, -Infinity, cut) - veilSource(t, -Infinity, cut))).toBeLessThan(0.08);
+    }
+    expect(veilSource(cut + VEIL.cut, -Infinity, cut)).toBe(0);
+    // Resumed at 0.6 s: nothing before, ramped up after.
+    expect(veilSource(0.6, 0.6)).toBe(0);
+    expect(veilSource(0.61, 0.6)).toBeLessThan(0.02);
+  });
+
+  it('the accepted still has no steam (posters, reduced motion, a saved accept)', () => {
+    expect(STEAM_REST).toBeNull();
   });
 });
 
@@ -235,7 +249,7 @@ function stage() {
   return { scene, director, run, get now() { return now; } };
 }
 
-describe('Dinner steam on stage (v1.5)', () => {
+describe('Dinner steam on stage (v1.5 clocks, v1.6 field)', () => {
   it('the reveal releases it on its own clock, it rises on after the reveal and ends clear; the loop then idles', () => {
     const s = stage();
     expect(s.scene.steamState.visible).toBe(false);
@@ -377,16 +391,14 @@ describe('Dinner steam on stage (v1.5)', () => {
     expect(s.director.state).toBe('declined-pose');
     expect(s.scene.steamState.visible).toBe(false);
     expect(s.scene.settling()).toBe(false);
-    // The release stops softly: the source dies away over PLUME.cut (continuous), then nothing; the
-    // column's base detaches and rises off at its rise speed.
-    for (const p of steamPlumes()) {
-      for (let t = cut - 0.05; t < cut + PLUME.cut + 0.05; t += 0.005) {
-        expect(Math.abs(plumeSource(p, t + 0.005, -Infinity, cut) - plumeSource(p, t, -Infinity, cut))).toBeLessThan(0.08);
-      }
-      expect(plumeSource(p, cut + PLUME.cut, -Infinity, cut)).toBe(0);
-      const tau = cut + 0.6;
-      expect(plumeDensity(p, p.rise * (tau - cut - PLUME.cut) - 0.01, tau, -Infinity, cut)).toBe(0);
+    // The release stops softly: the veil's source dies away over VEIL.cut (continuous), then nothing;
+    // its column's base detaches and rises off at its rise speed.
+    for (let t = cut - 0.05; t < cut + VEIL.cut + 0.05; t += 0.005) {
+      expect(Math.abs(veilSource(t + 0.005, -Infinity, cut) - veilSource(t, -Infinity, cut))).toBeLessThan(0.08);
     }
+    expect(veilSource(cut + VEIL.cut, -Infinity, cut)).toBe(0);
+    const tau = cut + 0.6;
+    expect(veilDensity(VEIL.rise * (tau - cut - VEIL.cut) - 0.01, tau, -Infinity, cut)).toBe(0);
   });
 
   it('changed back mid-rewind, the reveal resumes and releases its own steam beside what was left behind', () => {
@@ -408,7 +420,9 @@ describe('Dinner steam on stage (v1.5)', () => {
     expect(st.tau!).toBeGreaterThan(0);
     expect(st.tau!).toBeLessThan(0.6);
     expect(st.emitStart).toBe(st.tau);
-    for (const p of steamPlumes()) expect(plumeSource(p, st.tau! + 0.01, st.emitStart)).toBeLessThan(0.02);
+    expect(veilSource(st.tau! + 0.01, st.emitStart)).toBeLessThan(0.02);
+    // Its cloud is the one left behind.
+    expect(cloudState(st.tau!, st.emitStart).present).toBe(false);
     s.run(DURATIONS.accept + 0.1);
     expect(s.director.state).toBe('accepted-pose');
     expect(s.scene.settling()).toBe(true);

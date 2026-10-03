@@ -11,6 +11,7 @@ import { HeatHaze } from './heatHaze.ts';
 import { STUDY_RIG } from './lighting.ts';
 import type { Rig, RigBuild } from './rig.ts';
 import { resolveRig } from './rigRegistry.ts';
+import { SceneDepth } from './sceneDepth.ts';
 import { smoothPcf } from './studio.ts';
 import { releaseCachedTextureGpu } from './textures.ts';
 import { shadowProxyMaterial } from '../../models/shadowProxy.ts';
@@ -101,6 +102,8 @@ export class Stage {
   readonly bloom = new Bloom();
   /** v1.6: heat haze over the flames (src/render/heatHaze.ts); a no-op in a frame that drew no plume. */
   readonly haze = new HeatHaze();
+  /** v1.6: the opaque scene's depth for effects that ask for it (src/render/sceneDepth.ts); idle otherwise. */
+  readonly sceneDepth = new SceneDepth();
 
   static create(options: StageOptions = {}): Stage | null {
     const result = createRenderer(options);
@@ -398,6 +401,8 @@ export class Stage {
   }
 
   render(): void {
+    // The depth clients (the steam's march) run inside this step, before the main pass.
+    this.sceneDepth.render(this.renderer, this.scene, this.camera);
     const glow = this.bloom.prepare(this.renderer, this.scene, this.camera);
     this.renderer.render(this.scene, this.camera);
     this.haze.apply(this.renderer, this.camera);
@@ -456,6 +461,7 @@ export class Stage {
   dispose(): void {
     // Before the content and studio (whose materials lead to the shared LUT) leave the scene.
     releaseDfgLUT(this.renderer, this.scene);
+    this.sceneDepth.dispose();
     this.setContent(null);
     this.bloom.dispose();
     this.haze.dispose();

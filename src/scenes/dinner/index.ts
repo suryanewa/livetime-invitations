@@ -10,6 +10,7 @@ import { DinnerSteam, STEAM_LAYERS } from '../../../models/dinnerSteam.ts';
 import { disposeImported, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { silhouettePoints } from '../../render/framing.ts';
+import { markDepthOccluders } from '../../render/sceneDepth.ts';
 import type { DeferredContext, SceneInstance, SceneLoadContext, SceneModule } from '../../core/sequence.ts';
 import type { MaterialLibrary } from '../../render/materials.ts';
 import { DeferredBin } from '../deferredBin.ts';
@@ -19,7 +20,7 @@ import {
   type AnswerChange, changeTime, CONTENT_END, coverBlendSafe, DURATIONS, frameFor, newFrame, planAnswerChange, sampleAnswerChange, sampleSequence,
   type DinnerFrame,
 } from './sequences.ts';
-import { leftSteamEnd, leftSteamFade, STEAM_END, STEAM_REST, steamPlumes, steamPuffs } from './steam.ts';
+import { leftSteamEnd, leftSteamFade, STEAM_END, STEAM_REST } from './steam.ts';
 import { dinnerPull } from './pull.ts';
 
 /**
@@ -80,8 +81,8 @@ export class DinnerScene implements SceneInstance {
   readonly restFramePoints = dinnerFramePoints('rest');
 
   private readonly frame = newFrame();
-  /** v1.5: the steam released by the reveal (src/scenes/dinner/steam.ts, models/dinnerSteam.ts). */
-  private readonly steam = new DinnerSteam(steamPuffs(), steamPlumes());
+  /** v1.6: the steam under the cloche, a raymarched volume (src/scenes/dinner/steam.ts, models/dinnerSteam.ts). */
+  private readonly steam = new DinnerSteam();
   /**
    * The steam clock τ (s since the reveal began), or null when no steam shows. While the reveal
    * plays the accept's samples set it; after it (`steamFree`) `simulate` carries it on until the
@@ -101,6 +102,8 @@ export class DinnerScene implements SceneInstance {
 
   /** v1.5: the shared bin, loaded after ready (only the decline shows it). */
   private readonly bin: DeferredBin;
+  /** v1.6: the bin's meshes are on the scene depth's layer (once it has arrived). */
+  private binOccludes = false;
 
   constructor(readonly rig: DinnerRig, _config: Extract<SceneConfig, { category: 'dinner' }>, library?: MaterialLibrary) {
     this.root = rig.root;
@@ -112,6 +115,9 @@ export class DinnerScene implements SceneInstance {
     // The open bin's silhouette from its design (its GLB arrives after ready: openBinSilhouette).
     this.framePoints = [...dinnerFramePoints(), ...openBinSilhouette(DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE)];
     this.bin = new DeferredBin(n.bin_root!, this.root, library, () => this.apply(this.frame));
+    // v1.6: the steam's volume stops at the plate and the cloche (and the bin, once it is here).
+    markDepthOccluders(n.plate_authored!);
+    markDepthOccluders(n.cover_authored!);
     this.pose('guest-ready');
     this.heroPoints = silhouettePoints(this.root);
   }
@@ -329,6 +335,10 @@ export class DinnerScene implements SceneInstance {
     coverShadow.setHeight(f.dishVisible ? f.coverPos.y + (1 - beside) * 2 : 99, 1.2);
     this.placeBin(f.binPos);
     n.bin_root!.visible = f.binVisible;
+    if (!this.binOccludes && this.bin.ready) {
+      markDepthOccluders(n.bin_root!);
+      this.binOccludes = true;
+    }
     const [l, r] = flapAngles(f.flaps);
     this.rig.flapL.rotation.set(0, 0, l);
     this.rig.flapR.rotation.set(0, 0, r);
