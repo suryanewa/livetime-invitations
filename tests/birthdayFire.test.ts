@@ -3,7 +3,7 @@ import { Color, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { blackbodyAt, createFlameMaterial, SMOKE_RADIANCE, sootRadiance } from '../src/render/flame.ts';
 import { rigBirthday } from '../models/birthday.ts';
-import { CANDLE_LIGHT } from '../models/birthdayFire.ts';
+import { CANDLE_LIGHT, SMOKE_RIBBON_POINTS } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME_FRAME, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
@@ -667,7 +667,7 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     rig.root.updateMatrixWorld(true);
     expect(rig.nodes.cake_authored!.position.distanceTo(ON_STAND)).toBeGreaterThan(0.1);
     for (let k = 0; k < rig.candles.length; k++) {
-      const v = (k * SMOKE_STRAND_COUNT * SMOKE_POINT_COUNT) * 2;
+      const v = (k * SMOKE_STRAND_COUNT * SMOKE_RIBBON_POINTS) * 2;
       expect(new Vector3(pos.getX(v), pos.getY(v), pos.getZ(v)).distanceTo(tipOf(k))).toBeLessThan(0.05 * MM);
     }
     // The braids curl each their own way.
