@@ -1,6 +1,71 @@
-# Style reference — v1.5 · the perfection pass
+# Style reference — v1.6 · the Hollywood pass
 
-## v1.5 (2026-10-02): the perfection pass
+## v1.6 (2026-10-03): the Hollywood pass
+
+Surya, on v1.5: *"Everything looks great for the most part, but there are two issues"* — three, each at the same
+bar, **"I'm expecting Hollywood CGI level work here"**: the cake ("still has a plasticky, too perfect and geometric
+shape / texture"), the flames ("aren't bad, but are unconvincing") and the steam under the cloche ("it needs to
+realistically accumulate under the cloche and somewhat match its shape when it's lifted"). The brief is
+`docs/hollywood-pass-brief.md` (the bar, the CG tells measured on v1.5 at the real sizes, the techniques a VFX
+house would use at this scale). Three owners rebuilt rather than tuned; independent VFX judges then scored each
+against photographs and film frames and demanded fixes, which a second owner per object made. The records are
+`docs/scenes/birthday-v1.6-cake.md`, `docs/scenes/birthday-v1.6-flames.md`, `docs/scenes/dinner-v1.6-steam.md`;
+the judging is in `docs/qualification.md` v1.6.
+
+- **The cake is regenerated, not sculpted.** The master's half-pipe swags and star rosettes could not become
+  hand-piped rope, so `scripts/masters/recipes/birthdayPiping.ts` rebuilds every piped part as a star-tip sweep at
+  the master's own placements: ropes pressed ~1 mm in with a concave fillet, teeth with rounded crests that vary
+  ±15–20 % and twist as the bag turns, pressure swells, fatter starts, hiccups and pulled tails; swags with sag;
+  shells squeezed head first; rosettes as spirals; twisted rope borders; domed dots with drooping peaks; smears and
+  crumbs on the stand. The tiers are hand-coated (`birthdayFinish.ts`): a 6–6.5 mm edge bead with a pushed lip,
+  scraper waves of −2.4…+2.0 mm on the silhouette, the top tier 2.5 mm off centre, knife chatter and a turntable
+  spiral. A baked light (`birthdayBake.ts`: a 0.55 mm voxel grid, 24 rays; occlusion and thickness per vertex and a
+  1024² contact map) feeds a food shader (`models/cakeShaders.ts` `foodPatch`): a wrap that widens on thin parts,
+  tinted by the frosting's saturated colour; exp(−thickness / 2.6 mm) translucency; coloured, never black shade;
+  sugar glints on the key at two crystal sizes; crests lighter and warmer, grooves deeper; roughness by curvature;
+  cocoa as ganache. 1.6 M triangles. Judged 5.5–6.5 at the showcase sizes and 3.5–4.5 in macro by the VFX judge
+  ("the swags now read as piped rope; what still reads as CG is everything around them": a flat coat with no sheen,
+  copied twins, shells as separate lozenges, bitten pearls with black crevices, cool porcelain white) → the polish
+  round below.
+- **The flame is a volume** (`src/render/flame.ts`): each pixel of the camera-facing proxy marches 32 jittered
+  steps through the flame's box, stopping at the wick (an analytic capsule); the field is v1.5's analytic flame
+  (Sunderland 2011's zones) warped by value noise carried up on the live clock; emission from the Planck soot table
+  (700–2,300 K, CIE fit) so the body sits around 5 and the core 10–20 in HDR; a per-channel camera shoulder with
+  luminance² crosstalk (a cream core, yellow body, amber rim, orange apex); premultiplied compositing with
+  glow-weighted absorption. **Bloom** (`src/render/bloom.ts`): selective — only marked emitters draw into a
+  half-float target at CSS resolution; a 13-tap Karis downsample with a soft-knee threshold of 1.0, 5 levels
+  (3 on Low), tent upsample, composited at 0.1 through the same response, scissored to the flames' reach, with
+  a warm footprint floor (σ 1.1 CSS px) so the 192 px thumbnail stays lit; byte-identical frames when nothing
+  glows (tested on Party's still and the stage-colour capture); targets freed when unused. **Heat haze**
+  (`src/render/heatHaze.ts`): a depth-tested column above each flame samples a copy of the canvas under the plumes
+  through a rising refractive-index field, 1.2 CSS px peak, off under reduced motion and on Low. **The light**:
+  ~1 cd per flame flickering with the volume, all six in one BRDF evaluation, each candle shading its own flame
+  from a penumbral disk at its foot and the top tier's rim shadowing the sides; shadows between candles cost
+  +2.7 ms and were invisible, so they were dropped. Six flames ≤ 0.1 ms; bloom 0.4–1.1 ms; haze 0.4–0.8 ms; a lit
+  frame 6–8.5 ms. The **smoke** was then rebuilt to the same standard (a lit, self-shadowed thick tube,
+  premultiplied, the last glow becoming the first vapour, the haze running on into the plume from the ember).
+- **The steam is a raymarched volume** (`models/dinnerSteam.ts`, `src/scenes/dinner/steam.ts`): one density field,
+  a pure function of the steam clock. At the seat it is the dome's cavity (a superellipse fitted to the cover's
+  profile within 1.5 %), densest under the crown; the cloud is treated as a material — each sample works back to
+  where that air sat under the dome and reads the cloud's noise there, so its structure stands, stretches, rolls
+  and tears with the flow instead of scrolling. The velocity: a slump over the plate's rim, a narrowing stem and
+  spreading cap, a buoyant thermal (15 cm/s peak), a vortex-ring roll, the room's draught and a growing warp; it
+  evaporates as it thins, holds the dome's shape until ~0.6 s, mushrooms to ~1.4 s, and leaves a ribbon veil to
+  ~4.5 s; the lifting dome drags the crown's air up (`dragAt`) and the **scene depth** (`src/render/sceneDepth.ts`:
+  the opaque occluders drawn depth-only into a float texture, only when a client asks) clips it at the shell.
+  Rendering: a 64³ noise texture, a per-frame flow map, a 24³ light volume, a half-resolution march (28/22 steps,
+  6 occupancy probes), a depth-aware 4×4 upsample; Henyey-Greenstein single scattering plus Wrenninge multiple-
+  scattering octaves, room ambient occluded from above, the plate's bounce, the dome's shade, and a soft steam
+  shadow on the plate. 0.8–1.5 ms at both sizes, zero with no steam. Judged 4/10 at laptop and 5/10 at phone size
+  ("the timing is right … but it reads as a frosted cotton-wool ball with a crawling sand grain"; the dome shape
+  holds ~0.1 s) → the polish round below.
+- **Every runtime GLB is meshopt-compressed** (`scripts/masters/compose.ts` `GEOMETRY_COMPRESSION`, EXT_meshopt_
+  compression, no reorder or new quantisation; `models/imported.ts` `gltfLoader()` sets three's `MeshoptDecoder`
+  once, its WASM inlined): the six GLBs go from 54.2 to 23.0 MiB raw (−58 %), 28.4 to 15.8 MiB gzip; the cake
+  31.9 → 11.0 MiB raw (15.2 → 7.8 gzip), decoded geometry bit-identical, 36 stills pixel-identical but flicker.
+- **Polish round (the judges' fixes):** recorded in the three scene docs; summarised in `docs/qualification.md`
+  v1.6 once the second judging is in.
+
 
 Surya's twelve edits on v1.4 (`docs/perfection-pass-brief.md`: *"For each of these, I won't settle for anything less than perfection. Feel free to do external research or get experimental if it helps."*). Seven owners built in parallel, three independent judges measured the integrated build (motion and physics; materials and look; the guest's real-time experience on laptop and phone), and every owner then fixed what the judges found. The per-scene records are `docs/scenes/<scene>-v1.5*.md`; spec revisions #37–#40. What each edit became:
 
