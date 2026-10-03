@@ -87,6 +87,9 @@ export const STEAM_LOOK = {
   back: 0.35,
   /** The key's optical depth through the cloud is the light volume's times this (steeper: a dark core). */
   keyFall: 1.25,
+  /** The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density. */
+  ringCore: 0.55,
+  ringFog: 5.0,
   /** The underside's band (su: the undercut's foot, the stem and the cap's underside as it rises; the walls' is 2.5 mm young). */
   underBand: 0.1,
   /** Wrenninge's multiple-scattering octaves (their share of the key; v1.6 polish 2: 0.45 / 0.18 → raised). */
@@ -529,12 +532,24 @@ bool veilOccupies(vec3 p, int l) {
   return length(p.xz - uB[l].zw * h * 0.6) < ${f(VEIL.radius)} + ${f(VEIL.spread)} * h;
 }
 
+/**
+ * The vortex ring's core on clock l (v1.6 polish 2) at q (the flow's frame: the draught and the
+ * turbulence undone; rho its distance from the axis): a tube round the ring's core circle, the
+ * rolled sheet wound round it, torn round the circumference with age. \`na\`, \`nb\`: the cloud's own
+ * large and billow noise at the point (variation along the tube).
+ */
+float ringTube(float rho, float y, int l) {
+  vec2 rc = vec2(rho - uR[l].x, y - uR[l].y);
+  float sc = ${f(STEAM_LOOK.ringCore)} * uR[l].z;
+  return exp(-dot(rc, rc) / (sc * sc));
+}
 /** The cloud's mean density at p on clock l (the map only: for the light's taps). */
 float cloudMean(vec3 p, int l) {
   if (uA[l].w <= 0.0) return 0.0;
   vec2 q = p.xz - uB[l].zw * max(0.0, p.y - 0.15);
   vec4 m = mapAt(length(q), p.y, l);
-  return m.a > 0.0 ? seat(m.r, m.g, uF[l].w, 0.0) * m.b : 0.0;
+  // (v1.6 polish 2: and the vortex ring's core, at its mean: it shades its own underside.)
+  return (m.a > 0.0 ? seat(m.r, m.g, uF[l].w, 0.0) * m.b : 0.0) + (uR[l].w > 0.0 ? ${f(0.55 * 0.6)} * ${f(STEAM_LOOK.ringFog)} * uR[l].w * ringTube(length(q), p.y, l) : 0.0);
 }
 
 
@@ -603,12 +618,31 @@ bool cloudOccupies(vec3 p, int l) {
   return mapAt(length(q), p.y, l).a > 1e-3;
 }
 
+float ringFog(vec3 q, float rho, int l, float na, float nb, float age) {
+  if (uR[l].w <= 0.0) return 0.0;
+  vec2 rc = vec2(rho - uR[l].x, q.y - uR[l].y);
+  float sc = ${f(STEAM_LOOK.ringCore)} * uR[l].z;
+  float r2 = dot(rc, rc) / (sc * sc);
+  if (r2 > 4.0) return 0.0;
+  float tube = exp(-r2);
+  // Torn round the circumference: a slow field round the ring (≈ 4 cells), its threshold rising with age.
+  float az = atan(q.z, q.x);
+  vec4 nr = texture(uNoise, vec3(cos(az) * 0.18 + 0.41, 0.27 + 0.03 * uA[l].x, sin(az) * 0.18 + 0.66));
+  float tear = 0.22 + 0.42 * smoothstep(0.45, 1.05, age);
+  float lobesA = smoothstep(tear - 0.09, tear + 0.09, nr.r + 0.22 * (na - 0.5));
+  // The rolled sheet: a spiral round the core (outward over the top, down outside, in underneath).
+  float phi = atan(rc.y, rc.x);
+  float wound = 0.55 + 0.45 * cos(phi + 6.2832 * sqrt(r2) * 0.9 - 2.0 * uR[l].x);
+  return ${f(STEAM_LOOK.ringFog)} * uR[l].w * tube * lobesA * mix(1.0, wound, 1.0 - tube) * (0.8 + 0.4 * (nb - 0.5));
+}
+
 /**
  * The cloud on clock l at p: the draught and the dome's side drag undone, the map read (the flow's
  * axisymmetric inverse), the cloud's own turbulence at the material point.
  */
 float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   shadeOd = 0.0;
+  float ringShade = 0.0;
   if (uA[l].w <= 0.0) return 0.0;
   vec4 E = uE[l], F = uF[l];
   vec3 q = p;
@@ -723,11 +757,29 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // A change of mind: once the cover is back on the plate, the fog low over the plate (the base and
   // its slump over the rim) is swept by its skirt and leaves with the plate.
   if (uA[l].x > uD[l].z) d *= 1.0 - (1.0 - smoothstep(0.12, 0.26, X.y)) * smoothstep(uD[l].z, uD[l].z + 0.25, uA[l].x);
+  // v1.6 polish 2: the vortex ring's core. A starting thermal rolls its edge up round a ring that
+  // gathers the densest of what is left (the judge: the cap faded instead of rolling): a tube of fog
+  // round the cap's edge, the rolled sheet wound round it (a spiral in its cross-section), dense
+  // enough to shade its own underside; as it ages it tears round its circumference into a few lobes
+  // (3–6 round the ring), then evaporates.
+  float rf = ringFog(q, rho, l, n1.b, nb.b, uC[l].z);
+  d += rf;
+  // (Its own shade, analytically: the tube's fog between here and the key, so its top is lit and its
+  // underside and inner side fall into shade; the light volume's voxels are as wide as the tube.)
+  if (rf > 0.01) {
+    float od = 0.0;
+    for (int i = 0; i < 3; i++) {
+      vec3 qs = q + L * (0.04 + 0.08 * float(i));
+      od += ringTube(length(qs.xz), qs.y, l) * 0.08;
+    }
+    ringShade = ${f(STEAM_LOOK.ringFog)} * uR[l].w * 1.6 * od;
+  }
   // The billows' own shade: the edge a little way towards the key.
   if (d > 0.02 && detail > 0.0 && uC[l].z < 0.7) {
     vec4 nl = texture(uNoise, Xb + L * 0.2);
     shadeOd = 0.24 * sat((dShade + E.z * (nl.b - nb.b) * 2.0) / 0.06);
   }
+  shadeOd += ringShade;
   return d;
 }
 
@@ -1604,10 +1656,13 @@ export class DinnerSteam {
       Cc[l]!.set(s.turb, s.erode, s.age, s.rise);
       const look = cloudLook(s.age, s.erode, this.look, s.peel);
       E[l]!.set(look.amp, look.band, look.billow, look.warp);
-      Hh[l]!.set(EDGE.fine * s.peel, s.peel, s.undercutReach, s.undercutHeight);
+      // (The fine curls belong to the young edge: as the band widens they would read as a felt over the aging cap.)
+      Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.45) / 0.45)), s.peel, s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
       // (The ring holds fog once it has rolled up, until the cloud has gone.)
-      R[l]!.set(s.ringR, s.ringY, s.ringSigma, smoothstep01((s.age - 0.25) / 0.4) * (1 - smoothstep01((s.age - 1.2) / 0.6)));
+      // (v1.6 polish 2: its core holds its fog from ≈ 0.25 s of the thermal, tears from ≈ 0.45 s and has
+      // evaporated by ≈ 1.6 s; with the cloud's fade.)
+      R[l]!.set(s.ringR, s.ringY, s.ringSigma, smoothstep01((s.age - 0.2) / 0.35) * (1 - smoothstep01((s.age - 0.95) / 0.65)) * s.fade);
       // The spill's source over the last half-second (what is on the wall now left the gap then).
       const fade = spillFade(tau);
       let on = 0;

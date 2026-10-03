@@ -630,7 +630,7 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   // (v1.6 polish 2: from the lift-off the outer layer peels and billows; the bulk keeps the dome's shape.)
   out.billow = Math.max(0.028 + EDGE.billow * peel, 0.028 + 0.042 * smooth(0.25, 1.3, age));
   out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
-  out.core = 2.2 + (0.04 - 2.2) * smooth(0.2, 0.85, age);
+  out.core = 2.2 + (0.04 - 2.2) * smooth(0.15, 0.72, age);
   out.sheet = 1.2 - 0.6 * smooth(0.15, 0.5, age) - 0.48 * smooth(0.4, 1.05, age);
   out.sheetWidth = 0.012 + 0.05 * smooth(0.3, 1.3, age);
   return out;
