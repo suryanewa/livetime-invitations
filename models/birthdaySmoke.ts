@@ -1,7 +1,7 @@
 import {
   BoxGeometry, BufferGeometry, Color, DataTexture, Float32BufferAttribute, FloatType, FrontSide, Group, HalfFloatType, InstancedBufferGeometry, LinearFilter, Matrix4, Mesh, NearestFilter,
   type Object3D, OrthographicCamera, type PerspectiveCamera, RepeatWrapping, RGBAFormat, Scene, ShaderMaterial, UnsignedByteType, Vector2, Vector3, WebGL3DRenderTarget, WebGLRenderTarget,
-  type WebGLRenderer, CustomBlending, AddEquation, OneFactor,
+  type WebGLRenderer, CustomBlending, AddEquation, OneFactor, RedFormat,
 } from 'three';
 import { requestSceneDepth, type SceneDepthFrame } from '../src/render/sceneDepth.ts';
 
@@ -50,10 +50,10 @@ export const SMOKE_VOLUME = {
   tilesX: 8,
   /**
    * A sheet's own thickness (full width at half maximum, m) at height z above the wick: the laminar
-   * stem's ≈2.5 mm, thickening slowly by diffusion (≈6 mm at 10 cm, 9 mm at 20 cm). The plume's
-   * width is its meander and folds (the march's warp: ≈1–2 cm at 10 cm, 3–5 cm at 20 cm).
+   * stem's ≈2.5 mm, spreading as it mixes (≈1 cm at 10 cm, 1.7 cm at 20 cm); with the meander and
+   * the folds (the march's warp) the plume is ≈1–2 cm wide at 10 cm and 3–5 cm at 20 cm.
    */
-  width: (z: number) => 0.0025 + 0.03 * z,
+  width: (z: number) => 0.0025 + 0.07 * z,
   /**
    * The ribbon draws a thread's first `ribbon[0]` m of path from the wick, handing it over to the
    * volume by `ribbon[1]`.
@@ -66,7 +66,9 @@ export const SMOKE_VOLUME = {
    */
   mass: 0.07,
   /** Evaporation and mixing below visibility: the volume's own age fade (× each kind's ribbon fade), s. */
-  ageFade: 2,
+  ageFade: 1.4,
+  /** Evaporation of the aerosol with height above the wick (e-folding, m, from 4 cm). */
+  evaporate: 0.09,
   /** March steps (the Low tier: `lowSteps`), probes of the occupancy, and the half-resolution pixel cap. */
   steps: 40,
   lowSteps: 24,
@@ -394,16 +396,25 @@ void main() {
       vec3 q2 = (p + warp - vec3(0.02 * uTime, 0.75 * uTime, -0.015 * uTime)) / (4.0 * lam2);
       vec3 n = texture(uNoise, q2).rgb - 0.5;
       warp += n * 2.0 * g2 * 0.2 * lam2;
-      // Erosion: thinner and denser stretches along the sheets.
-      float e = texture(uNoise, q2 * 1.3 + vec3(0.37, 0.0, 0.11)).a;
-      sheet = mix(1.0, 1.5 * smoothstep(0.25, 0.75, e), 0.5 * g2);
+      // Sheets: the mixing layer folds the smoke into thin surfaces (the noise's level set, carried
+      // with the gas): denser on them, emptier between, so a fold seen edge-on reads brighter.
+      float lam3 = 0.1 + 0.08 * hc;
+      float rn = texture(uNoise, (p + warp - vec3(0.0, 0.7 * uTime, 0.0)) / (4.0 * lam3) + vec3(0.71, 0.13, 0.29)).b;
+      float ridge = 1.0 - smoothstep(0.0, 0.1, abs(rn - 0.5));
+      sheet = mix(1.0, 0.2 + 2.0 * ridge, 0.85 * smoothstep(0.25, 0.6, h));
     }
     vec3 v = (p + warp - bmin) / ${f(VOX)};
     float rho = density(v) * sheet;
     if (rho < 1e-4) continue;
     vec3 lt = lightAt(v);
-    vec3 key = uKey * ${f(SMOKE_VOLUME.key)} * phase * exp(-lt.r);
-    vec3 room = uRoom * (0.45 + 0.55 * exp(-lt.g));
+    // Single scattering of the key through the smoke's own shadow, and Wrenninge's octaves for the
+    // light scattered more than once (less extinction, flatter phase): a dense puff stays grey-white
+    // instead of going dark. The room lights it from every side, less what the smoke above hides.
+    float od = lt.r;
+    // (Only where the smoke is thick enough to scatter twice: thin smoke is single-scattering.)
+    float ms = 1.0 - exp(-od);
+    vec3 key = uKey * ${f(SMOKE_VOLUME.key)} * (phase * exp(-od) + ms * (0.5 * mix(phase, 1.0, 0.6) * exp(-0.3 * od) + 0.25 * exp(-0.1 * od)));
+    vec3 room = uRoom * (0.6 + 0.4 * exp(-0.5 * lt.g));
     vec3 S = ${f(SMOKE_VOLUME.albedo)} * (key + room);
     float Ts = exp(-rho * dt);
     C += T * (1.0 - Ts) * S;
@@ -538,6 +549,8 @@ export class SmokeVolume {
       return t;
     };
     this.density = rt(NX * TX, NY * TY, true);
+    // (One channel: a quarter of the bandwidth to clear, splat and read.)
+    this.density.texture.format = RedFormat;
     this.light = rt(LX * LTX, LY * LTY, true);
     this.half = rt(1, 1, false);
     const tex = () => {
@@ -661,11 +674,15 @@ export class SmokeVolume {
       const mass = SMOKE_VOLUME.mass * rate * db;
       const sig = (j: number) => Math.min(SIGMA_MAX, Math.max(SIGMA_MIN, (Math.max(SMOKE_VOLUME.width(st.rise[j]!), st.full[j]!) / 2.355) * UNITS));
       const sa = sig(k), sb = sig(k + 1);
-      const m = Math.max(1, Math.min(32, Math.ceil(len / (0.8 * Math.min(sa, sb)))));
+      const m = Math.max(1, Math.min(32, Math.ceil(len / (1.2 * Math.min(sa, sb)))));
       for (let j = 0; j < m; j++) {
         const u = (j + 0.5) / m;
         const age = st.age[k]! + db * u;
-        const w = smoothstep(r0, r1, s0 + (s1 - s0) * u) * (1 - smoothstep(fadeAge[0], fadeAge[1], age)) * tail;
+        // The wax aerosol evaporates as the plume mixes with the room's air: the visible smoke thins
+        // with height on top of its spreading (e-folding SMOKE_VOLUME.evaporate above 4 cm), so the
+        // merged veil is a few hundredths of optical depth, barely visible over the light wall.
+        const rise = st.rise[k]! + (st.rise[k + 1]! - st.rise[k]!) * u;
+        const w = smoothstep(r0, r1, s0 + (s1 - s0) * u) * (1 - smoothstep(fadeAge[0], fadeAge[1], age)) * tail * Math.exp(-Math.max(0, rise - 0.04) / SMOKE_VOLUME.evaporate);
         const pm = (mass / m) * w;
         const s = sa + (sb - sa) * u;
         // Below what a screen could show (its peak optical depth across under 10⁻⁴): not drawn.
@@ -766,15 +783,18 @@ export class SmokeVolume {
       const l = key as unknown as { color: Color; intensity: number };
       (u.uKey!.value as Vector3).set(l.color.r, l.color.g, l.color.b).multiplyScalar(l.intensity);
     }
+    const skip = (globalThis as { __smokeSkip?: string }).__smokeSkip ?? '';
     // 1. Splat.
     renderer.setClearColor(0x000000, 0);
     renderer.setRenderTarget(this.density);
-    renderer.clear(true, false, false);
-    renderer.render(this.splatScene, this.fsCamera);
+    if (!skip.includes('splat')) {
+      renderer.clear(true, false, false);
+      renderer.render(this.splatScene, this.fsCamera);
+    }
     // 2. The light volume.
     this.fsMesh.material = this.lightMaterial;
     renderer.setRenderTarget(this.light);
-    renderer.render(this.fsScene, this.fsCamera);
+    if (!skip.includes('light')) renderer.render(this.fsScene, this.fsCamera);
     // 3. The march, at half the drawing buffer's resolution (capped).
     const scale = Math.min(0.5, Math.sqrt(SMOKE_VOLUME.marchPixels / Math.max(1, frame.size.x * frame.size.y)));
     const w = Math.max(1, Math.ceil(frame.size.x * scale)), h = Math.max(1, Math.ceil(frame.size.y * scale));
@@ -783,7 +803,7 @@ export class SmokeVolume {
     renderer.setClearColor(TMP_C.setRGB(0, 0, 1e4), 0);
     renderer.setRenderTarget(this.half);
     renderer.clear(true, false, false);
-    renderer.render(this.marchScene, camera);
+    if (!skip.includes('march')) renderer.render(this.marchScene, camera);
     renderer.setRenderTarget(prev);
     renderer.setClearColor(TMP_D, alpha);
     renderer.autoClear = auto;

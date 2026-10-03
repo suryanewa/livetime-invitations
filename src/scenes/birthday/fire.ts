@@ -544,7 +544,13 @@ export const SMOKE = {
    * Neighbouring plumes entrain each other's air and lean together (plume merging): from 5 cm up
    * each is drawn towards the candles' centre, by `merge` of its offset at 25 cm.
    */
-  merge: 0.55,
+  merge: 0.6,
+  /**
+   * v1.6 polish: from 4 cm, fully by 20 cm (judge: the six plumes merge into one veil above 6–10 cm;
+   * v1.5's 0.55 from 5 cm over 20 cm left six parallel columns to the top of the frame).
+   */
+  mergeFrom: 0.04,
+  mergeOver: 0.16,
   /** Swept smoke widens by this much per distance carried (the wick's wake keeps it narrow at first). */
   jetSpread: 0.06,
   /** Wick vapour rides the breath at 60 % of it (it leaves in the wick's own wake). */
@@ -738,7 +744,7 @@ export function smokeStrand(i: number, strand: number, t: number, wickAt: WickAt
       pz += wakeTmp[2];
     }
     // Neighbouring plumes lean together and merge higher up.
-    const pull = mergeK * smooth((zr - 0.05) / 0.2);
+    const pull = mergeK * smooth((zr - SMOKE.mergeFrom) / SMOKE.mergeOver);
     px += toCentreX * pull;
     pz += toCentreZ * pull;
     // Room draft: slow drift back-right, and a slow lean of the column that the old parcels carry.

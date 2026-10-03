@@ -7,7 +7,7 @@ import { CANDLE } from './birthdayContract.ts';
 import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
 import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, SMOKE_GLOW, sootRadiance } from '../src/render/flame.ts';
 import { addHaze } from '../src/render/heatHaze.ts';
-import { markDepthOccluders } from '../src/render/sceneDepth.ts';
+import { SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
 import { SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
 import {
   FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, rand, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
@@ -591,10 +591,10 @@ export class SmokeRig {
 
   /** `parent`: the room the smoke rises in (birthday_root): smoke stays where it was born, not on the carried cake. */
   constructor(parent: Object3D, private readonly candles: number) {
-    // The volume marches up to the opaque scene: the candles (wax and wicks) are all that can stand
-    // between the lens and smoke rising above the wicks, so only they draw in its depth pass (the
-    // cake's 1.4 M triangles of piping would cost a depth pass for nothing).
-    parent.traverse((o) => { if (/^candle_\d\d$/.test(o.name)) markDepthOccluders(o); });
+    // The volume marches up to the opaque scene: the candles are all that can stand between the lens
+    // and smoke rising above the wicks, so only they draw in its depth pass, as their low-poly shadow
+    // stand-ins (2 k triangles each; the wax is 35 k, the cake's piping 1.4 M).
+    parent.traverse((o) => { if (o.userData.shadowProxy && /^candle_\d\d/.test(o.name)) o.layers.enable(SCENE_DEPTH_LAYER); });
     this.volume = new SmokeVolume(parent);
     const strands = candles * SMOKE_STRAND_COUNT;
     const n = strands * SMOKE_POINT_COUNT * 2;
