@@ -368,9 +368,11 @@ export interface FoodFlames {
  * top lifted its centre +27 R and turned it lavender. Now the pool is each candle's own halo, falling
  * off from the candle's surface over `reach` (scene units: 2 cm, gone by ≈ 4 cm), and on the top coat
  * the flames' broad light (the loop in models/birthdayFire.ts, read by reference) is answered at
- * `broad` of its strength (the whole top's wash; its shadows stay).
+ * `broad` of its strength (the whole top's wash; its shadows stay). Calibrated against the flames
+ * polish's light (FLAME_LIGHT_CAL 2.0 on v1.6/integration, a trial merge): the top's centre +7 R, the
+ * halo +29–36 R within a centimetre of a candle, +14–17 at 3 cm (at the old 1.0: +3–4 and half that).
  */
-export const FLAME_POOL = { gain: 7.0, wrap: 0.5, reach: 0.1, broad: 0.4 } as const;
+export const FLAME_POOL = { gain: 4.5, wrap: 0.5, reach: 0.1, broad: 0.28 } as const;
 
 /**
  * v1.6 polish 2 (fix 3): the candles' shadows from the key on the top coat, analytic (the rig's
