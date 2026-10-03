@@ -83,6 +83,11 @@ export const FLAME_REST = {
 /** Visible flame top above the candle base at rest. */
 export const FLAME_REST_TOP = FLAME_REST.base + FLAME_REST.length;
 
+/** The framing's per-candle size (v1.5's seeded ±7 %: the hero fit's envelope, models/birthdayContract.ts FLAME_FRAME). */
+export function frameScale(i: number): number {
+  return 1 + 0.07 * signed(i, 50);
+}
+
 /**
  * No two wicks stand the same height: candle `i`'s flame is this many times FLAME_REST (v1.6
  * polish: ±12 % seeded, the judge's ±10–15 %; Lf ∝ L^0.63, so ±0.6 mm of wick and its curl).

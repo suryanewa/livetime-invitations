@@ -217,8 +217,16 @@ export const FLAME = {
   widest: 1.0 * MM,
 } as const;
 
-/** Flame top above the candle base at full size (16.3 mm above the wax). */
-export const FLAME_TOP = FLAME.base + FLAME.height;
+/**
+ * The flames' envelope for the framing (the hero fit, `FLAME_TOP`): v1.5's flame (its cup 1 mm over
+ * the pool, 13 mm long, 2.5 mm in radius, ±7 % per candle). v1.6 polish: held, so the camera and
+ * every Birthday poster and backdrop stay where they are; the drawn flame (FLAME, 16.3 mm over the
+ * pool, ±12 %) reaches 2–4 mm higher, well inside the frame's margin.
+ */
+export const FLAME_FRAME = { base: CANDLE.height + 1.0 * MM, height: 13 * MM, radius: 2.5 * MM, spread: 0.07 } as const;
+
+/** The framing's flame top above the candle base (14 mm above the wax: FLAME_FRAME). */
+export const FLAME_TOP = FLAME_FRAME.base + FLAME_FRAME.height;
 
 /**
  * Complete motion bounds: stand, hovering candles, lit flames, the cake's arc over the rim and

@@ -555,7 +555,9 @@ describe('Birthday builder (code-authored candles)', () => {
       expect(FLAME.base).toBeGreaterThan(CANDLE.height);
       expect(wick.max.y - base).toBeGreaterThan(FLAME.base);
       expect(wick.max.y - base).toBeLessThan(FLAME.base + 0.4 * FLAME.height);
-      expect((FLAME_TOP - CANDLE.height) / 0.005).toBeCloseTo(16.3, 6);
+      // (The framing's envelope, FLAME_FRAME, holds v1.5's 14 mm; the drawn flame reaches 16.3 mm.)
+      expect((FLAME_TOP - CANDLE.height) / 0.005).toBeCloseTo(14, 6);
+      expect((FLAME.base + FLAME.height - CANDLE.height) / 0.005).toBeCloseTo(16.3, 6);
     }
   });
 });
