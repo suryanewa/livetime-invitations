@@ -692,8 +692,11 @@ export function spiralRosette(c: V3, n0: V3, u0: V3, R: number, seed: number, op
 }
 
 /**
- * v1.6 polish 2: the side rosettes' star and kiss. `teeth` (+0–1 each), `crest`, `amp` (±0.05 each),
- * the tail's share of the rope (`tail`), the kiss's base above the surface and its radius (× R).
+ * v1.6 polish 2: the side rosettes' star and kiss. `teeth` (+0–1 each), `crest`, `amp` (±0.05 each), the
+ * tip's turn over the rope (`twist`, rad); the tail's least share of the rope (`tail`: it starts at least
+ * 5 % of the rope before it comes round over the start), how far it eases in (`tailOut`, × the path's
+ * radius, −: inward), the share of the rope spent spiralling out to the ring (`grow`); the kiss's base
+ * above the surface and its radius (`kissZ`, `kissR`, × R).
  */
 export const ROSETTE_TIP = { teeth: 10, crest: 0.45, amp: 0.44, tail: 0.2, kissZ: 0.22, kissR: 0.46, grow: 0.18, tailOut: -0.05, twist: 0.45 } as const;
 
@@ -934,7 +937,7 @@ export function backMound(c: V3, n0: V3, R: number, seed: number): PipeMesh {
   const v = cross(n, u);
   // v1.6 polish (fix 2): the mass behind is the coil's own rope seen from behind, so it carries its
   // loops (a spiral of rope wrapping round the axis, ridged along its length), not a plain hump, a
-  // little inside the coil's outline.
+  // little inside the coil's outline. (v1.6 polish 2: the loops kept only as soft lumps, below.)
   const I = 30, J = 40;
   const g = stream(seed + 5);
   const loops = 4 + 0.8 * g.r(), dirL = g.r() < 0.5 ? 1 : -1, ph0 = g.r();
