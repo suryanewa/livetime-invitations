@@ -301,7 +301,7 @@ const hazeUp = new Vector3();
  * and `height` × its rest length tall, from just under its tip; its light behind bent by up to
  * `px` CSS px (laptop: 2–4 device px).
  */
-export const HAZE = { width: 6, height: 4.5, px: 1.2 } as const;
+export const HAZE = { width: 6, height: 4.5, px: 1.2, plume: 0.6 } as const;
 /**
  * Wick ember radiance scale (on soot's 1,900 K = 1 scale): a freshly bared ember (1,320 K) is a
  * bright orange point; at its in-flame glow (EMBER.lit) a dim red tip in the dark zone.
@@ -411,18 +411,23 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   quad.onBeforeRender = (renderer: WebGLRenderer, _s, camera) => {
     const { sx, sy, dpr, scale, pxPerUnit, output } = face(renderer, camera);
     // Into a target (tooling) nothing is registered: the bloom and the haze are the stage's own.
-    if (renderer.getRenderTarget() !== null || output <= 1e-3) return;
-    // Its glow's reach, for the bloom's composite.
+    const ember = u.uEmber.value;
+    if (renderer.getRenderTarget() !== null || (output <= 1e-3 && ember <= 0.05)) return;
+    // Its glow's reach, for the bloom's composite (a flame only: an ember does not bloom).
     const h = u.uHalf.value * pxPerUnit * 1.5;
-    emitBloom(renderer, [sx - h, sy - h, sx + h, sy + h]);
-    // The heat haze over it: a column from just under its tip along its axis, while live.
+    if (output > 1e-3) emitBloom(renderer, [sx - h, sy - h, sx + h, sy + h]);
+    // The heat haze over it: a column from just under its tip along its axis, while live; once
+    // the flame is out the hot wick goes on heating the air the first vapour rises in, so the haze
+    // runs on into the plume from the ember (fading as it cools: ≈1–2 s).
     const L = u.uShape.value[0], R = u.uShape.value[1];
-    hazeFoot.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.85 * L).addScaledVector(u.uAxisX.value, -u.uShape.value[2] * 0.5).applyMatrix4(quad.matrixWorld);
-    hazeUp.copy(u.uAxisY.value).transformDirection(quad.matrixWorld);
+    if (output > 1e-3) hazeFoot.copy(u.uBase.value).addScaledVector(u.uAxisY.value, 0.85 * L).addScaledVector(u.uAxisX.value, -u.uShape.value[2] * 0.5).applyMatrix4(quad.matrixWorld);
+    else hazeFoot.copy(u.uWick.value).addScaledVector(up.set(0, 1, 0).transformDirection(inv), 0.002).applyMatrix4(quad.matrixWorld);
+    hazeUp.copy(output > 1e-3 ? u.uAxisY.value : up.set(0, 1, 0).transformDirection(inv)).transformDirection(quad.matrixWorld);
+    const heat = Math.max(Math.min(1, output), HAZE.plume * ember);
     addHaze(renderer, index, {
       foot: hazeFoot, up: hazeUp, width: HAZE.width * R * scale, height: HAZE.height * FLAME_REST.length * scale,
       // The breath blows the hot gas away and mixes it cold within a few millimetres: no plume, no haze.
-      strength: HAZE.px * dpr * live.gain * Math.min(1, output) * (1 - u.uNoise.value.y) ** 2, time: live.time, seed: 7.3 * index + 1.1,
+      strength: HAZE.px * dpr * live.gain * heat * (1 - u.uNoise.value.y) ** 2, time: live.time, seed: 7.3 * index + 1.1,
     });
   };
   node.add(quad);
