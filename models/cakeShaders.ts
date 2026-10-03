@@ -358,7 +358,7 @@ export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodL
   cocoaPiping: {
     wrap: 0.24, wrapThin: 0.55, scatter: 0.65, transMm: 1.5, trans: 0.45, transDistort: 0.3, transPower: 4,
     sssSat: 1.45, shadeSat: 1.18, crestLift: 0.07, grooveDeep: 0.15, mottle: 0.025,
-    roughCrest: 0.26, roughGroove: 0.5, roughCrease: 0.1, glint: 0, glintCell: 0.3, glintStrength: 0, keyOcclusion: 0.55,
+    roughCrest: 0.2, roughGroove: 0.38, roughCrease: 0.1, glint: 0, glintCell: 0.3, glintStrength: 0, keyOcclusion: 0.55,
     fatTint: [1, 0.7, 0.5], fat: 0.25,
     coatRough: [0.15, 0.26], coatRoughVar: 0, streak: 0, hue: 0, topLift: 0, pinholes: 0, pinholeMm: [0.2, 0.6], glintSpread: 0.4, wave: 0, diffSoft: 0.55,
   },
@@ -435,7 +435,8 @@ bool foodScene = true;`,
     vec3 P = vFoodP;
     float rr = length(P.xz);
     float sS = (cakeNoise(vec3(P.x * 7.0, P.y * 60.0, P.z * 7.0)) - 0.5) + 0.55 * (cakeNoise(vec3(P.x * 18.0, P.y * 150.0, P.z * 18.0) + 3.7) - 0.5);
-    float sT = (cakeNoise(vec3(P.x * 12.0, P.z * 12.0, rr * 70.0)) - 0.5) + 0.5 * (cakeNoise(vec3(P.x * 30.0, P.z * 30.0, rr * 160.0) + 5.1) - 0.5);
+    float warpT = 4.0 * cakeNoise(P * 8.0 + 1.7);
+    float sT = (cakeNoise(vec3(P.x * 12.0, P.z * 12.0, rr * 45.0 + warpT)) - 0.5) + 0.5 * (cakeNoise(vec3(P.x * 30.0, P.z * 30.0, rr * 110.0 + 2.0 * warpT) + 5.1) - 0.5);
     float blot = (cakeNoise(P * 6.0 + 11.0) - 0.5) + 0.5 * (cakeNoise(P * 14.0 + 23.0) - 0.5);
     float hueN = (cakeNoise(P * 9.0 + 41.0) - 0.5) + 0.4 * (cakeNoise(P * 21.0 + 5.0) - 0.5);
     diffuseColor.rgb *= 1.0 + ${f(look.streak)} * (mix(sS, 2.0 * sT, onTop) + (0.6 + 0.4 * onTop) * blot) + ${f(look.topLift)} * onTop;
@@ -488,7 +489,9 @@ bool foodScene = true;`,
     vec3 P = vFoodP;
     float rr = length(P.xz);
     float hS = (cakeNoise(vec3(P.x * 6.0, P.y * 42.0, P.z * 6.0)) - 0.5) + 0.6 * (cakeNoise(vec3(P.x * 14.0, P.y * 90.0, P.z * 14.0) + 2.3) - 0.5) + 0.5 * (cakeNoise(P * 9.0 + 6.1) - 0.5);
-    float hT = (cakeNoise(vec3(P.x * 9.0, P.z * 9.0, rr * 40.0)) - 0.5) + 0.6 * (cakeNoise(vec3(P.x * 22.0, P.z * 22.0, rr * 70.0) + 8.4) - 0.5) + 0.5 * (cakeNoise(P * 7.0 + 3.3) - 0.5);
+    // (the top: broad strokes; the turntable's rings only in patches and wandering)
+    float ringT = smoothstep(0.5, 0.75, cakeNoise(P * 6.0 + 9.2)) * (cakeNoise(vec3(P.x * 9.0, P.z * 9.0, rr * 30.0 + 5.0 * cakeNoise(P * 7.0))) - 0.5);
+    float hT = (cakeNoise(vec3(P.x * 11.0, P.z * 11.0, P.y * 11.0)) - 0.5) + 0.6 * (cakeNoise(P * 24.0 + 8.4) - 0.5) + 0.5 * (cakeNoise(P * 5.0 + 3.3) - 0.5) + 0.6 * ringT;
     float hW = ${f(look.wave * 0.005)} * mix(hS, 2.0 * hT, foodTop) * foodContact;
     normal = cakeBump(-vViewPosition, normal, hW, faceDirection);
   }`}

@@ -698,7 +698,9 @@ class Pockets {
         this.cells.set(`${gx},${gy}`, {
           x: (gx + r()) * cell, y: (gy + r()) * cell, rx: rad * (1 + 0.9 * r()), ry: rad, cos: Math.cos(ang), sin: Math.sin(ang),
           l2: 0.25 * r(), p2: r() * 6.283, l3: 0.18 * r(), p3: r() * 6.283,
-          depth: rad * (0.06 + 0.22 * r()), open: r() < 0.5,
+          // v1.6 polish: soft dents only (the open, steep-walled bubbles read as isolated crater rings at a
+          // distance); the runtime's clustered pinholes (models/cakeShaders.ts) are the open ones.
+          depth: rad * (0.05 + 0.15 * r()), open: r() < 0, // (the draw kept: the stream stays as it was)
         });
       }
     }
@@ -762,8 +764,9 @@ function sideHeight(x: number, y: number, P: Pockets): { h: number; pocket: numb
   // highlight at laptop size: slopes of 3–6°).
   const chatterEnv = Math.max(0, fbm(u * 4, y * 0.13, 83, 2, 4) * 2.4 - 0.45);
   if (chatterEnv > 0) {
-    const ph = (2 * Math.PI * 69 * (x + 0.1 * y)) / period + 2.2 * fbm(u * 6, y * 0.25, 89, 2, 6);
-    h += 0.0022 * Math.min(chatterEnv, 1) * (Math.sin(ph) + 0.25 * Math.sin(2 * ph + 1.1));
+    // v1.6 polish: shallower and irregular (pitch and phase wander), so it is no corduroy.
+    const ph = (2 * Math.PI * 69 * (x + 0.1 * y)) / period + 6.5 * fbm(u * 9, y * 0.4, 89, 3, 9);
+    h += 0.0012 * Math.min(chatterEnv, 1) * (Math.sin(ph) + 0.35 * Math.sin(2.3 * ph + 1.1)) * (0.6 + 0.8 * fbm(u * 20, y * 1.3, 91, 2, 20));
   }
   let pocket = 0;
   for (const p of P.near(x, y, scratch)) {
@@ -790,7 +793,7 @@ function strokesFor(seed: number, radius: number): Stroke[] {
     const R = 5 + 7 * r();
     const ang = r() * 2 * Math.PI, dist = radius * Math.sqrt(r()) * 1.05;
     const a0 = r() * 2 * Math.PI;
-    return { cx: dist * Math.cos(ang) - R * Math.cos(a0 + 0.5), cz: dist * Math.sin(ang) - R * Math.sin(a0 + 0.5), R, w: 2.5 + 2.5 * r(), a0, a1: a0 + 0.6 + 0.8 * r(), depth: 0.01 + 0.015 * r(), lip: 0.01 + 0.01 * r() };
+    return { cx: dist * Math.cos(ang) - R * Math.cos(a0 + 0.5), cz: dist * Math.sin(ang) - R * Math.sin(a0 + 0.5), R, w: 2.5 + 2.5 * r(), a0, a1: a0 + 0.6 + 0.8 * r(), depth: 0.016 + 0.024 * r(), lip: 0.014 + 0.014 * r() };
   });
 }
 
@@ -802,8 +805,9 @@ function topHeight(x: number, z: number, S: Stroke[], P: Pockets): { h: number; 
   const rr = Math.hypot(x, z), th = Math.atan2(z, x);
   const spiralEnv = smoothstep(0.6, 2.2, rr) * Math.max(0, 0.55 + 0.6 * fbm(x * 0.4 + 3, z * 0.4, 97, 2));
   if (spiralEnv > 0) {
-    const ph = (2 * Math.PI * rr) / 0.75 - th + 1.4 * fbm(x * 0.5, z * 0.5, 101, 2);
-    h += 0.007 * spiralEnv * (Math.sin(ph) + 0.3 * Math.sin(2 * ph + 0.7));
+    // v1.6 polish: fainter and wandering (it read as regular rings in the ganache's gloss).
+    const ph = (2 * Math.PI * rr) / 0.75 - th + 4.0 * fbm(x * 0.6, z * 0.6, 101, 3);
+    h += 0.004 * spiralEnv * (Math.sin(ph) + 0.3 * Math.sin(2 * ph + 0.7)) * (0.5 + fbm(x * 1.5, z * 1.5, 103, 2));
   }
   let edge = 0;
   for (const s of S) {
