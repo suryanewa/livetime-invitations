@@ -88,11 +88,11 @@ export const STEAM_LOOK = {
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
    */
-  steps: { dense: 22, thin: 17, veil: 15 },
+  steps: { dense: 22, thin: 15, veil: 13 },
   /** The temporal resolve: the new frame's share of each pixel (≈ the last 7 frames averaged). */
   history: 0.1,
   /** The march's pixel budget: half the drawing buffer a side, at most this many pixels. */
-  marchPixels: 460_000,
+  marchPixels: 400_000,
   lowShare: 0.6,
 } as const;
 
@@ -368,6 +368,8 @@ uniform float uSigma;
 uniform int uDebug;
 /** The jitter's frame (from the steam clock). */
 uniform float uFrame;
+/** Whether the march bisects where rays enter the steam (the young cloud's narrow edge). */
+uniform bool uRefine;
 uniform vec3 uKeyDir;
 uniform vec3 uKeyColor;
 uniform vec3 uAmbient;
@@ -628,7 +630,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // its slump over the rim) is swept by its skirt and leaves with the plate.
   if (uA[l].x > uD[l].z) d *= 1.0 - (1.0 - smoothstep(0.12, 0.26, X.y)) * smoothstep(uD[l].z, uD[l].z + 0.25, uA[l].x);
   // The billows' own shade: the edge a little way towards the key.
-  if (d > 0.02 && detail > 0.0 && uC[l].z < 1.2) {
+  if (d > 0.02 && detail > 0.0 && uC[l].z < 0.7) {
     vec4 nl = texture(uNoise, Xb + L * 0.2);
     shadeOd = 0.24 * sat((dEff + E.z * (nl.b - nb.b) * 2.0) / 0.06);
   }
@@ -878,7 +880,7 @@ void main() {
     float localOd, rising;
     float dens = sampleAt(p, L, detail, localOd, rising);
     float seg = dt;
-    if (dens > 1e-4 && clear && refined < 1) {
+    if (uRefine && dens > 1e-4 && clear && refined < 1) {
       float lo = max(t - dt, a0), hi = t, od2, r2;
       for (int b = 0; b < 3; b++) {
         float mid = 0.5 * (lo + hi);
@@ -895,8 +897,9 @@ void main() {
     // above, and the lifted dome's shade; the billows' own shade from the local tap.
     // (The volume's voxels are ≈ 2 cm: read from 2.4 cm towards the key, and take the first stretch
     // from this sample's own density, so a lit face is not darkened by the cloud behind it.)
-    vec3 lv = lightAt(p);
-    float od = uSigma * (${f(STEAM_LOOK.keyFall)} * lightAt(p + L * 0.14).x + 0.07 * dens + localOd);
+    // (One read serves the key, the room above and the dome's shade: 2.4 cm is well inside a voxel.)
+    vec3 lv = lightAt(p + L * 0.14);
+    float od = uSigma * (${f(STEAM_LOOK.keyFall)} * lv.x + 0.07 * dens + localOd);
     // Wrenninge's octaves: each scatters again with less extinction, less light and a flatter phase.
     float key = exp(-od) * ph0 + 0.45 * exp(-0.35 * od) * ph1 + 0.18 * exp(-0.12 * od) * ph2;
     float lit = mix(uDomeShade, 1.0, lv.z);
@@ -1197,6 +1200,7 @@ export class DinnerSteam {
       uScale: { value: new Vector2(0.5, 0.5) },
       uDebug: { value: 0 },
       uFrame: { value: 0 },
+      uRefine: { value: true },
       uLow: { value: false },
       uSigma: { value: STEAM_LOOK.sigma },
       uKeyDir: { value: new Vector3(-0.36, 0.643, 0.676).normalize() },
@@ -1424,7 +1428,7 @@ export class DinnerSteam {
     const limMin = TMP_A.set(-BOX_MAX, 0, -BOX_MAX), limMax = TMP_B.set(BOX_MAX, Y_MAX, BOX_MAX);
     let any = false;
     let steps: number = STEAM_LOOK.steps.veil;
-    let shadowOn = 0;
+    let shadowOn = 0, refine = false;
     this.l0 = -1;
     this.l0Cloud = false;
     this.clocks.forEach((c, l) => {
@@ -1442,7 +1446,10 @@ export class DinnerSteam {
       const present = s.present && s.fade > 0;
       A[l]!.set(tau, 1, c.fade, present ? 1 : 0);
       if (this.l0 < 0 || (present && !this.l0Cloud)) { this.l0 = l; this.l0Cloud = present; this.tau0 = tau; }
-      if (present) steps = Math.max(steps, s.age < 1.15 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
+      // (The fog inside has mostly gone by ≈ 0.75 s of the thermal: wisps take fewer steps, and the
+      // edge's bisection is for the young cloud's narrow band.)
+      if (present) steps = Math.max(steps, s.age < 0.75 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
+      if (present && s.age < 0.75) refine = true;
       // (Its shadow once the dome has lifted off it: τ 0.3 s on.)
       shadowOn = Math.max(shadowOn, present ? Math.min(1, Math.max(0, (tau - 0.3) / 0.15)) : 1);
       B[l]!.set(s.dragSide.x, s.dragSide.y, s.lean.x, s.lean.y);
@@ -1489,6 +1496,7 @@ export class DinnerSteam {
     });
     this.steps = steps;
     this.uniforms.uShadowOn!.value = shadowOn;
+    this.uniforms.uRefine!.value = refine;
     if (!any) {
       min.set(-1, 0, -1);
       max.set(1, 1, 1);
