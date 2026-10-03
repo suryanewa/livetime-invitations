@@ -146,7 +146,10 @@ export class HeatHaze {
   apply(renderer: WebGLRenderer, camera: Camera): number {
     this.lastColumns = 0;
     const map = registry.get(renderer);
-    if (!map?.size) return 0;
+    if (!map?.size) {
+      this.release();
+      return 0;
+    }
     const frame = renderer.info.render.frame;
     const live: Entry[] = [];
     let seen = false;
@@ -164,7 +167,11 @@ export class HeatHaze {
       this.slot(0);
       renderer.compile(this.scene, camera);
     }
-    if (!live.length) return 0;
+    if (!live.length) {
+      // Nothing shimmers (the flames out, still, or another scene): its copy goes back to the GPU.
+      this.release();
+      return 0;
+    }
     renderer.getDrawingBufferSize(this.buffer);
     const W = this.buffer.x, H = this.buffer.y;
     camera.updateMatrixWorld();
@@ -219,9 +226,13 @@ export class HeatHaze {
     return live.length;
   }
 
-  dispose(): void {
+  private release(): void {
     this.copy?.dispose();
     this.copy = null;
+  }
+
+  dispose(): void {
+    this.release();
     this.geometry.dispose();
     for (const m of this.meshes) (m.material as ShaderMaterial).dispose();
   }

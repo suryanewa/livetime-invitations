@@ -36,7 +36,7 @@ export const BLOOM = {
   threshold: 1,
   knee: 0.5,
   /** Share of the emitters' light the chain spreads (all levels summed, then divided by their count). */
-  strength: 0.16,
+  strength: 0.1,
   /** Display-space gain of the added light (≈ the sRGB curve's slope over the stage's mid-light values). */
   display: 0.65,
   /** Mip levels: Normal/High; Low (the cheaper chain: a tighter glow, three passes fewer). */
@@ -322,7 +322,12 @@ export class Bloom {
   prepare(renderer: WebGLRenderer, scene: Scene, camera: Camera): boolean {
     this.ready = false;
     this.lastRect = null;
-    if (!bloomTooling.enabled || !showing(scene)) return false;
+    if (!bloomTooling.enabled || !showing(scene)) {
+      // Nothing to glow (another scene, the flames out): its targets go back to the GPU's pool, so a
+      // scene without emitters holds nothing for it (they are made again, in a frame, if needed).
+      this.release();
+      return false;
+    }
     if (this.supported === null) this.supported = renderer.capabilities.isWebGL2 && (renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float'));
     if (!this.supported) return false;
     const pr = renderer.getPixelRatio();
@@ -400,11 +405,17 @@ export class Bloom {
     return true;
   }
 
-  dispose(): void {
-    this.source?.dispose();
+  /** Free the targets (made again on the next frame that needs them). */
+  private release(): void {
+    if (!this.source) return;
+    this.source.dispose();
     for (const m of this.mips) m.dispose();
     this.mips = [];
     this.source = null;
+  }
+
+  dispose(): void {
+    this.release();
     this.quad.geometry.dispose();
     for (const m of [this.prefilter, this.down, this.up, this.compositing]) m.dispose();
   }

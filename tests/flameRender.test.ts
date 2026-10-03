@@ -125,6 +125,10 @@ describe('v1.6 flames: the volume, the bloom and the haze', () => {
     scene.pose('accepted');
     scene.beforeRender();
     expect(rig.candles.every((c) => !c.fire.quad.visible)).toBe(true);
+    // The bloom's twins with them (an ember alone never blooms: it glows on down into the bin).
+    scene.sample('accept', 0.9);
+    scene.beforeRender();
+    expect(rig.candles.every((c) => !c.fire.twin.visible)).toBe(true);
     const out = strictRenderer();
     draw(out);
     expect(pendingBloom(out)).toBeNull();

@@ -12,9 +12,10 @@ import {
 } from '../src/scenes/birthday/fire.ts';
 
 /**
- * Birthday fire rig (v1.5, #4): per candle a ray-marched flame on a camera-facing quad and a warm
- * point light at the flame, and one ribbon mesh for every candle's smoke streaklines. Drawing only:
- * the states come from src/scenes/birthday/fire.ts.
+ * Birthday fire rig (v1.5, #4; v1.6 the Hollywood pass): per candle a ray-marched flame volume (on
+ * a camera-facing quad) with its HDR twin for the bloom, its heat haze and its light on the cake
+ * (flickering with it, shadowed by the candles and the top tier), and one ribbon mesh for every
+ * candle's smoke streaklines. Drawing only: the states come from src/scenes/birthday/fire.ts.
  */
 
 /**
@@ -305,7 +306,7 @@ export const HAZE = { width: 6, height: 4.5, px: 1.2 } as const;
  * Wick ember radiance scale (on soot's 1,900 K = 1 scale): a freshly bared ember (1,320 K) is a
  * bright orange point; at its in-flame glow (EMBER.lit) a dim red tip in the dark zone.
  */
-const EMBER_GAIN = 900;
+const EMBER_GAIN = 320;
 /** Scene units per millimetre (fire.ts MM). */
 const MM_UNITS = 0.005;
 
@@ -468,7 +469,8 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
     // Through a per-channel response, as the flame's (src/render/flame.ts): a hot ember saturates
     // red, then green, so it stays orange under the Neutral curve instead of washing to salmon.
     const e = blackbodyAt(900 + 420 * ember, r.wick.ember.value).multiplyScalar(EMBER_GAIN * ember);
-    e.setRGB(1 - Math.exp(-e.r), 1 - Math.exp(-e.g), 1 - Math.exp(-e.b));
+    // v1.6: the flame's shoulder (x / (1 + x)): it never clips red and green together (a yellow LED).
+    e.setRGB(e.r / (1 + e.r), e.g / (1 + e.g), e.b / (1 + e.b));
   } else r.wick.ember.value.setRGB(0, 0, 0);
   // The light is the flame's luminous (soot) output: a fresh blue bead lights almost nothing.
   r.lights.intensity.value[r.index] = CANDLE_LIGHT * Math.max(0, f.intensity * fl.intensity) * sootFormed(f.lit);
