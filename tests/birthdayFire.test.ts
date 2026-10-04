@@ -3,7 +3,7 @@ import { Color, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { blackbodyAt, createFlameMaterial, SMOKE_RADIANCE, sootRadiance } from '../src/render/flame.ts';
 import { rigBirthday } from '../models/birthday.ts';
-import { CANDLE_LIGHT, SMOKE_RIBBON_POINTS } from '../models/birthdayFire.ts';
+import { CANDLE_LIGHT, flameLightColor, SMOKE_RIBBON_POINTS, waxGlowColor } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME_FRAME, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
@@ -124,6 +124,51 @@ describe('Birthday fire: the flame', () => {
       expect(burnRate(i, extinguishedAt(i) + 0.001, 'accept')).toBe(0);
       expect(burnRate(i, 0.3, 'decline')).toBe(0);
     }
+  });
+});
+
+describe('Birthday fire: the flames\' light (v1.6 polish 2)', () => {
+  it('is a warm cream, not red: green proportionate, some blue (re-judge: the top went lilac, +73 % red, +20 % green, no blue)', () => {
+    const c = flameLightColor();
+    expect(c.r).toBeCloseTo(1, 6);
+    expect(c.g).toBeGreaterThan(0.7);
+    expect(c.g).toBeLessThan(0.9);
+    expect(c.b).toBeGreaterThan(0.3);
+    expect(c.b).toBeLessThan(0.6);
+    // The wax under its own flame glows warmer than the room-balanced light.
+    const w = waxGlowColor();
+    expect(w.g / w.r).toBeLessThan(c.g / c.r);
+    expect(w.b / w.r).toBeLessThan(c.b / c.r);
+  });
+
+  it('breathes with the flames, ±2–3 % round a candle and at the top\'s centre; exactly still at gain 0', () => {
+    const fl = newFlicker();
+    const own: number[][] = Array.from({ length: CANDLE_COUNT }, () => []), mean: number[] = [];
+    for (let t = 0; t < 60; t += 1 / 60) {
+      let m = 0;
+      for (let i = 0; i < CANDLE_COUNT; i++) { flicker(i, t, 1, fl); own[i]!.push(fl.light); m += fl.light / CANDLE_COUNT; }
+      mean.push(m);
+    }
+    const sd = (x: number[]) => { const a = x.reduce((p, q) => p + q, 0) / x.length; return Math.sqrt(x.reduce((p, q) => p + (q - a) ** 2, 0) / x.length) / a; };
+    for (const o of own) { expect(sd(o)).toBeGreaterThan(0.02); expect(sd(o)).toBeLessThan(0.035); }
+    expect(sd(mean)).toBeGreaterThan(0.012);
+    expect(sd(mean)).toBeLessThan(0.025);
+    for (let i = 0; i < CANDLE_COUNT; i++) expect(flicker(i, 3.3, 0, fl).light).toBe(1);
+  });
+
+  it('goes out candle by candle at the blow, each with its own flame, never the whole top at once', () => {
+    const outAt = Array.from({ length: CANDLE_COUNT }, (_, i) => {
+      const b = BREATH_AT[i]!;
+      // Full until its own lift-off, gone within BREATH.tear of it, never faster than 0.05 a millisecond.
+      expect(flameState(i, b.lift - 0.001, 'accept').intensity).toBeGreaterThan(0.99);
+      expect(flameState(i, b.lift + BREATH.tear + 0.001, 'accept').intensity).toBe(0);
+      for (let t = b.lift; t < b.lift + BREATH.tear; t += 0.001) expect(flameState(i, t, 'accept').intensity - flameState(i, t + 0.001, 'accept').intensity).toBeLessThan(0.05);
+      return b.lift;
+    });
+    // The six go out over more than 0.1 s, and at no 16 ms frame does more than half of the light go.
+    expect(Math.max(...outAt) - Math.min(...outAt)).toBeGreaterThan(0.1);
+    const total = (t: number) => Array.from({ length: CANDLE_COUNT }, (_, i) => flameState(i, t, 'accept').intensity).reduce((p, q) => p + q, 0);
+    for (let t = 0; t < 0.5; t += 0.004) expect(total(t) - total(t + 0.016)).toBeLessThan(0.5 * CANDLE_COUNT);
   });
 });
 

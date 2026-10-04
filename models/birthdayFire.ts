@@ -41,11 +41,30 @@ const CANDLE_LIGHT_SCALE = 1.5 / 2500;
 const FLAME_LIGHT_CAL = 2.0;
 export const CANDLE_LIGHT = CANDLE_CANDELA * 25 * CANDLE_LIGHT_SCALE * FLAME_LIGHT_CAL;
 
-/** The flame's light colour: soot at ≈1,900 K (linear sRGB, luminance-normalised). */
+/**
+ * v1.6 polish 2: the flames' light as the camera records it. Soot at ≈1,900 K is deep orange to a
+ * camera balanced to daylight (linear (1, 0.28, 0.01): over the blue frosting it read lilac, +73 % red,
+ * +20 % green, nothing in blue); the camera in a room lit by a window and six candles balances part of
+ * the way to them (`balance` K), and the frosting returns their light diffused through the room's
+ * (`cream`: the share of it the room's white mixes in): a warm cream, ≈ (1, 0.84, 0.45).
+ */
+export const FLAME_LIGHT_WB = { soot: 1900, balance: 2200, cream: 0.3 } as const;
+
+/** The flame's light colour (linear sRGB, its largest channel 1): FLAME_LIGHT_WB. */
 export function flameLightColor(): Color {
-  const [r, g, b] = sootRadiance(1900);
+  const [r, g, b] = sootRadiance(FLAME_LIGHT_WB.soot);
+  const [wr, wg, wb] = sootRadiance(FLAME_LIGHT_WB.balance);
+  const c = [r / wr, g / wg, b / wb];
+  const m = Math.max(...c);
+  const k = FLAME_LIGHT_WB.cream;
+  return new Color(...(c.map((x) => (x / m) * (1 - k) + k) as [number, number, number]));
+}
+
+/** The wax's glow under its flame: halfway between the soot's own colour and the balanced light. */
+export function waxGlowColor(): Color {
+  const [r, g, b] = sootRadiance(FLAME_LIGHT_WB.soot);
   const m = Math.max(r, g, b);
-  return new Color(r / m, g / m, b / m);
+  return new Color(r / m, g / m, b / m).lerp(flameLightColor(), 0.5);
 }
 
 /** Flames lighting the cake (the master has six candles; the v1.1 tooling cake three). */
@@ -61,6 +80,12 @@ export interface FlameLights {
   pos: { value: Vector3[] };
   intensity: { value: number[] };
   color: { value: Color };
+  /**
+   * v1.6 polish 2: the colour of the light a candle's top glows with (its own flame's, scattered in
+   * the wax right under it: warmer than the light the camera balances the room's top to; cream there
+   * read pale cyan on the blue candles' tops).
+   */
+  wax: { value: Color };
   radius2: { value: number };
   /**
    * v1.6: every candle as an occluder of every flame's light (world): its axis from its base to its
@@ -78,6 +103,7 @@ export function createFlameLights(): FlameLights {
     pos: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => new Vector3()) },
     intensity: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => 0) },
     color: { value: flameLightColor() },
+    wax: { value: waxGlowColor() },
     radius2: { value: FLAME_LIGHT_RADIUS ** 2 },
     // Unposed candles stand far away (they occlude nothing until a flame rig places them).
     candleA: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => new Vector3(0, -1e3, 0)) },
@@ -111,6 +137,7 @@ const FLAME_LIGHT_PARS = /* glsl */ `
 uniform vec3 uFlamePos[${FLAME_LIGHT_COUNT}];
 uniform float uFlameI[${FLAME_LIGHT_COUNT}];
 uniform vec3 uFlameColor;
+uniform vec3 uFlameWax;
 uniform float uFlameR2;
 uniform vec3 uCandleA[${FLAME_LIGHT_COUNT}];
 uniform vec3 uCandleB[${FLAME_LIGHT_COUNT}];
@@ -181,7 +208,7 @@ function flameLightLoop(wax: boolean): string {
     }
     ${wax ? `if (fOwn >= 0 && uFlameI[fOwn] > 0.0) {
       vec3 ft = uFlamePos[fOwn] - uCandleB[fOwn];
-      reflectedLight.indirectDiffuse += material.diffuseColor * uFlameColor * (uFlameI[fOwn] / (dot(ft, ft) + uFlameR2)) * ${WAX_GLOW.toFixed(3)} * exp(-fBelow / ${WAX_MFP.toFixed(4)});
+      reflectedLight.indirectDiffuse += material.diffuseColor * uFlameWax * (uFlameI[fOwn] / (dot(ft, ft) + uFlameR2)) * ${WAX_GLOW.toFixed(3)} * exp(-fBelow / ${WAX_MFP.toFixed(4)});
     }` : ''}
   }`;
 }
@@ -208,14 +235,14 @@ export function patchFlameLight(material: Material, lights: FlameLights): void {
   material.onBeforeCompile = (shader, renderer) => {
     prev.call(material, shader, renderer);
     Object.assign(shader.uniforms, {
-      uFlamePos: lights.pos, uFlameI: lights.intensity, uFlameColor: lights.color, uFlameR2: lights.radius2, uCandleA: lights.candleA, uCandleB: lights.candleB, uCandleR: lights.occluder,
+      uFlamePos: lights.pos, uFlameI: lights.intensity, uFlameColor: lights.color, uFlameWax: lights.wax, uFlameR2: lights.radius2, uCandleA: lights.candleA, uCandleB: lights.candleB, uCandleR: lights.occluder,
       uTier: lights.tier,
     });
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${FLAME_LIGHT_PARS}`)
       .replace('#include <lights_fragment_end>', `${flameLightLoop(wax)}\n#include <lights_fragment_end>`);
   };
-  material.customProgramCacheKey = () => `${prevKey.call(material)}+flame-light-v4${wax ? '-wax' : ''}`;
+  material.customProgramCacheKey = () => `${prevKey.call(material)}+flame-light-v5${wax ? '-wax' : ''}`;
   material.needsUpdate = true;
 }
 
@@ -537,7 +564,9 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
     e.setRGB(e.r / (1 + e.r), e.g / (1 + e.g), e.b / (1 + e.b));
   } else r.wick.ember.value.setRGB(0, 0, 0);
   // The light is the flame's luminous (soot) output: a fresh blue bead lights almost nothing.
-  r.lights.intensity.value[r.index] = CANDLE_LIGHT * Math.max(0, f.intensity * fl.intensity) * sootFormed(f.lit);
+  // (v1.6 polish 2: breathing with the flame and the room's draft, fl.light; at the blow it goes out
+  // candle by candle with each flame's own output, over BREATH.tear from its lift-off.)
+  r.lights.intensity.value[r.index] = CANDLE_LIGHT * Math.max(0, f.intensity * fl.light) * sootFormed(f.lit);
   // The candle as an occluder of every flame's light: its axis from its base to its wax top (in the
   // world, where the light's shader works), whether or not its own flame burns.
   candle.updateWorldMatrix(true, false);

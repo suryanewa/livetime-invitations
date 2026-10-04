@@ -142,6 +142,12 @@ export const FLICKER = {
   flutter: { every: 3, skip: 0.25, length: [0.1, 0.3] as const, lean: (4 * Math.PI) / 180, stretch: 0.07 },
   /** Gain ramp after settle() (seconds): the flame comes to life without a pop. */
   resume: 0.35,
+  /**
+   * v1.6 polish 2: the flames' light breathes with them: × (1 + own × the length breathing + draft ×
+   * the room's air, moving them all at once at 0.6–2.3 Hz): ≈ 2.8 % RMS round a candle, ≈ 2 % at the
+   * top's centre (the six own breathings average out there).
+   */
+  light: { own: 0.65, draft: 0.035 },
 } as const;
 
 export interface Flicker {
@@ -149,6 +155,8 @@ export interface Flicker {
   height: number;
   width: number;
   intensity: number;
+  /** v1.6 polish 2: the multiplier of the light the flame casts on the cake (FLICKER.light). */
+  light: number;
   /** Lean from the room's air (radians), as a vector in the cake's plan (x, z). */
   swayX: number;
   swayZ: number;
@@ -226,6 +234,11 @@ export function flicker(i: number, t: number, gain: number, out: Flicker): Flick
   // Nearly incompressible: a taller flame is a little thinner; its light breathes with it.
   out.width = 1 - 0.45 * dh;
   out.intensity = 1 + 0.5 * dh;
+  // v1.6 polish 2 (re-judge: the light on the cake should breathe with the flames, ±2–3 % of itself):
+  // the light a flame casts follows its luminous size (FLICKER.light.own × its length breathing) and
+  // the room's slow draft, which moves every flame at once (FLICKER.light.draft, the same for all).
+  const L = FLICKER.light;
+  out.light = 1 + (L.own * dh + L.draft * (0.55 * Math.sin(2 * Math.PI * 0.61 * (t - lag) + 0.6) + 0.45 * Math.sin(2 * Math.PI * 1.27 * (t - lag) + 2.0) + 0.3 * Math.sin(2 * Math.PI * 2.3 * (t - lag) + 4.1))) * gain;
   out.swayX = sx * gain;
   out.swayZ = sz * gain;
   out.phase = phase;
@@ -245,7 +258,7 @@ export function restLean(i: number): [number, number] {
 }
 
 export function newFlicker(): Flicker {
-  return { height: 1, width: 1, intensity: 1, swayX: 0, swayZ: 0, phase: 0, wave: 0, time: 0, gain: 0 };
+  return { height: 1, width: 1, intensity: 1, light: 1, swayX: 0, swayZ: 0, phase: 0, wave: 0, time: 0, gain: 0 };
 }
 
 // ── Ignition (host) ──────────────────────────────────────────────────────────
