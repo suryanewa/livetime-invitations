@@ -1,48 +1,58 @@
-v1.6 cake polish 2: measurements (judge.mjs frames through the live stage on 127.0.0.1:5608; re-judge 'before' = scratchpad/judge-cake2/raw, nopool)
+v1.6 cake polish 2: measurements. judge.mjs frames through the live stage (127.0.0.1:5608). 'before' = the re-judge's
+frames (scratchpad/judge-cake2/raw, nopool). 'after' = v1.6/cake-polish2 as committed (the flames' light as on
+v1.6/integration's parent 29d8245, FLAME_LIGHT_CAL absent = 1.0). 'merged' = a trial merge of v1.6/integration (the
+flames polish's light x2, FLAME_LIGHT_CAL 2.0), not committed. NOPOOL=1 zeroes the flames' intensities.
 
-== fix 4: top coat sigma (sigp.py, laptop crop top patch 176,72 40x40, luma /255) ==
-before            [176,72,40,40] cov 100% raw 2.28 det 1.89 hp 1.14 rgb 187,198,244
-after, texture only (candle shadows off in a measuring build) [176,72,40,40] cov 100% raw 3.16 det 2.83 hp 1.88 rgb 170,192,243
-after, as shipped (a candle's shadow crosses the patch)     [176,72,40,40] cov 100% raw 7.58 det 6.54 hp 3.85 rgb 167,188,239
-sig.py (40 px windows, medians):
+== fix 4: top coat sigma (sigp.py, laptop crop top patch 176,72 40x40, luma /255; raw is the acceptance figure) ==
+before                                      [176,72,40,40] cov 100% raw 2.28 det 1.89 hp 1.14 rgb 187,198,244
+after, texture only (candle shadows off)    [176,72,40,40] cov 100% raw 3.35 det 3.14 hp 2.37 rgb 166,190,243
+after, as shipped (a candle shadow crosses) [176,72,40,40] cov 100% raw 8.55 det 7.60 hp 4.34 rgb 163,187,239
+merged, as shipped                          [176,72,40,40] cov 99% raw 8.01 det 6.86 hp 4.17 rgb 171,189,239
+sig.py top/upper medians (40 px windows):
   before    top n= 29 raw med 2.21 | detrended med 1.91 max 7.24 | highpass med 1.46 | L 199  e.g. win@168,64
   before  upper n= 23 raw med 4.65 | detrended med 3.13 max 3.85 | highpass med 2.20 | L 150  e.g. win@264,212
-noshadow    top n= 28 raw med 3.65 | detrended med 3.26 max 5.71 | highpass med 1.88 | L 191  e.g. win@176,64
+noshadow    top n= 29 raw med 3.93 | detrended med 3.60 max 7.28 | highpass med 2.37 | L 189  e.g. win@168,64
 noshadow  upper n= 23 raw med 4.84 | detrended med 3.21 max 3.94 | highpass med 2.29 | L 151  e.g. win@272,212
-   after    top n= 27 raw med 6.85 | detrended med 6.31 max 8.45 | highpass med 3.51 | L 190  e.g. win@168,80
+   after    top n= 29 raw med 7.88 | detrended med 7.20 max 9.19 | highpass med 4.02 | L 188  e.g. win@168,80
    after  upper n= 23 raw med 4.84 | detrended med 3.21 max 3.94 | highpass med 2.29 | L 151  e.g. win@272,212
-cocoa (sigp.py patch 176,72 40x40, then sig.py top medians):
-before            [176,72,40,40] cov 100% raw 3.21 det 2.96 hp 1.63 rgb 122,61,41
-after, texture only [176,72,40,40] cov 100% raw 4.37 det 3.75 hp 3.08 rgb 106,59,40
-after, as shipped  [176,72,40,40] cov 100% raw 5.58 det 4.78 hp 3.34 rgb 104,57,39
-  before    top n= 32 raw med 3.06 | detrended med 2.89 max 8.10 | highpass med 1.91 | L 71  e.g. win@104,88
-noshadow    top n= 31 raw med 4.05 | detrended med 3.59 max 8.47 | highpass med 2.95 | L 66  e.g. win@104,88
-   after    top n= 31 raw med 4.97 | detrended med 4.56 max 8.48 | highpass med 3.24 | L 65  e.g. win@104,88
+cocoa (same patch):
+before                                      [176,72,40,40] cov 100% raw 3.21 det 2.96 hp 1.63 rgb 122,61,41
+after, texture only                         [176,72,40,40] cov 100% raw 4.34 det 3.82 hp 3.12 rgb 103,58,40
+after, as shipped                           [176,72,40,40] cov 100% raw 5.68 det 4.97 hp 3.38 rgb 101,57,39
+merged, as shipped                          [176,72,40,40] cov 100% raw 5.62 det 4.74 hp 3.30 rgb 108,58,39
 
-== fix 3: the top centre with / without the flame light (NOPOOL=1 zeroes the flames' intensities) ==
--- top-surface [570,570,60,60] (the top's centre in that frame)
-  before, flames:    [570,570,60,60] rgb 184,197,245 hue 227.1 sat 0.247 val 245
-  before, no flames: [570,570,60,60] rgb 158,188,245 hue 219.2 sat 0.352 val 245
-  after, flames:     [570,570,60,60] rgb 162,188,243 hue 220.5 sat 0.335 val 243
-  after, no flames:  [570,570,60,60] rgb 157,187,243 hue 219.2 sat 0.357 val 243
--- sockets-front [786,338,60,40] (the top's centre in that frame)
-  before, flames:    [786,338,60,40] rgb 184,196,244 hue 227.6 sat 0.245 val 244
-  before, no flames: [786,338,60,40] rgb 158,187,244 hue 219.6 sat 0.350 val 244
-  after, flames:     [786,338,60,40] rgb 163,189,244 hue 220.9 sat 0.330 val 244
-  after, no flames:  [786,338,60,40] rgb 158,187,244 hue 219.6 sat 0.350 val 244
--- hero-close [560,260,60,30] (the top's centre in that frame)
-  before, flames:    [560,260,60,30] rgb 185,197,243 hue 227.2 sat 0.240 val 243
-  before, no flames: [560,260,60,30] rgb 158,188,243 hue 219.0 sat 0.350 val 243
-  after, flames:     [560,260,60,30] rgb 165,191,244 hue 220.4 sat 0.325 val 244
-  after, no flames:  [560,260,60,30] rgb 160,189,244 hue 219.1 sat 0.346 val 244
--- the side coat's hue: hero-close [300,560 40x60]
-  after: [300,560,40,60] rgb 162,189,244 hue 220.5 sat 0.335 val 244
+== fix 3: the top's centre with / without the flames' light (rgb.py) ==
+-- top-surface [570,570,60,60]
+  before  flames [570,570,60,60] rgb 184,197,245 hue 227.1 sat 0.247 val 245
+  before  off    [570,570,60,60] rgb 158,188,245 hue 219.2 sat 0.352 val 245
+  after   flames [570,570,60,60] rgb 160,187,243 hue 220.2 sat 0.342 val 243
+  after   off    [570,570,60,60] rgb 156,186,243 hue 219.2 sat 0.358 val 243
+  merged  flames [570,570,60,60] rgb 164,189,243 hue 221.2 sat 0.326 val 243
+  merged  off    [570,570,60,60] rgb 156,186,243 hue 219.2 sat 0.358 val 243
+-- sockets-front [786,338,60,40]
+  before  flames [786,338,60,40] rgb 184,196,244 hue 227.6 sat 0.245 val 244
+  before  off    [786,338,60,40] rgb 158,187,244 hue 219.6 sat 0.350 val 244
+  after   flames [786,338,60,40] rgb 162,188,243 hue 220.5 sat 0.336 val 243
+  after   off    [786,338,60,40] rgb 158,187,243 hue 219.6 sat 0.351 val 243
+  merged  flames [786,338,60,40] rgb 165,189,243 hue 221.4 sat 0.323 val 243
+  merged  off    [786,338,60,40] rgb 158,187,243 hue 219.6 sat 0.351 val 243
+-- hero-close [560,260,60,30]
+  before  flames [560,260,60,30] rgb 185,197,243 hue 227.2 sat 0.240 val 243
+  before  off    [560,260,60,30] rgb 158,188,243 hue 219.0 sat 0.350 val 243
+  after   flames [560,260,60,30] rgb 164,190,244 hue 220.0 sat 0.330 val 244
+  after   off    [560,260,60,30] rgb 160,189,244 hue 219.1 sat 0.345 val 244
+  merged  flames [560,260,60,30] rgb 167,192,244 hue 221.0 sat 0.315 val 244
+  merged  off    [560,260,60,30] rgb 160,189,244 hue 219.1 sat 0.345 val 244
+-- the side coat (hero-close 300,560 40x60): [300,560,40,60] rgb 162,189,244 hue 220.5 sat 0.335 val 244
 
-== fix 3: the pool's falloff (falloff.py: median R lift, flames on - off, in rings round a candle's axis, top-surface) ==
-before, lower-left candle: 0.5 cm  13.0 | 1.0 cm  20.0 | 1.5 cm  19.0 | 2.0 cm  18.0 | 2.5 cm  18.0 | 3.0 cm  19.0 | 4.0 cm  19.0 | 5.0 cm  20.0
-after,  lower-left candle: 0.5 cm  24.0 | 1.0 cm  28.0 | 1.5 cm  24.0 | 2.0 cm  16.0 | 2.5 cm  11.0 | 3.0 cm  10.0 | 4.0 cm   5.0 | 5.0 cm   6.0
-after,  right candle:      0.5 cm  29.0 | 1.0 cm  29.0 | 1.5 cm  24.0 | 2.0 cm  18.0 | 2.5 cm  13.0 | 3.0 cm  10.0 | 4.0 cm   7.0 | 5.0 cm   7.0
+== fix 3: the pool's falloff (falloff.py: median red lift, flames on - off, rings round a candle's axis, top-surface) ==
+before  lower-left candle: 0.5 cm  13.0 | 1.0 cm  20.0 | 1.5 cm  19.0 | 2.0 cm  18.0 | 2.5 cm  18.0 | 3.0 cm  19.0 | 4.0 cm  19.0 | 5.0 cm  20.0
+after   lower-left candle: 0.5 cm  16.0 | 1.0 cm  19.0 | 1.5 cm  16.0 | 2.0 cm  11.0 | 2.5 cm   8.0 | 3.0 cm   8.0 | 4.0 cm   4.0 | 5.0 cm   5.0
+after   right candle:      0.5 cm  19.0 | 1.0 cm  20.0 | 1.5 cm  16.0 | 2.0 cm  12.0 | 2.5 cm   9.0 | 3.0 cm   7.0 | 4.0 cm   5.0 | 5.0 cm   5.0
+merged  lower-left candle: 0.5 cm  29.0 | 1.0 cm  34.0 | 1.5 cm  29.0 | 2.0 cm  20.0 | 2.5 cm  15.0 | 3.0 cm  17.0 | 4.0 cm   9.0 | 5.0 cm   9.0
+merged  right candle:      0.5 cm  36.0 | 1.0 cm  37.0 | 1.5 cm  31.0 | 2.0 cm  23.0 | 2.5 cm  18.0 | 3.0 cm  14.0 | 4.0 cm  10.0 | 5.0 cm   9.0
 
-== fix 3: the candles' key shadows (laptop crop, luma of the shadow streak vs the coat beside it) ==
-finns2/vanilla-laptop-crop.png streak 190-210,104-110: 187.0  coat above 190-210,92-98: 189.3
-fin3/vanilla-laptop-crop.png streak 190-210,104-110: 171.7  coat above 190-210,92-98: 189.2
+== fix 3: the candles' key shadows at laptop (luma of a streak vs the coat just above it, laptop crop) ==
+finns4/vanilla-laptop-crop.png     streak (190-210,104-110) 184.5   coat above (190-210,92-98) 188.0
+fin5/vanilla-laptop-crop.png       streak (190-210,104-110) 167.9   coat above (190-210,92-98) 188.0
+mg3/vanilla-laptop-crop.png        streak (190-210,104-110) 172.4   coat above (190-210,92-98) 189.9

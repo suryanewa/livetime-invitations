@@ -300,7 +300,7 @@ macro, signed cocoa at 540 and phone only, and named the four fixes that would g
 Frames through the live stage from the re-judge's own `judge.mjs` (laptop crop, square 540, phone crop; the macros; the
 `NOPOOL=1` probe that zeroes the flames' intensities): `evidence/v1.6/cake-polish2/` (`final/`, `noflame/`, side-by-side
 `compare-*.webp` against the re-judge's frames, `compare-flame-lift-top-surface.webp` the flames' red lift ×6,
-`measurements.txt`, `perf.txt`).
+`merged-flames/` a trial merge with v1.6/integration's flames polish, `measurements.txt`, `perf.txt`).
 
 1. **Side rosettes: one rope round** (`spiralRosette`, `backMound`, `restOn`). The "terraced stacks of ridged sheets
    with jagged rims" were three things, not the star:
@@ -331,25 +331,28 @@ Frames through the live stage from the re-judge's own `judge.mjs` (laptop crop, 
 3. **The flames' light pools, and the candles throw the key's shadows** (`models/cakeShaders.ts`; the flame files
    untouched, their uniforms read by reference). The +27 R over the whole top was the gain-2 pool on the full inverse
    square plus the flames' broad light at full strength:
-   - `FLAME_POOL`: each candle's own halo, I/(d² + a²) × wrap × exp(−(r / 2 cm)²) with r from the candle's surface, gain 7,
-     through the other candles' spokes; on the top coat the flames' broad light (the loop's RE_Direct: three's lambert
-     and the food terms, scaled inside RE_Direct) answered at 0.4;
+   - `FLAME_POOL`: each candle's own halo, I/(d² + a²) × wrap × exp(−(r / 2 cm)²) with r from the candle's surface, gain
+     4.5, through the other candles' spokes; on the top coat the flames' broad light (the loop's RE_Direct: three's
+     lambert and the food terms, scaled inside RE_Direct) answered at 0.28. Calibrated against the flames polish's light
+     (FLAME_LIGHT_CAL 2.0, on v1.6/integration since this branch was cut) by a trial merge, not committed: at gain 7 /
+     broad 0.4 that merge put the centre at +10 R and the halos at +42–53 R;
    - `KEY_CANDLE_SHADOW`: each candle's soft shadow from the key's direction (captured in the key's own RE_Direct) on
      the top coat, analytic (the rig's 1024² map has ≈ 3.3 mm texels and a 5-texel filter: the 8 mm candles vanished in
      it; the rig is not this pass's): the key's diffuse takes 0.85 of it and, because the key is only ≈ 7 % of the top's
      light (zeroing it moved the top 164 → 151 R), the room light's window share 0.32, 1.5× softer; the penumbra opens
      0.2 per unit along the shadow.
-   Measured (`measurements.txt`): the top's centre 157–160 R with the flames off, 162–165 with them (+5 R; was 158 →
-   184–187), hue 220.4–220.9° (the side 220.5°; was 227°); the red lift round a candle +24–29 at 0.5–1 cm, +16–18 at
-   2 cm, +10 at 3 cm, +5–7 at 4–5 cm (was a flat +19–20); the shadow streak at laptop 172 against 189 beside it
-   (the same patch 187 with the shadows off).
+   Measured (`measurements.txt`, the top's centre in three frames; "merged" with the integration's flames): with the
+   flames off 156–160 R; with them 160–164 R on this branch, 164–167 R merged (+4 / +7 R; was +26–29, 184–187), hue
+   220.0–221.4° (the side 220.5°; was 227°). The red lift round a candle, merged: +29–37 at 0.5–1 cm, +20–23 at 2 cm,
+   +14–17 at 3 cm, +9–10 at 4–5 cm (this branch alone about half; was a flat +19–20 everywhere). A candle's shadow
+   streak at laptop: 168 against 188 beside it (merged 172 / 190; 184.5 with the shadows off).
 4. **The top's texture** (`cakeTopArcs`, `TOP_ARCS`). The water-ripple rings were the coat's colour streaks banded in r
    (noise in r × 45 and × 110), not the relief: the top's marks are now the spatula's passes on a turntable, two spirals
    (10 and 17 mm pitch) wandering ±0.35 pitch, cut into passes of uneven length with 58 % left smooth, each a narrow
    ridge with the cream it pushed aside, rising out of a ridge where the blade landed and ending in a lip where it was
    lifted (relief, colour), and isotropic hand-mixed colour between them. Laptop top patch (`sigp.py`, 176,72 40×40)
-   σ 3.16 with the candle shadows switched off in a measuring build (was 2.28), 7.58 as shipped (a candle's shadow
-   crosses the patch); cocoa 3.21 → 4.37 / 5.58. The pinholes smaller and fainter (0.15–0.5 mm, −16 %).
+   σ 3.35 with the candle shadows switched off in a measuring build (was 2.28), 8.55 as shipped (a candle's shadow
+   crosses the patch; 8.01 merged); cocoa 3.21 → 4.34 / 5.68. The pinholes smaller and fainter (0.15–0.5 mm, −16 %).
 5. **Pearls** (the optional item): a third of the shell-junction dragées left off (bottom 28 → 19, top 18 → 13), the
    rest ±10 % in size and up to a tenth of their radius off the junction; every pearl moves rigidly with the finish
    field (`deformRigid`: the bays' drop changed over a pearl's height at the column tops and stretched it into an
@@ -365,8 +368,8 @@ What the judge would still find, and why:
 - the rosettes at the silhouette are coils with parallel rope ridges; the one seen a little from behind shows its
   pearl's side folded by the droop, and the top tier's coils seen from above show their start inside;
 - on a few rosettes the start's pressed outer flank shows beside the tail, smooth where the tail flattened it;
-- the halos read a touch pink on the blue at square 540; the flames owner's intensity scales them (the centre stays
-  within +10 R up to about twice today's intensity);
+- the halos read a touch pink on the blue at square 540 with the integration's flames; any further change to the
+  flames' intensity scales them and the centre's lift with it (`FLAME_POOL` is the knob);
 - the candles' key shadows are analytic upright capsules (no flutes, no shadow from the flame) and soft smudges at macro;
 - where the two spirals cross, the top's passes read a little like contour lines at macro;
 - the macro-only list (crisper star ridges, sugar grain, a window reflection on cocoa, tassel beads, the smudge on
