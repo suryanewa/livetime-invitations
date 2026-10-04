@@ -395,6 +395,13 @@ export const FLAME_POOL = { gain: 1.0, wrap: 0.5, reach: 0.06, broad: 0.2 } as c
  */
 export const KEY_CANDLE_SHADOW = { soft0: 0.003, soft: 0.2, strength: 0.85, window: 0.32, windowSoft: 1.5 } as const;
 
+/**
+ * v1.6 polish 3 (fix 2): the coat's specular anti-aliasing (Tokuyoshi & Kaplanyan, "Improved Geometric
+ * Specular Antialiasing", 2019): the filter kernel's variance (1/2π for a pixel-wide Gaussian) and the
+ * clamp on the roughness it may add (α² + at most `kappa`).
+ */
+export const SPEC_AA = { sigma2: 0.15915494, kappa: 0.18 } as const;
+
 /** Thickness range of the packed `_FOOD` attribute (mm): scripts/masters/recipes/birthdayFinish.ts FOOD_THICK_MM. */
 export const FOOD_THICK_MM = 16;
 
@@ -442,7 +449,7 @@ export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodL
  * (× pitch); `relief` and `value` their height (× the coat's `wave`) and colour, `noise` the
  * hand-mixed mid-scale colour that replaced the old rings.
  */
-export const TOP_ARCS = { pitch: [0.05, 0.083], segMin: 0.9, segVar: 1.6, gaps: 0.58, lipLen: 0.012, drift: 0.35, relief: 1.0, value: 1.1, noise: 1.9 } as const;
+export const TOP_ARCS = { pitch: [0.05, 0.083], segMin: 0.9, segVar: 1.6, gaps: 0.58, lipLen: 0.012, drift: 0.35, relief: 1.0, value: 1.1, noise: 1.9, fade: [0.3, 0.5], aa: 1.0 } as const;
 
 const FOOD_NOISE = /* glsl */ `${CAKE_NOISE}
 vec3 cakeHash33(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.xxy + p.yxx) * p.zyx); }
@@ -453,7 +460,11 @@ vec3 cakeSaturate(vec3 c, float k) { float l = dot(c, vec3(0.2126, 0.7152, 0.072
 // aside beside it, rising out of the ridge where the blade landed and ending in the lip where it was
 // lifted. P in cake space (scene units, the cake's axis at x = z = 0). Returns the height (≈ ±1) and
 // in lip how much of it is a start or stop ridge.
-float cakeTopArcs(vec3 P, out float lip) {
+// v1.6 polish 3 (fix 2: "stitched leather"): prefiltered by the pixel's footprint w (scene units: x across
+// the spirals, y along them): a ridge or lip narrower than the pixel is widened to it, its area kept
+// (σ' = √(σ² + w²), height × σ/σ'), so its slope falls with the pixel and its highlight cannot break
+// into evenly spaced specks; where a pass's pitch nears the pixel the marks fade to their mean.
+float cakeTopArcs(vec3 P, vec2 w, out float lip) {
   float rr = length(P.xz), th = atan(P.z, P.x);
   float h = 0.0;
   lip = 0.0;
@@ -473,13 +484,18 @@ float cakeTopArcs(vec3 P, out float lip) {
     float segL = ${(TOP_ARCS.segMin + TOP_ARCS.segVar / 2).toFixed(3)};
     vec3 rs = cakeHash33(vec3(m, 2.9, 11.3 + 5.0 * fk));
     if (rs.x < ${TOP_ARCS.gaps.toFixed(3)}) continue;
-    float amp = 0.3 + 0.7 * rs.y * rs.y;
+    float pf = ${TOP_ARCS.aa.toFixed(3)} * w.x / pitch;
+    float amp = (0.3 + 0.7 * rs.y * rs.y) * (1.0 - smoothstep(${TOP_ARCS.fade[0].toFixed(3)}, ${TOP_ARCS.fade[1].toFixed(3)}, pf));
+    if (amp <= 0.0) continue;
     float wu = ${TOP_ARCS.lipLen.toFixed(4)} / max(rr * segL, 1e-3);
+    float pu = ${TOP_ARCS.aa.toFixed(3)} * w.y / max(rr * segL, 1e-3);
     float ends = smoothstep(0.0, wu, u) * smoothstep(0.0, wu, 1.0 - u);
     float env = smoothstep(0.0, 4.0 * wu, u) * (1.0 - smoothstep(1.0 - 6.0 * wu, 1.0 - 1.5 * wu, u));
-    float ridge = exp(-pow((f - 0.5) / 0.07, 2.0)) - 0.45 * exp(-pow((f - 0.64) / 0.1, 2.0));
-    float band = exp(-pow((f - 0.5) / 0.22, 2.0)) * ends;
-    float st = exp(-pow((u - 1.5 * wu) / wu, 2.0)) * band, sp = exp(-pow((u - 1.0 + 2.0 * wu) / (1.3 * wu), 2.0)) * band;
+    float sR = length(vec2(0.07, pf)), sV = length(vec2(0.1, pf)), sB = length(vec2(0.22, pf));
+    float ridge = (0.07 / sR) * exp(-pow((f - 0.5) / sR, 2.0)) - 0.45 * (0.1 / sV) * exp(-pow((f - 0.64) / sV, 2.0));
+    float band = (0.22 / sB) * exp(-pow((f - 0.5) / sB, 2.0)) * ends;
+    float wS = length(vec2(wu, pu)), wP = length(vec2(1.3 * wu, pu));
+    float st = (wu / wS) * exp(-pow((u - 1.5 * wu) / wS, 2.0)) * band, sp = (1.3 * wu / wP) * exp(-pow((u - 1.0 + 2.0 * wu) / wP, 2.0)) * band;
     h += amp * (ridge * env + 0.7 * st + 1.2 * sp);
     lip += amp * (st + sp);
   }
@@ -605,8 +621,10 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
     // v1.6 polish 2 (fix 4): the top's marks are broken spiral arcs, not banded rings (the old r-banded
     // streaks read as water ripples); the hand-mixed colour between them is isotropic, mid-scale.
     float sT = 0.0;
+    // (The pixel's footprint on the top, across the spirals (in r) and along them; here, in uniform flow.)
+    vec2 arcW = vec2(length(vec2(dFdx(rr), dFdy(rr))), max(length(dFdx(P)), length(dFdy(P))));
     if (onTop > 0.0) {
-      foodArcs = cakeTopArcs(P, foodArcLip);
+      foodArcs = cakeTopArcs(P, arcW, foodArcLip);
       sT = ${f(TOP_ARCS.value)} * foodArcs + ${f(TOP_ARCS.noise)} * ((cakeNoise(vec3(P.x * 16.0, P.z * 16.0, P.y * 16.0 + warpT)) - 0.5) + 0.5 * (cakeNoise(P * 37.0 + 5.1) - 0.5));
     }
     float blot = (cakeNoise(P * 6.0 + 11.0) - 0.5) + 0.5 * (cakeNoise(P * 14.0 + 23.0) - 0.5);
@@ -675,6 +693,15 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
   }
   // A pinhole is a pit (≈ 0.3 mm deep).
   ${coat && look.pinholes > 0 ? 'if (foodPin > 0.0) normal = cakeBump(-vViewPosition, normal, -0.0015 * foodPin, faceDirection);' : ''}
+  ${coat ? `// v1.6 polish 3 (fix 2): specular anti-aliasing (Tokuyoshi & Kaplanyan's projected-space NDF
+  // filtering): the bumped normal's spread over the pixel widens the lobe (three's own term sees only the
+  // mesh's normal), so relief finer than the pixel reads as satin, not as specks.
+  {
+    vec3 dnx = dFdx(normal), dny = dFdy(normal);
+    float kr2 = min(2.0 * ${f(SPEC_AA.sigma2)} * (dot(dnx, dnx) + dot(dny, dny)), ${f(SPEC_AA.kappa)});
+    float r2 = roughnessFactor * roughnessFactor;
+    roughnessFactor = sqrt(sqrt(min(r2 * r2 + kr2, 1.0)));
+  }` : ''}
   // The scattered light sees a softened normal (relief shows in the specular, not in the diffuse).
   foodDiffN = normalize(mix(normal, normalize(vNormal) * faceDirection, ${f(look.diffSoft)}));
   ${glint ? `foodGlintP = vFoodP / ${f(cell)};
