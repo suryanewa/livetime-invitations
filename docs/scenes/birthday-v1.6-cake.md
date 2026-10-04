@@ -291,7 +291,11 @@ What the judge would still find, and why:
 
 Tests: `tests/birthdayPiping.test.ts` (8; the dot test now asks for peaks leaning their own ways, ≥ 3 quadrants over 12
 seeds), `tests/birthday.test.ts` 34, `tests/masters.test.ts` 5, `tests/world-scale.test.ts` 7, `tests/bin.test.ts` 18,
-`tests/browser/birthday.spec.ts` 7, `pnpm typecheck` clean. Posters still need the integrator's regeneration.
+`tests/browser/birthday.spec.ts` 7 (also 7 on the trial merge with v1.6/integration, with `tests/birthday.test.ts` 34),
+`pnpm typecheck` clean. The posters on v1.6/integration were captured before this round: the integrator regenerates them.
+
+Not in this round: the shared rig's key is still frontal-left at 40° and its shadow map still cannot resolve a candle
+(the analytic shadow stands in on the top coat only); `MASTER.cakeRadius` was not re-measured down (0.2 mm of scan). Posters still need the integrator's regeneration.
 
 ## Polish round 2 (2026-10-03: the re-judge's four fixes)
 
@@ -377,4 +381,8 @@ What the judge would still find, and why:
 
 Tests: `tests/birthdayPiping.test.ts` 9 (new: the side rosette's kiss flush in the eye, the coil inside its radius),
 `tests/birthday.test.ts` 34, `tests/masters.test.ts` 7, `tests/world-scale.test.ts` 7, `tests/bin.test.ts` 18,
-`tests/browser/birthday.spec.ts` 7, `pnpm typecheck` clean.
+`tests/browser/birthday.spec.ts` 7 (also 7 on the trial merge with v1.6/integration, with `tests/birthday.test.ts` 34),
+`pnpm typecheck` clean. The posters on v1.6/integration were captured before this round: the integrator regenerates them.
+
+Not in this round: the shared rig's key is still frontal-left at 40° and its shadow map still cannot resolve a candle
+(the analytic shadow stands in on the top coat only); `MASTER.cakeRadius` was not re-measured down (0.2 mm of scan).
