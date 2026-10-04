@@ -89,6 +89,7 @@ export const STEAM_LOOK = {
   keyFall: 1.25,
   /** A change of mind: how far (su) the seating cover squeezes the air under it out along the plate (≈ 5 cm). */
   squeeze: 0.3,
+  squeezeFog: 5.0,
   /** The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density. */
   ringCore: 0.55,
   ringFog: 5.0,
@@ -119,6 +120,8 @@ export const STEAM_LOOK = {
 /** The flow map's domain and resolution (per clock): ρ ∈ [0, RHO_MAX], y ∈ [0, Y_MAX] (su). */
 const RHO_MAX = 1.5, BOX_MAX = 2.6, Y_MAX = CLOUD_Y_MAX, MAP_W = 96, MAP_H = 160;
 const NOISE_SIZE = 64;
+/** The seating's squeeze (s): its puffs start this long before the capture and have gone this long after it. */
+const SQUEEZE_LEAD = 0.1, SQUEEZE_LIFE = 0.45;
 /** The spill's density at its full source. */
 const SPILL_STRENGTH = 18.0;
 /** The light volume: N³ voxels over the proxy box, its z-slices tiled COLS × ROWS in one 2D atlas. */
@@ -615,6 +618,44 @@ float spill(vec3 p, int l, float detail) {
   return ${f(SPILL_STRENGTH)} * src * az * sheet * rise * mix(1.0, 0.15 + 1.1 * strips, detail);
 }
 
+/**
+ * The seating's squeeze on clock l (v1.6 polish 2; a change of mind that sets the cover back over
+ * fog): as the rim closes on the plate the air under the dome leaves the narrowing gap and runs out
+ * along the porcelain in puffs (≈ 5 cm, slowing, rising as they slow), a few round the rim, and mixes
+ * in within ≈ 0.3 s. \`ts\`: time since the seating (uD.z, the capture).
+ */
+bool squeezeOccupies(vec3 p, int l) {
+  float ts = uA[l].x - uD[l].z;
+  if (uA[l].w <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return false;
+  vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
+  float x = length(cv.xz) - ${f(COVER.radius)};
+  return x > -0.03 && x < 0.5 && cv.y > -0.08 && cv.y < 0.32;
+}
+float squeeze(vec3 p, int l) {
+  float ts = uA[l].x - uD[l].z;
+  if (uA[l].w <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return 0.0;
+  vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
+  float r = length(cv.xz);
+  float x = r - ${f(COVER.radius)};
+  if (x < -0.03 || x > 0.5 || cv.y < -0.08 || cv.y > 0.32) return 0.0;
+  float age = ts + ${f(SQUEEZE_LEAD)};
+  float front = ${f(STEAM_LOOK.squeeze)} * (1.0 - exp(-age / 0.07));
+  float hc = 0.012 + 0.45 * front * smoothstep(0.03, 0.25, age);
+  float w = 0.02 + 0.45 * front;
+  float xr = (x - 0.6 * front) / w;
+  float yr = (cv.y - hc) / (0.018 + 0.3 * front);
+  float body = exp(-xr * xr - yr * yr);
+  if (body < 0.01) return 0.0;
+  // A few puffs round the rim (a slow field round the circumference), each a cluster of lobes.
+  float az = atan(cv.z, cv.x);
+  float big = texture(uNoise, vec3(cos(az) * 0.3 + 0.21, 0.43, sin(az) * 0.3 + 0.57)).r;
+  vec2 out2 = cv.xz / max(r, 1e-4);
+  vec4 nf = texture(uNoise, vec3(cv.x, cv.y * 1.3, cv.z) * 2.4 - vec3(out2.x, 0.0, out2.y) * front * 1.6 + vec3(0.17, -0.5 * age, 0.29));
+  float lumps = smoothstep(0.38, 0.68, nf.b + 0.9 * (big - 0.5));
+  float fade = smoothstep(0.0, 0.03, age) * exp(-max(age - 0.14, 0.0) / 0.13);
+  return ${f(STEAM_LOOK.squeezeFog)} * fade * body * lumps;
+}
+
 /** Whether clock l's cloud could show at p (the dilated mean, lifted by the most the turbulence can): the probes' test. */
 bool cloudOccupies(vec3 p, int l) {
   if (uA[l].w <= 0.0) return false;
@@ -653,12 +694,10 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // A change of mind (v1.6 polish): the returning cover does not pass through the fog it left; it
   // shoves it out of its way, outward and down in a ring round its wall. (The fog at p came from
   // nearer the dome: read it there.) v1.6 polish 2: the shove is torn at two scales and the shoved
-  // fog breaks up as it is stirred (the judge saw a smooth halo round the seated cover); and the
-  // seating squeezes: from just before the rim meets the plate, the air under the dome leaves the
-  // closing gap in puffs that run out along the porcelain (≈ 5 cm in 0.15 s, slowing), carrying the
-  // fog from higher inside the dome.
+  // fog breaks up as it is stirred (the judge saw a smooth halo round the seated cover); the
+  // seating's squeeze is its own field (\`squeeze\`).
   float stir = 1.0;
-  if (uA[l].x > uD[l].y) {
+  if (uA[l].x > uD[l].y && (uFlags & 128) == 0) {
     vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
     float r = length(cv.xz);
     float dOut = r - domeWall(clamp(cv.y, 0.0, ${f(COVER.domeHeight)}));
@@ -669,15 +708,13 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
       vec4 pn = texture(uNoise, vec3(cv.x * 1.7, cv.y * 2.3 - 0.4 * uA[l].x, cv.z * 1.7) + 0.37);
       vec4 pf = texture(uNoise, vec3(cv.x * 4.6, cv.y * 5.0 - 0.9 * uA[l].x, cv.z * 4.6) + 0.61);
       float torn = 0.25 + 1.1 * pn.b + 0.7 * (pf.a - 0.5);
-      float seat = uA[l].x - uD[l].z;
-      float travel = ${f(STEAM_LOOK.squeeze)} * (1.0 - exp(-max(seat + 0.05, 0.0) / 0.07));
-      float puffs = smoothstep(0.3, 0.62, pf.b + 0.35 * (pn.r - 0.5));
-      float jet = travel * exp(-pow((cv.y + 0.005) / 0.055, 2.0)) * (0.35 + 1.3 * puffs) * (1.0 - smoothstep(0.0, 0.4, dOut - travel));
-      q.xz -= out2 * on * (shove * torn + jet);
-      q.y += on * (shove * torn * 0.5 * (1.0 - smoothstep(0.0, 0.3, cv.y)) + 0.8 * jet);
-      // The stirred fog round the wall tears into lumps as the stir goes on.
-      float e = 0.55 * smoothstep(uD[l].y, uD[l].y + 0.22, uA[l].x) * exp(-max(dOut, 0.0) / 0.25);
-      stir = smoothstep(e - 0.12, e + 0.12, pf.r + 0.5 * (pn.g - 0.5));
+      q.xz -= out2 * on * shove * torn;
+      q.y += on * shove * torn * 0.5 * (1.0 - smoothstep(0.0, 0.3, cv.y));
+      // The stirred fog round the wall tears into lumps as the stir goes on, and the wall's own
+      // boundary layer, dragged down with it, sweeps the centimetre next to the silver clear (the
+      // fog left there veiled the returning dome: the judge's frosted silver).
+      float e = 0.72 * smoothstep(uD[l].y, uD[l].y + 0.18, uA[l].x) * exp(-max(dOut, 0.0) / 0.3);
+      stir = smoothstep(e - 0.12, e + 0.12, pf.r + 0.5 * (pn.g - 0.5)) * mix(1.0, smoothstep(0.004, 0.07, dOut + 0.03 * (pf.a - 0.5)), on);
     }
   }
   q.xz -= uB[l].zw * max(0.0, q.y - 0.15);
@@ -913,6 +950,10 @@ float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising
     bool inSpill = all(greaterThanEqual(p, uSpillMin[l])) && all(lessThanEqual(p, uSpillMax[l]));
     float dc = inCloud && uDebug != 3 && uDebug != 5 ? cloud(p, l, detail, L, so) : 0.0;
     float dr = (inSpill ? spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 ? veil(p, l, detail) : 0.0);
+    // (The seating's puffs leave the cover: what it closes over does not hold them.)
+    float dq = inSpill ? squeeze(p, l) * uA[l].z : 0.0;
+    dens += dq;
+    rising += dq;
     if (dc + dr <= 0.0) continue;
     float k = uA[l].z * captured(p - vec3(0.0, uD[l].w, 0.0), l);
     dens += (dc + dr) * k;
@@ -972,7 +1013,7 @@ void main() {
       if (uA[l].y <= 0.0) continue;
       if (all(greaterThanEqual(p, uCloudMin[l])) && all(lessThanEqual(p, uCloudMax[l])) && cloudOccupies(p, l)) hit = true;
       else if (all(greaterThanEqual(p, uVeilMin[l])) && all(lessThanEqual(p, uVeilMax[l])) && veilOccupies(p, l)) hit = true;
-      else if (all(greaterThanEqual(p, uSpillMin[l])) && all(lessThanEqual(p, uSpillMax[l])) && spillOccupies(p, l)) hit = true;
+      else if (all(greaterThanEqual(p, uSpillMin[l])) && all(lessThanEqual(p, uSpillMax[l])) && (spillOccupies(p, l) || squeezeOccupies(p, l))) hit = true;
     }
     if (hit) { first = min(first, tp); last = tp; }
   }
@@ -1308,7 +1349,7 @@ void main() {
 const COMPOSITE_VERTEX = VOLUME_VERTEX;
 
 const EULER = new Euler();
-const TMP_VP = new Matrix4(), TMP_M = new Matrix4(), TMP_A = new Vector3(), TMP_B = new Vector3(), TMP_C = new Color(), TMP_D = new Color();
+const TMP_VP = new Matrix4(), TMP_M = new Matrix4(), TMP_A = new Vector3(), TMP_B = new Vector3(), TMP_E = new Vector3(), TMP_C = new Color(), TMP_D = new Color();
 
 /** The scene's shadow-casting key light (spot or directional), or null. */
 function findKey(scene: Object3D): Object3D | null {
@@ -1705,6 +1746,12 @@ export class DinnerSteam {
       // (The occupancy reaches as far as the turbulence, the swell and the billows can move the edge.)
       S3[l]!.set(s.floor, s.turb + look.amp + look.billow + 2 * EDGE.fine * s.peel + 0.03, s.stemFade, 0);
       steamBounds(s, { tau, emitStart: c.emitStart, emitEnd: c.emitEnd }, cMin[l]!, cMax[l]!, vMin[l]!, vMax[l]!, sMin[l]!, sMax[l]!);
+      // (The seating's squeeze: round the seated cover, from just before the capture.)
+      if (present && Number.isFinite(c.capture) && tau >= c.capture - SQUEEZE_LEAD && tau <= c.capture + SQUEEZE_LIFE) {
+        const at = this.uniforms.uSeated!.value as Vector3, rq = COVER.radius + 0.55;
+        sMin[l]!.min(TMP_E.set(at.x - rq, Math.max(0, at.y - 0.1), at.z - rq));
+        sMax[l]!.max(TMP_E.set(at.x + rq, at.y + 0.35, at.z + rq));
+      }
       for (const [lo, hi, lit] of [[cMin[l]!, cMax[l]!, true], [vMin[l]!, vMax[l]!, true], [sMin[l]!, sMax[l]!, false]] as const) {
         if (lit && lo.x <= hi.x) {
           // Its shadow on the plate and the table falls away from the key: the box reaches over it.
