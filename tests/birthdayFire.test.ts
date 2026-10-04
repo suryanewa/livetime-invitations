@@ -338,6 +338,12 @@ describe('Birthday fire: the smoke', () => {
       expect(maxH).toBeLessThan(2);
       expect(minW).toBeLessThan(0.62);
       expect(maxBend).toBeGreaterThan(0.3);
+      // v1.6 polish 2: off the wick it is a dim wisp within one frame: what the shader draws of it,
+      // its output × (1 − cool)^5, under a third 8 ms after lift-off and under 1 % at 16 ms (re-judge:
+      // a golden sliver with a white core drifted for 2–3 frames).
+      const seen = (ms: number) => { const f = flameState(i, b.lift + ms / 1000, 'accept'); return f.intensity * (1 - f.cool) ** 5; };
+      expect(seen(8)).toBeLessThan(0.3);
+      expect(seen(16)).toBeLessThan(0.01);
       // Gone within 50 ms of lift-off (its light and its soot), never drifting off as a whole flame.
       const at50 = flameState(i, b.lift + 0.05, 'accept');
       expect(at50.intensity).toBeLessThan(0.02);

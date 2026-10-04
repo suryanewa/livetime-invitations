@@ -453,9 +453,13 @@ const FLAME_FRAGMENT = /* glsl */ `
     }
     // A flame cut off from its fuel (the breath's) fades much faster than it cools (soot's
     // radiance falls roughly as T^5 and its soot burns out): amber, then gone.
+    // (v1.6 polish 2: as T^5 — × (1 − cool)^5 — so a flame that has left its wick is a dim orange
+    // wisp within one frame: ≈ 5 % of its light 12 ms after lift-off, 0.4 % at 16 ms; re-judge: a
+    // detached golden sliver with a white core drifted for 2–3 frames under (1 − cool)³. The blue
+    // sheath is added after the camera's response, as light only: below.)
     float fade = 1.0 - uState.y;
-    // (v1.6 polish 2: the blue sheath is added after the camera's response, as light only: below.)
-    vec3 Lx = Ls * fade * fade * fade * uExposure;
+    float fade2 = fade * fade;
+    vec3 Lx = Ls * fade2 * fade2 * fade * uExposure;
     // A camera's response, per channel: an overexposed blackbody saturates red, then green, then
     // (a sensor's channels overlap: a little of all its light reaches each) blue: orange, yellow, a
     // cream-white core, as in photographs (a hue-preserving tone curve turns it pink).
