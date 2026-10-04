@@ -109,11 +109,18 @@ export const STEAM_LOOK = {
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
    */
-  steps: { dense: 22, thin: 18, veil: 13 },
-  /** The temporal resolve: the new frame's share of each pixel (≈ the last 7 frames averaged). */
-  history: 0.15,
+  steps: { dense: 18, thin: 14, veil: 12 },
+  /**
+   * The temporal resolve: the new frame's share of a marched pixel (v1.6 polish 2: the march is a
+   * checkerboard, each pixel marched every other frame), and of a pixel filled from its marched
+   * neighbours on the frames between.
+   */
+  history: 0.22,
+  fillBlend: 0.1,
   /** The march's pixel budget: half the drawing buffer a side, at most this many pixels. */
-  marchPixels: 400_000,
+  marchPixels: 360_000,
+  /** (v1.6 polish 2) The budget once only thin steam shows (the cloud past its fog, the veil). */
+  thinPixels: 200_000,
   lowShare: 0.6,
 } as const;
 
@@ -123,11 +130,11 @@ const NOISE_SIZE = 64;
 /** The seating's squeeze (s): its puffs start this long before the capture and have gone this long after it. */
 const SQUEEZE_LEAD = 0.1, SQUEEZE_LIFE = 0.45;
 /** The spill's density at its full source. */
-const SPILL_STRENGTH = 18.0;
+const SPILL_STRENGTH = 10.0;
 /** The light volume: N³ voxels over the proxy box, its z-slices tiled COLS × ROWS in one 2D atlas. */
 const LIGHT_N = 24, LIGHT_COLS = 6, LIGHT_ROWS = 4;
 /** Probes of the march's occupancy along each ray. */
-const PROBES = 6;
+const PROBES = 5;
 
 const f = (x: number) => x.toFixed(5);
 /** A colour scaled to unit (Rec. 709) luminance, as a vector. */
@@ -431,8 +438,11 @@ uniform int uDebug;
 uniform int uFlags;
 /** The jitter's frame (from the steam clock). */
 uniform float uFrame;
-/** Whether the march bisects where rays enter the steam (the young cloud's narrow edge). */
-uniform bool uRefine;
+/** (v1.6 polish 2) The checkerboard: march only the pixels of this parity this frame (-1: all). */
+uniform int uParity;
+/** The march's full resolution (pixels), and the local inverse of the view-projection (rays from pixels). */
+uniform vec2 uMarchSize;
+uniform mat4 uInvVPL;
 uniform vec3 uKeyDir;
 uniform float uG;
 uniform float uDomeShade;
@@ -589,11 +599,11 @@ float spill(vec3 p, int l, float detail) {
   float r = length(cv.xz);
   float d = r - domeWall(y);
   // (v1.6 polish 2.) The gap's outflow is a thin sheet: it leaves the gap, wraps round the rim's lip
-  // (bulging ≈ 8 mm out of it) and climbs the hot wall only a little way before it mixes in, 3–8 mm
+  // (bulging ≈ 1 cm out of it) and climbs the hot wall only a little way before it mixes in, 3–6 mm
   // thick and torn into strips: no lump at the rim, no wash over the silver's face (the judge).
   float curl = 0.06 * exp(-pow((y - 0.01) / 0.06, 2.0));
   float off = 0.004 + curl;
-  float thick = 0.007 + 0.025 * max(y, 0.0);
+  float thick = 0.016 + 0.03 * max(y, 0.0);
   if (d < -0.004 || d > off + 3.0 * thick + 0.02) return 0.0;
   float c = dot(cv.xz / max(r, 1e-4), vec2(${f(RAISED_DIR.x)}, ${f(RAISED_DIR.y)}));
   float ang = acos(clamp(c, -1.0, 1.0));
@@ -769,21 +779,28 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // fading out over ≈ 1.3 cm. All in material space (carried with the air), the outer layer sliding
   // slowly along the wall against the inner; its coordinates are turned off the noise's tiling axes.
   float wisp = 0.0, fineD = 0.0;
-  if (H.x > 0.0 && detail > 0.0 && dEff > -(2.6 * H.x + 4.0 * H.x + 0.01) && dEff < 2.6 * H.x + E.y) {
+  // (Only where the layer can reach the boundary: its lobes move it ±1.8 H.x, its curls ±1.1 H.x,
+  // its sheets reach 2.5 H.x out; the finer fetch only where the lobes leave the boundary close.)
+  if ((uFlags & 256) == 0 && H.x > 0.0 && detail > 0.0 && dEff > -5.5 * H.x - 0.005 && dEff < 3.0 * H.x + E.y) {
     float outer = sat(0.5 - dw / 0.08);
     vec3 Xp = mat3(0.80, 0.36, -0.48, -0.20, 0.91, 0.36, 0.56, -0.20, 0.80) * X;
     vec3 Xf = Xp * 4.6 + (nb.rgb - 0.5) * 0.9 + vec3(0.37, -0.6 * H.y * outer * (tau - 0.27) + 0.21, 0.53 + 0.3 * tau);
     vec4 nf = texture(uNoise, Xf);
-    vec4 ng = texture(uNoise, Xf * 2.3 + (nf.rgb - 0.5) * 1.2 + vec3(0.11, 0.0, 0.29));
-    // (The shade below reads the boundary without these: the face keeps its silky fog.)
-    fineD = H.x * (1.8 * (nf.a - 0.6) * 2.0 + 1.3 * (ng.a - 0.6) * 2.0);
+    fineD = H.x * 1.8 * (nf.a - 0.6) * 2.0;
+    float near = dEff + fineD;
+    float fr = 0.5;
+    if ((uFlags & 8192) == 0 && near > -3.6 * H.x - 0.005 && near < 1.1 * H.x + E.y) {
+      vec4 ng = texture(uNoise, Xf * 2.3 + (nf.rgb - 0.5) * 1.2 + vec3(0.11, 0.0, 0.29));
+      fineD += H.x * 1.3 * (ng.a - 0.6) * 2.0;
+      fr = ng.r;
+    }
     // Here and there the layer tears off in thin curling sheets (the zero set of a gradient noise,
-    // folded by a finer one), translucent, out to ≈ 1.3 cm.
+    // folded by a finer one), translucent, out to ≈ 2.5 H.x (≈ 1 cm).
     float wd = -(dEff + fineD);
-    if (wd > -E.y && wd < 4.0 * H.x) {
-      float fold = (nf.g - 0.5) * 2.0 + 0.45 * (ng.r - 0.5) * 2.0;
+    if (wd > -E.y && wd < 2.5 * H.x) {
+      float fold = (nf.g - 0.5) * 2.0 + 0.45 * (fr - 0.5) * 2.0;
       float sheetW = smoothstep(0.8, 0.97, 1.0 - fold * fold) * smoothstep(0.55, 0.75, nb.a + 0.4 * (nf.b - 0.5));
-      wisp = ${f(EDGE.wisp)} * H.y * sheetW * (1.0 - smoothstep(0.0, 4.0 * H.x, wd)) * smoothstep(-E.y, 0.0, wd);
+      wisp = ${f(EDGE.wisp)} * H.y * sheetW * (1.0 - smoothstep(0.0, 2.5 * H.x, wd)) * smoothstep(-E.y, 0.0, wd);
     }
   }
   float dShade = dEff;
@@ -793,7 +810,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // fog's foot, and as the thermal rises its stem and the wall material that rolls under the cap
   // dilute and evaporate over the hot plate: their band is ≈ 1.7 cm (the judge's torn-paper
   // waterline across the plate at 0.74–1.0 s was the cap's 2.5 mm underside).
-  float low = (1.0 - smoothstep(0.26, 0.5, m.g)) * smoothstep(0.1, 0.38, uC[l].z);
+  float low = (1.0 - smoothstep(0.26, 0.5, m.g)) * smoothstep(0.28, 0.42, uC[l].z);
   float band = mix(E.y, ${f(STEAM_LOOK.underBand)}, max(low, under));
   float edge = smoothstep(0.0, band, dEff);
   // Inside, a silky fog that empties as it ages; at the edge, the mixing layer's thin sheet.
@@ -813,7 +830,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // round the cap's edge, the rolled sheet wound round it (a spiral in its cross-section), dense
   // enough to shade its own underside; as it ages it tears round its circumference into a few lobes
   // (3–6 round the ring), then evaporates.
-  float rf = ringFog(q, rho, l, n1.b, nb.b, uC[l].z);
+  float rf = (uFlags & 512) != 0 ? 0.0 : ringFog(q, rho, l, n1.b, nb.b, uC[l].z);
   d = (d + rf) * stir;
   // (Its own shade, analytically: the tube's fog between here and the key, so its top is lit and its
   // underside and inner side fall into shade; the light volume's voxels are as wide as the tube.)
@@ -826,7 +843,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
     ringShade = ${f(STEAM_LOOK.ringFog)} * uR[l].w * 1.6 * od;
   }
   // The billows' own shade: the edge a little way towards the key.
-  if (d > 0.02 && detail > 0.0 && uC[l].z < 0.7) {
+  if ((uFlags & 4096) == 0 && d > 0.02 && detail > 0.0 && uC[l].z < 0.3) {
     vec4 nl = texture(uNoise, Xb + L * 0.2);
     shadeOd = 0.24 * sat((dShade + E.z * (nl.b - nb.b) * 2.0) / 0.06);
   }
@@ -877,6 +894,32 @@ float ign(vec2 px) {
   return float(h) / 4294967295.0;
 }
 
+/** View distance (positive) of a [0, 1] scene depth. */
+float viewDistance(float dz) {
+  float n = uNearFar.x, fa = uNearFar.y;
+  return uOrtho ? n + dz * (fa - n) : -(n * fa) / ((fa - n) * dz - fa);
+}
+/**
+ * The opaque scene's distance for the march's pixel \`px\` (its corner, integer): the farthest of the
+ * full-resolution pixels it covers (1/uScale across: their corners); 1e4 where there is none.
+ */
+float sceneUsed(vec2 px) {
+  if (!uHasDepth) return 1e4;
+  vec2 lo = px / uScale, hi = (px + 1.0) / uScale - 1.0;
+  ivec2 lim = textureSize(uSceneDepth, 0) - 1;
+  ivec2 a = clamp(ivec2(lo + 0.5), ivec2(0), lim), b = clamp(ivec2(hi + 0.5), ivec2(0), lim);
+  float dz = max(max(texelFetch(uSceneDepth, a, 0).r, texelFetch(uSceneDepth, ivec2(b.x, a.y), 0).r),
+    max(texelFetch(uSceneDepth, ivec2(a.x, b.y), 0).r, texelFetch(uSceneDepth, b, 0).r));
+  return dz < 1.0 ? viewDistance(dz) : 1e4;
+}
+/**
+ * (v1.6 polish 2) The checkerboard: each frame the march draws one parity of the pixels, packed into
+ * a target half as wide (texel x holds pixel 2x + the row's offset), so every lane of the GPU does
+ * useful work. Whether pixel p is marched this frame, and its texel.
+ */
+bool checkerMarched(ivec2 p) { return uParity < 0 || ((p.x + p.y + uParity) & 1) == 0; }
+ivec2 checkerTexel(ivec2 p) { return uParity < 0 ? p : ivec2((p.x - ((p.y + uParity) & 1)) / 2, p.y); }
+
 vec2 boxHit(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
   vec3 inv = 1.0 / rd;
   vec3 t0 = (bmin - ro) * inv, t1 = (bmax - ro) * inv;
@@ -910,13 +953,14 @@ void main() {
   vec3 p = uLightMin + u * (uLightMax - uLightMin);
   vec3 L = normalize(uKeyDir);
   float od = 0.0, up = 0.0;
-  for (int i = 0; i < 9; i++) {
-    float s = (float(i) + 0.5) * 0.12;
-    od += meanAt(p + L * s) * 0.12;
+  // (v1.6 polish 2: 7 taps towards the key, 3 up: the same reach.)
+  for (int i = 0; i < 7; i++) {
+    float s = (float(i) + 0.5) * 0.154;
+    od += meanAt(p + L * s) * 0.154;
   }
-  for (int i = 0; i < 4; i++) {
-    float s = (float(i) + 0.5) * 0.16;
-    up += meanAt(p + vec3(0.0, s, 0.0)) * 0.16;
+  for (int i = 0; i < 3; i++) {
+    float s = (float(i) + 0.5) * 0.213;
+    up += meanAt(p + vec3(0.0, s, 0.0)) * 0.213;
   }
   // (v1.6 polish 2) Down to the plate: how much fog the white plate's light crosses to reach here.
   float down = 0.0;
@@ -931,11 +975,6 @@ void main() {
 const VOLUME_FRAGMENT = /* glsl */ `
 ${STEAM_CORE}
 varying vec3 vLocal;
-/** View distance (positive) of a [0, 1] scene depth. */
-float viewDistance(float dz) {
-  float n = uNearFar.x, fa = uNearFar.y;
-  return uOrtho ? n + dz * (fa - n) : -(n * fa) / ((fa - n) * dz - fa);
-}
 
 /** Every live clock's steam at p (the cloud, the spill, the veil), and the billows' own shade. */
 float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising) {
@@ -948,8 +987,8 @@ float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising
     bool inCloud = all(greaterThanEqual(p, uCloudMin[l])) && all(lessThanEqual(p, uCloudMax[l]));
     bool inVeil = all(greaterThanEqual(p, uVeilMin[l])) && all(lessThanEqual(p, uVeilMax[l]));
     bool inSpill = all(greaterThanEqual(p, uSpillMin[l])) && all(lessThanEqual(p, uSpillMax[l]));
-    float dc = inCloud && uDebug != 3 && uDebug != 5 ? cloud(p, l, detail, L, so) : 0.0;
-    float dr = (inSpill ? spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 ? veil(p, l, detail) : 0.0);
+    float dc = inCloud && uDebug != 3 && uDebug != 5 && (uFlags & 131072) == 0 ? cloud(p, l, detail, L, so) : 0.0;
+    float dr = (inSpill ? spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 && (uFlags & 65536) == 0 ? veil(p, l, detail) : 0.0);
     // (The seating's puffs leave the cover: what it closes over does not hold them.)
     float dq = inSpill ? squeeze(p, l) * uA[l].z : 0.0;
     dens += dq;
@@ -964,8 +1003,11 @@ float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising
 }
 
 void main() {
+  // The march's pixel (the checkerboard's: this texel holds one of a pair) and its ray.
+  vec2 fc = uParity >= 0 ? vec2(2.0 * floor(gl_FragCoord.x) + float((int(gl_FragCoord.y) + uParity) & 1) + 0.5, gl_FragCoord.y) : gl_FragCoord.xy;
   vec3 ro = uCamLocal;
-  vec3 rd = normalize(vLocal - ro);
+  vec4 far = uInvVPL * vec4(fc / uMarchSize * 2.0 - 1.0, 1.0, 1.0);
+  vec3 rd = normalize(far.xyz / far.w - ro);
   // The ray's span through every live box (the clouds and the veils), not the whole proxy box.
   float t0 = 1e9, t1 = -1e9;
   for (int l = 0; l < ${STEAM_LAYERS}; l++) {
@@ -983,21 +1025,10 @@ void main() {
   if (rd.y < 0.0) { tSurf = -ro.y / rd.y; t1 = min(t1, tSurf); }
   // The opaque scene (plate, cloche, bin) along this ray: the farthest of the four full-resolution
   // pixels this one covers (the upsample keeps the nearer ones off it by depth).
-  float used = 1e4;
+  float used = sceneUsed(floor(fc - 0.5));
   vec4 v0 = uModelView * vec4(ro, 1.0);
   vec4 v1 = uModelView * vec4(rd, 0.0);
-  if (uHasDepth) {
-    // This pixel's footprint in the full-resolution depth (1/uScale pixels across): its corners.
-    vec2 lo = floor(gl_FragCoord.xy - 0.5) / uScale, hi = (floor(gl_FragCoord.xy - 0.5) + 1.0) / uScale - 1.0;
-    ivec2 lim = textureSize(uSceneDepth, 0) - 1;
-    ivec2 a = clamp(ivec2(lo + 0.5), ivec2(0), lim), b = clamp(ivec2(hi + 0.5), ivec2(0), lim);
-    float dz = max(max(texelFetch(uSceneDepth, a, 0).r, texelFetch(uSceneDepth, ivec2(b.x, a.y), 0).r),
-      max(texelFetch(uSceneDepth, ivec2(a.x, b.y), 0).r, texelFetch(uSceneDepth, b, 0).r));
-    if (dz < 1.0) {
-      used = viewDistance(dz);
-      if (v1.z < 0.0) { float ts = (-used - v0.z) / v1.z; tSurf = min(tSurf, ts); t1 = min(t1, ts); }
-    }
-  }
+  if (used < 9000.0 && v1.z < 0.0) { float ts = (-used - v0.z) / v1.z; tSurf = min(tSurf, ts); t1 = min(t1, ts); }
   // (v1.6 polish 2: the steam's shadow on what the ray meets is the composite's, at full resolution.)
   if (t1 <= t0) { gl_FragColor = vec4(0.0, 0.0, used, 1.0); return; }
   // Probes: where along the ray anything can show (the dilated mean, the veil's column), so the
@@ -1023,7 +1054,7 @@ void main() {
   float dt = (a1 - a0) / float(steps);
   // (The start moves every frame, along a golden-ratio sequence seeded by the steam clock: the
   // temporal resolve averages the starts, and a capture at a given τ is the same every time.)
-  float t = a0 + dt * (uDebug == 10 ? 0.5 : fract(ign(gl_FragCoord.xy) + 0.6180339887 * uFrame));
+  float t = a0 + dt * (uDebug == 10 ? 0.5 : fract(ign(fc) + 0.6180339887 * uFrame));
   vec3 L = normalize(uKeyDir);
   float cosT = dot(rd, L);
   // Phase: forward-leaning single scattering blended towards isotropic for the multiple-scattering octaves.
@@ -1036,38 +1067,25 @@ void main() {
   float detail = uLow || uDebug == 9 ? 0.0 : 1.0;
   vec2 C = vec2(0.0);
   float T = 1.0, wt = 0.0, tw = 0.0, rw = 0.0;
-  // Each sample stands for the span since the last one. Where the ray enters the steam from clear
-  // air, the boundary is found by bisection (3 steps: an eighth of a step), so the edge is where the
-  // field puts it, not where the dither happened to land: a crisp silhouette at any step size.
+  // Each sample stands for the span since the last one. (v1.6 polish 2: no bisection where the ray
+  // enters the steam: lanes bisected at different steps, serialising the GPU's groups (≈ 0.9 ms at
+  // the held dome); the jittered start and the history find the edge as well.)
   bool clear = true;
-  int refined = 0;
   // (v1.6 polish 2) The step adapts: in dense fog it is no longer than ≈ 0.45 of optical depth (the
   // young fog is dense: jittered samples a step apart landed either side of its features, a speckle
   // the history could not average out), back to the span's share in thin steam; at most twice the
   // step count, and the dense fog ends the ray soon anyway.
   float h = dt;
-  bool spillAny = false;
-  for (int l = 0; l < ${STEAM_LAYERS}; l++) spillAny = spillAny || uSpillOn[l] > 0.0;
   for (int i = 0; i < 128; i++) {
-    if (i >= 3 * steps || t > a1 || T < 0.01) break;
+    if (i >= 2 * steps || t > a1 || T < ((uFlags & 32768) != 0 ? 0.05 : 0.02)) break;
     vec3 p = ro + rd * t;
     float localOd, rising;
     float dens = sampleAt(p, L, detail, localOd, rising);
     float seg = h;
-    if (uRefine && dens > 1e-4 && clear && refined < 1) {
-      float lo = max(t - h, a0), hi = t, od2, r2;
-      for (int b = 0; b < 3; b++) {
-        float mid = 0.5 * (lo + hi);
-        if (sampleAt(ro + rd * mid, L, detail, od2, r2) > 1e-4) hi = mid; else lo = mid;
-      }
-      seg = t - 0.5 * (lo + hi);
-      refined++;
-    }
     clear = dens <= 1e-4;
     float tp = t;
-    h = clear ? dt : clamp(0.45 / (uSigma * dens), 0.3 * dt, dt);
-    // (The spill is a sheet a few millimetres thick: near it, quarter steps.)
-    if (spillAny) for (int l = 0; l < ${STEAM_LAYERS}; l++) if (spillOccupies(p, l)) { h = min(h, 0.25 * dt); break; }
+    h = clear || (uFlags & 1024) != 0 ? dt : clamp(0.45 / (uSigma * dens), 0.3 * dt, dt);
+
     t += h;
     if (clear) continue;
     float sig = uSigma * dens;
@@ -1134,7 +1152,6 @@ uniform sampler2D uCur;
 uniform sampler2D uHist;
 uniform bool uHistValid;
 uniform float uBlend;
-uniform mat4 uInvVPL;
 uniform mat4 uPrevVPL;
 uniform int uL0;
 uniform vec4 uPS0;
@@ -1191,23 +1208,32 @@ vec3 previous(vec3 p, bool rising) {
 
 void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
-  ivec2 lim = textureSize(uCur, 0) - 1;
-  vec4 c = texelFetch(uCur, px, 0);
-  // (v1.6 polish 2) Luminance, coverage and the key's luminance (its share of the light, for the colour).
-  vec3 cur = vec3(c.xy, unpackKey(c.w) * c.x);
+  ivec2 lim = ivec2(uMarchSize) - 1;
+  // (Not marched this frame: no value yet, its scene depth from the depth texture.)
+  vec4 c = checkerMarched(px) ? texelFetch(uCur, checkerTexel(px), 0) : vec4(0.0, 0.0, sceneUsed(vec2(px)), -1.0);
+  // (v1.6 polish 2) Luminance, coverage and the key's luminance (its share of the light, for the
+  // colour). The checkerboard: a pixel not marched this frame (.w < 0) takes its marched edge
+  // neighbours' mean as its new value and leans on its history.
+  bool marched = c.w >= 0.0;
+  vec3 m1 = vec3(0.0), m2 = vec3(0.0), sp = vec3(0.0);
+  float n = 0.0, spn = 0.0, bestA = -1.0, bestW = 0.0;
+  for (int k = 0; k < 9; k++) {
+    ivec2 o = ivec2(k % 3 - 1, k / 3 - 1);
+    ivec2 q = clamp(px + o, ivec2(0), lim);
+    if (!checkerMarched(q)) continue;
+    vec4 v = texelFetch(uCur, checkerTexel(q), 0);
+    vec3 x = vec3(v.xy, unpackKey(v.w) * v.x);
+    m1 += x;
+    m2 += x * x;
+    n += 1.0;
+    if (o.x == 0 || o.y == 0) { sp += x; spn += 1.0; }
+    if (v.y > bestA) { bestA = v.y; bestW = v.w; }
+  }
+  m1 /= max(n, 1.0);
+  vec3 sd = sqrt(max(m2 / max(n, 1.0) - m1 * m1, 0.0));
+  vec3 cur = marched ? vec3(c.xy, unpackKey(c.w) * c.x) : (spn > 0.0 ? sp / spn : m1);
   vec3 res = cur;
   if (uHistValid) {
-    vec3 m1 = vec3(0.0), m2 = vec3(0.0);
-    float bestA = -1.0, bestW = 0.0;
-    for (int k = 0; k < 9; k++) {
-      vec4 v = texelFetch(uCur, clamp(px + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), lim), 0);
-      vec3 x = vec3(v.xy, unpackKey(v.w) * v.x);
-      m1 += x;
-      m2 += x * x;
-      if (v.y > bestA) { bestA = v.y; bestW = v.w; }
-    }
-    m1 /= 9.0;
-    vec3 sd = sqrt(max(m2 / 9.0 - m1 * m1, 0.0));
     vec2 uv = (vec2(px) + 0.5) / vec2(lim + 1);
     vec2 puv = uv;
     // The steam's point: this pixel's, or (at an edge it has just left) its densest neighbour's.
@@ -1216,9 +1242,9 @@ void main() {
     if (bestA > 0.002 && depth > 0.0) {
       vec4 fa = uInvVPL * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
       vec3 rd = normalize(fa.xyz / fa.w - uCamLocal);
-      vec3 sp = uCamLocal + rd * depth;
-      viewZ = -(uModelView * vec4(sp, 1.0)).z;
-      vec4 pc = uPrevVPL * vec4(previous(sp, unpackRising(bestW)), 1.0);
+      vec3 at = uCamLocal + rd * depth;
+      viewZ = -(uModelView * vec4(at, 1.0)).z;
+      vec4 pc = uPrevVPL * vec4(previous(at, unpackRising(bestW)), 1.0);
       puv = pc.xy / pc.w * 0.5 + 0.5;
     }
     if (all(greaterThanEqual(puv, vec2(0.0))) && all(lessThanEqual(puv, vec2(1.0)))) {
@@ -1226,7 +1252,7 @@ void main() {
       // (A moving occluder only matters where it cuts the steam: steam well in front of both keeps its history.)
       if (abs(h.z - c.z) < 0.03 * max(min(h.z, c.z), 1e-3) || viewZ < min(h.z, c.z) - 0.1) {
         vec3 hc = clamp(h.xyw, m1 - 1.25 * sd - 0.004, m1 + 1.25 * sd + 0.004);
-        res = mix(hc, cur, uBlend);
+        res = mix(hc, cur, marched ? uBlend : ${f(STEAM_LOOK.fillBlend)});
         if (uDebug == 11) res = vec3(1.0, 1.0, 0.5);
       } else if (uDebug == 11) res = vec3(0.4, 1.0, 0.2);
     } else if (uDebug == 11) res = vec3(0.0, 1.0, 0.0);
@@ -1406,6 +1432,10 @@ export class DinnerSteam {
   private steps: number = STEAM_LOOK.steps.dense;
   /** Frames marched (tooling). */
   marched = 0;
+  /** Whether any steam clock is alive (the scene depth keeps its target while it is). */
+  private alive = false;
+  /** How many clocks carry a cloud (set by sync). */
+  private clouds = 0;
 
   constructor() {
     this.object.name = 'fx_steam';
@@ -1461,7 +1491,9 @@ export class DinnerSteam {
       uDebug: { value: 0 },
       uFlags: { value: 0 },
       uFrame: { value: 0 },
-      uRefine: { value: true },
+      uParity: { value: -1 },
+      uMarchSize: { value: new Vector2(1, 1) },
+      uInvVPL: { value: new Matrix4() },
       uLow: { value: false },
       uSigma: { value: STEAM_LOOK.sigma },
       uKeyDir: { value: new Vector3(-0.36, 0.643, 0.676).normalize() },
@@ -1482,7 +1514,6 @@ export class DinnerSteam {
       uHist: { value: this.hist[0].texture },
       uHistValid: { value: false },
       uBlend: { value: STEAM_LOOK.history },
-      uInvVPL: { value: new Matrix4() },
       uPrevVPL: { value: new Matrix4() },
       uL0: { value: -1 },
       uPS0: { value: new Vector4() }, uPS1: { value: new Vector4() }, uPS2: { value: new Vector4() }, uPB: { value: new Vector4() },
@@ -1534,6 +1565,8 @@ export class DinnerSteam {
     this.unregister = requestSceneDepth({
       object: this.object,
       active: () => this.object.visible,
+      // (While a steam clock is alive the steam is only paused if it is hidden: keep the depth.)
+      holdDepth: () => this.alive,
       prepare: (renderer, frame) => this.prepare(renderer, frame),
     });
   }
@@ -1573,10 +1606,21 @@ export class DinnerSteam {
     if (!dbg.__steamSkip?.includes('light')) renderer.render(this.pass.scene, this.pass.camera);
     this.pass.mesh.material = this.mapMaterial;
     // The march, at half the drawing buffer's resolution.
-    const scale = Math.min(0.5, Math.sqrt(STEAM_LOOK.marchPixels / Math.max(1, frame.size.x * frame.size.y)));
+    // (The young cloud's fine edge takes the full budget; thin steam and wisps, whose finest features
+    // are centimetres, a smaller one. The history is resampled across the change: no pop.)
+    // (Two clouds at once, a change of mind's: each sample evaluates both; fewer pixels.)
+    const budget = (globalThis as { __steamPixels?: number }).__steamPixels
+      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.45 : 1);
+    const scale = Math.min(0.5, Math.sqrt(budget / Math.max(1, frame.size.x * frame.size.y)));
     const w = Math.max(1, Math.ceil(frame.size.x * scale)), h = Math.max(1, Math.ceil(frame.size.y * scale));
     (u.uScale!.value as Vector2).set(w / frame.size.x, h / frame.size.y);
-    if (this.half.width !== w || this.half.height !== h) this.half.setSize(w, h);
+    (u.uMarchSize!.value as Vector2).set(w, h);
+    // (The checkerboard: one parity of the pixels a frame, packed half as wide; its parity alternates.)
+    const checker = !(globalThis as { __steamFull?: boolean }).__steamFull;
+    u.uParity!.value = checker ? this.marched & 1 : -1;
+    const hw = checker ? Math.ceil(w / 2) : w;
+    if (this.half.width !== hw || this.half.height !== h) this.half.setSize(hw, h);
+    (u.uInvVPL!.value as Matrix4).multiplyMatrices(TMP_VP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), this.volume.matrixWorld).invert();
     renderer.getClearColor(TMP_C);
     const alpha = renderer.getClearAlpha();
     // (Empty: no light, no cover, far, and no shadow.)
@@ -1602,13 +1646,13 @@ export class DinnerSteam {
   private resolve(renderer: WebGLRenderer, camera: PerspectiveCamera | OrthographicCamera, w: number, h: number, dbg: { __steamNoTaa?: boolean }): void {
     const ru = this.resolveUniforms;
     const vp = TMP_VP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    (ru.uInvVPL!.value as Matrix4).multiplyMatrices(vp, this.volume.matrixWorld).invert();
     const p = this.prev, tau = this.tau0, l0 = this.l0;
     const src = this.hist[this.histIndex]!, dst = this.hist[1 - this.histIndex]!;
-    const sized = src.width === w && src.height === h;
-    if (!sized) src.setSize(w, h);
+    // (The history is sampled by its uv: a change of the march's resolution resamples it. Only a
+    // history that was never written at all is invalid.)
+    const sized = src.width > 1 && p !== null && src.width === p.w && src.height === p.h;
     if (dst.width !== w || dst.height !== h) dst.setSize(w, h);
-    const valid = !!p && sized && p.w === w && p.h === h && p.l0 === l0 && tau >= p.tau && tau - p.tau <= 0.1 && p.frame === this.marched - 1 && !dbg.__steamNoTaa;
+    const valid = !!p && sized && p.l0 === l0 && tau >= p.tau && tau - p.tau <= 0.1 && p.frame === this.marched - 1 && !dbg.__steamNoTaa;
     ru.uHistValid!.value = valid;
     ru.uL0!.value = -1;
     if (p && valid) {
@@ -1694,7 +1738,8 @@ export class DinnerSteam {
     const limMin = TMP_A.set(-BOX_MAX, 0, -BOX_MAX), limMax = TMP_B.set(BOX_MAX, Y_MAX, BOX_MAX);
     let any = false;
     let steps: number = STEAM_LOOK.steps.veil;
-    let shadowOn = 0, refine = false;
+    let shadowOn = 0;
+    this.clouds = 0;
     this.l0 = -1;
     this.l0Cloud = false;
     this.clocks.forEach((c, l) => {
@@ -1712,10 +1757,10 @@ export class DinnerSteam {
       const present = s.present && s.fade > 0;
       A[l]!.set(tau, 1, c.fade, present ? 1 : 0);
       if (this.l0 < 0 || (present && !this.l0Cloud)) { this.l0 = l; this.l0Cloud = present; this.tau0 = tau; }
-      // (The fog inside has mostly gone by ≈ 0.75 s of the thermal: wisps take fewer steps, and the
-      // edge's bisection is for the young cloud's narrow band.)
-      if (present) steps = Math.max(steps, s.age < 0.75 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
-      if (present && s.age < 0.75) refine = true;
+      // (The fog inside is going by ≈ 0.42 s of the thermal (v1.6 polish 2: it empties sooner):
+      // a hollowing cloud and wisps take fewer steps.)
+      if (present) steps = Math.max(steps, s.age < 0.42 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
+      if (present) this.clouds++;
       // (Its shadow once the dome has lifted off it: τ 0.3 s on.)
       shadowOn = Math.max(shadowOn, present ? Math.min(1, Math.max(0, (tau - 0.3) / 0.15)) : 1);
       B[l]!.set(s.dragSide.x, s.dragSide.y, s.lean.x, s.lean.y);
@@ -1723,7 +1768,7 @@ export class DinnerSteam {
       const look = cloudLook(s.age, s.erode, this.look, s.peel);
       E[l]!.set(look.amp, look.band, look.billow, look.warp);
       // (The fine curls belong to the young edge: as the band widens they would read as a felt over the aging cap.)
-      Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.45) / 0.45)), s.peel, s.undercutReach, s.undercutHeight);
+      Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.3) / 0.25)), s.peel, s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
       // (The ring holds fog once it has rolled up, until the cloud has gone.)
       // (v1.6 polish 2: its core holds its fog from ≈ 0.25 s of the thermal, tears from ≈ 0.45 s and has
@@ -1771,8 +1816,8 @@ export class DinnerSteam {
       }
     });
     this.steps = steps;
+    this.alive = any;
     this.uniforms.uShadowOn!.value = shadowOn;
-    this.uniforms.uRefine!.value = refine;
     if (!any) {
       min.set(-1, 0, -1);
       max.set(1, 1, 1);

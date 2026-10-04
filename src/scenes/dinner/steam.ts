@@ -404,12 +404,12 @@ export const verticalForward = (Y: number, P: number, s: CloudState) => Y + s.ri
 const verticalSlope = (Y: number, P: number, s: CloudState) => 1 + s.rise * riseWeightD(Y) * centreWeight(P) + s.dragUp * dragWeightD(Y) * dragCentre(P) - s.squash * capWeight(Y);
 /** The stem and base evaporate as the uncovered plate re-heats them (their share of the light left). */
 export const stemLeft = (Y: number, s: CloudState) => 1 - s.stemFade * (1 - smooth(0.12, 0.42, Y));
-/** Bisection steps of the vertical solve (the map is monotonic; ≈ 0.04 mm over its bracket). */
-export const VERTICAL_STEPS = 13;
+/** Bisection steps of the vertical solve (the map is monotonic; ≈ 0.2 mm over its bracket; v1.6 polish 2: 13 → 11). */
+export const VERTICAL_STEPS = 11;
 /** Bisection steps of the radial solve (each with a vertical solve inside). */
-export const OUTER_STEPS = 11;
+export const OUTER_STEPS = 10;
 /** Bisection steps of the slump's solve. */
-export const SKIRT_STEPS = 10;
+export const SKIRT_STEPS = 8;
 
 /**
  * The axisymmetric part of the inverse map (the shader tabulates exactly this per frame, in
