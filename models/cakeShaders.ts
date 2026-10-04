@@ -361,10 +361,28 @@ export interface FoodFlames {
 
 /**
  * The warm pool on the top coat (fix 5): each flame's light on the top tier's top surface, through
- * every candle's soft shadow (its own: the dark disc at its foot; the other five: soft spokes), at
- * `gain` over what the flames' own light loop adds (the coat scatters it: a broader, brighter pool).
+ * the other candles' soft shadows (spokes), at `gain` over what the flames' own light loop adds (the
+ * coat scatters it: a brighter pool).
+ *
+ * v1.6 polish 2 (the re-judge's fix 3: "a different frosting, not light"): the gain-2 pool over the whole
+ * top lifted its centre +27 R and turned it lavender. Now the pool is each candle's own halo, falling
+ * off from the candle's surface over `reach` (scene units: 2 cm, gone by ≈ 4 cm), and on the top coat
+ * the flames' broad light (the loop in models/birthdayFire.ts, read by reference) is answered at
+ * `broad` of its strength (the whole top's wash; its shadows stay). Calibrated against the flames
+ * polish's light (FLAME_LIGHT_CAL 2.0 on v1.6/integration, a trial merge): the top's centre +7 R, the
+ * halo +29–36 R within a centimetre of a candle, +14–17 at 3 cm (at the old 1.0: +3–4 and half that).
  */
-export const FLAME_POOL = { gain: 2.0, wrap: 0.5 } as const;
+export const FLAME_POOL = { gain: 4.5, wrap: 0.5, reach: 0.1, broad: 0.28 } as const;
+
+/**
+ * v1.6 polish 2 (fix 3): the candles' shadows from the key on the top coat, analytic (the rig's
+ * shadow map has ≈ 3.3 mm texels and a ≈ 1.7 cm filter: an 8 mm candle all but vanishes in it). The
+ * window is a soft source: the penumbra opens by `soft` per unit along the shadow from `soft0` at
+ * the candle (scene units), and the shadow takes `strength` of the key's diffuse. The key is only the
+ * window's direct share (≈ 7 % of the top's light): the room's light from the same window (in the
+ * environment) is shadowed too, `window` of the coat's indirect diffuse, `windowSoft` × softer.
+ */
+export const KEY_CANDLE_SHADOW = { soft0: 0.003, soft: 0.2, strength: 0.85, window: 0.32, windowSoft: 1.5 } as const;
 
 /** Thickness range of the packed `_FOOD` attribute (mm): scripts/masters/recipes/birthdayFinish.ts FOOD_THICK_MM. */
 export const FOOD_THICK_MM = 16;
@@ -375,7 +393,7 @@ export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodL
     sssSat: 1.35, shadeSat: 1.18, crestLift: 0.05, grooveDeep: 0.1, mottle: 0.028,
     roughCrest: 0.42, roughGroove: 0.6, roughCrease: 0.12, glint: 0.55, glintCell: 0.16, glintStrength: 1.6, keyOcclusion: 0.45,
     fatTint: [1, 0.93, 0.8], fat: 0.12,
-    coatRough: [0.3, 0.44], coatRoughVar: 0.07, streak: 0.14, hue: 0.04, topLift: 0.06, pinholes: 0.35, pinholeMm: [0.2, 0.75], glintSpread: 0.4, wave: 0.35, diffSoft: 0.3,
+    coatRough: [0.3, 0.44], coatRoughVar: 0.07, streak: 0.14, hue: 0.04, topLift: 0.06, pinholes: 0.35, pinholeMm: [0.15, 0.5], glintSpread: 0.4, wave: 0.35, diffSoft: 0.3,
     grooveTint: 0.3, flameGain: 0.5, flameWrap: 0.7, flameTrans: 0.5, rim: 0.25,
   },
   piping: {
@@ -406,10 +424,60 @@ export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodL
   },
 };
 
+/**
+ * v1.6 polish 2 (fix 4): the top's turntable marks (cakeTopArcs): the two spirals' pitch (scene units:
+ * 10 and 17 mm), a pass's length (rad, `segMin` + up to `segVar`), the share of a track left smooth,
+ * the start and stop ridges' length along the pass (2.4 mm), how far a pass wanders off its spiral
+ * (× pitch); `relief` and `value` their height (× the coat's `wave`) and colour, `noise` the
+ * hand-mixed mid-scale colour that replaced the old rings.
+ */
+export const TOP_ARCS = { pitch: [0.05, 0.083], segMin: 0.9, segVar: 1.6, gaps: 0.58, lipLen: 0.012, drift: 0.35, relief: 1.0, value: 1.1, noise: 1.9 } as const;
+
 const FOOD_NOISE = /* glsl */ `${CAKE_NOISE}
 vec3 cakeHash33(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.xxy + p.yxx) * p.zyx); }
 vec3 cakeSaturate(vec3 c, float k) { float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); return max(vec3(0.0), mix(vec3(l), c, k)); }
+// v1.6 polish 2 (the re-judge's fix 4): the spatula's marks on a top iced on a turntable, as broken
+// spiral arcs (not rings): passes of uneven length (≈ ${TOP_ARCS.segMin}–${TOP_ARCS.segMin + TOP_ARCS.segVar} rad), ${Math.round(TOP_ARCS.gaps * 100)} % of the
+// spiral left smooth, two spirals of their own pitch; a pass is a narrow ridge with the cream it pushed
+// aside beside it, rising out of the ridge where the blade landed and ending in the lip where it was
+// lifted. P in cake space (scene units, the cake's axis at x = z = 0). Returns the height (≈ ±1) and
+// in lip how much of it is a start or stop ridge.
+float cakeTopArcs(vec3 P, out float lip) {
+  float rr = length(P.xz), th = atan(P.z, P.x);
+  float h = 0.0;
+  lip = 0.0;
+  for (int k = 0; k < 2; k++) {
+    float fk = float(k);
+    float pitch = k == 0 ? ${(TOP_ARCS.pitch[0]).toFixed(4)} : ${(TOP_ARCS.pitch[1]).toFixed(4)};
+    // (The hand drifts in and out as the cake turns: the passes wander off the spiral, ±${TOP_ARCS.drift} pitch.)
+    // (In the cake's own space only: anything periodic in θ would break where atan wraps.)
+    float drift = ${TOP_ARCS.drift.toFixed(3)} * (2.0 * (cakeNoise(P * 5.0 + 1.3 + 3.1 * fk) - 0.5) + 0.7 * (cakeNoise(P * 11.0 + 7.7 * fk) - 0.5));
+    float q = rr / pitch - th / 6.2831853 + 0.37 * fk + drift;
+    float n = floor(q), f = fract(q);
+    // Along the spiral, unrolled (continuous through atan's wrap: n steps as θ does), cut into passes
+    // of uneven length (the cut depends only on how far along the spiral: no seam where atan wraps).
+    float phi = th + 6.2831853 * n;
+    float a = phi / ${(TOP_ARCS.segMin + TOP_ARCS.segVar / 2).toFixed(3)} + 0.3 * sin(phi * 0.31 + 1.7 * fk) + 0.2 * sin(phi * 0.83 + 4.1 * fk);
+    float m = floor(a), u = fract(a);
+    float segL = ${(TOP_ARCS.segMin + TOP_ARCS.segVar / 2).toFixed(3)};
+    vec3 rs = cakeHash33(vec3(m, 2.9, 11.3 + 5.0 * fk));
+    if (rs.x < ${TOP_ARCS.gaps.toFixed(3)}) continue;
+    float amp = 0.3 + 0.7 * rs.y * rs.y;
+    float wu = ${TOP_ARCS.lipLen.toFixed(4)} / max(rr * segL, 1e-3);
+    float ends = smoothstep(0.0, wu, u) * smoothstep(0.0, wu, 1.0 - u);
+    float env = smoothstep(0.0, 4.0 * wu, u) * (1.0 - smoothstep(1.0 - 6.0 * wu, 1.0 - 1.5 * wu, u));
+    float ridge = exp(-pow((f - 0.5) / 0.07, 2.0)) - 0.45 * exp(-pow((f - 0.64) / 0.1, 2.0));
+    float band = exp(-pow((f - 0.5) / 0.22, 2.0)) * ends;
+    float st = exp(-pow((u - 1.5 * wu) / wu, 2.0)) * band, sp = exp(-pow((u - 1.0 + 2.0 * wu) / (1.3 * wu), 2.0)) * band;
+    h += amp * (ridge * env + 0.7 * st + 1.2 * sp);
+    lip += amp * (st + sp);
+  }
+  float c = smoothstep(0.03, 0.09, rr);
+  lip *= c;
+  return h * c;
+}
 `;
+
 
 /**
  * The food look for a frosting material. `kind`: 'body' (the tiers: a normal map, the unique
@@ -453,14 +521,35 @@ ${coat ? 'vFoodN = objectNormal / uFoodQS;' : ''}
 ${piping ? `vFoodRidge = _food.x * 2.0 - 1.0; vFoodAO = _food.y; vFoodThick = _food.z * ${FOOD_THICK_MM.toFixed(1)};` : ''}`,
     fragmentHead: `varying vec3 vFoodP;
 ${piping ? 'varying float vFoodRidge; varying float vFoodAO; varying float vFoodThick;' : 'varying vec3 vFoodN;'}
-float foodPin = 0.0; float foodTop = 0.0;
+float foodPin = 0.0; float foodTop = 0.0; float foodArcs = 0.0; float foodArcLip = 0.0;
 ${FOOD_NOISE}
 // Per-fragment state the lighting reads (set after the normal is known).
 float foodThin; float foodAO; float foodContact; vec3 foodDiffN; vec3 foodGlintP; float foodGlintFade; float foodGlintFade2; vec3 foodGlintT; vec3 foodGlintB;
 // The scene's own lights (the key): translucency and glints; the flames' small lights get the scattering only.
 bool foodScene = true;
 ${flames ? `uniform vec3 uPoolPos[${NF}]; uniform float uPoolI[${NF}]; uniform vec3 uPoolColor; uniform float uPoolR2;
-uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uniform vec4 uPoolTier;` : ''}`,
+uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uniform vec4 uPoolTier;
+// v1.6 polish 2 (fix 3): on the top tier's top (world, as the flames' uniforms are).
+bool foodOnTopCoat(vec3 P) { return P.y > uPoolTier.z - 0.008 && length(P.xz - uPoolTier.xy) < uPoolTier.w + 0.03; }
+// The candles' soft shadows from a distant light along L (world) at P: each candle upright from its
+// base to its wax top; the penumbra opens away from the candle (the window is a soft source).
+vec3 foodKeyL = vec3(0.0);
+float foodCandleShadow(vec3 P, vec3 L, float soft) {
+  float hl = length(L.xz);
+  if (hl < 1e-4) return 1.0;
+  vec2 Lh = L.xz / hl;
+  float rise = L.y / hl, vis = 1.0;
+  for (int j = 0; j < ${NF}; j++) {
+    vec2 d = uPoolA[j].xz - P.xz;
+    float along = dot(d, Lh);
+    if (along <= 0.0) continue;
+    float w = ${f(KEY_CANDLE_SHADOW.soft0)} + soft * along;
+    float side = smoothstep(-w, w, abs(d.x * Lh.y - d.y * Lh.x) - uPoolR.x);
+    float over = smoothstep(-w, w, P.y + along * rise - uPoolB[j].y);
+    vis *= 1.0 - (1.0 - side) * (1.0 - over);
+  }
+  return vis;
+}` : ''}`,
     afterMap: `{
   // Never one flat colour: a slow mottle of hand-mixed colour (2–4 cm), warm-cool.
   float m1 = cakeNoise(vFoodP * 34.0) - 0.5, m2 = cakeNoise(vFoodP * 91.0 + 7.1) - 0.5;
@@ -502,7 +591,13 @@ uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uni
     float rr = length(P.xz);
     float sS = (cakeNoise(vec3(P.x * 7.0, P.y * 60.0, P.z * 7.0)) - 0.5) + 0.55 * (cakeNoise(vec3(P.x * 18.0, P.y * 150.0, P.z * 18.0) + 3.7) - 0.5);
     float warpT = 4.0 * cakeNoise(P * 8.0 + 1.7);
-    float sT = (cakeNoise(vec3(P.x * 12.0, P.z * 12.0, rr * 45.0 + warpT)) - 0.5) + 0.5 * (cakeNoise(vec3(P.x * 30.0, P.z * 30.0, rr * 110.0 + 2.0 * warpT) + 5.1) - 0.5);
+    // v1.6 polish 2 (fix 4): the top's marks are broken spiral arcs, not banded rings (the old r-banded
+    // streaks read as water ripples); the hand-mixed colour between them is isotropic, mid-scale.
+    float sT = 0.0;
+    if (onTop > 0.0) {
+      foodArcs = cakeTopArcs(P, foodArcLip);
+      sT = ${f(TOP_ARCS.value)} * foodArcs + ${f(TOP_ARCS.noise)} * ((cakeNoise(vec3(P.x * 16.0, P.z * 16.0, P.y * 16.0 + warpT)) - 0.5) + 0.5 * (cakeNoise(P * 37.0 + 5.1) - 0.5));
+    }
     float blot = (cakeNoise(P * 6.0 + 11.0) - 0.5) + 0.5 * (cakeNoise(P * 14.0 + 23.0) - 0.5);
     float hueN = (cakeNoise(P * 9.0 + 41.0) - 0.5) + 0.4 * (cakeNoise(P * 21.0 + 5.0) - 0.5);
     diffuseColor.rgb *= 1.0 + ${f(look.streak)} * (mix(sS, 2.0 * sT, onTop) + (0.6 + 0.4 * onTop) * blot) + ${f(look.topLift)} * onTop;
@@ -518,7 +613,7 @@ uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uni
       float r = mix(${f(look.pinholeMm[0] / 3.5)}, ${f(look.pinholeMm[1] / 3.5)}, hp.y * hp.y);
       foodPin = 1.0 - smoothstep(0.5 * r, r, length(cp - c));
     }
-    diffuseColor.rgb *= 1.0 - 0.28 * foodPin;` : ''}
+    diffuseColor.rgb *= 1.0 - 0.16 * foodPin;` : ''}
   }`}
 }`,
     afterRoughness: piping
@@ -555,9 +650,8 @@ uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uni
     vec3 P = vFoodP;
     float rr = length(P.xz);
     float hS = (cakeNoise(vec3(P.x * 6.0, P.y * 42.0, P.z * 6.0)) - 0.5) + 0.6 * (cakeNoise(vec3(P.x * 14.0, P.y * 90.0, P.z * 14.0) + 2.3) - 0.5) + 0.5 * (cakeNoise(P * 9.0 + 6.1) - 0.5);
-    // (the top: broad strokes; the turntable's rings only in patches and wandering)
-    float ringT = smoothstep(0.5, 0.75, cakeNoise(P * 6.0 + 9.2)) * (cakeNoise(vec3(P.x * 9.0, P.z * 9.0, rr * 30.0 + 5.0 * cakeNoise(P * 7.0))) - 0.5);
-    float hT = (cakeNoise(vec3(P.x * 11.0, P.z * 11.0, P.y * 11.0)) - 0.5) + 0.6 * (cakeNoise(P * 24.0 + 8.4) - 0.5) + 0.5 * (cakeNoise(P * 5.0 + 3.3) - 0.5) + 0.6 * ringT;
+    // (the top: broad strokes and, v1.6 polish 2, the spatula's broken spiral passes, cakeTopArcs)
+    float hT = (cakeNoise(vec3(P.x * 11.0, P.z * 11.0, P.y * 11.0)) - 0.5) + 0.6 * (cakeNoise(P * 24.0 + 8.4) - 0.5) + 0.5 * (cakeNoise(P * 5.0 + 3.3) - 0.5) + ${f(TOP_ARCS.relief)} * foodArcs;
     float hW = ${f(look.wave * 0.005)} * mix(hS, 2.0 * hT, foodTop) * foodContact;
     normal = cakeBump(-vViewPosition, normal, hW, faceDirection);
   }`}
@@ -580,6 +674,17 @@ uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uni
   foodGlintB = cross(normal, foodGlintT);` : ''}
 }`,
     directDiffuse: `{
+  ${flames ? `// v1.6 polish 2 (fix 3): on the top coat the key is shadowed by the candles, and the flames' broad
+  // light is answered at FLAME_POOL.broad (each candle's own halo is the pool, below): everything this
+  // light adds to the diffuse (three's lambert just above and the terms here) is scaled by foodK.
+  vec3 foodDD0 = reflectedLight.directDiffuse - irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );
+  float foodK = 1.0;
+  {
+    mat3 kRt = transpose(mat3(viewMatrix));
+    vec3 kP = kRt * (geometryPosition - viewMatrix[3].xyz);
+    if (foodScene) foodKeyL = kRt * directLight.direction;
+    if (foodOnTopCoat(kP)) foodK = foodScene ? mix(1.0, foodCandleShadow(kP, foodKeyL, ${f(KEY_CANDLE_SHADOW.soft)}), ${f(KEY_CANDLE_SHADOW.strength)}) : mix(1.0, ${f(FLAME_POOL.broad)}, foodTop);
+  }` : ''}
   // Pre-integrated scattering (analytic): a wrap whose width grows with thinness, the wrapped light
   // tinted by the frosting, added where the lambert is dark.
   float nlS = dot(foodDiffN, directLight.direction);
@@ -611,6 +716,7 @@ uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uni
   float against = saturate(0.4 + 0.6 * dot(-geometryViewDir, directLight.direction));
   reflectedLight.directDiffuse += ${f(look.rim)} * edgeV * edgeV * edgeV * against * foodThin * directLight.color * foodTint * albedoD;
   }
+  ${flames ? 'reflectedLight.directDiffuse = foodDD0 + (reflectedLight.directDiffuse - foodDD0) * foodK;' : ''}
   if (foodScene) {
   ${glint ? `
   // Sugar glints: two sizes of crystal (fine ones seen close up, rarer coarse ones that read as a
@@ -632,7 +738,7 @@ uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uni
     // one), so the sparkle gathers in the satin highlight instead of specking the whole coat.
     vec3 tn = normalize(geometryNormal + (foodGlintT * q.x + foodGlintB * q.y) * ${f(look.glintSpread)});
     float d = pow(saturate(dot(tn, hv)), 380.0);
-    reflectedLight.directSpecular += directLight.color * nlG * d * spot * ${f(look.glintStrength)} * (li == 0 ? 1.0 : 0.7) * fade * foodContact;
+    reflectedLight.directSpecular += directLight.color * nlG * d * spot * ${f(look.glintStrength)} * (li == 0 ? 1.0 : 0.7) * fade * foodContact${flames ? ' * foodK' : ''};
   }` : ''}
   }
 }`,
@@ -658,20 +764,28 @@ uniform vec3 uPoolA[${NF}]; uniform vec3 uPoolB[${NF}]; uniform vec2 uPoolR; uni
   reflectedLight.indirectDiffuse *= 1.0 + 0.35 * foodThin * foodTintI;
   ${flames ? `{
   // v1.6 polish (fix 5): the warm pool on the top coat (FLAME_POOL): each flame through every candle.
+  // v1.6 polish 2 (fix 3): each candle's own halo, falling off from its surface over FLAME_POOL.reach
+  // (the light pools round the candles; the top's centre keeps its colour), through the others' spokes.
   mat3 pRt = transpose(mat3(viewMatrix));
   vec3 pP = pRt * (geometryPosition - viewMatrix[3].xyz);
-  if (pP.y > uPoolTier.z - 0.008 && length(pP.xz - uPoolTier.xy) < uPoolTier.w + 0.03) {
+  if (foodOnTopCoat(pP)) {
+    // The window's light in the room's (the key's direction): the candles shadow it too, softer.
+    if (dot(foodKeyL, foodKeyL) > 0.0) reflectedLight.indirectDiffuse *= mix(1.0, foodCandleShadow(pP, foodKeyL, ${f(KEY_CANDLE_SHADOW.soft * KEY_CANDLE_SHADOW.windowSoft)}), ${f(KEY_CANDLE_SHADOW.window)});
     vec3 pN = pRt * normalize(mix(foodDiffN, geometryNormal, 0.5));
     float pool = 0.0;
     for (int i = 0; i < ${NF}; i++) {
       if (uPoolI[i] <= 0.0) continue;
+      float rI = max(length(pP.xz - uPoolA[i].xz) - uPoolR.x, 0.0) / ${f(FLAME_POOL.reach)};
+      float halo = exp(-rI * rI);
+      if (halo < 1e-3) continue;
       vec3 fd = uPoolPos[i] - pP;
       float d2 = dot(fd, fd);
       float nl = saturate((dot(pN, fd * inversesqrt(d2)) + ${f(FLAME_POOL.wrap)}) / ${f(1 + FLAME_POOL.wrap)});
-      float vis = 1.0;
+      float vis = halo;
       vec2 a = pP.xz, ab = uPoolPos[i].xz - pP.xz;
       float ab2 = max(dot(ab, ab), 1e-10), abl = sqrt(ab2);
       for (int j = 0; j < ${NF}; j++) {
+        if (j == i) continue;
         // Candle j stands upright: where the ray to flame i passes it in plan, below its top.
         vec2 cj = uPoolA[j].xz;
         float t = clamp(dot(cj - a, ab) / ab2, 0.0, 1.0);
