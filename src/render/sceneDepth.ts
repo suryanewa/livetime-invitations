@@ -49,6 +49,12 @@ export interface SceneDepthClient {
   readonly object: Object3D;
   /** Whether it needs the depth this frame (false: nothing is drawn for it). */
   active(): boolean;
+  /**
+   * (v1.6 steam polish 2) Optional: while inactive, whether it will need the depth again shortly
+   * (its effect is still running, only not drawn this frame), so the target is kept rather than
+   * freed and allocated again. Never asked of a client outside this scene: a scene switch frees it.
+   */
+  holdDepth?(): boolean;
   /** After the depth pass, before the main render. */
   prepare(renderer: WebGLRenderer, frame: SceneDepthFrame): void;
 }
@@ -92,6 +98,12 @@ function drawnIn(object: Object3D, scene: Scene): boolean {
   return false;
 }
 
+/** Is `object` in `scene` (visible or not)? */
+function attachedTo(object: Object3D, scene: Scene): boolean {
+  for (let o: Object3D | null = object; o; o = o.parent) if (o === scene) return true;
+  return false;
+}
+
 /** One per stage: the depth target and the pass. */
 export class SceneDepth {
   private target: WebGLRenderTarget | null = null;
@@ -106,12 +118,16 @@ export class SceneDepth {
    * `scene` it returns at once and touches nothing.
    */
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera): boolean {
-    let served: SceneDepthClient[] | null = null;
-    if (clients.size) for (const c of clients) if (drawnIn(c.object, scene) && c.active()) (served ??= []).push(c);
+    let served: SceneDepthClient[] | null = null, hold = false;
+    if (clients.size) for (const c of clients) {
+      if (drawnIn(c.object, scene) && c.active()) (served ??= []).push(c);
+      else if (this.target && c.holdDepth && attachedTo(c.object, scene) && c.holdDepth()) hold = true;
+    }
     if (!served) {
       // Nothing needs it: free the target (no GPU memory is held for scenes that do not ask; a
-      // scene switch must leave nothing behind). Without one, nothing at all is touched.
-      if (this.target) this.release();
+      // scene switch must leave nothing behind), unless a client in this scene is only paused.
+      // Without one, nothing at all is touched.
+      if (this.target && !hold) this.release();
       return false;
     }
 

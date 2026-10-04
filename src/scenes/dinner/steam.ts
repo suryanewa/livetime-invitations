@@ -119,6 +119,27 @@ export const CLOUD = {
   evaporate: 0.9,
 } as const;
 
+/**
+ * The boundary from the lift-off (v1.6 polish 2: the judge saw "a frosted-glass ghost cloche", a
+ * perfectly smooth wall with nothing finer than 6.6 mm and a crisp elliptical foot). Once the rim
+ * lifts off, room air meets the saturated cloud along its whole wall: the outer centimetre or two
+ * peels and billows (a shear layer: the cloud's air drawn up after the dome, the room's sliding down
+ * and in) while the bulk keeps the dome's shape, and the room's cooler, denser air slides in under
+ * the warm fog from the rim as a gravity current (u ≈ ½√(g′h) ≈ 10 cm/s for g′ ≈ 1.5 m/s², h ≈ 2 cm),
+ * lifting its foot off the porcelain from the outside in.
+ */
+export const EDGE = {
+  /** The outer layer starts to peel at the lift-off and is fully turbulent by (τ, s). */
+  peel: [0.27, 0.6] as const,
+  /** The young billows' growth at the peel (su, ≈ 1 cm), and the peeling layer's scale (su: its lobes ±2.4 mm, its sheets out to ≈ 1.3 cm). */
+  billow: 0.06,
+  fine: 0.03,
+  /** The peeling layer's sheets: their density at the boundary (the young fog's is CLOUD look `core`). */
+  wisp: 2.2,
+  /** The gravity current under the base: its start (τ, s), speed (su/s ≈ 10 cm/s), furthest reach in from the rim and its head's height (su). */
+  undercut: { start: 0.27, speed: 0.7, reach: 0.36, height: 0.11 },
+} as const;
+
 /** The room's draught: away from the cloche set down behind-left, across the view. */
 export const LEAN_DIR = new Vector2(0.86, -0.51);
 
@@ -281,12 +302,16 @@ export interface CloudState {
   floor: number;
   /** Share of the stem and base evaporated by the re-heating plate. */
   stemFade: number;
+  /** The boundary's turbulence from the lift-off (0..1), and the room's air under the base: its reach in from the rim and its height (su). */
+  peel: number;
+  undercutReach: number;
+  undercutHeight: number;
 }
 
 export function newCloudState(): CloudState {
   return {
     present: false, tau: 0, age: 0, dragUp: 0, dragSide: new Vector2(), rise: 0, squash: 0, cap: 1, stem: 1, skirt: 0, roll: 0, ringR: 0.4, ringY: 0.5, ringSigma: CLOUD.ringCore,
-    turb: CLOUD.turb[0], lean: new Vector2(), erode: 0, fade: 1, floor: CLOUD.floor, stemFade: 0,
+    turb: CLOUD.turb[0], lean: new Vector2(), erode: 0, fade: 1, floor: CLOUD.floor, stemFade: 0, peel: 0, undercutReach: 0, undercutHeight: 0,
   };
 }
 
@@ -350,7 +375,17 @@ export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinit
   out.fade = 1 - smooth(CLOUD.life - CLOUD.fadeOut, CLOUD.life, a);
   out.floor = CLOUD.floor + CLOUD.floorGrow * smooth(0, 1.0, a);
   out.stemFade = CLOUD.stemFade * smooth(0.15, 1.3, a);
+  out.peel = smooth(EDGE.peel[0], EDGE.peel[1], tau);
+  const u = EDGE.undercut, ut = Math.max(0, tau - u.start);
+  out.undercutReach = Math.min(u.reach, u.speed * ut);
+  out.undercutHeight = u.height * smooth(0, 0.18, ut);
   return out;
+}
+
+/** The room's air under the base at material radius P (su of clear air over the porcelain): deepest at the rim, nothing past its head. */
+export function undercutAt(P: number, s: Pick<CloudState, 'undercutReach' | 'undercutHeight'>): number {
+  if (s.undercutReach <= 0) return 0;
+  return s.undercutHeight * smooth(CLOUD.radius - s.undercutReach, CLOUD.radius + 0.02, P);
 }
 
 export interface CloudMaterial {
@@ -369,12 +404,12 @@ export const verticalForward = (Y: number, P: number, s: CloudState) => Y + s.ri
 const verticalSlope = (Y: number, P: number, s: CloudState) => 1 + s.rise * riseWeightD(Y) * centreWeight(P) + s.dragUp * dragWeightD(Y) * dragCentre(P) - s.squash * capWeight(Y);
 /** The stem and base evaporate as the uncovered plate re-heats them (their share of the light left). */
 export const stemLeft = (Y: number, s: CloudState) => 1 - s.stemFade * (1 - smooth(0.12, 0.42, Y));
-/** Bisection steps of the vertical solve (the map is monotonic; ≈ 0.04 mm over its bracket). */
-export const VERTICAL_STEPS = 13;
+/** Bisection steps of the vertical solve (the map is monotonic; ≈ 0.2 mm over its bracket; v1.6 polish 2: 13 → 11). */
+export const VERTICAL_STEPS = 11;
 /** Bisection steps of the radial solve (each with a vertical solve inside). */
-export const OUTER_STEPS = 11;
+export const OUTER_STEPS = 10;
 /** Bisection steps of the slump's solve. */
-export const SKIRT_STEPS = 10;
+export const SKIRT_STEPS = 8;
 
 /**
  * The axisymmetric part of the inverse map (the shader tabulates exactly this per frame, in
@@ -460,7 +495,7 @@ export function cloudMaterial(p: Vector3, s: CloudState, out: CloudMaterial = { 
 }
 
 /** The cloud at the seat: the dome's cavity, soft at the wall, clear over the porcelain (0..1, no noise). */
-export function cloudSeat(X: Vector3, floor: number = CLOUD.floor): number {
+export function cloudSeat(X: Vector3, floor: number = CLOUD.floor, under = 0): number {
   const r = Math.hypot(X.x, X.z);
   const q = X.y - CLOUD.rim;
   const { radius: R, height: H, power: pw } = CLOUD;
@@ -468,7 +503,9 @@ export function cloudSeat(X: Vector3, floor: number = CLOUD.floor): number {
   const k = q > 0 ? Math.pow(Math.pow(r / R, pw) + Math.pow(q / H, pw), 1 / pw) : r / R;
   const d = (1 - k) * Math.min(R, H);
   const inside = smooth(0, CLOUD.wall, d);
-  const above = smooth(0, floor, X.y - plateTop(Math.min(r, PLATE.radius)));
+  // (v1.6 polish 2: the room's air under the base is a boundary like the wall.)
+  const hp = X.y - plateTop(Math.min(r, PLATE.radius));
+  const above = smooth(0, floor, hp) * (under > 0 ? smooth(under, under + CLOUD.wall, hp) : 1);
   const grade = CLOUD.baseDensity + (1 - CLOUD.baseDensity) * smooth(0.05, 0.6, X.y);
   return inside * above * grade;
 }
@@ -484,7 +521,7 @@ export function cloudDensity(p: Vector3, s: CloudState): number {
   cloudMaterial(p, s, mat);
   // (Never in the porcelain: the flow's roll can carry the edge of the base down onto it.)
   const above = smooth(0, 0.012, p.y - slumpSurface(Math.hypot(p.x, p.z)));
-  return cloudSeat(mat.X, s.floor) * Math.min(1, mat.dilution) * evaporation(p.y) * s.fade * above;
+  return cloudSeat(mat.X, s.floor, undercutAt(Math.hypot(mat.X.x, mat.X.z), s)) * Math.min(1, mat.dilution) * evaporation(p.y) * s.fade * above;
 }
 
 // ── The veil: the plate's thin column ─────────────────────────────────────────
@@ -587,13 +624,14 @@ export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infin
  * bright folds. `warp` folds the lobes by the large field.
  */
 export interface CloudLook { amp: number; band: number; billow: number; warp: number; core: number; sheet: number; sheetWidth: number }
-export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, band: 0, billow: 0, warp: 0, core: 0, sheet: 0, sheetWidth: 0 }): CloudLook {
+export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, band: 0, billow: 0, warp: 0, core: 0, sheet: 0, sheetWidth: 0 }, peel = 0): CloudLook {
   out.amp = 0.008 + 0.07 * smooth(0.35, 1.5, age);
   out.band = 0.015 + 0.065 * smooth(0.3, 1.3, age);
-  out.billow = 0.028 + 0.042 * smooth(0.25, 1.3, age);
+  // (v1.6 polish 2: from the lift-off the outer layer peels and billows; the bulk keeps the dome's shape.)
+  out.billow = Math.max(0.028 + EDGE.billow * peel, 0.028 + 0.042 * smooth(0.25, 1.3, age));
   out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
-  out.core = 1.3 + (0.04 - 1.3) * smooth(0.2, 0.85, age);
-  out.sheet = 0.35 + 0.1 * smooth(0.15, 0.5, age) - 0.33 * smooth(0.4, 1.05, age);
+  out.core = 2.2 + (0.04 - 2.2) * smooth(0.15, 0.72, age);
+  out.sheet = 1.2 - 0.6 * smooth(0.15, 0.5, age) - 0.48 * smooth(0.4, 1.05, age);
   out.sheetWidth = 0.012 + 0.05 * smooth(0.3, 1.3, age);
   return out;
 }
@@ -663,8 +701,8 @@ export function steamBounds(
       yMax = Math.max(yMax, fw[1]);
     }
     // (The turbulence's warp, and the billows and swell that move the edge in material space.)
-    const look = cloudLook(s.age, s.erode, BOUNDS_LOOK);
-    const m = 0.1 + 1.6 * s.turb + look.amp + look.billow;
+    const look = cloudLook(s.age, s.erode, BOUNDS_LOOK, s.peel);
+    const m = 0.1 + 1.6 * s.turb + look.amp + look.billow + EDGE.fine;
     const lean = s.lean.length() * Math.max(0, yMax - 0.15);
     const r = rMax + m + lean + s.dragSide.length();
     cloudMin.set(-r, Math.max(0, yMin - m), -r);

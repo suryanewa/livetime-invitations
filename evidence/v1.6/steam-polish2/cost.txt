@@ -1,0 +1,34 @@
+v1.6 steam polish 2: frame cost (the re-judge's bench.ts: the real Dinner scene on the production stage,
+steam on and off interleaved frame by frame, each frame synced by a 1-pixel read-back; 10th percentile
+of on minus off, ms; N 30 x 3 rounds; M2 Pro, Chrome/ANGLE Metal; 2026-10-04, machine load 14-21).
+
+Final build (this branch):
+  tau (s)           0.3   0.5   0.6   0.7   1.0   1.2   1.5   2.2   3.0   overlap 1.0+1.0
+  1400^2            1.3   1.4   1.4   1.5   1.3   1.3   1.2   1.3   0.8   1.5
+  2000^2            1.1   1.4   1.4   1.5   1.2   1.4   1.3   1.4   0.8   1.6
+  (overlap: the reveal at 1.0 s plus a whole left-behind cloud at 1.0 s, fade 1: two full clouds; in use a
+  left-behind cloud is stirred away within ~1 s)
+
+Same session, the re-judge's taus (0.3 / 0.6 / 1.2):
+  this build          1400^2 1.1 / 1.4 / 1.3     2000^2 1.1 / 1.4 / 1.3
+  v1.6/integration    1400^2 1.7 / 2.0 / 1.8     2000^2 1.9 / 2.1 / 1.9   (the polish-1 steam, with the
+                      flames polish's scene-depth change merged; the re-judge measured 1.9-2.4 before it)
+  this branch before fix 7 (fixes 1-6 in): 1400^2 3.4 / 4.4 / 3.2
+
+Where it goes now (1400^2, 1.2-1.5 s, by skipping one part at a time): scene depth + composite 0.2-0.3,
+flow map < 0.1, light volume 0.1, resolve 0.1, the march 0.8-1.0.
+
+What paid for it (fix 7):
+  - no bisection where rays enter the steam: lanes bisected at different steps and serialised their
+    SIMD groups: ~0.9 ms at 0.6 s on its own (the jittered start and the history find the edge as well);
+  - the scene-depth target is kept while the steam is only paused (a client's holdDepth: a steam clock is
+    alive), not freed and reallocated: the bench toggles the steam every frame (0.4-0.5 ms of its "not the
+    march"); a scene switch or the end of the steam still frees it at once;
+  - a checkerboard march packed into a half-width target (every lane useful; a plain checker discard saved
+    nothing), the other half rebuilt by the resolve from the history and the marched neighbours;
+  - budgets by phase: 330 k pixels for the young cloud's fine edge, 200 k once the cloud is thin, x0.45
+    with two clouds; steps dense 18 (to 0.32 s of the thermal), thin 14, veil 12; adaptive steps in dense fog;
+    early exit at 2 % transmittance; probes 5; the light volume 7 + 3 (+ 4 down) taps; bisections 11/10/8;
+  - the peel's fetches only within its reach of the boundary, its finest only near it, faded out by 0.45 s of
+    the thermal; the billows' own-shade tap to 0.3 s of the thermal.
+Zero cost with no steam (no client active: no depth pass, no march), as before.

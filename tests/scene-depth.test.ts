@@ -80,6 +80,35 @@ describe('Scene depth (v1.6)', () => {
     depth.dispose();
   });
 
+  it('v1.6 steam polish 2: a client only paused (holdDepth) keeps the target; once it lets go, or leaves the scene, it is freed', () => {
+    const scene = new Scene(), camera = new PerspectiveCamera();
+    const steam = new Group();
+    scene.add(steam);
+    let active = true, hold = true;
+    unregister.push(requestSceneDepth({ object: steam, active: () => active, holdDepth: () => hold, prepare: () => {} }));
+    const log: string[] = [];
+    const depth = new SceneDepth();
+    expect(depth.render(recording(log), scene, camera)).toBe(true);
+    // Paused (hidden this frame, its effect still running): no pass, nothing drawn, the target kept.
+    active = false;
+    steam.visible = false;
+    log.length = 0;
+    expect(depth.render(recording(log), scene, camera)).toBe(false);
+    expect(log).toEqual([]);
+    expect(depth.allocated).toBe(true);
+    // Done: freed.
+    hold = false;
+    expect(depth.render(recording(log), scene, camera)).toBe(false);
+    expect(depth.allocated).toBe(false);
+    // A held client that has left the scene (a scene switch) never keeps it.
+    active = true; hold = true; steam.visible = true;
+    depth.render(recording(log), scene, camera);
+    scene.remove(steam);
+    expect(depth.render(recording(log), scene, camera)).toBe(false);
+    expect(depth.allocated).toBe(false);
+    depth.dispose();
+  });
+
   it('occluders are the opaque meshes (not transparent ones, shadow proxies or opted-out ones)', () => {
     const root = new Group();
     const solid = new Mesh(new BoxGeometry(), new MeshBasicMaterial());
