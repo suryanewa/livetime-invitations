@@ -63,7 +63,7 @@ export const SMOKE_VOLUME = {
    * Of a thread swept off its stem (the breath) they draw only its first `ribbon[0]` m of sideways
    * travel, handing it over by `ribbon[1]`. The volume draws the rest (mass conserved).
    */
-  ribbon: [0.025, 0.05] as const,
+  ribbon: [0.004, 0.015] as const,
   filament: [0.85, 0.01, 0.03, 0.04, 0.16] as const,
   /** The first vapour (born within `puffHead[0]`–`[1]` s of the flame letting go) is the volume's once `[2]`–`[3]` m up. */
   puffHead: [0.12, 0.3, 0.008, 0.02] as const,
