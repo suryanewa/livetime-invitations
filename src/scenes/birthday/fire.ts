@@ -566,9 +566,10 @@ export const EMBER = {
   /**
    * Wick glow while the flame burns over it: its curled tip, where it pokes into the flame sheet,
    * glows orange-red (v1.6 polish: ≈1,240 K, a bead in every macro photograph; v1.5's dull red,
-   * 1,030 K, left a black rod under the flame).
+   * 1,030 K, left a black rod under the flame; v1.6 polish 2: ≈1,130 K, a fifth as bright: at
+   * 1,240 K it was a glowing orange sphere, a match head, under the flame).
    */
-  lit: 0.8,
+  lit: 0.55,
   /** Fresh oxygen on the bare wick: it flares to its peak in 50 ms, then cools (e-folding 0.8 s). */
   flare: 0.05,
   decay: 0.8,

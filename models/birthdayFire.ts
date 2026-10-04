@@ -488,8 +488,26 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
 }
 
 let beadShared: SphereGeometry | null = null;
-/** The bead: a knob ≈1.1 mm across (the braid's char swells a little over the wick's 1 mm). */
-const beadGeometry = () => (beadShared ??= new SphereGeometry(0.55 * MM_UNITS, 12, 8));
+/**
+ * The bead: a knob of char (v1.6 polish 2: ≈ 0.6 mm across and lumpy, its radius ±25 % round it; the
+ * 1.1 mm sphere read as a match head in the macro and an orange dot at 192 px).
+ */
+const beadGeometry = () => {
+  if (beadShared) return beadShared;
+  const g = new SphereGeometry(0.3 * MM_UNITS, 10, 7);
+  const p = g.getAttribute('position') as BufferAttribute;
+  const v = new Vector3();
+  for (let k = 0; k < p.count; k++) {
+    v.fromBufferAttribute(p, k);
+    const n = v.clone().normalize();
+    // Lumps: a few low harmonics of the direction (seam-free: a function of the position only).
+    const lump = 0.16 * Math.sin(5.1 * n.x + 1.3) * Math.cos(4.3 * n.y - 0.7) + 0.1 * Math.sin(7.7 * n.z + 2.9 * n.x) - 0.08 * n.y;
+    v.multiplyScalar(1 + lump);
+    p.setXYZ(k, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return (beadShared = g);
+};
 
 const qInv = new Quaternion();
 const qCake = new Quaternion();

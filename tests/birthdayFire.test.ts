@@ -44,7 +44,13 @@ describe('Birthday fire: the flame', () => {
     expect((2 * FLAME_REST.radius) / MM).toBeGreaterThanOrEqual(4.5);
     expect((2 * FLAME_REST.radius) / MM).toBeLessThanOrEqual(5.5);
     expect((WICK_TIP_Y - POOL_Y) / MM).toBeCloseTo(3, 6);
-    expect((WICK_TIP_Y - (FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length)) / MM).toBeCloseTo(1.2, 6);
+    // v1.6 polish 2: the luminous zone's foot 0.4 mm over the wick's tip (its soot forms there, the
+    // white-yellow core 1–1.5 mm over the tip); under it, the lowest ≈15–20 % of the flame is its dim
+    // blue zone (re-judge: the foot 1.2 mm under the tip drew an orange collar).
+    expect((FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length - WICK_TIP_Y) / MM).toBeCloseTo(0.4, 6);
+    const blue = (FLAME_REST.foot * FLAME_REST.length) / FLAME_REST.length;
+    expect(blue).toBeGreaterThan(0.15);
+    expect(blue).toBeLessThan(0.22);
     expect((FLAME_REST.base + FLAME_REST.widest * FLAME_REST.length - WICK_TIP_Y) / MM).toBeCloseTo(1, 6);
     // The bare wick under the luminous zone is at most a quarter of the flame seen above the pool.
     expect((FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length - POOL_Y) / top).toBeLessThan(0.25);
