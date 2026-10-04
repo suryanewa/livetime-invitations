@@ -1,0 +1,5 @@
+scripts/cake-perf.ts http://127.0.0.1:5608 polish2 (M2 Pro, Chrome headless, Metal; 2026-10-03, after polish 2's four fixes and the pearls; other sessions rendering on the machine, so the bench medians run high: compare own vs plain)
+polish2 laptop · materials: own 2.64 vs plain 2.61 ms (patches +0.03) · bench (120) min 2.21 q25 2.65 med 3.45 ms: frames 757 p50 16.70 p95 16.70 p99 16.80 max 16.8 ms · GPU render at guest-ready (169 frames) p50 19.72 p95 25.45 ms · buffer 2108×1185 @1.647019614671031
+polish2 phone · materials: own 1.96 vs plain 1.94 ms (patches +0.02) · bench (120) min 1.51 q25 1.79 med 2.10 ms: frames 757 p50 16.70 p95 16.80 p99 16.80 max 16.8 ms · GPU render at guest-ready (168 frames) p50 16.92 p95 28.56 ms · buffer 780×1688 @2
+
+earlier run in the same session (more load): laptop own 2.86 vs plain 2.94 ms (patches -0.07), phone own 3.68 vs plain 3.53 ms (patches +0.15); 60 fps at phone, one 33 ms hiccup at laptop

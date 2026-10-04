@@ -144,7 +144,8 @@ const SCENE_CAPTURE = {
     // Declined shows the empty stand and the closed bin: identical for both frostings.
     sharedDeclined: true,
     // v1.5 polish: the careful candle placement makes the host beat ≈ 2.45 s.
-    clips: { host: 2.8, accept: 1.7, decline: 1.8, change: 2.6 },
+    // v1.6: the accept clip runs on past the blow to show the smoke rising and thinning (3–5 s smoulder).
+    clips: { host: 2.8, accept: 4.5, decline: 1.8, change: 2.6 },
   },
   sports: {
     presets: [['orange', '{ category: "sports", ball: "orange" }'], ['cream', '{ category: "sports", ball: "cream" }']],
