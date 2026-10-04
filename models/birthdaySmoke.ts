@@ -63,12 +63,12 @@ export const SMOKE_VOLUME = {
    * Of a thread swept off its stem (the breath) they draw only its first `ribbon[0]` m of sideways
    * travel, handing it over by `ribbon[1]`. The volume draws the rest (mass conserved).
    */
-  ribbon: [0.004, 0.015] as const,
+  ribbon: [0.002, 0.008] as const,
   filament: [0.85, 0.01, 0.03, 0.04, 0.16] as const,
-  /** The first vapour (born within `puffHead[0]`–`[1]` s of the flame letting go) is the volume's once `[2]`–`[3]` m up. */
-  puffHead: [0.12, 0.3, 0.008, 0.02] as const,
+  /** The first vapour (born within `puffHead[0]`–`[1]` s of the flame letting go) is the volume's once `[2]`–`[3]` m up (all but its condensing foot). */
+  puffHead: [0.12, 0.3, 0.0, 0.004] as const,
   /** v1.6 polish 2: the ribbons draw threads up to this wide (m: fading from [0] to [1]); wider smoke is the volume's. */
-  ribbonWidth: [0.0028, 0.0045] as const,
+  ribbonWidth: [0.0025, 0.0032] as const,
   /** How far above its transition (m) a plume's sheets and folds are fully developed (the march's turbulence, 0 → 1). */
   develop: 0.045,
   /**
@@ -77,6 +77,8 @@ export const SMOKE_VOLUME = {
    * over, the merged veil's a few hundredths.
    */
   mass: 0.07,
+  /** v1.6 polish 2: the box's margin round its puffs for the march's warp (scene units: 1.5 cm). */
+  pad: 0.075,
   /** Evaporation and mixing below visibility: the volume's own age fade (× each kind's ribbon fade), s. */
   ageFade: 1.4,
   /** Evaporation of the aerosol with height above the wick (e-folding, m, from 4 cm or its plume's transition, if higher). */
@@ -102,7 +104,7 @@ export const SMOKE_VOLUME = {
   key: 0.6,
   room: [0.6, 0.62, 0.66] as const,
   /** v1.6 polish 2: the room light's multiple scattering in thick smoke (× 1 − e^−τ). */
-  roomOctaves: 0.7,
+  roomOctaves: 1.1,
 } as const;
 
 const VOX = SMOKE_VOLUME.voxel;
@@ -806,7 +808,7 @@ export class SmokeVolume {
       const db = st.age[k + 1]! - st.age[k]!;
       // (Still the ribbon's: the laminar stem, below its transition and not swept.)
       if (rate <= 0 || db <= 0 || ribbonShare(s1, Math.max(st.rise[k]!, st.rise[k + 1]!), laminar, since - st.age[k + 1]!, Math.min(st.full[k]!, st.full[k + 1]!)) >= 1) continue;
-      const mass = SMOKE_VOLUME.mass * rate * db * ((globalThis as { __smokeMass?: number }).__smokeMass ?? 1);
+      const mass = SMOKE_VOLUME.mass * rate * db;
       const sig = (j: number) => Math.min(SIGMA_MAX, Math.max(SIGMA_MIN, (Math.max(SMOKE_VOLUME.width(st.rise[j]!), st.full[j]!) / 2.355) * UNITS));
       const sa = sig(k), sb = sig(k + 1);
       const m = Math.max(1, Math.min(32, Math.ceil(len / (1.2 * Math.min(sa, sb)))));
@@ -858,6 +860,10 @@ export class SmokeVolume {
       cx += S[o]! * m; cy += S[o + 1]! * m; cz += S[o + 2]! * m; mt += m;
     }
     cx /= mt; cy /= mt; cz /= mt;
+    // (v1.6 polish 2: and the march's warp's reach round them: smoke folded out past the box was cut
+    // by its face, a straight seam down the first puff.)
+    const pad = SMOKE_VOLUME.pad;
+    x0 -= pad; y0 -= pad; z0 -= pad; x1 += pad; y1 += pad; z1 += pad;
     // Too wide: centred on the smoke's mass; too tall: kept from the bottom (the dense part), up to the grid's height.
     const fit = (lo: number, hi: number, c: number, N: number, bottom: boolean) => {
       const span = N * VOX;

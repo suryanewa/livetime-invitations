@@ -604,8 +604,10 @@ export const SMOKE_LIGHT = { room: [0.6, 0.62, 0.66] as const, key: 0.6, g: 0.3,
  * the flame letting go carry its soot's glow (≈1,500 K, `radiance` on the exposed scale), fading
  * over their first `fade` s of age: the dying flame's emission falls as the vapour's scattering
  * rises (it condenses within 4 ms), so flame and smoke are one thread with no gap.
+ * (v1.6 polish 2: 0.4 → 0.06: the re-judge still saw a salmon puff at the wick; the last glow now adds
+ * at most a few levels of red to the first vapour.)
  */
-export const SMOKE_GLOW = { born: 0.04, fade: 0.035, radiance: 0.4 } as const;
+export const SMOKE_GLOW = { born: 0.04, fade: 0.035, radiance: 0.06 } as const;
 
 /**
  * v1.5's flat smoke radiance (white, brighter than the wall: ≈ 245 of 255 on screen against the
