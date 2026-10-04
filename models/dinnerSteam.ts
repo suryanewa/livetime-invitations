@@ -75,11 +75,12 @@ export const STEAM_LOOK = {
   room: 0.22,
   /**
    * Their colours (v1.6 polish 2: the judge saw "cold steam in a warm room"): the key is the
-   * window's daylight (the rig's key, #F3F5FA); the room is what surrounds the steam on every side
-   * but the window's: the greige walls and cove, the table and the white plate that reflects them.
+   * window's daylight as the white plate renders it under this rig (neutral: R − B +0.5); the room is
+   * what surrounds the steam on every side but the window's: the greige walls and cove, the table
+   * and the white plate that reflects them.
    */
-  keyTint: new Color('#F3F5FA'),
-  roomTint: new Color('#E0D7CA'),
+  keyTint: new Color('#F5F5F5'),
+  roomTint: new Color('#E2DBD0'),
   /** Henyey-Greenstein asymmetry (water droplets scatter forward). */
   g: 0.7,
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
@@ -102,7 +103,7 @@ export const STEAM_LOOK = {
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
   /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
-  shadow: 0.2,
+  shadow: 0.16,
   /** The shadow's optical depth: the fog's extinction less what it scatters forward onto the surface (≈ 1 − g). */
   shadowOd: 0.45,
   /**
@@ -118,7 +119,7 @@ export const STEAM_LOOK = {
   history: 0.22,
   fillBlend: 0.1,
   /** The march's pixel budget: half the drawing buffer a side, at most this many pixels. */
-  marchPixels: 360_000,
+  marchPixels: 330_000,
   /** (v1.6 polish 2) The budget once only thin steam shows (the cloud past its fog, the veil). */
   thinPixels: 200_000,
   lowShare: 0.6,
@@ -784,7 +785,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   if ((uFlags & 256) == 0 && H.x > 0.0 && detail > 0.0 && dEff > -5.5 * H.x - 0.005 && dEff < 3.0 * H.x + E.y) {
     float outer = sat(0.5 - dw / 0.08);
     vec3 Xp = mat3(0.80, 0.36, -0.48, -0.20, 0.91, 0.36, 0.56, -0.20, 0.80) * X;
-    vec3 Xf = Xp * 4.6 + (nb.rgb - 0.5) * 0.9 + vec3(0.37, -0.6 * H.y * outer * (tau - 0.27) + 0.21, 0.53 + 0.3 * tau);
+    vec3 Xf = Xp * 6.0 + (nb.rgb - 0.5) * 0.9 + vec3(0.37, -0.6 * H.y * outer * (tau - 0.27) + 0.21, 0.53 + 0.3 * tau);
     vec4 nf = texture(uNoise, Xf);
     fineD = H.x * 1.8 * (nf.a - 0.6) * 2.0;
     float near = dEff + fineD;
@@ -1757,9 +1758,9 @@ export class DinnerSteam {
       const present = s.present && s.fade > 0;
       A[l]!.set(tau, 1, c.fade, present ? 1 : 0);
       if (this.l0 < 0 || (present && !this.l0Cloud)) { this.l0 = l; this.l0Cloud = present; this.tau0 = tau; }
-      // (The fog inside is going by ≈ 0.42 s of the thermal (v1.6 polish 2: it empties sooner):
+      // (The fog inside is going by ≈ 0.32 s of the thermal (v1.6 polish 2: it empties sooner):
       // a hollowing cloud and wisps take fewer steps.)
-      if (present) steps = Math.max(steps, s.age < 0.42 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
+      if (present) steps = Math.max(steps, s.age < 0.32 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
       if (present) this.clouds++;
       // (Its shadow once the dome has lifted off it: τ 0.3 s on.)
       shadowOn = Math.max(shadowOn, present ? Math.min(1, Math.max(0, (tau - 0.3) / 0.15)) : 1);
@@ -1768,7 +1769,7 @@ export class DinnerSteam {
       const look = cloudLook(s.age, s.erode, this.look, s.peel);
       E[l]!.set(look.amp, look.band, look.billow, look.warp);
       // (The fine curls belong to the young edge: as the band widens they would read as a felt over the aging cap.)
-      Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.3) / 0.25)), s.peel, s.undercutReach, s.undercutHeight);
+      Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.25) / 0.2)), s.peel, s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
       // (The ring holds fog once it has rolled up, until the cloud has gone.)
       // (v1.6 polish 2: its core holds its fog from ≈ 0.25 s of the thermal, tears from ≈ 0.45 s and has

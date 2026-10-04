@@ -133,7 +133,7 @@ export const EDGE = {
   peel: [0.27, 0.6] as const,
   /** The young billows' growth at the peel (su, ≈ 1 cm), and the peeling layer's scale (su: its lobes ±2.4 mm, its sheets out to ≈ 1.3 cm). */
   billow: 0.06,
-  fine: 0.026,
+  fine: 0.03,
   /** The peeling layer's sheets: their density at the boundary (the young fog's is CLOUD look `core`). */
   wisp: 2.2,
   /** The gravity current under the base: its start (τ, s), speed (su/s ≈ 10 cm/s), furthest reach in from the rim and its head's height (su). */
