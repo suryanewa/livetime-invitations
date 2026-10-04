@@ -334,6 +334,90 @@ hook test stubs the bloom and haze hooks merged at integration: it failed on `v1
 `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6, `tests/browser/scene-depth.spec.ts` 5/5;
 `pnpm typecheck` clean.
 
+## Polish round 2: the re-judge's fixes (`v1.6/steam-polish2`)
+
+The re-judge scored the polish round **5 at laptop size, 5.5 at phone size** and named seven fixes (the first
+five for the signature, the last two to ship) and seven new tells (A–G). Each fix is its own commit; frames are
+rendered with the re-judge's own `frames.ts` (laptop 1280 × 720 @2 in its 620 CSS-px clip, phone 390 × 844 @3,
+16 ms virtual clock) and measured against no-steam twins; the numbers are in
+`evidence/v1.6/steam-polish2/measurements.txt`, the cost in `evidence/v1.6/steam-polish2/cost.txt`.
+
+1. **Fine structure on the edge, from the lift-off** (`EDGE`, `cloud()`). Once the rim lifts off (`peel`,
+   τ 0.27–0.6 s) the outer layer is a shear layer: the young billows grow by ≈ 1 cm, and the dense boundary
+   takes its own lobes (Worley bulges, ≈ 7 mm cells, rounded so that seen edge-on each keeps its outline) with
+   2–4 mm curls folded in, and here and there tears off in thin translucent sheets out to ≈ 1 cm; all in
+   material space, the outer layer sliding against the inner, faded out by 0.45 s of the thermal as the band
+   widens (the felt pattern on the aging cap, tell G). The young fog is denser (core 2.2, skin 1.2) so the lobes
+   keep their outline. The room's cooler air undercuts the foot from the rim as a gravity current (≈ 12 cm/s,
+   up to 2 cm deep at the rim, 6 cm in) whose head breaks into lobes and clefts: the foot is no ellipse (tell A).
+   The history is fetched Catmull-Rom (bilinear resampling blurred the edge each frame) and clipped at 1.25 σ.
+   Lobes per 10 cm of the outline at 0.54–0.67 s at 2× (`py/lobes.py`): walls 5–8 (judge's frames 0–4.5),
+   crown 3.5–4.6 (2.5–2.7); the dome stays inside the seated outline to 0.74 s
+   (`dome-0.43-0.74-outline.png`, `dome-edge-x2-0.54-0.67.png`).
+2. **The plate stays white** (`surfaceShadow` in the composite). The steam's shadow on the plate and the table is
+   computed per full-resolution pixel in the composite: none where the fog itself stands in front of the
+   surface (it reads offset, beside the fog), its optical depth the fog's extinction less what it scatters
+   forward onto the surface (× 0.45), at most 0.16 of the light. The fog is lit as a dense white body:
+   Wrenninge's octaves raised (0.45 / 0.18, the second's extinction 0.2), the white plate's bounce on the fog
+   above it (its view factor, through the fog below it: a downward optical depth in the light volume's fourth
+   channel), the key's optical depth 1.25× the light volume's (was 2.1×). Plate centre 0.48–1.0 s: −5 to +1
+   levels (judge's frames −24 to −35); its shaded right side −10 to −19 (−42 to −79) (tell B).
+3. **No waterline** (`STEAM_LOOK.underBand`). The undercut's foot, the stem and the wall material that rolls
+   under the cap take a 1.7 cm band as the thermal rises (from 0.28 s of the thermal); the walls keep the
+   young 2.5 mm edge. Part of the torn line was a lighting step (the cap's shadow on the base through the
+   steeper key falloff), gone with fix 2. Strongest vertical step per column over the well at 0.74–0.96 s:
+   median 1.8–2.2 levels, no column over 12 (judge's frames median 3.8–9.2, 26 % of columns over 12 at
+   0.83 s) (tell C).
+4. **Warm steam** (`keyTint`, `roomTint`). The march keeps the key's and the room's light apart (luminance each)
+   and packs the key's share of each pixel (7 bits) beside its depth; the resolve carries the key's luminance
+   through the history; the composite colours the steam by the share, each tint of unit luminance: the key as
+   the white plate renders it under this rig (neutral), the room the greige cove, walls and table (#E2DBD0).
+   Red − blue of the bright steam 0.48–0.99 s: **+6.3 to +7.9** (judge's frames +1.7), over the plate +6 to
+   +8; the backdrop is +8.6 (tell F).
+5. **The cap rolls up round a ring core and tears** (`ringFog`, `ringTube`). A tube of fog round the cap's
+   edge (the ring's reach × 0.55, density 5) with the rolled sheet wound round it, shading its own underside
+   (three analytic taps towards the key; the light volume carries its mean too); it holds its fog from ≈ 0.2 s
+   of the thermal, tears round its circumference into a few lobes as a slow field's threshold rises, and has
+   gone by ≈ 1.6 s. The dip between the ring's lit back and front arcs, through the cap's middle at 0.96–1.12 s:
+   median 10–16 levels, best 22–29 (judge's frames median 0–7); torn into 3–5 lobes at 1.15–1.35 s
+   (`roll-1.06-1.22.png`, `mushroom-0.99-1.76.png`, `cap-1.02-1.15-x2.png`).
+6. **The return squeezes; the spill is a sheet** (`squeeze`, `spill`). On a change of mind the returning cover's
+   shove is torn at two scales, the stirred fog breaks into lumps, and the wall's own boundary layer sweeps the
+   centimetre next to the silver clear (it veiled the returning dome). The seating squeezes: from 0.1 s before
+   the capture the air under the dome leaves the closing gap in puffs along the porcelain (≈ 5 cm, rising as
+   they slow, gone in ≈ 0.3 s; their own field, not held by the capture), a few round the rim
+   (`decline-0.5-return.png`: 0.67–0.80 s; tell E). The spill is a 3–6 mm sheet that wraps the raised rim's lip
+   and climbs only a little way, torn into strips: the dome's right flank brightens by +0 to +1 levels at
+   0.30–0.37 s (judge's frames +3 to +20, p90 +49) (tell D's wash). The march's step adapts in dense fog (at most
+   ≈ 0.45 of optical depth): the speckle in the fog seen through the gap went with it.
+7. **Cost.** See `cost.txt`: with the re-judge's `bench.ts`, **1.1–1.5 ms** at 1400² and 2000² over τ 0.3–2.2 s
+   (1.1 / 1.4 / 1.3 at the re-judge's τ 0.3 / 0.6 / 1.2 s, against 1.7–2.1 for the integration build in the same
+   session), the overlap case (two full clouds) 1.5–1.6. What paid: no bisection at the ray's entry (divergent:
+   ≈ 0.9 ms alone); the scene depth keeps its target while the steam is only paused (`holdDepth`); a
+   checkerboard march packed into a half-width target, the other half rebuilt by the resolve; budgets by
+   phase (330 k pixels young, 200 k thin, × 0.45 with two clouds; steps 18 / 14 / 12, adaptive in dense fog,
+   early exit at 2 %; probes 5); the peel's fetches only near the boundary. The main pass's own depth could not
+   be reused: the stage draws it into the multisampled default framebuffer, which WebGL cannot sample.
+   (Tooling, for the bench and the frames: `__steamFlags` turns single features off by bit, `__steamFull`
+   marches every pixel, `__steamPixels` overrides the budget; `scripts/_scratch/gpu-bench.ts` takes
+   `_`-joined variants such as `f256_s14`.)
+
+**The tells** (the re-judge's 1–11 and A–G): gone — A (the ghost cloche: lobed wall, broken foot), B (the
+smoked-glass plate), C (the waterline), F (cold steam), G (the felt on the aging cap), the rim spill's lump and
+white wash (4, D's wash); improved — the roll (7: a legible ring core that tears), the return (10, E: puffs at
+the seating and a torn shove, though the displaced fog still reads partly as a cap round the dome), the lighting
+(5: warm and white, but light-to-shade across the lit body is still small, ≈ 5–20 levels), the silver under the
+fog (11: the fog in front of it has a lobed edge, no crescent; its contrast is the fog's real occlusion);
+remain — the fine 2–4 mm detail is at the march's resolution limit (1.2 mm a march pixel young) and partly
+smoothed by the history; the crown's lobes are larger than the walls'. The temporal high-frequency noise at 1.6 s
+is 0.54 levels rms (judge's frames 0.46): the checkerboard adds a little, no pattern. The same frame is
+byte-identical across runs (the checkerboard's parity is the march's frame count).
+
+**Tests.** `tests/dinner-steam.test.ts` 23 (new: the peel and the undercut; the colour and the budgets),
+`tests/scene-depth.test.ts` 6 (new: a paused client keeps the target, one that lets go or leaves the scene frees
+it), `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6, `tests/browser/scene-depth.spec.ts` 5/5,
+`tests/browser/collection.spec.ts` 3/3; `pnpm typecheck` clean.
+
 ## Decisions
 
 - **A material field, not particles.** Every sample asks where its air came from (the analytic flow's inverse), so

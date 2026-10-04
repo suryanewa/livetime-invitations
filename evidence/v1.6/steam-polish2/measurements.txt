@@ -1,0 +1,86 @@
+# v1.6 steam polish 2: measurements (laptop 1280x720 @2, the judge's 620 CSS-px clip; levels 0-255; steam vs its no-steam twin)
+
+## Plate (fix 2): centre / shaded right side / left, clean -> with steam
+now:
+0.480s centre 240->239 (-1)  right 243->227 (-15)  left 230->235 (+5)
+0.608s centre 240->239 (-1)  right 243->229 (-14)  left 230->234 (+4)
+0.736s centre 240->237 (-3)  right 243->223 (-19)  left 230->231 (+2)
+0.864s centre 240->235 (-5)  right 243->225 (-18)  left 230->229 (-0)
+0.992s centre 240->241 (+1)  right 243->233 (-10)  left 230->229 (-0)
+judge's frames:
+0.480s centre 240->213 (-27)  right 243->175 (-68)  left 230->229 (-1)
+0.608s centre 240->213 (-27)  right 243->171 (-71)  left 230->229 (-1)
+0.736s centre 240->209 (-31)  right 243->163 (-79)  left 230->228 (-2)
+0.864s centre 240->205 (-35)  right 243->177 (-66)  left 230->225 (-5)
+0.992s centre 240->216 (-24)  right 243->200 (-42)  left 230->227 (-3)
+
+## Warmth (fix 4): red - blue of the bright steam (> 40 above the background, luma > 215)
+now:
+0.480s bright steam (52738 px, luma 230) R-B +7.9 (median +8, p10 +7, p90 +9);  over the plate centre R-B +7.9
+0.608s bright steam (79550 px, luma 232) R-B +7.8 (median +8, p10 +7, p90 +9);  over the plate centre R-B +8.0
+0.736s bright steam (100535 px, luma 237) R-B +6.3 (median +6, p10 +5, p90 +7);  over the plate centre R-B +8.4
+0.864s bright steam (122345 px, luma 235) R-B +6.5 (median +6, p10 +5, p90 +7);  over the plate centre R-B +8.2
+0.992s bright steam (83986 px, luma 234) R-B +7.9 (median +8, p10 +7, p90 +9);  over the plate centre R-B +5.9
+judge's frames:
+0.480s bright steam (38736 px, luma 225) R-B +1.8 (median +2, p10 +1, p90 +3);  over the plate centre R-B +0.1
+0.608s bright steam (63459 px, luma 226) R-B +1.7 (median +2, p10 +1, p90 +3);  over the plate centre R-B +0.1
+0.736s bright steam (49529 px, luma 228) R-B +1.7 (median +2, p10 +1, p90 +3);  over the plate centre R-B +0.1
+
+## Waterline (fix 3): strongest vertical step per column over the well (3 px, 1 px blur)
+now:
+0.736s median step 1.8  p90 3.3  columns > 12: 0%
+0.832s median step 2.2  p90 4.7  columns > 12: 0%
+0.896s median step 1.9  p90 4.1  columns > 12: 0%
+0.960s median step 2.0  p90 3.4  columns > 12: 0%
+judge's frames:
+0.736s median step 3.8  p90 5.8  columns > 12: 0%
+0.832s median step 9.2  p90 13.1  columns > 12: 26%
+0.896s median step 7.3  p90 11.8  columns > 12: 8%
+0.960s median step 5.2  p90 8.7  columns > 12: 1%
+
+## Edge (fix 1): lobes per 10 cm of outline (polar outline about the foot, 1.5 cm detrend, peaks >= 2 px)
+now:
+0.544s right wall: 5.6/10cm (6 in 10.7 cm, rms 5.7px)  crown: 4.6/10cm (7 in 15.3 cm, rms 9.2px)  left wall: 5.5/10cm (6 in 10.9 cm, rms 4.6px)
+0.608s right wall: 7.8/10cm (9 in 11.5 cm, rms 9.9px)  crown: 4.2/10cm (7 in 16.7 cm, rms 10.6px)  left wall: 5.1/10cm (6 in 11.7 cm, rms 6.7px)
+0.672s right wall: 5.2/10cm (6 in 11.5 cm, rms 8.5px)  crown: 3.5/10cm (6 in 17.2 cm, rms 11.1px)  left wall: 5.0/10cm (7 in 13.9 cm, rms 9.2px)
+judge's frames:
+0.544s right wall: 0.0/10cm (0 in 8.8 cm, rms 2.0px)  crown: 2.7/10cm (3 in 11.2 cm, rms 1.6px)  left wall: 4.2/10cm (4 in 9.5 cm, rms 1.5px)
+0.608s right wall: 0.0/10cm (0 in 8.6 cm, rms 2.1px)  crown: 2.6/10cm (3 in 11.5 cm, rms 1.7px)  left wall: 3.0/10cm (3 in 9.9 cm, rms 1.7px)
+0.672s right wall: 0.0/10cm (0 in 8.9 cm, rms 1.7px)  crown: 2.5/10cm (3 in 11.9 cm, rms 2.2px)  left wall: 4.5/10cm (5 in 11.0 cm, rms 5.4px)
+
+## The roll (fix 5): dip between the ring's two bright arcs, vertical profiles through the cap (median / best over 15 columns)
+now:
+0.960s curl dip median 10, best 24 levels
+0.992s curl dip median 11, best 28 levels
+1.056s curl dip median 14, best 29 levels
+1.120s curl dip median 16, best 22 levels
+1.184s curl dip median 7, best 17 levels
+1.248s curl dip median 2, best 17 levels
+judge's frames:
+0.960s curl dip median 0, best 19 levels
+0.992s curl dip median 0, best 19 levels
+1.056s curl dip median 7, best 19 levels
+1.120s curl dip median 7, best 21 levels
+1.184s curl dip median 7, best 25 levels
+1.248s curl dip median 0, best 28 levels
+
+## Body: lit / middle / shaded side over the backdrop
+0.480s lit 210 (bg 124, +86) R-B +7.1  mid 228 (bg 147, +80) R-B +7.3  shade 227 (bg 161, +66) R-B +7.4
+0.608s lit 239 (bg 153, +86) R-B +7.4  mid 234 (bg 159, +76) R-B +7.5  shade 234 (bg 182, +51) R-B +7.4
+0.736s lit 241 (bg 146, +95) R-B +5.7  mid 240 (bg 172, +69) R-B +5.7  shade 237 (bg 192, +45) R-B +6.6
+
+## Temporal noise at 1.6 s (judge's tnoise.py, 600 px region)
+tn 100-101: |diff| mean 0.71  temporal HF rms 0.54  spatial HF rms 5.96  p99|hfD| 1.92
+lap 100-101: |diff| mean 0.66  temporal HF rms 0.46  spatial HF rms 5.92  p99|hfD| 1.52
+
+## Spill (fix 6): the dome's right flank, mean / p90 brightening at 0.30-0.37 s
+now   0.304s right flank +0.0 mean, p90 +0
+now   0.336s right flank +0.0 mean, p90 +0
+now   0.368s right flank +1.1 mean, p90 +3
+judge 0.304s right flank +0.0 mean, p90 +0
+judge 0.336s right flank +3.1 mean, p90 +11
+judge 0.368s right flank +19.7 mean, p90 +49
+
+## Determinism: the same frame from two runs of the final build
+f0038 (τ 0.608 s): byte-identical across two runs
+f0070 (τ 1.120 s): byte-identical across two runs

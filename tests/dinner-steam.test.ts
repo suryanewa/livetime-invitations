@@ -6,6 +6,7 @@ import { buildDisposalBin } from '../models/disposalBin.ts';
 import { VisualDirector } from '../src/core/visualDirector.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { DinnerScene } from '../src/scenes/dinner/index.ts';
+import { STEAM_LOOK } from '../models/dinnerSteam.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
   axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, dragAt, EDGE, leftSteamEnd, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
@@ -154,6 +155,21 @@ describe('Dinner steam field (v1.6)', () => {
     // (The held dome: the walls stand where they were, the undercut takes only the foot.)
     const P = CLOUD.radius - 0.05;
     expect(at(P, 0.25)).toBeCloseTo(cloudSeat(new Vector3(P, plateTop(P) + 0.25, 0), CLOUD.floor), 6);
+  });
+
+  it('v1.6 polish 2: the steam is lit in colour (a neutral key, a warm room) and its march fits the budget', () => {
+    // The room's light is warmer than the key's: red over blue, so steam lit mostly by the room in a
+    // warm room reads warm; the key is the window's light as the white plate renders it (neutral).
+    const k = STEAM_LOOK.keyTint, r = STEAM_LOOK.roomTint;
+    expect(Math.abs(k.r - k.b)).toBeLessThan(0.01);
+    expect(r.r - r.b).toBeGreaterThan(0.04);
+    expect(r.r - r.b).toBeLessThan(0.2); // (linear: #E2DBD0)
+    // The plate's shadow is a fraction of the key's share; dense fog in front of a surface casts none on it (the composite).
+    expect(STEAM_LOOK.shadow).toBeLessThanOrEqual(0.2);
+    // The march's budgets: the young cloud's fine edge the most, thin steam less; steps by phase.
+    expect(STEAM_LOOK.thinPixels).toBeLessThan(STEAM_LOOK.marchPixels);
+    expect(STEAM_LOOK.steps.dense).toBeGreaterThan(STEAM_LOOK.steps.thin);
+    expect(STEAM_LOOK.steps.thin).toBeGreaterThanOrEqual(STEAM_LOOK.steps.veil);
   });
 
   it('its base rolls outward and down over the plate\'s rim', () => {
