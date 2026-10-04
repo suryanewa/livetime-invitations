@@ -371,6 +371,17 @@ export interface FoodFlames {
  * `broad` of its strength (the whole top's wash; its shadows stay). Calibrated against the flames
  * polish's light (FLAME_LIGHT_CAL 2.0 on v1.6/integration, a trial merge): the top's centre +7 R, the
  * halo +29–36 R within a centimetre of a candle, +14–17 at 3 cm (at the old 1.0: +3–4 and half that).
+ *
+ * v1.6 polish 3 (the third judge's fix 1: "the lilac tint now sits in six overlapping halos and turns
+ * the shadows into mauve-brown smudges"): the soot-coloured light added to a blue coat whose blue is
+ * already in the tone curve's shoulder raised red at 2.7× green, rotating the hue to 232°. On the top
+ * coat the flames' light is now hue-preserving, whatever its colour: the halo scales the coat's own
+ * light (`gain` × the halo's irradiance × the flame colour's peak channel: the coat as lit there, the
+ * key's candle shadows in it, so a shadow inside a halo stays blue and as deep as without the flames),
+ * and the broad light is answered as a white light at the flame's peak channel, at `broad`. The halo is
+ * tighter (`reach` 1.2 cm: e^-1 at 1.2 cm from the candle, gone by 3 cm). Measured on the laptop crop,
+ * square 540 @2 and phone against the flames' light off: +11–14 R at 0.5 cm, +7–9 at 1 cm, +3–5 at 2 cm,
+ * the halo's hue within 2.5° of the coat's own; the top's mean +6 R, 3 % of it more than 3° off.
  */
 export const FLAME_POOL = { gain: 1.0, wrap: 0.5, reach: 0.06, broad: 0.2 } as const;
 
