@@ -756,7 +756,7 @@ export class SmokeRig {
           if (k > 0) path += Math.hypot(st.position[k * 3]! - st.position[k * 3 - 3]!, st.position[k * 3 + 1]! - st.position[k * 3 - 2]!, st.position[k * 3 + 2]! - st.position[k * 3 - 1]!);
           // The ribbon is the thread's laminar stem only: past it the volume carries the vapour.
           // (v1.6 polish 2: and the thin filament it goes on as above its transition, fading as it spreads.)
-          const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!);
+          const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!, st.full[k]!);
           // (v1.6 polish 2: at the thread's own core width, 1–3 mm: the turbulent spread is the volume's veil.)
           T.wid[k] = st.full[k]! * MPS_UNITS;
           // (A filament at its own width: as dense as the share of the smoke it still carries, ribbonShare.)

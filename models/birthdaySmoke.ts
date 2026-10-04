@@ -67,6 +67,8 @@ export const SMOKE_VOLUME = {
   filament: [0.85, 0.01, 0.03, 0.04, 0.16] as const,
   /** The first vapour (born within `puffHead[0]`–`[1]` s of the flame letting go) is the volume's once `[2]`–`[3]` m up. */
   puffHead: [0.12, 0.3, 0.008, 0.02] as const,
+  /** v1.6 polish 2: the ribbons draw threads up to this wide (m: fading from [0] to [1]); wider smoke is the volume's. */
+  ribbonWidth: [0.0028, 0.0045] as const,
   /** How far above its transition (m) a plume's sheets and folds are fully developed (the march's turbulence, 0 → 1). */
   develop: 0.045,
   /**
@@ -92,11 +94,15 @@ export const SMOKE_VOLUME = {
    */
   sheet: [0.04, 0.025, 0.1, 0.35] as const,
   sheetGrow: [0.5, 0.2, 0.85] as const,
+  /** v1.6 polish 2: the billows of a developing plume and the swept first puff: size (scene units: 1.2 cm), mean, contrast. */
+  billow: [0.06, 1.0, 2.6] as const,
   /** Light: Henyey–Greenstein asymmetry (forward), albedo, the key's share and the room's radiance (linear, before exposure). */
   g: 0.6,
   albedo: 0.92,
   key: 0.6,
   room: [0.6, 0.62, 0.66] as const,
+  /** v1.6 polish 2: the room light's multiple scattering in thick smoke (× 1 − e^−τ). */
+  roomOctaves: 0.7,
 } as const;
 
 const VOX = SMOKE_VOLUME.voxel;
@@ -263,7 +269,9 @@ void main() {
   float q = dot(d, d) / s2;
   if (q > 6.25) discard;
   // A 3D Gaussian carrying vMass (τ·unit²) over its volume: optical depth per scene unit.
-  float rho = vMass * exp(-0.5 * q) / (15.7496 * s2 * vP.w * ${f(VOX * VOX * VOX * 1e6)} * 1e-6);
+  // (v1.6 polish 2: lowered to reach exactly 0 at its 2.5 σ cut: the dense first puff showed the cut's
+  // 4 % as a hard rounded edge.)
+  float rho = vMass * max(exp(-0.5 * q) - 0.0439369, 0.0) * 1.0459562 / (15.7496 * s2 * vP.w * ${f(VOX * VOX * VOX * 1e6)} * 1e-6);
   gl_FragColor = vec4(rho, rho * vTurb, 0.0, 0.0);
 }
 `;
@@ -344,6 +352,8 @@ uniform int uDebug;
 uniform vec4 uSheet;
 // ... and how their cells and thickness grow with height (per scene unit), and their cells' stretch along the rise.
 uniform vec3 uSheetGrow;
+// ... and the billows: their size (scene units), mean and contrast.
+uniform vec3 uBillow;
 varying vec3 vRoot;
 
 float viewDistance(float dz) {
@@ -435,7 +445,7 @@ void main() {
   vec3 C = vec3(0.0);
   float K = 0.0, T = 1.0;
   // The previous sample's sheet field (v1.6 polish 2), when it was evaluated.
-  float phiPrev = 0.0;
+  float phiPrev = 0.0, tbAcc = 0.0;
   bool havePrev = false;
   for (int i = 0; i < 64; i++) {
     if (i >= uSteps || T < 0.01) break;
@@ -453,7 +463,7 @@ void main() {
     // cm growing to 2.8 cm by 20 cm), both carried up with the gas, so the folds rise with it.
     float h = p.y - uWickY;
     float hc = clamp(h, 0.0, 1.5);
-    float g1 = smoothstep(0.25, 1.0, tb), g2 = smoothstep(0.35, 1.0, tb);
+    float g1 = smoothstep(0.1, 0.5, tb), g2 = smoothstep(0.2, 0.6, tb);
     vec3 warp = vec3(0.0);
     if (g1 > 0.0) {
       float lam1 = 0.3 + 0.15 * hc;
@@ -473,7 +483,15 @@ void main() {
     // The grid holds where the smoke is; inside it the smoke lies on the zero set of an advected field
     // (cells uSheet.x growing with height), ε thick (uSheet.y, thickening as it rises and mixes), its
     // profile integrated exactly over each step; uSheet.z of it stays a veil between the sheets.
-    float sk = smoothstep(0.1, 0.7, tb);
+    // Billows (v1.6 polish 2): a developing plume and the breath's swept puff are rolled, not yet
+    // combed into sheets: cauliflower lumps (the noise's Worley octaves, through the same folds) of a
+    // centimetre or so, denser in the lumps and thinner between, so the dense first puff reads rolled.
+    float kb = smoothstep(0.1, 0.45, tb) * (1.0 - smoothstep(0.55, 0.95, tb));
+    if (kb > 0.0) {
+      float wl = texture(uNoise, (p + warp - vec3(0.01 * uTime, 0.5 * uTime, 0.0)) / (4.0 * uBillow.x) + vec3(0.53, 0.29, 0.81)).a;
+      rho *= mix(1.0, max(0.0, uBillow.y + uBillow.z * (wl - 0.5)), kb);
+    }
+    float sk = smoothstep(0.55, 0.95, tb);
     if (sk > 0.0) {
       float ls = uSheet.x * (1.0 + uSheetGrow.x * hc);
       float e = uSheet.y * (1.0 + uSheetGrow.y * hc);
@@ -492,16 +510,21 @@ void main() {
     // (Only where the smoke is thick enough to scatter twice: thin smoke is single-scattering.)
     float ms = 1.0 - exp(-od);
     vec3 key = uKey * ${f(SMOKE_VOLUME.key)} * (phase * exp(-od) + ms * (0.5 * mix(phase, 1.0, 0.6) * exp(-0.3 * od) + 0.25 * exp(-0.1 * od)));
-    vec3 room = uRoom * (0.6 + 0.4 * exp(-0.5 * lt.g));
+    // (v1.6 polish 2: and its octaves too where the smoke is thick: a dense puff takes in the room's
+    // light from every side and gives most of it back, whiter than the greige wall, as a cloud does;
+    // single scattering left the first puff no brighter than the wall's +20 levels.)
+    vec3 room = uRoom * (0.6 + 0.4 * exp(-0.5 * lt.g)) * (1.0 + ${f(SMOKE_VOLUME.roomOctaves)} * ms);
     vec3 S = ${f(SMOKE_VOLUME.albedo)} * (key + room);
     float Ts = exp(-rho * dt);
     C += T * (1.0 - Ts) * S;
+    tbAcc += T * (1.0 - Ts) * tb;
     K += T * (1.0 - Ts) * ${f(SMOKE_VOLUME.albedo)} * dot(key, vec3(0.2126, 0.7152, 0.0722));
     T *= Ts;
   }
   float alpha = 1.0 - T;
   float lum = dot(C, vec3(0.2126, 0.7152, 0.0722));
   if (uDebug == 1) lum = alpha;
+  if (uDebug == 2) lum = alpha * 2.0 * tbAcc / max(alpha, 1e-4);
   // Premultiplied luminance, coverage, the depth used, and the key's share of the light (its colour).
   gl_FragColor = vec4(lum, alpha, used, lum > 1e-6 ? K / lum : 0.0);
 }
@@ -578,19 +601,28 @@ const smooth01 = (a: number, b: number, x: number) => { const t = Math.min(1, Ma
  * above it), by how far it has risen (m) against its plume's own transition `laminar` (m) and how far
  * it has been swept sideways off its stem (`path` − `rise`, m). The volume draws the rest (1 − this).
  */
-export function ribbonShare(path: number, rise: number, laminar: number, born: number): number {
-  const [keep, a0, a1, f0, f1] = SMOKE_VOLUME.filament, [r0, r1] = SMOKE_VOLUME.ribbon, [p0, p1, h0, h1] = SMOKE_VOLUME.puffHead;
+export function ribbonShare(path: number, rise: number, laminar: number, born: number, width: number): number {
+  const [keep, a0, a1, f0, f1] = SMOKE_VOLUME.filament, [r0, r1] = SMOKE_VOLUME.ribbon, [p0, p1, h0, h1] = SMOKE_VOLUME.puffHead, [w0, w1] = SMOKE_VOLUME.ribbonWidth;
   const dz = rise - laminar;
   const filament = (1 - (1 - keep) * smooth01(-a0, a1, dz)) * (1 - smooth01(f0, f1, dz));
   // The first vapour's head (the starting plume's thermal, 3–5 mm wide and bunched) is a puff, not
   // a filament: the volume draws it once it has left the wick (a strip drew it as a fan of hairlines).
   const puff = (1 - smooth01(p0, p1, born)) * smooth01(h0, h1, rise);
-  return filament * (1 - puff) * (1 - smooth01(r0, r1, path - rise));
+  // (And a strip draws only a thread: smoke wider than `ribbonWidth` m is the volume's, a strip that wide
+  // drew a hard-edged marshmallow at the wick.)
+  return filament * (1 - puff) * (1 - smooth01(r0, r1, path - rise)) * (1 - smooth01(w0, w1, width));
 }
 
-/** v1.6 polish 2: how developed a parcel's turbulence is (0 a laminar stem – 1 folded sheets): above its transition, or swept by the breath. */
-export function smokeTurbulence(path: number, rise: number, laminar: number): number {
-  return Math.max(smooth01(laminar - 0.005, laminar + SMOKE_VOLUME.develop, rise), smooth01(0.02, 0.06, path - rise));
+/**
+ * v1.6 polish 2: how developed a parcel's turbulence is (0 a laminar stem – 1 folded sheets): above
+ * its plume's transition; swept by the breath, half of it (the march rolls and folds it from 0.1 – 0.6
+ * and draws sheets only over 0.55: a swept puff is rolled, not combed into strands).
+ */
+export function smokeTurbulence(path: number, rise: number, laminar: number, born: number): number {
+  // (The vapour the breath met, born in its first 0.3–0.5 s, is mixed by its turbulent jet from a few
+  // millimetres off the wick, however little it has been carried yet.)
+  const swept = Math.max(smooth01(0.005, 0.03, path - rise), (1 - smooth01(0.3, 0.5, born)) * smooth01(0.002, 0.01, path));
+  return Math.max(smooth01(laminar - 0.005, laminar + SMOKE_VOLUME.develop, rise), 0.5 * swept);
 }
 
 const TMP_M = new Matrix4(), TMP_A = new Vector3(), TMP_B = new Vector3(), TMP_C = new Color(), TMP_D = new Color();
@@ -688,6 +720,7 @@ export class SmokeVolume {
       uDebug: { value: 0 },
       uSheet: { value: new Vector4(...SMOKE_VOLUME.sheet) },
       uSheetGrow: { value: new Vector3(...SMOKE_VOLUME.sheetGrow) },
+      uBillow: { value: new Vector3(...SMOKE_VOLUME.billow) },
       uVolume: { value: this.half.texture },
       uReady: { value: false },
       uRoomTint: { value: new Vector3(room.r, room.g, room.b).multiplyScalar(1 / lum(room)) },
@@ -772,8 +805,8 @@ export class SmokeVolume {
       const rate = 0.5 * (st.rate[k]! + st.rate[k + 1]!);
       const db = st.age[k + 1]! - st.age[k]!;
       // (Still the ribbon's: the laminar stem, below its transition and not swept.)
-      if (rate <= 0 || db <= 0 || ribbonShare(s1, Math.max(st.rise[k]!, st.rise[k + 1]!), laminar, since - st.age[k + 1]!) >= 1) continue;
-      const mass = SMOKE_VOLUME.mass * rate * db;
+      if (rate <= 0 || db <= 0 || ribbonShare(s1, Math.max(st.rise[k]!, st.rise[k + 1]!), laminar, since - st.age[k + 1]!, Math.min(st.full[k]!, st.full[k + 1]!)) >= 1) continue;
+      const mass = SMOKE_VOLUME.mass * rate * db * ((globalThis as { __smokeMass?: number }).__smokeMass ?? 1);
       const sig = (j: number) => Math.min(SIGMA_MAX, Math.max(SIGMA_MIN, (Math.max(SMOKE_VOLUME.width(st.rise[j]!), st.full[j]!) / 2.355) * UNITS));
       const sa = sig(k), sb = sig(k + 1);
       const m = Math.max(1, Math.min(32, Math.ceil(len / (1.2 * Math.min(sa, sb)))));
@@ -786,7 +819,7 @@ export class SmokeVolume {
         const rise = st.rise[k]! + (st.rise[k + 1]! - st.rise[k]!) * u;
         const sp = s0 + (s1 - s0) * u;
         // (v1.6 polish 2: from its own plume's transition: a stem that stays laminar to 12 cm has not mixed below it.)
-        const w = (1 - ribbonShare(sp, rise, laminar, since - age)) * (1 - smoothstep(fadeAge[0], fadeAge[1], age)) * tail * Math.exp(-Math.max(0, rise - Math.max(0.04, laminar)) / SMOKE_VOLUME.evaporate);
+        const w = (1 - ribbonShare(sp, rise, laminar, since - age, st.full[k]! + (st.full[k + 1]! - st.full[k]!) * u)) * (1 - smoothstep(fadeAge[0], fadeAge[1], age)) * tail * Math.exp(-Math.max(0, rise - Math.max(0.04, laminar)) / SMOKE_VOLUME.evaporate);
         const pm = (mass / m) * w;
         const s = sa + (sb - sa) * u;
         // Below what a screen could show (its peak optical depth across under 10⁻⁴): not drawn.
@@ -795,7 +828,7 @@ export class SmokeVolume {
         const o = this.count++ * STAGE;
         const S = this.staged;
         S[o] = ax + (bx - ax) * u; S[o + 1] = ay + (by - ay) * u; S[o + 2] = az + (bz - az) * u; S[o + 3] = s; S[o + 4] = pm;
-        S[o + 5] = smokeTurbulence(sp, rise, laminar);
+        S[o + 5] = smokeTurbulence(sp, rise, laminar, since - age);
       }
     }
   }

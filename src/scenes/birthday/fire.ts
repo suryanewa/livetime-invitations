@@ -615,7 +615,7 @@ export const SMOKE = {
    * and the puff's head: the thread leaves the wick (1 + puffWidth) × as wide, narrowing to the
    * stem's width over puffFor s (3–5 mm for the first 0.2–0.5 s).
    */
-  puff: 5.0,
+  puff: 12.0,
   puffWidth: 2.4,
   puffFor: 0.45,
   /**
