@@ -125,6 +125,26 @@ describe('Birthday v1.6 sculpted piping', () => {
     expect(p[8]!).toBeGreaterThan(p[100]! - 0.05);
   });
 
+  it('a side rosette (v1.6 polish 2): the star kiss sits flush in the eye, and the coil stays inside its radius', () => {
+    const R = 13 * MM;
+    for (let seed = 1; seed <= 12; seed++) {
+      const { mesh } = spiralRosette([0, 0, 0], [0, 1, 0], [1, 0, 0], R, seed, { rope: 0.4, turns: 1.25 });
+      let kiss = -Infinity, crest = -Infinity, reach = 0;
+      for (let i = 0; i < mesh.pos.length; i += 3) {
+        const r = Math.hypot(mesh.pos[i]!, mesh.pos[i + 2]!), y = mesh.pos[i + 1]!;
+        if (r < 0.25 * R) kiss = Math.max(kiss, y);
+        if (r > 0.5 * R) crest = Math.max(crest, y);
+        reach = Math.max(reach, r);
+      }
+      // (The old kiss sat in a crater ring below the loops round it.)
+      expect(kiss / crest).toBeGreaterThan(0.85);
+      expect(kiss / crest).toBeLessThan(1.25);
+      // The tail merges into its first loop rather than swinging out past the rosette (its fillet's
+      // flare at the surface aside).
+      expect(reach).toBeLessThan(1.25 * R);
+    }
+  });
+
   it('a dot is a pressed-in dome with a pulled peak, each leaning its own way (v1.6 polish: not all down)', () => {
     const quadrants = new Set<number>();
     for (let seed = 11; seed < 23; seed++) {

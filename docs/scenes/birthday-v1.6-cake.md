@@ -291,4 +291,98 @@ What the judge would still find, and why:
 
 Tests: `tests/birthdayPiping.test.ts` (8; the dot test now asks for peaks leaning their own ways, ≥ 3 quadrants over 12
 seeds), `tests/birthday.test.ts` 34, `tests/masters.test.ts` 5, `tests/world-scale.test.ts` 7, `tests/bin.test.ts` 18,
-`tests/browser/birthday.spec.ts` 7, `pnpm typecheck` clean. Posters still need the integrator's regeneration.
+`tests/browser/birthday.spec.ts` 7 (also 7 on the trial merge with v1.6/integration, with `tests/birthday.test.ts` 34),
+`pnpm typecheck` clean. The posters on v1.6/integration were captured before this round: the integrator regenerates them.
+
+Not in this round: the shared rig's key is still frontal-left at 40° and its shadow map still cannot resolve a candle
+(the analytic shadow stands in on the top coat only); `MASTER.cakeRadius` was not re-measured down (0.2 mm of scan). Posters still need the integrator's regeneration.
+
+## Polish round 2 (2026-10-03: the re-judge's four fixes)
+
+The VFX re-judge scored the polished cake vanilla 7 / cocoa 7.5 at square 540, 6.5 / 7 at laptop and phone, 4.5 / 5 in
+macro, signed cocoa at 540 and phone only, and named the four fixes that would get its signature at all three sizes.
+Frames through the live stage from the re-judge's own `judge.mjs` (laptop crop, square 540, phone crop; the macros; the
+`NOPOOL=1` probe that zeroes the flames' intensities): `evidence/v1.6/cake-polish2/` (`final/`, `noflame/`, side-by-side
+`compare-*.webp` against the re-judge's frames, `compare-flame-lift-top-surface.webp` the flames' red lift ×6,
+`merged-flames/` a trial merge with v1.6/integration's flames polish, `measurements.txt`, `perf.txt`).
+
+1. **Side rosettes: one rope round** (`spiralRosette`, `backMound`, `restOn`). The "terraced stacks of ridged sheets
+   with jagged rims" were three things, not the star:
+   - `restOn` returned 0 ("on the surface") where it found no surface within 2 cm, so every foot over the top was
+     settled as resting and flared its fillet into the air (the free sheet edges); it returns Infinity (far) now, and
+     the fillet only flares where the foot still touches (0.3–1.2 mm off, was 1–3 mm);
+   - the settle (a foot up to ≈ 3 mm off the side moved onto it) was eased over ±5 samples (±25° of the coil): a few
+     millimetres within a quarter of the rope's width sheared the tight coil through itself at the top edge (the
+     terraces); it is eased over ±60° (L/6);
+   - the overhang's all-round teeth (`Foot.back`) and full-section sampling (`Tip.wrap`) are gone (the rope's underside
+     is its round section), and the back mound is a smooth mass inside the coil's outline (0.64 R, 0.36 R behind; its
+     4–4.8 ridged loops at 3 % of their depth).
+   The star is broader and runs along the rope: 10–11 teeth (was 12–14), crest 0.45, depth 0.44 ± 0.05, the tip turned
+   0.45 rad over the rope (was 1.1) and the teeth's depth drifting less (1.4, jitter 0.12): edge-on the coil shows
+   parallel rope ridges, not converging folds (`ROSETTE_TIP`).
+2. **The tail merged into its first loop**:
+   - the tail is where the pressure eases off from a little before the rope comes round (max(20 %, 1 − 1/turns + 5 %)),
+     thinning to a fifth, its teeth fading (−85 % by the end, −80 % from where it climbs);
+   - it sits on the start's crown where it actually crosses it (`crownAt` of the rope one turn earlier, at the tail's
+     offset), the climb eased along ±9 samples, the section square to the 3D rope (the old up along the axis and a 45°
+     ramp sheared the section into the flap and the polygon shards);
+   - the start under the tail is pressed down 40 % and spread ×1.4, its teeth flattened (−90 %): two toothed ropes
+     crossing at a small angle had met in a ragged seam;
+   - 1.25 ± 0.06 turns (was ± 0.12: a tail riding over a third of the coil read as a fold), the tail easing 2.5–7.5 % in
+     (was 5–13 % out), the start out to the ring over 18 % of the rope (was 26 %);
+   - the star kiss flush in the eye: 0.22 R up (was 0.15), 0.46 R across (was 0.42): its top 0.90–1.13 of the coil's
+     crest over 12 seeds (`tests/birthdayPiping.test.ts`), no crater ring.
+3. **The flames' light pools, and the candles throw the key's shadows** (`models/cakeShaders.ts`; the flame files
+   untouched, their uniforms read by reference). The +27 R over the whole top was the gain-2 pool on the full inverse
+   square plus the flames' broad light at full strength:
+   - `FLAME_POOL`: each candle's own halo, I/(d² + a²) × wrap × exp(−(r / 2 cm)²) with r from the candle's surface, gain
+     4.5, through the other candles' spokes; on the top coat the flames' broad light (the loop's RE_Direct: three's
+     lambert and the food terms, scaled inside RE_Direct) answered at 0.28. Calibrated against the flames polish's light
+     (FLAME_LIGHT_CAL 2.0, on v1.6/integration since this branch was cut) by a trial merge, not committed: at gain 7 /
+     broad 0.4 that merge put the centre at +10 R and the halos at +42–53 R;
+   - `KEY_CANDLE_SHADOW`: each candle's soft shadow from the key's direction (captured in the key's own RE_Direct) on
+     the top coat, analytic (the rig's 1024² map has ≈ 3.3 mm texels and a 5-texel filter: the 8 mm candles vanished in
+     it; the rig is not this pass's): the key's diffuse takes 0.85 of it and, because the key is only ≈ 7 % of the top's
+     light (zeroing it moved the top 164 → 151 R), the room light's window share 0.32, 1.5× softer; the penumbra opens
+     0.2 per unit along the shadow.
+   Measured (`measurements.txt`, the top's centre in three frames; "merged" with the integration's flames): with the
+   flames off 156–160 R; with them 160–164 R on this branch, 164–167 R merged (+4 / +7 R; was +26–29, 184–187), hue
+   220.0–221.4° (the side 220.5°; was 227°). The red lift round a candle, merged: +29–37 at 0.5–1 cm, +20–23 at 2 cm,
+   +14–17 at 3 cm, +9–10 at 4–5 cm (this branch alone about half; was a flat +19–20 everywhere). A candle's shadow
+   streak at laptop: 168 against 188 beside it (merged 172 / 190; 184.5 with the shadows off).
+4. **The top's texture** (`cakeTopArcs`, `TOP_ARCS`). The water-ripple rings were the coat's colour streaks banded in r
+   (noise in r × 45 and × 110), not the relief: the top's marks are now the spatula's passes on a turntable, two spirals
+   (10 and 17 mm pitch) wandering ±0.35 pitch, cut into passes of uneven length with 58 % left smooth, each a narrow
+   ridge with the cream it pushed aside, rising out of a ridge where the blade landed and ending in a lip where it was
+   lifted (relief, colour), and isotropic hand-mixed colour between them. Laptop top patch (`sigp.py`, 176,72 40×40)
+   σ 3.35 with the candle shadows switched off in a measuring build (was 2.28), 8.55 as shipped (a candle's shadow
+   crosses the patch; 8.01 merged); cocoa 3.21 → 4.34 / 5.68. The pinholes smaller and fainter (0.15–0.5 mm, −16 %).
+5. **Pearls** (the optional item): a third of the shell-junction dragées left off (bottom 28 → 19, top 18 → 13), the
+   rest ±10 % in size and up to a tenth of their radius off the junction; every pearl moves rigidly with the finish
+   field (`deformRigid`: the bays' drop changed over a pearl's height at the column tops and stretched it into an
+   egg); overlapping pearls would leave the smaller off (none do).
+
+Geometry and contract after round 2: 1,743,646 triangles (was 1,786,792); the frosting reaches r 0.63547 (the contract's
+`MASTER.cakeRadius` 0.63567 kept as the bound), `MASTER.cakeTop` 0.65176 unchanged; sockets, collar, dimple, melt and
+the bin clearance unchanged (tests). Frame cost (`perf.txt`): the frosting's patches +0.03 ms (laptop), +0.02 ms (phone),
+60 fps (p99 16.8 ms).
+
+What the judge would still find, and why:
+
+- the rosettes at the silhouette are coils with parallel rope ridges; the one seen a little from behind shows its
+  pearl's side folded by the droop, and the top tier's coils seen from above show their start inside;
+- on a few rosettes the start's pressed outer flank shows beside the tail, smooth where the tail flattened it;
+- the halos read a touch pink on the blue at square 540 with the integration's flames; any further change to the
+  flames' intensity scales them and the centre's lift with it (`FLAME_POOL` is the knob);
+- the candles' key shadows are analytic upright capsules (no flutes, no shadow from the flame) and soft smudges at macro;
+- where the two spirals cross, the top's passes read a little like contour lines at macro;
+- the macro-only list (crisper star ridges, sugar grain, a window reflection on cocoa, tassel beads, the smudge on
+  body-upper-z) was not in this round.
+
+Tests: `tests/birthdayPiping.test.ts` 9 (new: the side rosette's kiss flush in the eye, the coil inside its radius),
+`tests/birthday.test.ts` 34, `tests/masters.test.ts` 7, `tests/world-scale.test.ts` 7, `tests/bin.test.ts` 18,
+`tests/browser/birthday.spec.ts` 7 (also 7 on the trial merge with v1.6/integration, with `tests/birthday.test.ts` 34),
+`pnpm typecheck` clean. The posters on v1.6/integration were captured before this round: the integrator regenerates them.
+
+Not in this round: the shared rig's key is still frontal-left at 40° and its shadow map still cannot resolve a candle
+(the analytic shadow stands in on the top coat only); `MASTER.cakeRadius` was not re-measured down (0.2 mm of scan).
