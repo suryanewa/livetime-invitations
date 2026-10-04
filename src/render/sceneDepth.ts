@@ -111,7 +111,7 @@ export class SceneDepth {
     if (!served) {
       // Nothing needs it: free the target (no GPU memory is held for scenes that do not ask; a
       // scene switch must leave nothing behind). Without one, nothing at all is touched.
-      if (this.target) this.release();
+      if (this.target && !(globalThis as { __depthKeep?: boolean }).__depthKeep) this.release();
       return false;
     }
 
