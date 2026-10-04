@@ -5,13 +5,14 @@ import { blackbodyAt, createFlameMaterial, SMOKE_RADIANCE, sootRadiance } from '
 import { rigBirthday } from '../models/birthday.ts';
 import { CANDLE_LIGHT, flameLightColor, SMOKE_RIBBON_POINTS, waxGlowColor } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
+import { ribbonShare, smokeTurbulence } from '../models/birthdaySmoke.ts';
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME_FRAME, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
 import { CARRY_FROM, DURATIONS, IGNITE_START, ON_STAND } from '../src/scenes/birthday/poses.ts';
 import {
   ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, frameScale, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
-  POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
+  POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeLaminar, smokeLean, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /** Wick tip of candle i in cake_secondary space (seated, nominal). */
@@ -227,6 +228,54 @@ describe('Birthday fire: the smoke', () => {
       const wLow = Math.min(...st.width.slice(0, 3)), wHigh = Math.max(...st.width);
       expect(wHigh).toBeGreaterThan(2 * wLow);
     }
+  });
+
+  it('v1.6 polish 2: each stem ends at its own height, 4–12 cm, and leans its own way, 3–8°, neighbours splaying (re-judge: six evenly spaced parallel stems)', () => {
+    const h = Array.from({ length: CANDLE_COUNT }, (_, i) => smokeLaminar(i));
+    expect(Math.min(...h)).toBeGreaterThanOrEqual(0.04);
+    expect(Math.max(...h)).toBeLessThanOrEqual(0.12);
+    expect(Math.max(...h) - Math.min(...h)).toBeGreaterThan(0.06);
+    const sorted = [...h].sort((a, b) => a - b);
+    for (let k = 1; k < sorted.length; k++) expect(sorted[k]! - sorted[k - 1]!).toBeGreaterThan(0.008);
+    const leans = Array.from({ length: CANDLE_COUNT }, (_, i) => smokeLean(i));
+    for (const [a] of leans) { expect(a).toBeGreaterThanOrEqual((3 * Math.PI) / 180); expect(a).toBeLessThanOrEqual((8 * Math.PI) / 180); }
+    // Both ways across the picture: not six parallel stems.
+    const across = leans.map(([, x]) => x);
+    expect(Math.min(...across)).toBeLessThan(-0.3);
+    expect(Math.max(...across)).toBeGreaterThan(0.3);
+  });
+
+  it('v1.6 polish 2: the strips draw the stem and the thin filament it goes on as, the volume the rest (mass kept), the first puff and the breath-swept smoke', () => {
+    const lam = 0.08;
+    // The laminar stem: the strip's alone.
+    expect(ribbonShare(0.04, 0.04, lam, 1, 0.0015)).toBeCloseTo(1, 6);
+    // Above its transition a filament carries on (re-judge: "carry thin, folding, crisp structure above the stem"), fading out by 24 cm over it.
+    expect(ribbonShare(0.12, 0.11, lam, 1, 0.002)).toBeGreaterThan(0.6);
+    expect(ribbonShare(0.4, 0.33, lam, 1, 0.002)).toBe(0);
+    // Its own curls make its path longer than its rise: still a filament; the breath's sweep is the volume's.
+    expect(ribbonShare(0.2, 0.1, lam, 1.2, 0.002)).toBeGreaterThan(0.3);
+    expect(ribbonShare(0.03, 0.005, lam, 0.05, 0.002)).toBe(0);
+    // The first vapour off the wick, and anything wider than a thread: the volume's.
+    expect(ribbonShare(0.01, 0.01, lam, 0.05, 0.0015)).toBe(0);
+    expect(ribbonShare(0.03, 0.03, lam, 1, 0.006)).toBe(0);
+    // The volume's turbulence: none on the stem, folded sheets above it, rolled (half) where the breath swept it.
+    expect(smokeTurbulence(0.04, 0.04, lam, 1)).toBe(0);
+    expect(smokeTurbulence(0.15, 0.14, lam, 1)).toBe(1);
+    expect(smokeTurbulence(0.03, 0.005, lam, 0.1)).toBeCloseTo(0.5, 6);
+  });
+
+  it('v1.6 polish 2: the strands share their plume (computed once a candle), each splitting off it at its own height', () => {
+    const a = newSmokeStrand(), b = newSmokeStrand();
+    smokeStrand(3, 0, 1.7, still(3), a);
+    smokeStrand(3, 2, 1.7, still(3), b);
+    // Low down (a laminar stem) the strands are the same thread; above the split they part.
+    let low = 0, high = 0;
+    for (let k = 0; k < SMOKE_POINT_COUNT; k++) {
+      const d = Math.hypot(a.position[k * 3]! - b.position[k * 3]!, a.position[k * 3 + 2]! - b.position[k * 3 + 2]!);
+      if (a.rise[k]! < smokeLaminar(3) * 0.8) low = Math.max(low, d); else if (a.rise[k]! > smokeLaminar(3) + 0.08) high = Math.max(high, d);
+    }
+    expect(low).toBeLessThan(1e-6);
+    expect(high / MPS).toBeGreaterThan(0.005);
   });
 
   it('is deterministic per candle and differs between candles', () => {

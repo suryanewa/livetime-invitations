@@ -64,11 +64,11 @@ export const SMOKE_VOLUME = {
    * travel, handing it over by `ribbon[1]`. The volume draws the rest (mass conserved).
    */
   ribbon: [0.002, 0.008] as const,
-  filament: [0.85, 0.01, 0.03, 0.04, 0.16] as const,
+  filament: [1.0, 0.01, 0.03, 0.06, 0.24] as const,
   /** The first vapour (born within `puffHead[0]`–`[1]` s of the flame letting go) is the volume's once `[2]`–`[3]` m up (all but its condensing foot). */
   puffHead: [0.12, 0.3, 0.0, 0.004] as const,
   /** v1.6 polish 2: the ribbons draw threads up to this wide (m: fading from [0] to [1]); wider smoke is the volume's. */
-  ribbonWidth: [0.0025, 0.0032] as const,
+  ribbonWidth: [0.0035, 0.005] as const,
   /** How far above its transition (m) a plume's sheets and folds are fully developed (the march's turbulence, 0 → 1). */
   develop: 0.045,
   /**
@@ -97,7 +97,9 @@ export const SMOKE_VOLUME = {
   sheet: [0.04, 0.025, 0.1, 0.35] as const,
   sheetGrow: [0.5, 0.2, 0.85] as const,
   /** v1.6 polish 2: the billows of a developing plume and the swept first puff: size (scene units: 1.2 cm), mean, contrast. */
-  billow: [0.06, 1.0, 2.6] as const,
+  billow: [0.06, 1.0, 2.0] as const,
+  /** ... where the smoke is this dense (optical depth per scene unit: the first puff's ≈ 10–20, the veil's ≈ 0.3): thinner smoke folds into sheets. */
+  billowDense: [3, 12] as const,
   /** Light: Henyey–Greenstein asymmetry (forward), albedo, the key's share and the room's radiance (linear, before exposure). */
   g: 0.6,
   albedo: 0.92,
@@ -356,6 +358,7 @@ uniform vec4 uSheet;
 uniform vec3 uSheetGrow;
 // ... and the billows: their size (scene units), mean and contrast.
 uniform vec3 uBillow;
+uniform vec2 uBillowDense;
 varying vec3 vRoot;
 
 float viewDistance(float dz) {
@@ -488,12 +491,13 @@ void main() {
     // Billows (v1.6 polish 2): a developing plume and the breath's swept puff are rolled, not yet
     // combed into sheets: cauliflower lumps (the noise's Worley octaves, through the same folds) of a
     // centimetre or so, denser in the lumps and thinner between, so the dense first puff reads rolled.
-    float kb = smoothstep(0.1, 0.45, tb) * (1.0 - smoothstep(0.55, 0.95, tb));
+    // (Where it is dense: thin smoke folds into sheets.)
+    float kb = smoothstep(0.1, 0.45, tb) * (1.0 - smoothstep(0.55, 0.95, tb)) * smoothstep(uBillowDense.x, uBillowDense.y, rho);
     if (kb > 0.0) {
       float wl = texture(uNoise, (p + warp - vec3(0.01 * uTime, 0.5 * uTime, 0.0)) / (4.0 * uBillow.x) + vec3(0.53, 0.29, 0.81)).a;
       rho *= mix(1.0, max(0.0, uBillow.y + uBillow.z * (wl - 0.5)), kb);
     }
-    float sk = smoothstep(0.55, 0.95, tb);
+    float sk = smoothstep(0.55, 0.95, tb) * (1.0 - kb);
     if (sk > 0.0) {
       float ls = uSheet.x * (1.0 + uSheetGrow.x * hc);
       float e = uSheet.y * (1.0 + uSheetGrow.y * hc);
@@ -612,7 +616,10 @@ export function ribbonShare(path: number, rise: number, laminar: number, born: n
   const puff = (1 - smooth01(p0, p1, born)) * smooth01(h0, h1, rise);
   // (And a strip draws only a thread: smoke wider than `ribbonWidth` m is the volume's, a strip that wide
   // drew a hard-edged marshmallow at the wick.)
-  return filament * (1 - puff) * (1 - smooth01(r0, r1, path - rise)) * (1 - smooth01(w0, w1, width));
+  // (Swept: carried sideways by the breath, so born while it blew; a filament's own curls also make its
+  // path longer than its rise, and must stay a filament.)
+  const swept = smooth01(r0, r1, path - rise) * (1 - smooth01(p1, p1 + 0.2, born));
+  return filament * (1 - puff) * (1 - swept) * (1 - smooth01(w0, w1, width));
 }
 
 /**
@@ -623,7 +630,7 @@ export function ribbonShare(path: number, rise: number, laminar: number, born: n
 export function smokeTurbulence(path: number, rise: number, laminar: number, born: number): number {
   // (The vapour the breath met, born in its first 0.3–0.5 s, is mixed by its turbulent jet from a few
   // millimetres off the wick, however little it has been carried yet.)
-  const swept = Math.max(smooth01(0.005, 0.03, path - rise), (1 - smooth01(0.3, 0.5, born)) * smooth01(0.002, 0.01, path));
+  const swept = (1 - smooth01(0.3, 0.5, born)) * Math.max(smooth01(0.005, 0.03, path - rise), smooth01(0.002, 0.01, path));
   return Math.max(smooth01(laminar - 0.005, laminar + SMOKE_VOLUME.develop, rise), 0.5 * swept);
 }
 
@@ -723,6 +730,7 @@ export class SmokeVolume {
       uSheet: { value: new Vector4(...SMOKE_VOLUME.sheet) },
       uSheetGrow: { value: new Vector3(...SMOKE_VOLUME.sheetGrow) },
       uBillow: { value: new Vector3(...SMOKE_VOLUME.billow) },
+      uBillowDense: { value: new Vector2(...SMOKE_VOLUME.billowDense) },
       uVolume: { value: this.half.texture },
       uReady: { value: false },
       uRoomTint: { value: new Vector3(room.r, room.g, room.b).multiplyScalar(1 / lum(room)) },
