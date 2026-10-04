@@ -372,7 +372,7 @@ export interface FoodFlames {
  * polish's light (FLAME_LIGHT_CAL 2.0 on v1.6/integration, a trial merge): the top's centre +7 R, the
  * halo +29–36 R within a centimetre of a candle, +14–17 at 3 cm (at the old 1.0: +3–4 and half that).
  */
-export const FLAME_POOL = { gain: 4.5, wrap: 0.5, reach: 0.1, broad: 0.28 } as const;
+export const FLAME_POOL = { gain: 1.0, wrap: 0.5, reach: 0.06, broad: 0.2 } as const;
 
 /**
  * v1.6 polish 2 (fix 3): the candles' shadows from the key on the top coat, analytic (the rig's
@@ -679,11 +679,21 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
   // light adds to the diffuse (three's lambert just above and the terms here) is scaled by foodK.
   vec3 foodDD0 = reflectedLight.directDiffuse - irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );
   float foodK = 1.0;
+  // v1.6 polish 3 (fix 1): and on the top coat the flames' light is answered hue-preserving: as a white
+  // light at the flame's peak channel (whatever the flame's colour), so it lifts the coat's own blue
+  // instead of adding a red-heavy light that turns it lilac (foodHueK, per channel, on this light's terms).
+  vec3 foodHueK = vec3(1.0);
   {
     mat3 kRt = transpose(mat3(viewMatrix));
     vec3 kP = kRt * (geometryPosition - viewMatrix[3].xyz);
     if (foodScene) foodKeyL = kRt * directLight.direction;
-    if (foodOnTopCoat(kP)) foodK = foodScene ? mix(1.0, foodCandleShadow(kP, foodKeyL, ${f(KEY_CANDLE_SHADOW.soft)}), ${f(KEY_CANDLE_SHADOW.strength)}) : mix(1.0, ${f(FLAME_POOL.broad)}, foodTop);
+    if (foodOnTopCoat(kP)) {
+      foodK = foodScene ? mix(1.0, foodCandleShadow(kP, foodKeyL, ${f(KEY_CANDLE_SHADOW.soft)}), ${f(KEY_CANDLE_SHADOW.strength)}) : mix(1.0, ${f(FLAME_POOL.broad)}, foodTop);
+      if (!foodScene) {
+        vec3 lc = max(directLight.color, vec3(1e-7));
+        foodHueK = mix(vec3(1.0), vec3(max(lc.r, max(lc.g, lc.b))) / lc, foodTop);
+      }
+    }
   }` : ''}
   // Pre-integrated scattering (analytic): a wrap whose width grows with thinness, the wrapped light
   // tinted by the frosting, added where the lambert is dark.
@@ -716,7 +726,7 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
   float against = saturate(0.4 + 0.6 * dot(-geometryViewDir, directLight.direction));
   reflectedLight.directDiffuse += ${f(look.rim)} * edgeV * edgeV * edgeV * against * foodThin * directLight.color * foodTint * albedoD;
   }
-  ${flames ? 'reflectedLight.directDiffuse = foodDD0 + (reflectedLight.directDiffuse - foodDD0) * foodK;' : ''}
+  ${flames ? 'reflectedLight.directDiffuse = foodDD0 + (reflectedLight.directDiffuse - foodDD0) * foodK * foodHueK;' : ''}
   if (foodScene) {
   ${glint ? `
   // Sugar glints: two sizes of crystal (fine ones seen close up, rarer coarse ones that read as a
@@ -796,7 +806,13 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
       }
       pool += uPoolI[i] / (d2 + uPoolR2) * nl * vis;
     }
-    reflectedLight.directDiffuse += ${f(FLAME_POOL.gain)} * pool * uPoolColor * mix(vec3(1.0), ${v3(tint)}, 0.5) * BRDF_Lambert(material.diffuseContribution);
+    // v1.6 polish 3 (fix 1): the halo scales the coat's own light (its colour as lit here, the candles'
+    // key shadows in it) instead of adding the flame's red-heavy colour: hue-preserving whatever the
+    // flame's colour (its peak channel sets the strength), and a shadow inside a halo stays the coat's
+    // blue, as deep relative to the coat round it as without the flames.
+    float poolK = ${f(FLAME_POOL.gain)} * pool * max(uPoolColor.r, max(uPoolColor.g, uPoolColor.b));
+    reflectedLight.directDiffuse *= 1.0 + poolK;
+    reflectedLight.indirectDiffuse *= 1.0 + poolK;
   }
   }` : ''}
   ${ivoryK > 0 ? `// Ivory in the shade too (the room's light comes out of butter warm, not the room's blue).
