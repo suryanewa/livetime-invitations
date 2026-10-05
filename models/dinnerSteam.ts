@@ -156,8 +156,8 @@ const GUSH_RISE_K = Array.from({ length: SPILL.samples }, (_, k) => gushRise(k *
 const PLATE_PROFILE_TOP_AT_LIP = plateTop(COVER.lipRadius);
 /** The light volume: N³ voxels over the proxy box, its z-slices tiled COLS × ROWS in one 2D atlas. */
 const LIGHT_N = 32, LIGHT_COLS = 8, LIGHT_ROWS = 4;
-/** Probes of the march's occupancy along each ray. */
-const PROBES = 3;
+/** Probes of the march's occupancy along each ray: at least this many, no further apart than PROBE_GAP (su), at most PROBES_MAX. */
+const PROBES = 3, PROBE_GAP = 0.3, PROBES_MAX = 12;
 
 const f = (x: number) => x.toFixed(5);
 /** A colour scaled to unit (Rec. 709) luminance, as a vector. */
@@ -1201,10 +1201,13 @@ void main() {
   if (t1 <= t0) { gl_FragColor = vec4(0.0, 0.0, used, 1.0); return; }
   // Probes: where along the ray anything can show (the dilated mean, the veil's column), so the
   // march's steps all fall where the steam is.
-  float dp = (t1 - t0) / float(uProbes);
+  // (v1.6 polish 5: probes no further apart than PROBE_GAP along the ray, however long its span: the cloud's dilated
+  // occupancy is ≥ ≈ 1 su across where it shows, so no probe set steps over it.)
+  int probes = clamp(int(ceil((t1 - t0) / ${f(PROBE_GAP)})), uProbes, ${PROBES_MAX});
+  float dp = (t1 - t0) / float(probes);
   float first = 1e9, last = -1e9;
-  for (int i = 0; i <= 32; i++) {
-    if (i > uProbes) break;
+  for (int i = 0; i <= ${PROBES_MAX}; i++) {
+    if (i > probes) break;
     float tp = t0 + dp * float(i);
     if (occupied(ro + rd * tp)) { first = min(first, tp); last = tp; }
   }
@@ -1589,6 +1592,7 @@ const COMPOSITE_VERTEX = VOLUME_VERTEX;
 const EULER = new Euler();
 const TMP_FP = new Vector3(), FP = new Vector4();
 const TMP_VP = new Matrix4(), TMP_M = new Matrix4(), TMP_A = new Vector3(), TMP_B = new Vector3(), TMP_E = new Vector3(), TMP_C = new Color(), TMP_D = new Color();
+const TMP_SL = new Vector3(), TMP_SH = new Vector3();
 
 /** The scene's shadow-casting key light (spot or directional), or null. */
 function findKey(scene: Object3D): Object3D | null {
@@ -2080,20 +2084,27 @@ export class DinnerSteam {
         sMax[l]!.max(TMP_E.set(at.x + rq, at.y + 0.35, at.z + rq));
       }
       for (const [lo, hi, lit] of [[cMin[l]!, cMax[l]!, true], [vMin[l]!, vMax[l]!, true], [sMin[l]!, sMax[l]!, false]] as const) {
-        if (lit && lo.x <= hi.x) {
-          // Its shadow on the plate and the table falls away from the key: the box reaches over it.
-          const k = this.uniforms.uKeyDir!.value as Vector3;
-          const sx = (-k.x / Math.max(k.y, 0.2)) * hi.y, sz = (-k.z / Math.max(k.y, 0.2)) * hi.y;
-          lo.x = Math.min(lo.x, lo.x + sx); hi.x = Math.max(hi.x, hi.x + sx);
-          lo.z = Math.min(lo.z, lo.z + sz); hi.z = Math.max(hi.z, hi.z + sz);
-          lo.y = 0;
-        }
         lo.max(limMin);
         hi.min(limMax);
         if (lo.x > hi.x || lo.y > hi.y) { lo.set(1, 1, 1); hi.set(0, 0, 0); continue; }
-        min.min(lo);
-        max.max(hi);
-        if (lit) { lightMin.min(lo); lightMax.max(hi); }
+        // (v1.6 polish 5) The march's own boxes stay on the steam: its shadow's reach (below) is the composite's and
+        // the light volume's only. Stretched over the shadow, a ray's span through the box was 2–3× the steam's,
+        // and its three probes, that far apart, stepped over the cloud's flank where the ray grazes it: the
+        // judge's straight vertical cut down the cloud's right side at 0.86–1.25 s.
+        const eLo = TMP_SL.copy(lo), eHi = TMP_SH.copy(hi);
+        if (lit) {
+          // Its shadow on the plate and the table falls away from the key: the composite's box reaches over it.
+          const k = this.uniforms.uKeyDir!.value as Vector3;
+          const sx = (-k.x / Math.max(k.y, 0.2)) * hi.y, sz = (-k.z / Math.max(k.y, 0.2)) * hi.y;
+          eLo.x = Math.min(lo.x, lo.x + sx); eHi.x = Math.max(hi.x, hi.x + sx);
+          eLo.z = Math.min(lo.z, lo.z + sz); eHi.z = Math.max(hi.z, hi.z + sz);
+          eLo.y = 0;
+          eLo.max(limMin);
+          eHi.min(limMax);
+        }
+        min.min(eLo);
+        max.max(eHi);
+        if (lit) { lightMin.min(eLo); lightMax.max(eHi); }
         any = true;
       }
     });
