@@ -692,9 +692,10 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   out.sheet = 0.3 - 0.15 * smooth(0.15, 0.5, age) - 0.1 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
   // (v1.6 polish 3) The cap's fog: the stem and base empty, the cap keeps its own (a filled mushroom, not a ring).
-  // (v1.6 polish 5: young 0.24 → 0.17, with the core: the held dome, less stretched by the drag, was denser; then
-  // the cap gathers the dome's fog as the core empties, 0.37 by 0.75 s of the thermal, and keeps it as it rises away, to 1.4 s.)
-  out.capCore = 0.17 + 0.2 * smooth(0.4, 0.75, age) - 0.26 * smooth(0.85, 1.6, age);
+  // (v1.6 polish 5: young 0.24 → 0.17, with the core: the held dome, less stretched by the drag, was denser; then the cap,
+  // which now holds the air the thermal carries up from the dome's lower half too, gathers the dome's fog as the core
+  // empties, 0.25 by 0.75 s of the thermal, and keeps it as it rises away, to ≈ 1.4 s.)
+  out.capCore = 0.17 + 0.08 * smooth(0.4, 0.75, age) - 0.17 * smooth(0.85, 1.6, age);
   // (v1.6 polish 4: the structural round) The body is thin, dense sheets with clear air between: the zero set of
   // the sheet field (drawn out along the rise, folded with the air), `fold` times the core's density inside a
   // sheet, `foldWidth` its half-width in the field's units (≈ 2 mm), `haze` the share of the core between them.

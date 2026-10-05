@@ -1012,8 +1012,12 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // (v1.6 polish 3) The cap keeps its own fog as the stem and base empty: the crown closes over the
   // ring (the judge's hollow doughnut), the warm core that feeds the cap still rising through it.
   // (v1.6 polish 4: the stem that feeds it is as wide as the plate's well, so the cap is joined to the plate.)
-  // (v1.6 polish 5: the stem's share fades sooner, 0.45–0.7 s of the thermal (was 0.7–0.95): the cap rises away from it.)
-  float core = mix(F.x, max(F.x, uK[l].x), max(smoothstep(0.32, 0.55, m.g), (1.0 - smoothstep(0.3, 0.55, m.r)) * (1.0 - smoothstep(0.45, 0.7, uC[l].z))));
+  // (v1.6 polish 5: the stem's share fades sooner, 0.45–0.7 s of the thermal (was 0.7–0.95): the cap rises away from it;
+  // and the air the stronger thermal carries up from the dome's lower half into the cap's interior is the cap's, with
+  // its fog (it had the emptied core's, 0.03: a hollow ring under a thin lid, the cove seen through it).)
+  float capness = max(max(smoothstep(0.32, 0.55, m.g), smoothstep(0.62, 0.92, q.y) * smoothstep(0.35, 0.6, uC[l].z)),
+    (1.0 - smoothstep(0.3, 0.55, m.r)) * (1.0 - smoothstep(0.45, 0.7, uC[l].z)));
+  float core = mix(F.x, max(F.x, uK[l].x), capness);
   float d = (core * (M.z + M.x * folds) + F.y * skinMean * (0.3 + 1.4 * strips)) * edge + wisp;
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
