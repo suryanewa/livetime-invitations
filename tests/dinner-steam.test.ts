@@ -269,7 +269,7 @@ describe('Dinner steam field (v1.6)', () => {
     expect(STEAM_LOOK.keyFloor).toBeLessThan(0.2);
   });
 
-  it('v1.6 polish 3: a gush out of the raised gap, rolling out over the rim and rising, gone by 0.5 s; its box holds it', () => {
+  it('v1.6 polish 3: a gush out of the raised gap, rolling out over the rim and rising, gone by 0.66 s; its box holds it', () => {
     // The gap opens with the tip and closes at the lift-off; nothing after 0.5 s.
     expect(raisedGap(0)).toBe(0);
     expect(raisedGap(0.2)).toBeGreaterThan(0.05);
@@ -282,12 +282,15 @@ describe('Dinner steam field (v1.6)', () => {
       expect(((gushRise(a + 0.05) - gushRise(a)) / 0.05) * SU_CM).toBeLessThan(35);
     }
     expect(gushRise(0.3) * SU_CM).toBeGreaterThan(3);
-    // (v1.6 polish 5: it fades over 0.34–0.5 s, was 0.36–0.56.)
-    expect(spillFade(0.34)).toBe(1);
-    expect(spillFade(0.35)).toBeGreaterThan(0.98);
-    expect(spillFade(0.5)).toBe(0);
-    // The box: every parcel's centre (round the raised side) at τ 0.3 and 0.45 is inside it.
-    for (const tau of [0.3, 0.45]) {
+    // (v1.6 polish 5: it fades over 0.34–0.5 s, was 0.36–0.56; polish 6: over 0.42–0.66 s, carried up and out as it goes:
+    // its oldest parcels have risen ≥ 8 cm by the time it has half gone.)
+    expect(spillFade(0.42)).toBe(1);
+    expect(spillFade(0.43)).toBeGreaterThan(0.98);
+    expect(spillFade(0.66)).toBe(0);
+    expect(gushRise(0.54 - 0.3) * SU_CM).toBeGreaterThan(5);
+    expect(gushRise(0.54 - 0.15) * SU_CM).toBeGreaterThan(8);
+    // The box: every parcel's centre (round the raised side) at τ 0.3, 0.45 and 0.6 is inside it.
+    for (const tau of [0.3, 0.45, 0.6]) {
       const s = cloudState(tau), lo = new Vector3(), hi = new Vector3();
       steamBounds(s, { tau, emitStart: -Infinity, emitEnd: Infinity }, new Vector3(), new Vector3(), new Vector3(), new Vector3(), lo, hi);
       for (let k = 0; k < SPILL.samples; k++) {
