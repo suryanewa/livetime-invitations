@@ -9,7 +9,7 @@ import { DinnerScene } from '../src/scenes/dinner/index.ts';
 import { STEAM_LOOK } from '../models/dinnerSteam.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, dragAt, EDGE, leftSteamEnd, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
+  axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, dragAt, EDGE, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
   spillSource, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
 } from '../src/scenes/dinner/steam.ts';
 
@@ -170,6 +170,59 @@ describe('Dinner steam field (v1.6)', () => {
     expect(STEAM_LOOK.thinPixels).toBeLessThan(STEAM_LOOK.marchPixels);
     expect(STEAM_LOOK.steps.dense).toBeGreaterThan(STEAM_LOOK.steps.thin);
     expect(STEAM_LOOK.steps.thin).toBeGreaterThanOrEqual(STEAM_LOOK.steps.veil);
+  });
+
+  it('v1.6 polish 3: a translucent body with a denser mixing skin; the cap keeps its fog as the stem and base empty; the light is a key over a fill', () => {
+    // Translucent: the young fog's own density is a fraction of polish 2's (2.2), the skin where it
+    // meets the room's air several times the core (the limb reads, the far rim shows through).
+    const young = cloudLook(0.1, 0);
+    expect(young.core).toBeLessThan(0.3);
+    expect(young.sheet).toBeGreaterThan(4 * young.core);
+    // No hollow ring: the cap keeps a fog of its own after the core has emptied, and it thins by 1.4 s.
+    const at = (tau: number) => cloudLook(cloudState(tau).age, cloudState(tau).erode);
+    expect(at(1.0).capCore).toBeGreaterThan(2 * at(1.0).core);
+    expect(at(1.0).capCore).toBeGreaterThan(0.08);
+    expect(at(1.4).capCore).toBeLessThan(0.5 * at(0.5).capCore);
+    // The light: the multiple-scattering octaves pulled back from polish 2 (0.45 / 0.18), the key's
+    // shadow through the cloud steeper (1.25), the room a fill.
+    expect(STEAM_LOOK.ms[0]).toBeLessThan(0.3);
+    expect(STEAM_LOOK.ms[1]).toBeLessThan(0.1);
+    expect(STEAM_LOOK.keyFall).toBeGreaterThan(2);
+    expect(STEAM_LOOK.room).toBeLessThan(STEAM_LOOK.key / 5);
+  });
+
+  it('v1.6 polish 3: a gush out of the raised gap, rolling out over the rim and rising, gone by 0.56 s; its box holds it', () => {
+    // The gap opens with the tip and closes at the lift-off; nothing after 0.5 s.
+    expect(raisedGap(0)).toBe(0);
+    expect(raisedGap(0.2)).toBeGreaterThan(0.05);
+    expect(raisedGap(0.6)).toBe(0);
+    // A parcel rolls out a few centimetres and rises as it slows, at a buoyant plume's pace.
+    expect(gushOut(0.5) * SU_CM).toBeGreaterThan(2.5);
+    expect(gushOut(0.5) * SU_CM).toBeLessThan(5);
+    for (let a = 0; a < 0.5; a += 0.05) {
+      expect(gushOut(a + 0.05)).toBeGreaterThanOrEqual(gushOut(a));
+      expect(((gushRise(a + 0.05) - gushRise(a)) / 0.05) * SU_CM).toBeLessThan(35);
+    }
+    expect(gushRise(0.3) * SU_CM).toBeGreaterThan(3);
+    expect(spillFade(0.35)).toBe(1);
+    expect(spillFade(0.56)).toBe(0);
+    // The box: every parcel's centre (round the raised side) at τ 0.3 and 0.45 is inside it.
+    for (const tau of [0.3, 0.45]) {
+      const s = cloudState(tau), lo = new Vector3(), hi = new Vector3();
+      steamBounds(s, { tau, emitStart: -Infinity, emitEnd: Infinity }, new Vector3(), new Vector3(), new Vector3(), new Vector3(), lo, hi);
+      for (let k = 0; k < SPILL.samples; k++) {
+        const a = k * SPILL.dt, g = raisedGap(tau - a);
+        if (spillSource(tau - a) <= 0) continue;
+        for (const ang of [-0.5, 0, 0.5, 1.0]) {
+          const dx = RAISED_DIR.x * Math.cos(ang) - RAISED_DIR.y * Math.sin(ang), dz = RAISED_DIR.x * Math.sin(ang) + RAISED_DIR.y * Math.cos(ang);
+          const r = COVER.lipRadius + gushOut(a), y = plateTop(COVER.lipRadius) + 0.6 * g + gushRise(a);
+          const p = new Vector3(dx * r, y, dz * r);
+          expect(p.x).toBeGreaterThanOrEqual(lo.x); expect(p.x).toBeLessThanOrEqual(hi.x);
+          expect(p.z).toBeGreaterThanOrEqual(lo.z); expect(p.z).toBeLessThanOrEqual(hi.z);
+          expect(p.y).toBeLessThanOrEqual(hi.y);
+        }
+      }
+    }
   });
 
   it('its base rolls outward and down over the plate\'s rim', () => {
