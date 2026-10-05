@@ -64,7 +64,8 @@ describe('Dinner steam field (v1.6)', () => {
     const s = cloudState(0);
     // Inside the cloche, above the plate: fog (densest under the crown).
     for (const [r, y] of [[0, 0.6], [0.3, 0.4], [0.45, 0.2], [0.2, 0.12]] as const) {
-      expect(cloudDensity(new Vector3(r, y, 0), s), `${r}, ${y}`).toBeGreaterThan(0.4);
+      // (v1.6 polish 5: the base keeps 35 % of the crown's density, was 55 %.)
+      expect(cloudDensity(new Vector3(r, y, 0), s), `${r}, ${y}`).toBeGreaterThan(0.3);
     }
     expect(cloudDensity(new Vector3(0, 0.62, 0), s)).toBeGreaterThan(cloudDensity(new Vector3(0, 0.1, 0), s));
     // Outside the dome, above its crown, and on the porcelain itself: none.

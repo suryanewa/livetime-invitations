@@ -66,8 +66,12 @@ export const CLOUD = {
   /** The clear layer over the hot porcelain at the seat, and how much deeper it gets as the plate re-heats the air (su). */
   floor: 0.035,
   floorGrow: 0.1,
-  /** Densest under the crown (warm saturated air rises; the dome's cool wall condenses it): the base keeps this share. */
-  baseDensity: 0.55,
+  /**
+   * Densest under the crown (warm saturated air rises; the dome's cool wall condenses it): the base keeps this share
+   * (v1.6 polish 5: 0.55 → 0.35, with the young core 0.2 → 0.19: the held dome is denser than polish 4's drawn-up one;
+   * this keeps the plate's far rim seen through it at a transmittance of 0.34–0.46 while the lit upper body stays dense).
+   */
+  baseDensity: 0.35,
   /**
    * τ (s) at which the thermal clock starts: the dome is clearing the cloud's side (it is clear of
    * the plate's middle by 0.44 s). Before it, and for a beat after it, the fog stands in the dome's
@@ -681,12 +685,15 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   out.billow = Math.max(0.028 + EDGE.billow * peel, 0.028 + 0.042 * smooth(0.25, 1.3, age));
   // (v1.6 polish 4: the sheets curve and fold with the large field from the start: 0.5 → 0.9 young.)
   out.warp = 0.9 + 0.9 * smooth(0.25, 1.5, age);
-  out.core = 0.2 + (0.03 - 0.2) * smooth(0.15, 0.72, age);
+  // (v1.6 polish 5: 0.2 → 0.19 young, with the base's share: the held dome, less stretched by the drag, was denser.)
+  out.core = 0.19 + (0.03 - 0.19) * smooth(0.15, 0.72, age);
   // (v1.6 polish 4: the skin is light: a dense mixing skin round a thin body read as a bubble, the limb denser than the core.)
   out.sheet = 0.3 - 0.15 * smooth(0.15, 0.5, age) - 0.1 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
   // (v1.6 polish 3) The cap's fog: the stem and base empty, the cap keeps its own (a filled mushroom, not a ring).
-  out.capCore = 0.24 + 0.14 * smooth(0.4, 0.75, age) - 0.26 * smooth(0.85, 1.6, age);
+  // (v1.6 polish 5: young 0.24 → 0.17, with the core: the held dome, less stretched by the drag, was denser; then
+  // the cap gathers the dome's fog as the core empties, 0.37 by 0.75 s of the thermal, and keeps it as it rises away, to 1.4 s.)
+  out.capCore = 0.17 + 0.2 * smooth(0.4, 0.75, age) - 0.26 * smooth(0.85, 1.6, age);
   // (v1.6 polish 4: the structural round) The body is thin, dense sheets with clear air between: the zero set of
   // the sheet field (drawn out along the rise, folded with the air), `fold` times the core's density inside a
   // sheet, `foldWidth` its half-width in the field's units (≈ 2 mm), `haze` the share of the core between them.

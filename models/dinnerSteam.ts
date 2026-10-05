@@ -118,18 +118,20 @@ export const STEAM_LOOK = {
   shadowOd: 0.45,
   /**
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
-   * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
+   * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them. (v1.6 polish 5: 28 / 22 / 16 → 40 / 30 / 20,
+   * for the grain at the finer march.)
    */
-  steps: { dense: 28, thin: 22, veil: 16 },
+  steps: { dense: 40, thin: 30, veil: 20 },
   /**
    * The temporal resolve: the new frame's share of a marched pixel (v1.6 polish 4: every pixel is marched every
    * frame; a tenth, the history carried through the flow), of a pixel filled from its marched neighbours on the
    * Low tier's checkerboard, and the new frame's share taken from its same-surface neighbourhood (a light
-   * spatial denoise before the blend). The history is clipped to the neighbourhood's mean ± `clip` σ.
+   * spatial denoise before the blend; v1.6 polish 5: 0.5 → 0.25, the march being finer). The history is clipped to the
+   * neighbourhood's mean ± `clip` σ.
    */
   history: 0.1,
   fillBlend: 0.1,
-  denoise: 0.5,
+  denoise: 0.25,
   clip: 1.25,
   /**
    * (v1.6 polish 4) Frames of history the resolve builds at once where it has none (the first steam frame, a
@@ -137,17 +139,30 @@ export const STEAM_LOOK = {
    */
   warm: 4,
   /**
-   * The march's pixel budget: at most half the drawing buffer's resolution a side, and at most this many pixels over
-   * the steam's footprint on screen (polish 4: the footprint's, not the buffer's).
+   * The march's pixel budget: at most `maxScale` of the drawing buffer's resolution a side, and at most this many pixels
+   * over the steam's footprint on screen (polish 4: the footprint's, not the buffer's; polish 5: 120 k → 360 k, 90 k → 270 k
+   * thin).
    */
-  marchPixels: 120_000,
+  marchPixels: 360_000,
   /** (v1.6 polish 4) The march's shortest step (su, ≈ 2 mm). */
   minStep: 0.012,
-  /** (v1.6 polish 4) …and at most this many march pixels per CSS pixel of the footprint. */
-  cssDensity: 0.31,
+  /**
+   * (v1.6 polish 4) …and at most this many march pixels per CSS pixel² of the footprint. (v1.6 polish 5: 0.31 → 1.0, one
+   * march pixel per CSS pixel where `maxScale` allows: the phone's 2× buffer, 0.82 a side at the laptop's 1.65×.)
+   */
+  cssDensity: 1.0,
   /** (v1.6 polish 2) The budget once only thin steam shows (the cloud past its fog, the veil). */
-  thinPixels: 90_000,
+  thinPixels: 270_000,
   lowShare: 0.6,
+  /** (v1.6 polish 5) The composite's upsample: 0 bilinear, 1 Catmull-Rom held within the nearest 2 × 2's range. */
+  upsampleSharp: 0,
+  /**
+   * (v1.6 polish 5) The march's resolution a side over the drawing buffer's, at most (one march pixel per 2 × 2 buffer
+   * pixels: a full-resolution march, one per CSS pixel at the laptop's 1.65×, cost 6.5 ms at the held dome).
+   */
+  maxScale: 0.5,
+  /** (v1.6 polish 5) The crown's wake tongues: their height at most (su, ≈ 2 cm; polish 4: 0.075, 1.3 cm). */
+  tongue: 0.12,
   /** (v1.6 polish 3) The veil's density in the march: its wisps were lit for the old, dimmer key (it was 40 % of the vapour at 1.2 s). */
   veilGain: 0.35,
 } as const;
@@ -908,7 +923,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   if (uK[l].y > 0.0) {
     float crown = smoothstep(${f(CLOUD.rim + 0.25)}, ${f(CLOUD.rim + 0.55)}, m.g) * (1.0 - 0.6 * min(1.0, m.r * m.r / ${f(CLOUD.radius * CLOUD.radius)}));
     if (crown > 0.0) dEff += uK[l].y * crown * (texture(uNoise, vec3(X.x * 8.0, X.y * 0.6, X.z * 8.0) + vec3(0.29, 0.61, 0.13)).g - 0.45) * 2.0;
-    wakeTop = crown * uK[l].y / 0.075;
+    wakeTop = crown * min(1.0, uK[l].y / 0.075);
   }
   // v1.6 polish 2: the peeling layer, on the edge band only. From the lift-off the outer centimetre
   // or two is a shear layer (the room's air sliding down the wall and in, the cloud's drawn up): the
@@ -1518,6 +1533,8 @@ uniform vec3 uKeyDir;
 uniform float uShadowOn;
 uniform float uSigma;
 uniform int uFlags;
+/** (v1.6 polish 5) The upsample's sharpness: 0 bilinear, 1 Catmull-Rom (held within the 2 × 2's range). */
+uniform float uSharp;
 varying vec3 vLocal;
 ${LIGHT_GLSL}
 
@@ -1582,6 +1599,26 @@ void main() {
   }
   // (Luminance, coverage, the key's luminance.)
   vec3 g = wsum > 1e-4 ? acc / wsum : bestV;
+  // (v1.6 polish 5) A Catmull-Rom upsample over the 4 × 4 march pixels round this one, with the same depth weights, held
+  // within the 2 × 2's range (no ringing): the bilinear one blurred the edge and the sheets across each 2 × 2 buffer pixels.
+  if (uSharp > 0.0 && wsum > 1e-4) {
+    vec2 w0 = fr * (-0.5 + fr * (1.0 - 0.5 * fr)), w1 = 1.0 + fr * fr * (-2.5 + 1.5 * fr);
+    vec2 w2 = fr * (0.5 + fr * (2.0 - 1.5 * fr)), w3 = fr * fr * (-0.5 + 0.5 * fr);
+    vec3 lo = vec3(1e9), hi = vec3(-1e9), cacc = vec3(0.0);
+    float csum = 0.0;
+    for (int k = 0; k < 16; k++) {
+      ivec2 o = ivec2(k & 3, k >> 2) - 1;
+      vec4 v = texelFetch(uVolume, clamp(b + o, ivec2(0), size - 1), 0);
+      float wx = o.x == -1 ? w0.x : (o.x == 0 ? w1.x : (o.x == 1 ? w2.x : w3.x));
+      float wy = o.y == -1 ? w0.y : (o.y == 0 ? w1.y : (o.y == 1 ? w2.y : w3.y));
+      float dd = abs(v.z - own);
+      float wd = exp(-dd / (0.02 * min(own, v.z) + 0.003));
+      cacc += v.xyw * wx * wy * wd;
+      csum += wx * wy * wd;
+      if (o.x >= 0 && o.x <= 1 && o.y >= 0 && o.y <= 1 && wd > 0.5) { lo = min(lo, v.xyw); hi = max(hi, v.xyw); }
+    }
+    if (csum > 1e-3 && hi.x >= lo.x) g = mix(g, clamp(cacc / csum, lo, hi), uSharp);
+  }
   vec2 v = g.xy;
   // The steam veils what is behind by its coverage; its shadow darkens what it falls on further.
   float shadow = surfaceShadow(own, v.y);
@@ -1795,6 +1832,7 @@ export class DinnerSteam {
       uCamLocal: this.uniforms.uCamLocal!, uModelView: this.uniforms.uModelView!, uLight: this.uniforms.uLight!,
       uLightMin: this.uniforms.uLightMin!, uLightMax: this.uniforms.uLightMax!, uCoverInv: this.uniforms.uCoverInv!,
       uKeyDir: this.uniforms.uKeyDir!, uShadowOn: this.uniforms.uShadowOn!, uSigma: this.uniforms.uSigma!, uFlags: this.uniforms.uFlags!,
+      uSharp: { value: STEAM_LOOK.upsampleSharp },
     };
     this.material = new ShaderMaterial({
       name: 'fx_steam_volume', uniforms: this.compositeUniforms, vertexShader: COMPOSITE_VERTEX, fragmentShader: COMPOSITE_FRAGMENT,
@@ -1844,6 +1882,7 @@ export class DinnerSteam {
     u.uOrtho!.value = (camera as OrthographicCamera).isOrthographicCamera === true;
     u.uHasDepth!.value = true;
     u.uDebug!.value = dbg.__steamDebug ?? 0;
+    this.compositeUniforms.uSharp!.value = (globalThis as { __steamSharp?: number }).__steamSharp ?? STEAM_LOOK.upsampleSharp;
     u.uFlags!.value = (globalThis as { __steamFlags?: number }).__steamFlags ?? 0;
     u.uProbes!.value = (globalThis as { __steamProbes?: number }).__steamProbes ?? PROBES;
     // (Two clouds at once, a change of mind's: every sample evaluates both, and the march's cost is the ray's length
@@ -1868,8 +1907,8 @@ export class DinnerSteam {
     // (And at most `cssDensity` march pixels per CSS pixel² of it: detail is judged at the page's scale, and a 3×
     // phone's buffer packs four times the laptop's pixels into each CSS pixel.)
     const dpr = Math.max(1, renderer.getPixelRatio());
-    const spend = Math.min(budget, STEAM_LOOK.cssDensity * (fp.z * fp.w) / (dpr * dpr));
-    const scale = Math.min(0.5, Math.sqrt(spend / Math.max(1, fp.z * fp.w)));
+    const spend = Math.min(budget, ((globalThis as { __steamCss?: number }).__steamCss ?? STEAM_LOOK.cssDensity) * (fp.z * fp.w) / (dpr * dpr));
+    const scale = Math.min((globalThis as { __steamMaxScale?: number }).__steamMaxScale ?? STEAM_LOOK.maxScale, Math.sqrt(spend / Math.max(1, fp.z * fp.w)));
     this.scissor.set(Math.floor(fp.x * scale) - 4, Math.floor(fp.y * scale) - 4, Math.ceil(fp.z * scale) + 8, Math.ceil(fp.w * scale) + 8);
     const st = (globalThis as { __steamStats?: string[] }).__steamStats;
     if (st) st.push(`tau ${this.tau0.toFixed(3)} buf ${frame.size.x}x${frame.size.y} fp ${fp.z}x${fp.w} scale ${scale.toFixed(3)} steps ${this.steps}`);
@@ -2080,13 +2119,16 @@ export class DinnerSteam {
       if (TT.billow !== undefined) look.billow *= TT.billow;
       if (TT.band !== undefined) look.band *= TT.band;
       if (TT.amp !== undefined) look.amp *= TT.amp;
+      if (TT.fold !== undefined) look.fold *= TT.fold;
+      if (TT.foldW !== undefined) look.foldWidth *= TT.foldW;
+      if (TT.haze !== undefined) look.haze *= TT.haze;
       E[l]!.set(look.amp, look.band, look.billow, look.warp);
       // (The fine curls belong to the young edge: as the band widens they would read as a felt over the aging cap.)
       Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.25) / 0.2)) * (TT.fine ?? 1), s.peel * (TT.peel ?? 1), s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
       // (v1.6 polish 5: and the seating's puffs' strength: the clock's light at the capture, the fog it squeezed out.)
       // (v1.6 polish 5: the crown's wake tongues come after the held dome, as its crown is drawn up, and go as the cap rolls.)
-      K[l]!.set(look.capCore, Math.min(0.075, 0.5 * dragAt(1.5)) * crownFray(Math.min(tau, c.emitEnd)) * (1 - smoothstep01((s.age - 0.55) / 0.35)) * (TT.wake ?? 1),
+      K[l]!.set(look.capCore, Math.min(STEAM_LOOK.tongue, 0.8 * dragAt(1.5)) * crownFray(Math.min(tau, c.emitEnd)) * (1 - smoothstep01((s.age - 0.55) / 0.35)) * (TT.wake ?? 1),
         Number.isFinite(c.capture) && Number.isFinite(c.emitEnd) ? leftSteamFade(c.capture, c.emitEnd, c.capture) : 0, 0);
       // (The body's mean density over the core's, for the light volume: the haze, the sheets' share of the volume
       // (≈ 1.6 × their half-width: the field's density at zero) less the holes torn in them, and the skin.)
