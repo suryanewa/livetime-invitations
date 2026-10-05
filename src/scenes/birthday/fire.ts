@@ -1035,7 +1035,7 @@ export function smokeStrand(i: number, strand: number, t: number, wickAt: WickAt
     out.carried[k] = dm;
     out.jet[k] = B.jet[k]!;
     out.stream[k] = B.sw[k]! * narrow;
-    out.streamAlpha[k] = 1 - Math.exp(-share * B.sd[k]!);
+    out.streamAlpha[k] = B.jet[k]! > 0 ? 1 - Math.exp(-share * B.sd[k]!) : 0;
     // The strands share the column's optical depth (Beer–Lambert): where they still overlap, low
     // down, they composite back to exactly the column's opacity.
     const alpha = 1 - Math.exp(-share * B.depth[k]!);
@@ -1206,7 +1206,7 @@ function computePlume(i: number, t: number, wickAt: WickAt, kind: SmokeKind, wak
     // the pool at their hottest: a puff 3–5 mm wide for its first 0.2–0.5 s); the stem then
     // thins as the wick cools and gives off less (judge: "after extinction a faint thin thread").
     // (v1.6 polish 3: it widens as it leaves, as wide as the breath it met rolls it: a thread at the wick.)
-    const met = breath ? smooth(breathAt(i, birth) / SMOKE.puffMet) : 1;
+    const met = breath ? smooth(Ub / SMOKE.puffMet) : 1;
     const head = 1 + SMOKE.puffWidth * (1 - smooth((birth - src.bare) / SMOKE.puffFor)) * met * smooth(a / SMOKE.puffGrow);
     const neck = 1 + SMOKE.neck[0] * (0.65 * Math.sin(n1 * birth + m1) + 0.35 * Math.sin(n2 * birth + m2));
     const core = (SMOKE.width0 * 1e-3 * (0.55 + 0.45 * Math.min(1, q)) + SMOKE.widthGrow * src.diffuse * 1e-3 * Math.sqrt(a / 0.5)) * head * neck + SMOKE.jetSpread * dm;
@@ -1217,8 +1217,8 @@ function computePlume(i: number, t: number, wickAt: WickAt, kind: SmokeKind, wak
     // wick's own wake).
     // (In the breath, the jet's entrainment dilutes it: SMOKE.breathDilute; v1.6 polish 4: 1/(1 + U/1.6), was
     // U/6: judge 4, the denser puff of polish 3 fogged the next candle to near-white.)
-    const dilute = (breath ? 1 / (1 + breathAt(i, birth) / SMOKE.breathDilute) : 1) / (1 + moving / STRUNG_AT);
-    const qm = q * (1 + SMOKE.neck[1] * smoulderShare(i, birth, kind) * Math.sin(n3 * birth + m3));
+    const dilute = (breath ? 1 / (1 + Ub / SMOKE.breathDilute) : 1) / (1 + moving / STRUNG_AT);
+    const qm = q > 0 ? q * (1 + SMOKE.neck[1] * smoulderShare(i, birth, kind) * Math.sin(n3 * birth + m3)) : 0;
     B.rate[k] = qm * dilute;
     let depth = SMOKE.depth * qm * dilute * smooth(a / 0.004) * Math.pow((SMOKE.width0 * 1e-3 * head) / w, SMOKE.thin);
     const fades = (1 - smooth((a - src.fade[0]) / (src.fade[1] - src.fade[0]))) * tailFade;
