@@ -223,7 +223,7 @@ export const STEAM_LOOK = {
   /**
    * (v1.6 polish 8) The steam's own colour off the tone curve's shoulder: its radiance scaled by this, then a tone curve
    * of its own (`steamTone`: the scene's neutral curve with its shoulder from `shoulder`, rolling off exponentially), so the
-   * lit side and the shade no longer both land at 246–251 of 255: the scene's curve maps 1.0 → 242, 2.0 → 250.
+   * lit side and the shade no longer both land at 246–251 of 255: the scene's curve maps 1.0 → 240, 2.0 → 251.
    */
   exposure: 0.79,
   shoulder: 0.5,
@@ -1820,7 +1820,7 @@ ${LIGHT_GLSL}
  * (v1.6 polish 8) The steam's own tone curve: the scene's neutral curve (Khronos PBR Neutral: the same toe and offset,
  * the same desaturation in the shoulder) with its shoulder starting lower and rolling off exponentially, so the steam's
  * lit side (≈ 1.3–2 in linear radiance) and its shade (≈ 0.8–1) no longer both land on the last few levels: the
- * scene's curve maps 1.0 → 242 and 2.0 → 250 of 255, this one 1.0 → 235 and 2.0 → 253.
+ * scene's curve maps 1.0 → 240 and 2.0 → 251 of 255, this one 1.0 → 231 and 2.0 → 252 (before the exposure).
  */
 vec3 steamTone(vec3 c) {
   float x = min(c.r, min(c.g, c.b));

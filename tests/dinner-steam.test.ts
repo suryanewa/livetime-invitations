@@ -261,10 +261,63 @@ describe('Dinner steam field (v1.6)', () => {
     expect(STEAM_LOOK.ms[0]).toBeLessThan(0.3);
     expect(STEAM_LOOK.ms[1]).toBeLessThan(0.1);
     expect(STEAM_LOOK.keyFall).toBeGreaterThan(2);
-    expect(STEAM_LOOK.room).toBeLessThan(STEAM_LOOK.key / 10);
     // (v1.6 polish 6: a terminator: the key's self-shadow steeper, its floor the deep shade's diffuse light, under a fifth.)
     expect(STEAM_LOOK.keyFall).toBeGreaterThan(5);
     expect(STEAM_LOOK.keyFloor).toBeLessThan(0.2);
+    // (v1.6 polish 8: the room is the steam's ambient, the floor of its shade, not a fill under a tenth of the key: the key,
+    // the window's spread and the back light over it carry the direction.)
+    expect(STEAM_LOOK.room).toBeLessThan(STEAM_LOOK.key + STEAM_LOOK.windowWrap.light);
+  });
+
+  it('v1.6 polish 8: the steam lit on purpose — a window spread from its side, a back light of its own, the room its ambient, a tone curve of its own', () => {
+    // The window's spread comes from the window's side (left, as the rig's key), low, towards the camera, and falls steeply
+    // across the dome: the terminator.
+    const [toCam, left, up] = STEAM_LOOK.windowWrap.dir;
+    expect(left).toBeGreaterThan(toCam);
+    expect(left).toBeGreaterThan(up);
+    expect(STEAM_LOOK.windowWrap.fall).toBeGreaterThanOrEqual(10);
+    // The back light is behind the steam (and above, a little right of the camera), seen only by the steam, and lights only
+    // its outer layer (≤ 1 cm: SU_CM cm per su): a rim, not a fill of the shaded side.
+    const [behind, right, upB] = STEAM_LOOK.backLight.dir;
+    expect(behind).toBeGreaterThan(Math.max(right, upB));
+    expect(right).toBeGreaterThan(0);
+    expect(STEAM_LOOK.backLight.rim * SU_CM).toBeLessThanOrEqual(1);
+    expect(STEAM_LOOK.backLight.g).toBeGreaterThan(0.4);
+    // The room: half of it from every side (the shade's floor: the shade never under the cove's own light), the rest from the
+    // window's side.
+    expect(STEAM_LOOK.roomFloor).toBeGreaterThanOrEqual(0.4);
+    expect(STEAM_LOOK.roomFloor).toBeLessThan(1);
+    // The steam's own tone curve: its shoulder from below the scene's (0.76), the exposure under 1, so the lit side (≈ 2 in
+    // linear radiance) and the shade (≈ 1) are ≥ 15 levels apart where the scene's curve puts them ≈ 11 apart.
+    const level = (x: number, a: number, exp: boolean) => {
+      const y = x - 0.04, d = 1 - a;
+      const t = y < a ? y : exp ? 1 - d * Math.exp(-(y - a) / d) : 1 - (d * d) / (y + d - a);
+      return 255 * (1.055 * Math.pow(Math.min(1, t), 1 / 2.4) - 0.055);
+    };
+    expect(STEAM_LOOK.shoulder).toBeLessThan(0.76);
+    expect(STEAM_LOOK.exposure).toBeLessThan(1);
+    const e = STEAM_LOOK.exposure;
+    expect(level(2 * e, STEAM_LOOK.shoulder, true) - level(1 * e, STEAM_LOOK.shoulder, true)).toBeGreaterThan(15);
+    expect(level(2, 0.76, false) - level(1, 0.76, false)).toBeLessThan(12);
+    // The radiance composite only over the cove (the plate, the cloche and the table are nearer).
+    expect(STEAM_LOOK.radiance.near).toBeGreaterThan(8);
+  });
+
+  it('v1.6 polish 8: the edge band and its full-resolution pass — millimetre tears, one march pixel per CSS pixel, young clouds only', () => {
+    const E = STEAM_LOOK.edgeBand, P = STEAM_LOOK.edge;
+    // Tears ≈ 1–3 mm across, several times taller, a few millimetres deep, within the outer centimetre.
+    const across = (1 / E.tearFreq / 4) * SU_CM;
+    expect(across).toBeGreaterThan(0.1);
+    expect(across).toBeLessThan(0.4);
+    expect(E.tearLength).toBeGreaterThanOrEqual(3);
+    expect(E.tear * SU_CM).toBeLessThan(0.5);
+    expect(E.depth * SU_CM).toBeLessThanOrEqual(1.5);
+    expect(E.boundary).toBeLessThan(1);
+    // The pass: ≥ 1 march pixel per CSS pixel, fewer steps, a ring under a centimetre, only while the cloud is young.
+    expect(P.css).toBeGreaterThanOrEqual(1);
+    expect(P.steps).toBeLessThan(1);
+    expect(P.age).toBeLessThan(1.2);
+    expect(P.ring).toBeLessThan(13.5);
   });
 
   it('v1.6 polish 3: a gush out of the raised gap, rolling out over the rim and rising, gone by 0.66 s; its box holds it', () => {
