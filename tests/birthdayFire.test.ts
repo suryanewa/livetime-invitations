@@ -12,7 +12,7 @@ import { BirthdayScene } from '../src/scenes/birthday/index.ts';
 import { CARRY_FROM, DURATIONS, IGNITE_START, ON_STAND } from '../src/scenes/birthday/poses.ts';
 import {
   ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, frameScale, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
-  breathAt, POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeLaminar, smokeLean, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
+  breathAt, POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeLaminar, smokeLean, smokeRate, smokeSource, smokeStrand, smoulderShare, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /** Wick tip of candle i in cake_secondary space (seated, nominal). */
@@ -20,6 +20,16 @@ const IGNITE_START_OF = (i: number) => IGNITE_START[i]!;
 const wick = (i: number): [number, number, number] => [CANDLE_SOCKETS[i]![0], CANDLE.seat + WICK_TIP_Y, CANDLE_SOCKETS[i]![1]];
 /** The wick standing still (the cake on its stand): where every parcel was born. */
 const still = (i: number): WickAt => (_birth, out) => { const w = wick(i); out[0] = w[0]; out[1] = w[1]; out[2] = w[2]; };
+/**
+ * v1.6 polish 4: the ember's output wavers (SMOKE.neck): the densest smoke near the wick averaged over
+ * ± 0.1 s, so a trend is read through the wavering.
+ */
+const alphaNearAvg = (i: number, t: number, kind: 'breath' | 'snuff', r: number) => {
+  const st = newSmokeStrand(), w = wick(i);
+  let sum = 0;
+  for (const d of [-0.1, -0.05, 0, 0.05, 0.1]) { smokeStrand(i, 0, t + d, still(i), st, kind); sum += alphaNear(st, w, r); }
+  return sum / 5;
+};
 /** Densest smoke within `r` (scene units) of the wick, over the thread's points. */
 const alphaNear = (st: SmokeStrand, w: [number, number, number], r: number) => {
   let m = 0;
@@ -254,9 +264,10 @@ describe('Birthday fire: the smoke', () => {
     const lam = 0.08;
     // The laminar stem: the strip's alone.
     expect(ribbonShare(0.04, 0.04, lam, 1, 0.0015)).toBeCloseTo(1, 6);
-    // Above its transition a filament carries on (re-judge: "carry thin, folding, crisp structure above the stem"), fading out by 24 cm over it.
+    // Above its transition a filament carries on (re-judge: "carry thin, folding, crisp structure above the stem"), fading out by 30 cm over it
+    // (v1.6 polish 4: was 24 cm; judge 4: the plume nearly gone above 16 cm).
     expect(ribbonShare(0.12, 0.11, lam, 1, 0.002)).toBeGreaterThan(0.6);
-    expect(ribbonShare(0.4, 0.33, lam, 1, 0.002)).toBe(0);
+    expect(ribbonShare(0.46, 0.39, lam, 1, 0.002)).toBe(0);
     // Its own curls make its path longer than its rise: still a filament; the breath's sweep is the volume's.
     expect(ribbonShare(0.2, 0.1, lam, 1.2, 0.002)).toBeGreaterThan(0.3);
     expect(ribbonShare(0.03, 0.005, lam, 0.05, 0.002)).toBe(0);
@@ -284,6 +295,104 @@ describe('Birthday fire: the smoke', () => {
         smokeStrand(i, 0, bare + a, still(i), st);
         for (let k = 0; k < SMOKE_POINT_COUNT && st.age[k]! < 0.004; k++) expect(st.full[k]!).toBeLessThan(0.0013);
       }
+    }
+  });
+
+  it('v1.6 polish 4: the breath\'s stream is a thread at the ember, stretched thinner as it is carried and the ribbons\' until the jet rolls it into the puff (judge 4: a soft cone glued to the ember)', () => {
+    const st = newSmokeStrand();
+    const [r0, r1] = SMOKE.stream.roll;
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const bare = smokeSource(i).bare;
+      for (const a of [0.04, 0.08, 0.12]) {
+        smokeStrand(i, 0, bare + a, still(i), st);
+        // At the ember: no wider than half a millimetre; a centimetre downwind, thinner still.
+        expect(st.jet[0]!).toBeGreaterThan(0.99);
+        expect(st.stream[0]!).toBeLessThanOrEqual(0.0005);
+        let k = 0;
+        while (k < SMOKE_POINT_COUNT - 1 && st.carried[k]! < 0.01) k++;
+        expect(st.stream[k]!).toBeLessThan(0.6 * st.stream[0]!);
+        // The strips draw it from the ember; the volume only once it has been carried r0 (none of it at the wick).
+        expect(ribbonShare(0.002, 0.001, smokeLaminar(i), a, st.full[0]!, 1, st.carried[0]!)).toBe(1);
+      }
+    }
+    expect(ribbonShare(0.05, 0.01, 0.08, 0.05, 0.004, 1, r1 + 0.001)).toBe(0);
+    expect(ribbonShare(0.05, 0.01, 0.08, 0.05, 0.004, 1, 0.5 * (r0 + r1))).toBeCloseTo(0.5, 6);
+  });
+
+  it('v1.6 polish 4: as the breath drops the stream turns up within 80 ms, and it never holds one shape by the wick', () => {
+    const st = newSmokeStrand(), st2 = newSmokeStrand();
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const b = BREATH_AT[i]!, w = wick(i);
+      // When the breath at the wick has fallen to half its peak (after it), and 80 ms on.
+      let tHalf = b.arrive + BREATH.rise;
+      while (breathAt(i, tHalf) > 0.5 * b.peak) tHalf += 0.001;
+      // The stream's direction 4–8 mm from the ember: above the breath's horizontal, in its plane.
+      const angle = (t: number) => {
+        smokeStrand(i, 0, t, still(i), st);
+        let n = 0, sum = 0;
+        for (let k = 0; k < SMOKE_POINT_COUNT; k++) {
+          const dx = (st.position[k * 3]! - w[0]) / MPS, dy = (st.position[k * 3 + 1]! - w[1]) / MPS, dz = (st.position[k * 3 + 2]! - w[2]) / MPS;
+          const r = Math.hypot(dx, dy, dz);
+          if (r > 0.004 && r < 0.008) { sum += Math.atan2(dy, Math.abs(dx * b.dirX + dz * b.dirZ)); n++; }
+        }
+        return n ? sum / n : NaN;
+      };
+      expect(angle(tHalf + 0.08)).toBeGreaterThan((45 * Math.PI) / 180);
+      // Within a centimetre of the wick the thread moves: its parcels there are not where those 48 ms
+      // earlier were (the jet's flapping, then the stirred air's sway).
+      for (const t of [b.lift + 0.1, b.lift + 0.2, b.lift + 0.3]) {
+        smokeStrand(i, 0, t, still(i), st);
+        smokeStrand(i, 0, t - 0.048, still(i), st2);
+        let moved = 0, n = 0;
+        for (let k = 0; k < SMOKE_POINT_COUNT; k++) {
+          const r = Math.hypot(st.position[k * 3]! - w[0], st.position[k * 3 + 1]! - w[1], st.position[k * 3 + 2]! - w[2]) / MPS;
+          if (r < 0.003 || r > 0.01) continue;
+          // The nearest point of the earlier thread.
+          let d = Infinity;
+          for (let j = 0; j < SMOKE_POINT_COUNT; j++) d = Math.min(d, Math.hypot(st.position[k * 3]! - st2.position[j * 3]!, st.position[k * 3 + 1]! - st2.position[j * 3 + 1]!, st.position[k * 3 + 2]! - st2.position[j * 3 + 2]!) / MPS);
+          n++;
+          if (d > 0.0003) moved++;
+        }
+        expect(moved / n).toBeGreaterThan(0.5);
+      }
+    }
+  });
+
+  it('v1.6 polish 4: the stem necks and swells, ± 30 % of its width, and wavers with the ember, ± 30 % of its smoke, carried up with it (judge 4: six evenly bright constant-width threads)', () => {
+    const st = newSmokeStrand();
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const src = smokeSource(i), t = src.bare + 1.97;
+      smokeStrand(i, 0, t, still(i), st);
+      let wLo = Infinity, wHi = 0, rLo = Infinity, rHi = 0;
+      for (let k = 0; k < SMOKE_POINT_COUNT; k++) {
+        if (st.rise[k]! < 0.005 || st.rise[k]! > 0.15) continue;
+        const a = st.age[k]!, q = smokeRate(i, t - a);
+        // The stem's own width without its necking, and its smoke without the ember's wavering.
+        const plain = SMOKE.width0 * 1e-3 * (0.55 + 0.45 * Math.min(1, q)) + SMOKE.widthGrow * 1e-3 * Math.sqrt(a / 0.5);
+        const wk = st.full[k]! / plain, rk = st.rate[k]! / (0.42 * q);
+        wLo = Math.min(wLo, wk); wHi = Math.max(wHi, wk); rLo = Math.min(rLo, rk); rHi = Math.max(rHi, rk);
+      }
+      expect(wHi).toBeGreaterThan(1.2);
+      expect(wLo).toBeLessThan(0.8);
+      expect(wHi).toBeLessThanOrEqual(1 + SMOKE.neck[0] + 1e-6);
+      expect(rHi).toBeGreaterThan(1.2);
+      expect(rLo).toBeLessThan(0.8);
+    }
+  });
+
+  it('v1.6 polish 4: the breath dilutes the burst it carries (no fog bank over the next candle), and only the smoulder wavers', () => {
+    const st = newSmokeStrand();
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const b = BREATH_AT[i]!, t = b.lift + 0.02;
+      smokeStrand(i, 0, t, still(i), st);
+      // The newest parcel was born in the breath at its height: at most 1 / (1 + U / SMOKE.breathDilute) of its vapour is drawn.
+      const U = breathAt(i, t), q = smokeRate(i, t);
+      expect(U).toBeGreaterThan(0.9);
+      expect(st.rate[0]! / (0.42 * q)).toBeLessThan(1.02 / (1 + U / SMOKE.breathDilute));
+      expect(1 / (1 + U / SMOKE.breathDilute)).toBeLessThan(0.65);
+      // The burst's vapour does not waver with the ember; a second on, the smoulder is all of it.
+      expect(smoulderShare(i, b.lift + 0.01)).toBeLessThan(0.1);
+      expect(smoulderShare(i, b.lift + 1)).toBeGreaterThan(0.99);
     }
   });
 
@@ -357,7 +466,8 @@ describe('Birthday fire: the smoke', () => {
     const st = newSmokeStrand();
     for (let i = 0; i < CANDLE_COUNT; i++) {
       const bare = smokeSource(i).bare, w = wick(i);
-      const at = (a: number) => { smokeStrand(i, 0, bare + a, still(i), st); return alphaNear(st, w, 10 * MM); };
+      const at = (a: number) => alphaNearAvg(i, bare + a, 'breath', 10 * MM);
+      void st; void w;
       const early = at(0.3), three = at(3), four = at(4.2);
       expect(three).toBeGreaterThan(0.08);
       expect(four).toBeGreaterThan(0.03);
@@ -397,10 +507,10 @@ describe('Birthday fire: the smoke', () => {
       expect(src.bare).toBeLessThan(SNUFF.start + SNUFF.stagger * i + SNUFF.length);
       expect(smokeStrand(i, 0, src.bare - 0.001, still(i), st, 'snuff')).toBe(false);
       expect(smokeStrand(i, 0, src.bare + 0.3, still(i), st, 'snuff')).toBe(true);
-      const snuff = alphaNear(st, w, 10 * MM);
-      smokeStrand(i, 0, smokeSource(i).bare + 0.3, still(i), sb, 'breath');
+      const snuff = alphaNearAvg(i, src.bare + 0.3, 'snuff', 10 * MM);
       expect(snuff).toBeGreaterThan(0.05);
-      expect(snuff).toBeLessThan(alphaNear(sb, w, 10 * MM));
+      expect(snuff).toBeLessThan(alphaNearAvg(i, smokeSource(i).bare + 0.3, 'breath', 10 * MM));
+      void sb; void w;
       expect(emberAt(i, src.bare + EMBER.flare, 'snuff')).toBeLessThan(emberAt(i, smokeSource(i).bare + EMBER.flare, 'breath'));
       for (let s = 0; s < SMOKE_STRAND_COUNT; s++) expect(smokeStrand(i, s, SMOKE.end, still(i), st, 'snuff')).toBe(false);
     }

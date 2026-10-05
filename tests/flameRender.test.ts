@@ -226,7 +226,8 @@ describe('v1.6 flames: the volume, the bloom and the haze', () => {
     expect(smoke.volume.puffs).toBeGreaterThan(50);
     expect(smoke.volume.dropped).toBe(0);
     // The hand-over: the ribbon carries a thread's first SMOKE_VOLUME.ribbon[0] of path at its full
-    // opacity and nothing past ribbon[1] (the volume does).
+    // opacity and nothing past ribbon[1] (the volume does). (v1.6 polish 4: the vapour leaves the ember
+    // already rising, so its first parcels are counted over ribbon[1], not ribbon[0].)
     const st = newSmokeStrand();
     const w: [number, number, number] = [0, 1, 0];
     const still: WickAt = (_b, out) => { out[0] = w[0]; out[1] = w[1]; out[2] = w[2]; };
@@ -236,11 +237,23 @@ describe('v1.6 flames: the volume, the bloom and the haze', () => {
     for (let k = 1; k < SMOKE_POINT_COUNT; k++) {
       path += Math.hypot(st.position[k * 3]! - st.position[k * 3 - 3]!, st.position[k * 3 + 1]! - st.position[k * 3 - 2]!, st.position[k * 3 + 2]! - st.position[k * 3 - 1]!) / 5;
       if (path > SMOKE_VOLUME.ribbon[1]) past++;
-      else if (path < SMOKE_VOLUME.ribbon[0]) near++;
+      else near++;
     }
     expect(past).toBeGreaterThan(10);
     expect(near).toBeGreaterThan(3);
     expect(a).toBeTruthy();
+    // v1.6 polish 4: two seconds on, the filaments that have widened above the stems are sheets with their
+    // folds (src/render/flame.ts SMOKE_SHEET); the stems and the breath's stream are plain threads.
+    scene.sample('accept', 1.97);
+    scene.beforeRender();
+    const sheet = smoke.mesh.geometry.getAttribute('aSheet').array as Float32Array, fold = smoke.mesh.geometry.getAttribute('aFold').array as Float32Array;
+    expect(Math.max(...sheet)).toBeGreaterThan(0.3);
+    expect(Math.max(...sheet)).toBeLessThanOrEqual(1);
+    expect(sheet.filter((v) => v === 0).length).toBeGreaterThan(sheet.length * 0.2);
+    expect(Math.min(...fold)).toBeGreaterThanOrEqual(-1);
+    expect(Math.max(...fold)).toBeLessThanOrEqual(1);
+    expect(Math.min(...fold)).toBeLessThan(-0.8);
+    expect(Math.max(...fold)).toBeGreaterThan(0.8);
     // Settled (the canonical accepted pose: posters, reduced motion): nothing.
     scene.pose('accepted');
     scene.settle();

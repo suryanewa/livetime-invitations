@@ -1,0 +1,194 @@
+v1.6 flames polish 4: measurements (branch v1.6/flames-polish4; frames through the real controller on a fake clock,
+the judge's harness, server 127.0.0.1:5614). 'judge 4' = the fourth judge's frames of v1.6/integration 61940fc.
+
+== Fix 1: the stream after extinction (back wick, 10x close-up 400@2, 8.27 px/mm; jet2.py: smoke on - off at the same frame)
+-- judge 4 (61940fc), re-run here:
+160 ms: 1mm +28@ 17° fwhm 1.8mm | 2mm +31@ 31° fwhm 3.0mm | 4mm +31@ 29° fwhm 3.5mm | 8mm +26@ 23° fwhm 10.3mm | area 94.8 mm2
+176 ms: 1mm +22@ -1° fwhm 1.5mm | 2mm +30@ 20° fwhm 2.7mm | 4mm +30@  9° fwhm 3.4mm | 8mm +24@ 13° fwhm 11.6mm | area 100.7 mm2
+192 ms: 1mm +23@ -8° fwhm 1.7mm | 2mm +30@ 22° fwhm 3.0mm | 4mm +30@ 18° fwhm 3.7mm | 8mm +21@ 16° fwhm 12.8mm | area 100.7 mm2
+208 ms: 1mm +21@ 13° fwhm 1.9mm | 2mm +30@ 41° fwhm 3.0mm | 4mm +30@ 30° fwhm 3.9mm | 8mm +21@ 18° fwhm 13.2mm | area 102.2 mm2 IoU48  84% held  71%
+224 ms: 1mm +19@ 13° fwhm 1.6mm | 2mm +30@ 32° fwhm 2.7mm | 4mm +30@ 33° fwhm 3.5mm | 8mm +25@ 26° fwhm 9.9mm | area 86.3 mm2 IoU48  65% held  42%
+240 ms: 1mm +20@  4° fwhm 1.6mm | 2mm +30@ 26° fwhm 2.7mm | 4mm +30@ 25° fwhm 3.4mm | 8mm +28@ 26° fwhm 7.3mm | area 74.0 mm2 IoU48  71% held  62%
+256 ms: 1mm +24@ -1° fwhm 1.7mm | 2mm +30@ 26° fwhm 3.0mm | 4mm +30@ 21° fwhm 3.6mm | 8mm +26@ 20° fwhm 6.8mm | area 72.8 mm2 IoU48  68% held  38%
+272 ms: 1mm +26@ -8° fwhm 1.8mm | 2mm +30@ 21° fwhm 3.3mm | 4mm +29@ 24° fwhm 3.9mm | 8mm +24@ 22° fwhm 9.9mm | area 88.4 mm2 IoU48  75% held  57%
+288 ms: 1mm +25@  0° fwhm 1.8mm | 2mm +30@ 28° fwhm 3.2mm | 4mm +29@ 23° fwhm 4.0mm | 8mm +24@ 26° fwhm 9.7mm | area 90.0 mm2 IoU48  80% held  71%
+304 ms: 1mm +25@  3° fwhm 1.9mm | 2mm +30@ 29° fwhm 3.0mm | 4mm +29@ 28° fwhm 3.6mm | 8mm +26@ 33° fwhm 9.4mm | area 91.7 mm2 IoU48  64% held  41%
+320 ms: 1mm +26@  4° fwhm 2.0mm | 2mm +29@ 29° fwhm 2.9mm | 4mm +29@ 30° fwhm 3.4mm | 8mm +28@ 34° fwhm 7.7mm | area 85.1 mm2 IoU48  64% held  32%
+336 ms: 1mm +27@  5° fwhm 2.0mm | 2mm +29@ 38° fwhm 2.9mm | 4mm +29@ 38° fwhm 3.3mm | 8mm +27@ 40° fwhm 6.1mm | area 72.1 mm2 IoU48  61% held  36%
+352 ms: 1mm +27@  4° fwhm 1.9mm | 2mm +29@ 34° fwhm 3.1mm | 4mm +29@ 46° fwhm 3.4mm | 8mm +26@ 50° fwhm 5.1mm | area 64.7 mm2 IoU48  57% held  42%
+368 ms: 1mm +27@  4° fwhm 1.9mm | 2mm +29@ 30° fwhm 2.9mm | 4mm +28@ 43° fwhm 3.6mm | 8mm +26@ 57° fwhm 5.3mm | area 63.5 mm2 IoU48  52% held  26%
+384 ms: 1mm +26@ 13° fwhm 2.0mm | 2mm +28@ 31° fwhm 2.8mm | 4mm +28@ 38° fwhm 3.0mm | 8mm +26@ 57° fwhm 4.0mm | area 52.5 mm2 IoU48  62% held  37%
+400 ms: 1mm +26@ 12° fwhm 1.9mm | 2mm +27@ 36° fwhm 2.8mm | 4mm +28@ 48° fwhm 2.9mm | 8mm +26@ 54° fwhm 4.1mm | area 51.6 mm2 IoU48  72% held  56%
+-- now:
+160 ms: 1mm +13@ 21° fwhm 0.6mm | 2mm +26@ 24° fwhm 0.7mm | 4mm +30@ 27° fwhm 0.7mm | 8mm +28@ 36° fwhm 0.6mm | area  7.2 mm2
+176 ms: 1mm  +8@ 12° fwhm 0.5mm | 2mm +22@ 13° fwhm 0.7mm | 4mm +28@ 12° fwhm 0.7mm | 8mm +28@ 16° fwhm 0.6mm | area  7.1 mm2
+192 ms: 1mm +15@ 24° fwhm 0.7mm | 2mm +27@ 20° fwhm 0.7mm | 4mm +27@ 17° fwhm 0.6mm | 8mm +27@ 17° fwhm 0.5mm | area  6.7 mm2
+208 ms: 1mm +14@ 55° fwhm 0.7mm | 2mm +27@ 50° fwhm 0.7mm | 4mm +26@ 40° fwhm 0.6mm | 8mm +26@ 29° fwhm 0.5mm | area  5.9 mm2 IoU48   7% held   5%
+224 ms: 1mm  +7@ 40° fwhm 0.6mm | 2mm +25@ 38° fwhm 0.7mm | 4mm +27@ 39° fwhm 0.7mm | 8mm +26@ 40° fwhm 0.5mm | area  6.2 mm2 IoU48   0% held   0%
+240 ms: 1mm  +9@ 26° fwhm 0.7mm | 2mm +25@ 26° fwhm 0.7mm | 4mm +27@ 26° fwhm 0.7mm | 8mm +26@ 29° fwhm 0.6mm | area  7.1 mm2 IoU48   9% held   5%
+256 ms: 1mm +19@ 20° fwhm 0.8mm | 2mm +27@ 25° fwhm 0.8mm | 4mm +27@ 25° fwhm 0.6mm | 8mm +26@ 26° fwhm 0.6mm | area  7.1 mm2 IoU48  12% held  11%
+272 ms: 1mm +21@ 48° fwhm 0.9mm | 2mm +27@ 46° fwhm 0.7mm | 4mm +26@ 42° fwhm 0.6mm | 8mm +26@ 36° fwhm 0.5mm | area  6.6 mm2 IoU48  28% held  17%
+288 ms: 1mm +18@ 44° fwhm 0.7mm | 2mm +28@ 46° fwhm 0.8mm | 4mm +27@ 56° fwhm 0.7mm | 8mm +25@ 56° fwhm 0.6mm | area  6.8 mm2 IoU48   2% held   1%
+304 ms: 1mm +16@ 48° fwhm 0.8mm | 2mm +28@ 48° fwhm 0.9mm | 4mm +27@ 48° fwhm 0.8mm | 8mm +27@ 54° fwhm 0.7mm | area  8.1 mm2 IoU48   2% held   1%
+320 ms: 1mm +19@ 60° fwhm 0.8mm | 2mm +28@ 60° fwhm 0.9mm | 4mm +28@ 58° fwhm 0.9mm | 8mm +27@ 56° fwhm 0.8mm | area  8.9 mm2 IoU48   5% held   3%
+336 ms: 1mm +23@ 74° fwhm 0.9mm | 2mm +28@ 68° fwhm 1.0mm | 4mm +28@ 70° fwhm 1.0mm | 8mm +27@ 68° fwhm 0.9mm | area 10.6 mm2 IoU48   3% held   1%
+352 ms: 1mm +23@ 59° fwhm 1.0mm | 2mm +28@ 62° fwhm 1.1mm | 4mm +27@ 70° fwhm 1.1mm | 8mm +27@ 74° fwhm 1.0mm | area 13.6 mm2 IoU48   5% held   2%
+368 ms: 1mm +23@ 56° fwhm 1.0mm | 2mm +28@ 60° fwhm 1.2mm | 4mm +27@ 63° fwhm 1.2mm | 8mm +27@ 69° fwhm 1.3mm | area 15.4 mm2 IoU48  20% held  15%
+384 ms: 1mm +24@ 68° fwhm 1.0mm | 2mm +27@ 66° fwhm 1.2mm | 4mm +27@ 68° fwhm 1.3mm | 8mm +27@ 67° fwhm 1.3mm | area 14.9 mm2 IoU48  61% held  37%
+400 ms: 1mm +25@ 76° fwhm 1.0mm | 2mm +27@ 73° fwhm 1.2mm | 4mm +27@ 76° fwhm 1.3mm | 8mm +26@ 74° fwhm 1.3mm | area 15.3 mm2 IoU48  53% held  30%
+-- now, held within 1 cm of the ember (E > +12 on - off, 0.6-10 mm; IoU and share within 3 levels over 48 ms):
+160 ms within 1 cm:   6.2 mm2
+176 ms within 1 cm:   5.9 mm2
+192 ms within 1 cm:   5.7 mm2
+208 ms within 1 cm:   5.1 mm2  IoU48   8%  held   5%
+224 ms within 1 cm:   5.4 mm2  IoU48   0%  held   0%
+240 ms within 1 cm:   6.0 mm2  IoU48  11%  held   6%
+256 ms within 1 cm:   6.1 mm2  IoU48   6%  held   4%
+272 ms within 1 cm:   5.6 mm2  IoU48  34%  held  20%
+288 ms within 1 cm:   5.9 mm2  IoU48   2%  held   1%
+304 ms within 1 cm:   7.1 mm2  IoU48   2%  held   1%
+320 ms within 1 cm:   7.6 mm2  IoU48   6%  held   4%
+336 ms within 1 cm:   8.9 mm2  IoU48   3%  held   1%
+352 ms within 1 cm:  11.5 mm2  IoU48   6%  held   3%
+368 ms within 1 cm:  12.7 mm2  IoU48  25%  held  19%
+384 ms within 1 cm:  12.1 mm2  IoU48  66%  held  42%
+400 ms within 1 cm:  12.4 mm2  IoU48  55%  held  34%
+(jet.py, excess over frame 0, is not used: frame 0 here holds the lit flame over this wick, so straight up from the ember
+ it measures the flame's absence, +70-95 levels, in the judge's frames as in these.)
+The breath at this wick (candle 0): arrives 0.101 s, lift-off 0.135 s, peak 1.45 m/s at 0.18 s, half its peak at 0.258 s.
+
+== Fix 2: the smoke 1-4 s (2x close-up, z2 600@2, ~3.4 px/mm; sheets3.py, widths.py; var.py)
+-- judge 4:
+  1.07 s: crisp lines/plume, 8-22 cm: per plume 0.8; median line +15.0 levels, half-width 3.3 px
+          own stems' zone (1-15 cm over each stem's end): per plume 0.8; median line +15.5 levels, half-width 3.3 px
+          16-20 cm: 16-20 cm: peaks  256  half-width median 7.3 px (2.13 mm)  p90 12.7 px  height median +7.0 p90 +10.6
+          stems 0.5-8 cm (var.py): mean: height +-7%, half-width +-32%
+  1.58 s: crisp lines/plume, 8-22 cm: per plume 0.5; median line +16.1 levels, half-width 3.2 px
+          own stems' zone (1-15 cm over each stem's end): per plume 0.5; median line +15.5 levels, half-width 3.4 px
+          16-20 cm: 16-20 cm: peaks  109  half-width median 11.6 px (3.39 mm)  p90 16.0 px  height median +5.6 p90 +7.4
+          stems 0.5-8 cm (var.py): mean: height +-6%, half-width +-31%
+  1.97 s: crisp lines/plume, 8-22 cm: per plume 0.5; median line +13.2 levels, half-width 3.0 px
+          own stems' zone (1-15 cm over each stem's end): per plume 0.2; median line +14.4 levels, half-width 3.0 px
+          16-20 cm: 16-20 cm: peaks   54  half-width median 10.1 px (2.96 mm)  p90 14.5 px  height median +4.9 p90 +8.3
+          stems 0.5-8 cm (var.py): mean: height +-6%, half-width +-33%
+  2.48 s: crisp lines/plume, 8-22 cm: per plume 0.7; median line +12.2 levels, half-width 3.6 px
+          own stems' zone (1-15 cm over each stem's end): per plume 0.5; median line +9.9 levels, half-width 3.7 px
+          16-20 cm: 16-20 cm: peaks   43  half-width median 7.9 px (2.33 mm)  p90 15.5 px  height median +4.9 p90 +7.7
+          stems 0.5-8 cm (var.py): mean: height +-8%, half-width +-35%
+  2.99 s: crisp lines/plume, 8-22 cm: per plume 0.8; median line +10.8 levels, half-width 3.1 px
+          own stems' zone (1-15 cm over each stem's end): per plume 0.5; median line +10.7 levels, half-width 3.1 px
+          16-20 cm: 16-20 cm: peaks   50  half-width median 8.9 px (2.62 mm)  p90 11.6 px  height median +4.7 p90 +6.4
+          stems 0.5-8 cm (var.py): mean: height +-6%, half-width +-31%
+  3.50 s: crisp lines/plume, 8-22 cm: per plume 1.0; median line +9.1 levels, half-width 3.4 px
+          own stems' zone (1-15 cm over each stem's end): per plume 1.0; median line +8.5 levels, half-width 3.6 px
+          16-20 cm: 16-20 cm: peaks   38  half-width median 9.1 px (2.68 mm)  p90 13.2 px  height median +4.8 p90 +6.1
+          stems 0.5-8 cm (var.py): mean: height +-8%, half-width +-34%
+-- now:
+  1.07 s: crisp lines/plume, 8-22 cm: per plume 5.8; median line +10.8 levels, half-width 1.7 px
+          own stems' zone (1-15 cm over each stem's end): per plume 5.7; median line +11.3 levels, half-width 1.7 px
+          16-20 cm: 16-20 cm: peaks  309  half-width median 3.2 px (0.95 mm)  p90 7.2 px  height median +6.6 p90 +11.5
+          stems 0.5-8 cm (var.py): mean: height +-22%, half-width +-48%
+  1.58 s: crisp lines/plume, 8-22 cm: per plume 6.7; median line +9.3 levels, half-width 1.6 px
+          own stems' zone (1-15 cm over each stem's end): per plume 5.0; median line +9.2 levels, half-width 1.6 px
+          16-20 cm: 16-20 cm: peaks  351  half-width median 1.6 px (0.46 mm)  p90 2.7 px  height median +5.6 p90 +10.1
+          stems 0.5-8 cm (var.py): mean: height +-29%, half-width +-58%
+  1.97 s: crisp lines/plume, 8-22 cm: per plume 5.0; median line +9.4 levels, half-width 1.6 px
+          own stems' zone (1-15 cm over each stem's end): per plume 5.2; median line +9.6 levels, half-width 1.6 px
+          16-20 cm: 16-20 cm: peaks  255  half-width median 1.6 px (0.46 mm)  p90 2.7 px  height median +6.7 p90 +11.0
+          stems 0.5-8 cm (var.py): mean: height +-22%, half-width +-38%
+  2.48 s: crisp lines/plume, 8-22 cm: per plume 2.7; median line +9.0 levels, half-width 2.5 px
+          own stems' zone (1-15 cm over each stem's end): per plume 1.7; median line +9.0 levels, half-width 2.1 px
+          16-20 cm: 16-20 cm: peaks  161  half-width median 1.6 px (0.46 mm)  p90 2.5 px  height median +5.2 p90 +8.2
+          stems 0.5-8 cm (var.py): mean: height +-28%, half-width +-61%
+  2.99 s: crisp lines/plume, 8-22 cm: per plume 3.7; median line +7.8 levels, half-width 2.0 px
+          own stems' zone (1-15 cm over each stem's end): per plume 3.3; median line +7.6 levels, half-width 1.7 px
+          16-20 cm: 16-20 cm: peaks  221  half-width median 1.6 px (0.46 mm)  p90 2.3 px  height median +5.1 p90 +7.9
+          stems 0.5-8 cm (var.py): mean: height +-29%, half-width +-49%
+  3.50 s: crisp lines/plume, 8-22 cm: per plume 2.0; median line +8.2 levels, half-width 1.9 px
+          own stems' zone (1-15 cm over each stem's end): per plume 2.0; median line +8.2 levels, half-width 1.9 px
+          16-20 cm: 16-20 cm: peaks  220  half-width median 1.5 px (0.44 mm)  p90 2.5 px  height median +5.0 p90 +7.1
+          stems 0.5-8 cm (var.py): mean: height +-31%, half-width +-45%
+
+== Fix 3: the first puff over the back-right candle (group view z3.5 600@2 at 1:1; sat.py: candle 4's body x 836-870, y 455-655,
+   mean HSV saturation, whole / upper half / lower half; core.py: smoke on - off, p98 per wick over x-60..+220, y-260..+10 px)
+-- judge 4:
+112 ms sat 0.211 upper 0.228 lower 0.194
+128 ms sat 0.211 upper 0.227 lower 0.195
+144 ms sat 0.210 upper 0.225 lower 0.194
+160 ms sat 0.201 upper 0.220 lower 0.182
+176 ms sat 0.138 upper 0.121 lower 0.155
+192 ms sat 0.108 upper 0.061 lower 0.155
+208 ms sat 0.086 upper 0.036 lower 0.136
+224 ms sat 0.090 upper 0.054 lower 0.127
+240 ms sat 0.108 upper 0.076 lower 0.139
+256 ms sat 0.116 upper 0.074 lower 0.159
+272 ms sat 0.126 upper 0.075 lower 0.176
+288 ms sat 0.145 upper 0.107 lower 0.182
+304 ms sat 0.164 upper 0.145 lower 0.183
+320 ms sat 0.179 upper 0.175 lower 0.183
+-- now:
+112 ms sat 0.211 upper 0.228 lower 0.194
+128 ms sat 0.211 upper 0.227 lower 0.195
+144 ms sat 0.210 upper 0.225 lower 0.194
+160 ms sat 0.208 upper 0.224 lower 0.192
+176 ms sat 0.181 upper 0.199 lower 0.164
+192 ms sat 0.142 upper 0.104 lower 0.180
+208 ms sat 0.141 upper 0.100 lower 0.181
+224 ms sat 0.164 upper 0.159 lower 0.169
+240 ms sat 0.161 upper 0.162 lower 0.161
+256 ms sat 0.156 upper 0.143 lower 0.168
+272 ms sat 0.148 upper 0.117 lower 0.179
+288 ms sat 0.150 upper 0.118 lower 0.183
+304 ms sat 0.162 upper 0.141 lower 0.183
+320 ms sat 0.178 upper 0.173 lower 0.183
+-- now, the puff's core (core.py; 'box' = puff.py's own box x-40..+110, y-130..+10):
+112 ms  c0 big p98  +0.0 max  +0.0 | box p98  +0.0   c2 big p98  +0.0 max  +0.0 | box p98  +0.0   c3 big p98  +0.0 max  +0.0 | box p98  +0.0   c4 big p98  +0.0 max  +0.0 | box p98  +0.0   c5 big p98  +0.0 max  +0.0 | box p98  +0.0
+128 ms  c0 big p98  +0.0 max  +0.0 | box p98  +0.0   c2 big p98  +0.0 max  +0.0 | box p98  +0.0   c3 big p98  +0.0 max  +1.9 | box p98  +0.0   c4 big p98  +0.0 max  +0.0 | box p98  +0.0   c5 big p98  +0.0 max  +0.0 | box p98  +0.0
+144 ms  c0 big p98  +0.0 | box p98  +0.0   c2 big p98  +0.0 max  +0.0 | box p98  +0.0   c3 big p98  +0.0 | box p98  +0.0   c4 big p98  +0.0 max  +0.0 | box p98  +0.0   c5 big p98  +0.0 max  +0.0 | box p98  +0.0
+160 ms  c0 big p98  +1.9 | box p98  +0.0   c2 big p98  +0.0 max  +4.0 | box p98  +0.0   c3 big p98  +1.1 | box p98  +3.1   c4 big p98  +0.0 max  +0.0 | box p98  +0.0   c5 big p98  +0.0 max  +0.0 | box p98  +0.0
+176 ms  c0 big p98  +7.1 | box p98  +4.8   c2 big p98  +0.0 max  +4.1 | box p98  +0.0   c3 big p98 +18.1 | box p98 +21.6   c4 big p98  +0.0 max  +1.5 | box p98  +0.0   c5 big p98  +0.0 max  +0.0 | box p98  +0.0
+192 ms  c0 big p98 +19.7 | box p98 +22.7   c2 big p98  +7.8 | box p98 +15.7   c3 big p98 +43.5 | box p98 +26.8   c4 big p98  +8.0 | box p98 +20.0   c5 big p98  +2.1 max  +9.8 | box p98  +2.0
+208 ms  c0 big p98 +26.5 | box p98 +20.6   c2 big p98 +25.7 | box p98 +28.6   c3 big p98 +32.5 | box p98 +13.1   c4 big p98 +25.7 | box p98 +41.9   c5 big p98 +17.8 | box p98 +17.7
+224 ms  c0 big p98 +25.7 | box p98 +21.7   c2 big p98 +25.7 | box p98 +26.5   c3 big p98 +26.8 | box p98 +11.9   c4 big p98 +27.6 | box p98 +29.4   c5 big p98 +27.6 | box p98 +29.6
+240 ms  c0 big p98 +25.5 | box p98 +25.7   c2 big p98 +25.7 | box p98 +25.7   c3 big p98 +22.0 | box p98 +14.4   c4 big p98 +25.7 | box p98 +23.4   c5 big p98 +25.8 | box p98 +25.7
+256 ms  c0 big p98 +26.7 | box p98 +29.5   c2 big p98 +24.6 | box p98 +24.6   c3 big p98 +24.8 | box p98 +17.8   c4 big p98 +26.5 | box p98 +17.7   c5 big p98 +26.4 | box p98 +17.8
+272 ms  c0 big p98 +26.6 | box p98 +22.8   c2 big p98 +29.7 | box p98 +23.7   c3 big p98 +28.7 | box p98 +20.3   c4 big p98 +31.6 | box p98 +27.0   c5 big p98 +30.7 | box p98 +16.6
+288 ms  c0 big p98 +24.5 | box p98 +16.6   c2 big p98 +33.6 | box p98 +19.8   c3 big p98 +30.9 | box p98 +23.3   c4 big p98 +31.7 | box p98 +42.9   c5 big p98 +26.7 | box p98 +21.8
+304 ms  c0 big p98 +25.9 | box p98  +9.5   c2 big p98 +33.3 | box p98 +22.6   c3 big p98 +26.8 | box p98 +17.2   c4 big p98 +33.4 | box p98 +44.3   c5 big p98 +31.7 | box p98 +14.7
+320 ms  c0 big p98 +25.7 | box p98 +10.7   c2 big p98 +30.4 | box p98 +22.7   c3 big p98 +21.4 | box p98 +14.6   c4 big p98 +33.7 | box p98 +30.5   c5 big p98 +33.6 | box p98  +5.9
+-- puff.py (judge's, L_t - L_0, frame 0 = 112 ms; columns = its detected wicks; the label is ms after 112):
+   judge 4:
+  48 ms +23.9(R-G -5.7) +24.0(R-G -5.7) +11.9(R-G -1.4) +64.3(R-G +28.2) +64.0(R-G +28.1)  +0.0(R-G -0.0)  +0.0(R-G -0.0)  +0.0(R-G -0.0)
+  64 ms +28.5(R-G -6.6) +28.5(R-G -6.6) +16.0(R-G -3.4) +66.4(R-G +26.9) +66.3(R-G +23.3)  +0.0(R-G -0.0) +17.2(R-G -17.9)  +0.5(R-G -0.3)
+  80 ms +27.8(R-G -6.2) +27.8(R-G -6.2) +23.3(R-G -3.5) +60.4(R-G +20.1) +62.7(R-G +4.8)  +7.4(R-G -1.5) +48.3(R-G -42.1) +10.5(R-G -2.4)
+  96 ms +26.9(R-G -6.0) +26.6(R-G -6.0) +37.7(R-G -4.3) +54.5(R-G +21.5) +54.7(R-G +14.5) +31.0(R-G -4.7) +58.3(R-G -44.6) +21.5(R-G -4.8)
+ 112 ms +25.5(R-G -6.3) +25.5(R-G -6.5) +46.0(R-G -4.9) +53.6(R-G +21.9) +53.4(R-G +21.2) +36.0(R-G -5.8) +54.5(R-G -32.6) +26.5(R-G -5.3)
+ 128 ms +26.8(R-G -6.6) +26.8(R-G -6.6) +49.0(R-G -6.0) +58.6(R-G +25.2) +58.3(R-G +24.4) +27.8(R-G -6.0) +33.7(R-G -18.8) +26.9(R-G -5.8)
+ 144 ms +27.0(R-G -6.6) +27.0(R-G -6.6) +40.9(R-G -4.9) +58.8(R-G +26.0) +58.7(R-G +26.0) +34.1(R-G -5.9) +41.3(R-G -20.7) +29.9(R-G -5.7)
+ 160 ms +26.3(R-G -6.3) +26.3(R-G -6.3) +46.5(R-G -4.9) +58.3(R-G +26.0) +58.2(R-G +26.0) +38.6(R-G -6.5) +44.7(R-G -18.6) +30.2(R-G -5.6)
+ 176 ms +25.2(R-G -6.2) +25.2(R-G -6.2) +37.9(R-G -5.0) +56.4(R-G +25.7) +56.2(R-G +25.8) +46.1(R-G -6.1) +49.8(R-G -12.4) +29.7(R-G -5.7)
+   now:
+  48 ms  +5.4(R-G -0.9)  +9.0(R-G -7.4)  +0.0(R-G -0.0) +13.3(R-G +3.7) +13.0(R-G +5.2)  +0.0(R-G -0.0)  +0.0(R-G -0.0)  +0.0(R-G -0.0)
+  64 ms +16.6(R-G -4.6) +18.0(R-G -7.4)  +1.2(R-G -0.1) +29.9(R-G -4.7) +31.5(R-G -8.4)  +0.0(R-G -0.0)  +0.0(R-G -0.0)  +0.0(R-G +0.0)
+  80 ms +23.2(R-G -5.5) +18.7(R-G -5.3) +32.0(R-G -4.0) +26.1(R-G -1.0) +40.3(R-G -23.2)  +0.6(R-G +0.2) +35.0(R-G -31.4)  +1.9(R-G +0.2)
+  96 ms +21.1(R-G -5.5) +16.3(R-G -5.0) +42.2(R-G -5.6) +23.8(R-G +4.1) +25.3(R-G +2.1) +20.6(R-G -3.4) +46.5(R-G -35.6) +19.2(R-G -4.5)
+ 112 ms +22.1(R-G -5.2) +16.0(R-G -5.1) +26.2(R-G -4.7) +22.2(R-G +7.1) +22.4(R-G +4.8) +30.9(R-G -5.3) +31.6(R-G -5.8) +30.3(R-G -4.7)
+ 128 ms +25.2(R-G -5.5) +24.3(R-G -5.8) +24.9(R-G -4.5) +14.0(R-G -3.2) +14.9(R-G -7.4) +21.6(R-G -5.2) +23.2(R-G -5.6) +25.1(R-G -5.6)
+ 144 ms +29.3(R-G -5.9) +20.8(R-G -5.8) +24.9(R-G -4.7) +15.5(R-G -5.7) +16.4(R-G -8.2) +16.6(R-G -4.4) +17.9(R-G -5.7) +20.2(R-G -4.2)
+ 160 ms +23.7(R-G -5.4) +17.0(R-G -5.3) +24.3(R-G -4.6) +16.0(R-G -7.4) +18.2(R-G -15.0) +19.2(R-G -4.9) +22.2(R-G -12.9) +20.6(R-G -4.8)
+ 176 ms +18.6(R-G -5.0) +13.7(R-G -8.4) +20.7(R-G -4.2) +16.2(R-G +1.3) +23.4(R-G -13.8) +26.3(R-G -5.8) +28.5(R-G -13.4) +23.3(R-G -5.2)
+
+== Kept: the lit flames (group z3.5 600@2, 63 frames at 16 ms; grp2.py)
+flame x 241 h 90px area   1331± 1.6% (p-p  8.6%) tip-y sd 2.06px tip-x sd 1.56 p-p 9.1px cx sd 0.73px white±1.4% peakHz area 1.0,11.9 tipx 1.0,2.0
+flame x 339 h 87px area   1221± 1.3% (p-p  4.8%) tip-y sd 2.26px tip-x sd 2.12 p-p 6.3px cx sd 0.88px white±1.9% peakHz area 2.0,1.0 tipx 1.0,2.0
+flame x 485 h 78px area   1027± 2.3% (p-p  7.5%) tip-y sd 3.42px tip-x sd 0.95 p-p 3.8px cx sd 0.40px white±2.4% peakHz area 1.0,2.0 tipx 1.0,2.0
+flame x 707 h 80px area   1174± 1.4% (p-p  5.5%) tip-y sd 4.89px tip-x sd 1.42 p-p 5.2px cx sd 0.56px white±1.7% peakHz area 1.0,2.0 tipx 1.0,2.0
+flame x 852 h 88px area   1270± 1.2% (p-p  4.3%) tip-y sd 1.52px tip-x sd 1.13 p-p 3.2px cx sd 0.52px white±1.5% peakHz area 2.0,1.0 tipx 1.0,3.0
+flame x 979 h 72px area    929± 2.4% (p-p  6.9%) tip-y sd 2.64px tip-x sd 1.57 p-p 4.7px cx sd 0.86px white±2.4% peakHz area 1.0,2.0 tipx 1.0,2.0
+area corr between flames (off-diag mean -0.05)
+
+== Kept: the accepted still (540@2): now vs the branch point (61940fc, same minutes)
+t4.00-540@2              mean |d| 0.041, px over 24 levels 0.0013 %
+t8.00-540@2              mean |d| 0.000, px over 24 levels 0.0001 %
+reduced-accepted-540@2   mean |d| 0.000, px over 24 levels 0.0000 %
+t8.00 vs judge 4 sq540    mean |d| 0.000, px over 24 levels 0.0001 %

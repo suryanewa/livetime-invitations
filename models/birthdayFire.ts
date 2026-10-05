@@ -703,7 +703,7 @@ export class SmokeRig {
   readonly mesh: Mesh;
   private readonly geometry = new BufferGeometry();
   private readonly strands: SmokeStrand[];
-  private readonly attrs: Record<'position' | 'aPrev' | 'aNext' | 'aWidth' | 'aAlpha' | 'aAge' | 'aSeed' | 'aHot', BufferAttribute>;
+  private readonly attrs: Record<'position' | 'aPrev' | 'aNext' | 'aWidth' | 'aAlpha' | 'aAge' | 'aSeed' | 'aHot' | 'aSheet' | 'aFold', BufferAttribute>;
   readonly material = createSmokeMaterial();
   /**
    * v1.6 polish: the smoke above its first few centimetres, as a ray-marched volume
@@ -724,7 +724,7 @@ export class SmokeRig {
     const strands = candles * SMOKE_STRAND_COUNT;
     const n = strands * SMOKE_RIBBON_POINTS * 2;
     const mk = (size: number) => new BufferAttribute(new Float32Array(n * size), size).setUsage(DynamicDrawUsage);
-    this.attrs = { position: mk(3), aPrev: mk(3), aNext: mk(3), aWidth: mk(1), aAlpha: mk(1), aAge: mk(1), aSeed: mk(1), aHot: mk(1) };
+    this.attrs = { position: mk(3), aPrev: mk(3), aNext: mk(3), aWidth: mk(1), aAlpha: mk(1), aAge: mk(1), aSeed: mk(1), aHot: mk(1), aSheet: mk(1), aFold: mk(1) };
     for (const [k, a] of Object.entries(this.attrs)) this.geometry.setAttribute(k, a);
     const side = new Float32Array(n);
     for (let v = 0; v < n; v++) side[v] = v % 2 ? 1 : -1;
@@ -764,7 +764,7 @@ export class SmokeRig {
   /** Per strand, per parcel: what its ribbon draws there (SmokeRig.update), and its subdivided path. */
   private readonly tmp = (() => {
     const f = () => new Float32Array(SMOKE_POINT_COUNT);
-    return { wid: f(), alp: f(), age: f(), seed: f(), hot: f(), pos: new Float32Array(SMOKE_RIBBON_POINTS * 3) };
+    return { wid: f(), alp: f(), age: f(), seed: f(), hot: f(), sheet: f(), fold: f(), pos: new Float32Array(SMOKE_RIBBON_POINTS * 3) };
   })();
 
   /** Candle i's wick for the smoke (set per update): one closure per candle, made once. */
@@ -789,9 +789,10 @@ export class SmokeRig {
     const tail = smokeTail(t);
     let any = false, peak = 0;
     const P = SMOKE_POINT_COUNT, R = SMOKE_RIBBON_POINTS;
-    const { position, aPrev, aNext, aWidth, aAlpha, aAge, aSeed, aHot } = this.attrs;
+    const { position, aPrev, aNext, aWidth, aAlpha, aAge, aSeed, aHot, aSheet, aFold } = this.attrs;
     const pos = position.array as Float32Array, prev = aPrev.array as Float32Array, next = aNext.array as Float32Array;
     const wid = aWidth.array as Float32Array, alp = aAlpha.array as Float32Array, age = aAge.array as Float32Array, seed = aSeed.array as Float32Array, hot = aHot.array as Float32Array;
+    const sht = aSheet.array as Float32Array, fld = aFold.array as Float32Array;
     for (let i = 0; i < this.candles; i++) {
       const at = this.at[i]!;
       const bare = smokeSource(i, kind).bare;
@@ -812,15 +813,25 @@ export class SmokeRig {
           if (k > 0) path += Math.hypot(st.position[k * 3]! - st.position[k * 3 - 3]!, st.position[k * 3 + 1]! - st.position[k * 3 - 2]!, st.position[k * 3 + 2]! - st.position[k * 3 - 1]!);
           // The ribbon is the thread's laminar stem only: past it the volume carries the vapour.
           // (v1.6 polish 2: and the thin filament it goes on as above its transition, fading as it spreads.)
-          const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!, st.full[k]!);
+          // (v1.6 polish 4: and the breath's stream, `jet` of the parcel, until the jet rolls it into the puff.)
+          const J = st.jet[k]!;
+          const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!, st.full[k]!, J, st.carried[k]!);
           // (v1.6 polish 2: at the thread's own core width, 1–3 mm: the turbulent spread is the volume's veil.)
           // (v1.6 polish 3: widening linearly with its height, filamentWidth, and thinning as it widens.)
           // (Its sheet's turn matters only where it widens: over SMOKE_VOLUME.filamentWiden[0].)
           const face = st.rise[k]! > SMOKE_VOLUME.filamentWiden[0] ? filamentFace(t - st.age[k]!, i * SMOKE_STRAND_COUNT + s + 1, st.rise[k]! - laminar) : 1;
           const wf = filamentWidth(st.full[k]!, st.rise[k]!, face);
-          T.wid[k] = wf * MPS_UNITS;
+          // (v1.6 polish 4: the breath's stream at its own, stretched width and depth, fire.ts SMOKE.stream.)
+          T.wid[k] = (wf + (st.stream[k]! - wf) * J) * MPS_UNITS;
           // (A filament at its own width: as dense as the share of the smoke it still carries, ribbonShare.)
-          T.alp[k] = stem > 0 ? 1 - Math.exp(Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * stem * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin * (st.full[k]! / wf)) : 0;
+          const tauThread = -Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin * (st.full[k]! / wf);
+          const tauStream = -Math.log(Math.max(1e-6, 1 - st.streamAlpha[k]!));
+          T.alp[k] = stem > 0 ? 1 - Math.exp(-stem * (tauThread + (tauStream - tauThread) * J)) : 0;
+          // v1.6 polish 4: widened, a sheet with its folds at its edges (src/render/flame.ts SMOKE_SHEET):
+          // the widening's share of its width, face-on; the stronger edge turning with the smoke.
+          T.sheet[k] = (1 - J) * face * Math.max(0, (wf - st.full[k]!) / wf);
+          const fb = t - st.age[k]!, fs = i * SMOKE_STRAND_COUNT + s + 1;
+          T.fold[k] = Math.max(-1, Math.min(1, 1.3 * (0.7 * Math.sin(2 * Math.PI * 1.7 * fb + 2.1 * fs) + 0.3 * Math.sin(2 * Math.PI * 4.3 * fb + 0.7 * fs))));
           T.age[k] = st.age[k]!;
           // Noise coordinate travels with the parcel (its birth), distinct per thread.
           T.seed[k] = (t - st.age[k]!) * 2.3 + s * 7.31 + i * 3.77;
@@ -848,7 +859,7 @@ export class SmokeRig {
           const k = j >> 1, odd = j & 1, k2 = odd ? k + 1 : k;
           const jp = Math.max(0, j - 1), jn = Math.min(R - 1, j + 1);
           const lerp = (A: Float32Array) => (odd ? 0.5 * (A[k]! + A[k2]!) : A[k]!);
-          const wv = lerp(T.wid), av = lerp(T.alp), gv = lerp(T.age), sv = lerp(T.seed), hv = lerp(T.hot);
+          const wv = lerp(T.wid), av = lerp(T.alp), gv = lerp(T.age), sv = lerp(T.seed), hv = lerp(T.hot), shv = lerp(T.sheet), fv = lerp(T.fold);
           for (let side = 0; side < 2; side++) {
             const v = (base + j) * 2 + side;
             for (let c = 0; c < 3; c++) {
@@ -861,6 +872,8 @@ export class SmokeRig {
             age[v] = gv;
             seed[v] = sv;
             hot[v] = hv;
+            sht[v] = shv;
+            fld[v] = fv;
           }
         }
       }

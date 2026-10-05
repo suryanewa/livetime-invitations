@@ -1,0 +1,22 @@
+v1.6 flames polish 4: frame cost (M2 Pro, Chrome/Metal, headless; the judge's cost.mjs: the live stage at a moment,
+each frame waited on with a 1-pixel readPixels, alternating 12-frame batches per case, medians; 'fire' = full - no flames,
+smoke, bloom or haze). The machine was shared and loaded (load average 9-19 over these runs): the component split is noisy
+(negative parts), the totals are what is read. Budget for the whole fire: <= 2.0 ms.
+
+laptop 1280x720@2 (drawing buffer 2108x1185), two runs in the same half hour:
+  lit (before Accept)     fire 1.44 / 1.56 ms
+  the gust (0.12 s)       fire 1.12 / 1.32 ms
+  the first puff (0.30 s) fire 1.09 / 1.27 ms   (61940fc, the branch point's birthday code, same minutes: 1.57 ms)
+  the smoke (1.5 s)       fire 0.69 / 0.75 ms   (61940fc, same minutes: 1.01 ms)
+phone 390x844@2 (780x1688):
+  lit                     fire 1.63 ms
+  the first puff (0.30 s) fire 1.45 / 1.54 ms
+  the smoke (1.5 s)       fire 1.40 ms
+
+The GPU work is the round's own: the ribbons' fragment shader gains the sheet's profile (a band and two Gaussian
+fold lines, only where a strip is a widened sheet), the volume is unchanged but for a constant.
+
+Physics on the main thread (fire.ts smokeStrand, 6 candles x 5 strands x 96 parcels, node, 400 frames each, back to
+back in the same minutes): now 0.71 ms (0.3 s) / 0.77 ms (1.5 s); 61940fc 0.56 / 0.63 ms: +0.14 ms a frame for the
+stream's own width and depth, the parcels' place in the breath, the stirred air's sway, the necking and the
+ember's wavering.

@@ -881,3 +881,163 @@ identical to the judge's (no smoke), reduced motion the same.
 `2-accepted-540x2-4s-8s-reduced-judge-vs-now.webp`, `3-foot-macro-30x-nobloom-f1-f3-judge-vs-now.webp`,
 `3-macro-30x-f1-f3-judge-vs-now.webp`, `3-laptop-flames-x4-judge-vs-now.webp`,
 `4-liftoff-closeup-10x-128-160ms-judge-vs-now.webp`, `measurements.txt`, `frame-cost.txt`.
+
+## Polish round 4: the fourth judge's fixes (v1.6 polish 4, branch `v1.6/flames-polish4`)
+
+The fourth judge signed the flame at rest at every size, the blow at laptop, phone and 540, and the smoke's first
+0.3–0.8 s, but not the whole. Three fixes remained: (1) a static jet at the wick where the capsule had been, "a soft
+white cone about 1 cm long with a rounded end, glued to the ember like a spray nozzle"; (2) the smoke's widening
+reading as a blur, not a sheet (0.2–1.2 crisp lines a plume, the plume nearly gone above 16 cm, six evenly bright
+constant-width stems); (3) the denser first puff fogging the back-right candle to near-white. Each fix is its own
+commit, measured with the judge's scripts (`jet2.py`, `sheets3.py`, `widths.py`, `puff.py`) and three of my own
+(`sat.py`, `core.py`, `var.py`, in `evidence/v1.6/flames-polish4/tools/`) on frames through the real controller.
+Numbers: `evidence/v1.6/flames-polish4/measurements.txt`.
+
+### 1. The stream after extinction: a thread torn off the ember (`fire.ts` `SMOKE.stream`, `sway`, `accel`/`launch`; `ribbonShare`; `SmokeRig`)
+
+What the cone was. The ribbons handed the breath's vapour to the volume after 2–8 mm of sideways travel, and the
+burst once 4 mm up, and the volume's 5 mm voxels (σ ≥ 2.75 mm) drew it as a soft blob with a rounded end at the
+ember. The stream's wander was indexed by its distance from the wick, so its shape stood still beside it while
+the breath blew. The vapour also started from rest (0.12 s), so a 0.4 m/s breath still held it at 20–30°.
+
+- **The breath's stream is a thread.** Vapour born while the breath blows (`SMOKE.stream.met`, 0.35 m/s) leaves
+  the ember 0.45 mm across. It is strung out at the breath's speed (its mass per length × leave / (leave + carried
+  speed)). As it is carried it is stretched: its width and its optical depth across fall as 1/√(1 + carried /
+  4 mm). The ribbons draw it until the jet's eddies roll it into the puff, between 1.5 and 4.5 cm of travel
+  (`SMOKE.stream.roll`). The volume draws it only from there (`ribbonShare`'s `jet`/`carried`), so nothing is
+  splatted at the ember. The strands are one thread until half-way through the roll, then come apart into the
+  puff's wisps. The vortex gathers the burst into one puff (`SMOKE.roll.gather`: up to 0.6 of its spread over
+  its first 50 ms).
+- **It moves.** The jet's wander is carried with the flow: it is indexed by the parcel's place in the breath's own
+  passage (`B.xb`), not by its distance from the wick, so its waves run off downstream. The stirred air the breath
+  brings sways the thread as it leaves the ember (`SMOKE.sway`: up to 0.3 rad on 3–6 Hz gusts, carried up to
+  2 cm, dying over 0.4 s). The jet's own flapping now reaches the ember (its e-folding distance 2 → 1 cm).
+- **It turns up as the breath drops.** Vapour torn off into a breath stronger than about 1 m/s
+  (`SMOKE.stream.tear`) starts from rest as before (0.12 s). Off a wick in weaker air it leaves already rising
+  (0.05 s, at 0.3 of the plume's speed: `SMOKE.accel`, `SMOKE.launch`, `plumeRise`'s `jet`).
+- The wick's thread at rest is 0.55 mm (`SMOKE.width0`, was 1.0; drawn as the tube's radius it measured 1.3–1.7 mm
+  FWHM at 1 mm from the ember).
+- **Measured** (`jet2.py`: back wick, 10×, smoke on − off at the same frame; the breath at this wick halves at
+  0.258 s):
+
+  | | judge 4 (61940fc, re-run) | now |
+  |---|---|---|
+  | FWHM 1 mm from the ember, 160–400 ms | 1.5–2.0 mm | 0.5–1.0 mm |
+  | FWHM at 2 / 4 / 8 mm under the breath (160–320 ms) | 2.7–3.3 / 3.4–4.0 / 6.8–13.2 mm | 0.7–0.9 / 0.6–0.9 / 0.5–0.8 mm |
+  | IoU over 48 ms, 208–400 ms | 52–84 % | 0–61 % |
+  | share of the jet's pixels within 3 levels over 48 ms, 208–400 ms | 26–71 % | 0–37 % (within 1 cm: 0–42 %) |
+  | direction 2–4 mm out | 20–30° to 320 ms, 38–57° at 336–368 | 12–27° under the peak (flapping to 38–50° at 208–224), 42–60° at 272–320, 68–70° at 336 |
+
+  `jet.py` is not used: its frame 0 holds the lit flame over this wick, so straight up from the ember it measures
+  the flame's absence (+70–95 levels, in the judge's frames as in these).
+
+### 2. The smoke from 1 to 4 s: sheets with fold lines; stems that neck and waver (`flame.ts` `SMOKE_SHEET`, `SmokeRig`, `fire.ts` `SMOKE.neck`)
+
+- **A widened filament is a sheet, not a fatter tube.** Where a filament has widened, the ribbon draws it as a
+  sheet: `aSheet` is the widening's share of the strip's width, face-on. A tenth of its smoke lies as a
+  translucent band across the width (`SMOKE_SHEET.veil`). The rest lies in the fold lines at its edges
+  (±0.82 of the half-width), each 0.4 mm across (never under 1.25 px), where the curled sheet runs along the line
+  of sight. One edge or the other is the stronger as the sheet turns (`aFold`, carried up with the smoke). The
+  same smoke lies across the width as in the tube (∫ tube = 1.367). Through tight turns and folds the strip is the
+  plain tube (its edges would jag). Edge-on stretches are narrower (`filamentEdge` 0.2 → 0.08 of the widening).
+  The filaments carry on to 30 cm over their stem's end (`SMOKE_VOLUME.filament[4]`, was 24 cm).
+- **The stems neck and waver.** Each stem necks and swells by ±35 % of its width (`SMOKE.neck[0]`). The ember's
+  output wavers by ±35 % of its smoke (`SMOKE.neck[1]`; the smoulder's share only, `smoulderShare`: the flame's
+  last fuel does not waver). Both are carried up with the smoke at 2.5–7 Hz, a few centimetres apart along the
+  stem, each candle on its own beat.
+- **Measured** (2× close-up, ≈3.4 px/mm):
+
+  | | 1.07 | 1.58 | 1.97 | 2.48 | 2.99 | 3.50 s |
+  |---|---|---|---|---|---|---|
+  | crisp lines a plume at 8–22 cm (`sheets3.py`), judge 4 | 0.8 | 0.5 | 0.5 | 0.7 | 0.8 | 1.0 |
+  | now | 5.8 | 6.7 | 5.0 | 2.7 | 3.7 | 2.0 |
+  | in each plume's own zone (1–15 cm over its stem), judge 4 | 0.8 | 0.5 | 0.2 | 0.5 | 0.5 | 1.0 |
+  | now | 5.7 | 5.0 | 5.2 | 1.7 | 3.3 | 2.0 |
+  | peaks at 16–20 cm (`widths.py`), judge 4 | 256 | 109 | 54 | 43 | 50 | 38 |
+  | now | 309 | 351 | 255 | 161 | 221 | 220 |
+  | stems' brightness along 0.5–8 cm (`var.py`, ±(p90 − p10)/2 median), judge 4 | ±7 % | ±6 % | ±6 % | ±8 % | ±6 % | ±8 % |
+  | now | ±22 % | ±29 % | ±22 % | ±28 % | ±29 % | ±31 % |
+
+  The lines' median half-width is 1.6–2.5 px (judge 4: 3.0–3.7 px), at +8–11 levels. The stems' half-width
+  spread reads ±38–61 % (judge 4: ±31–35 %). At 2× a 1.5–2.5 px thread is quantized, so threads of constant width
+  read ±31–35 % already. The modelled width is ±35 % by construction (tested).
+
+### 3. The first puff over the next candle (`fire.ts` `SMOKE.breathDilute`, `models/birthdaySmoke.ts` `roomOctaves`)
+
+The fog over the back-right candle (candle 4) is the front-centre candle's puff. It crosses that candle's line of
+sight 3–5 cm from its own wick, 70–100 ms after its lift-off, and no plausible rise clears it. So the puff is made
+thinner, not moved:
+- The breath's jet entrains the room's air into the burst it carries: the burst is diluted to 1 / (1 + U/1.6)
+  (was U/6), ×0.5–0.6 of its optical depth at the breath's 1.2–1.6 m/s.
+- The dense puff scatters the room's light on (`roomOctaves` 1.1 → 4: a white cloud gives the room's light back),
+  so its core stays bright.
+- The fix-1 stream already keeps the volume off the first 1.5 cm, where the old puff was densest.
+- **Measured** (group view at 1:1; candle 4's body, mean HSV saturation; clean 0.211, upper half 0.228):
+
+  | | 176 | 192 | 208 | 224 | 240 | 256 | 272 | 288 ms |
+  |---|---|---|---|---|---|---|---|---|
+  | judge 4, whole / upper half | 0.138 / 0.121 | 0.108 / 0.061 | 0.086 / 0.036 | 0.090 / 0.054 | 0.108 / 0.076 | 0.116 / 0.074 | 0.126 / 0.075 | 0.145 / 0.107 |
+  | now | 0.181 / 0.199 | 0.142 / 0.104 | 0.141 / 0.100 | 0.164 / 0.159 | 0.161 / 0.162 | 0.156 / 0.143 | 0.148 / 0.117 | 0.150 / 0.118 |
+
+  The puff's core, as the 98th percentile of smoke on − off over each wick's puff, at 208–288 ms: +24.5–26.7,
+  +24.6–33.6, +22.0–32.5, +25.7–31.7 and +25.8–30.7 levels for candles 0, 2, 3, 4 and 5. In `puff.py`'s boxes, fixed
+  beside each wick, it reads +16–30 at 224–288 ms (judge 4: +25–30 at the clean wicks), because the puff now leaves
+  the wick.
+
+### Tells
+
+Gone:
+- the cone at the ember: a 0.5–1.0 mm streak, no rounded end, thinning into the puff;
+- the static jet: no region within 1 cm keeps over 42 % of its pixels within 3 levels for 48 ms from 208 ms;
+- the stream held low after the breath: it turns up within ≈ 80 ms of the breath halving;
+- the blur above 8–10 cm: two or more fold lines a plume bounding faint veils;
+- the plume gone above 16 cm;
+- the six evenly bright, constant-width stems;
+- the fog bank over the back-right candle.
+
+Remaining:
+- the streak at 10× is a clean line, +25–28 levels, without inner structure;
+- where it rolls into the puff (2–4.5 cm out, 176–240 ms at 10×) its strands part into three to five faint wisps;
+- the fold lines are drawn on the ribbon, as two edges of a band: at 4× with doubled contrast a few tight turns
+  still show a kink;
+- the first puff is lighter than polish 3's at laptop size (0.4–0.6 s): it is thinner by design, its core is kept
+  on the puff itself, and in boxes fixed beside the wicks it reads lower as it leaves;
+- candle 4's upper half touches 0.100 at 208 ms, for about two frames as the puff passes in front of it.
+
+The optional items are untouched: flame 3's lilac crescent, the wick occluder at 30×, the blue base, the halo
+(the cake's) and the rigid lean.
+
+### Cost (`evidence/v1.6/flames-polish4/frame-cost.txt`)
+
+The whole fire, laptop: lit 1.44–1.56 ms, the gust 1.12–1.32, the first puff 1.09–1.27 (the branch point's code in
+the same minutes: 1.57), the smoke at 1.5 s 0.69–0.75 (1.01). Phone: lit 1.63, the puff 1.45–1.54, 1.5 s 1.40 ms.
+Budget ≤ 2.0 ms: met (machine at load average 9–19, the split noisy). Physics on the main thread: 0.71–0.77 ms a
+frame (the branch point 0.56–0.63 in the same minutes).
+
+### Verification
+
+- `pnpm typecheck`.
+- `tests/birthdayFire.test.ts` 41/41. New: the stream is a thread at the ember, stretched thinner and the ribbons'
+  until rolled; it turns up within 80 ms of the breath halving and moves within 1 cm; the stem necks and wavers
+  ±30 %; the breath dilutes the burst and only the smoulder wavers. Adjusted: the filament fades out by 30 cm
+  (was 24); the smoulder and snuff thresholds read the densest smoke near the wick averaged over ±0.1 s, through
+  the wavering.
+- `tests/flameRender.test.ts` 7/7 (new: the sheet's attributes at 1.97 s; the hand-over's first parcels counted over
+  `ribbon[1]`: the vapour now leaves the ember rising).
+- `tests/birthday.test.ts` 34/34, `birthdayChange` 7/7, `birthdayMeltCarry` 2/2.
+- Browser (`BASE_URL=http://127.0.0.1:5614`, fresh server): `birthday.spec` 7/7. `bloom.spec` 3/3 on a clean run.
+  Its "lit candles bloom" check flakes under load on a one-pixel, 1-level difference on the piping between two
+  consecutive stills; it flakes the same on the branch point's code (2 of 4 runs there).
+- Kept qualities, re-measured: the lit 1 s strip's tip-x sd 0.95–2.12 px, dominant 1–2 Hz, area ±1.2–2.4 %,
+  correlation −0.05. The accepted still 8 s after Accept is identical to the judge's and to the branch point's (no
+  smoke), and so is the reduced-motion accepted still.
+
+### Evidence (`evidence/v1.6/flames-polish4/`)
+
+`1-blow-closeup-10x-0-400ms-every-16ms.webp`, `1-blow-closeup-10x-144-400ms-judge-above-now-below.webp`,
+`1-jet-x3-160-224-288-336ms-judge-above-now-below.webp`, `2-smoke-2x-1.97s-judge-vs-now.webp`,
+`2-smoke-2x-1.07-1.58-1.97-2.48-2.99-3.50s.webp`, `2-smoke-1.97s-10-20cm-x4-contrast-judge-vs-now.webp`,
+`2-3-smoke-laptop-1to1-0.4-0.6-1.5-2.5-3.5s-judge-vs-now.webp`, `3-group-puff-1to1-160-320ms-judge-above-now-below.webp`,
+`3-back-right-candle-x2-176-288ms-judge-above-now-below.webp`, `accepted-540x2-4s-8s-reduced.webp`,
+`measurements.txt`, `frame-cost.txt`, `tools/` (`sat.py`, `core.py`, `var.py`, `fix2.sh`, `lapcmp.py`, `grpv.mjs`,
+`lab5.mjs`, `mkev.py`).
