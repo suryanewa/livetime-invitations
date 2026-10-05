@@ -132,7 +132,7 @@ export const EDGE = {
   /** The outer layer starts to peel at the lift-off and is fully turbulent by (τ, s). */
   peel: [0.27, 0.6] as const,
   /** The young billows' growth at the peel (su, ≈ 1 cm), and the peeling layer's scale (su: its lobes ±2.4 mm, its sheets out to ≈ 1.3 cm). */
-  billow: 0.06,
+  billow: 0.042,
   fine: 0.03,
   /** The peeling layer's sheets: their density at the boundary (the young fog's is CLOUD look `core`). */
   wisp: 2.6,
@@ -158,8 +158,8 @@ export const SPILL = {
   fullGap: 0.09,
   /** It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). */
   stop: [0.24, 0.3] as const,
-  /** (v1.6 polish 3: the gush rises on and mixes in after the lift-off, gone by 0.62 s.) */
-  fade: [0.36, 0.62] as const,
+  /** (v1.6 polish 3: the gush rises on and mixes in after the lift-off, gone by 0.56 s.) */
+  fade: [0.36, 0.56] as const,
   /** The shader samples its source at this many past times, this far apart (s). */
   samples: 8,
   dt: 0.075,

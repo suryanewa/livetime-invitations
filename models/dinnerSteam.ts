@@ -110,7 +110,7 @@ export const STEAM_LOOK = {
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
    */
-  steps: { dense: 18, thin: 14, veil: 12 },
+  steps: { dense: 15, thin: 12, veil: 11 },
   /**
    * The temporal resolve: the new frame's share of a marched pixel (v1.6 polish 2: the march is a
    * checkerboard, each pixel marched every other frame), and of a pixel filled from its marched
@@ -119,7 +119,7 @@ export const STEAM_LOOK = {
   history: 0.15,
   fillBlend: 0.1,
   /** The march's pixel budget: half the drawing buffer a side, at most this many pixels. */
-  marchPixels: 330_000,
+  marchPixels: 290_000,
   /** (v1.6 polish 2) The budget once only thin steam shows (the cloud past its fog, the veil). */
   thinPixels: 200_000,
   lowShare: 0.6,
@@ -137,7 +137,7 @@ const GUSH_OUT_K = Array.from({ length: SPILL.samples }, (_, k) => gushOut(k * S
 const GUSH_RISE_K = Array.from({ length: SPILL.samples }, (_, k) => gushRise(k * SPILL.dt));
 const PLATE_PROFILE_TOP_AT_LIP = plateTop(COVER.lipRadius);
 /** The light volume: N³ voxels over the proxy box, its z-slices tiled COLS × ROWS in one 2D atlas. */
-const LIGHT_N = 32, LIGHT_COLS = 8, LIGHT_ROWS = 4;
+const LIGHT_N = 28, LIGHT_COLS = 7, LIGHT_ROWS = 4;
 /** Probes of the march's occupancy along each ray. */
 const PROBES = 5;
 
@@ -621,7 +621,7 @@ float spill(vec3 p, int l, float detail) {
   if (w < 0.2) return 0.0;
   // It leaves where the gap is widest, in two or three tongues (a slow field round the rim).
   float ang = acos(clamp(cr, -1.0, 1.0)) * sign(dir.x * ${f(RAISED_DIR.y)} - dir.y * ${f(RAISED_DIR.x)});
-  float tongues = texture(uNoise, vec3(0.37 + 0.11 * ang, 0.61, 0.23)).r;
+  float tongues = 0.5 + 0.3 * sin(7.0 * ang + 1.3) + 0.2 * sin(13.0 * ang + 0.4);
   // (Round towards the side the camera sees edge-on, where the gap is still ≈ 0.85 of its widest.)
   float da = ang - ${f(GUSH.centre)};
   float az = exp(-da * da / ${f(GUSH.spread * GUSH.spread)}) * smoothstep(0.3, 0.7, tongues + 0.25 * exp(-da * da / 0.1));
@@ -797,8 +797,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // fog: a firm, lobed edge rather than a feathered matte.
   vec3 Xs = X * vec3(1.15, 0.8, 1.15) + vec3(0.31, 0.17 + 0.04 * tau, 0.53);
   vec4 n1 = texture(uNoise, Xs * 0.55);
-  // (v1.6 polish 3: drawn out 2.5× along the rise: torn sheets and streaks along the flow, not cauliflower.)
-  vec3 Xb = X * vec3(2.0, 0.8, 2.0) + (n1.rgb - 0.5) * E.w + vec3(0.71, 0.05 * tau, 0.23);
+  // (v1.6 polish 3: drawn out 4× along the rise: torn sheets and streaks along the flow, not cauliflower.)
+  vec3 Xb = X * vec3(2.2, 0.55, 2.2) + (n1.rgb - 0.5) * E.w + vec3(0.71, 0.05 * tau, 0.23);
   vec4 nb = texture(uNoise, Xb);
   float lobes = nb.b + 0.3 * (nb.a - 0.5) * detail;
   // v1.6 polish 2: the room's cooler air slides in under the warm fog from the rim (a gravity
@@ -824,7 +824,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // its sheets reach 2.5 H.x out; the finer fetch only where the lobes leave the boundary close.)
   if ((uFlags & 256) == 0 && H.x > 0.0 && detail > 0.0 && dEff > -5.5 * H.x - 0.005 && dEff < 3.0 * H.x + E.y) {
     float outer = sat(0.5 - dw / 0.08);
-    vec3 Xp = mat3(0.80, 0.36, -0.48, -0.20, 0.91, 0.36, 0.56, -0.20, 0.80) * (X * vec3(1.0, 0.3, 1.0));
+    vec3 Xp = mat3(0.80, 0.36, -0.48, -0.20, 0.91, 0.36, 0.56, -0.20, 0.80) * (X * vec3(1.0, 0.22, 1.0));
     vec3 Xf = Xp * 9.0 + (nb.rgb - 0.5) * 0.5 + vec3(0.37, -0.6 * H.y * outer * (tau - 0.27) + 0.21, 0.53 + 0.3 * tau);
     vec4 nf = texture(uNoise, Xf);
     fineD = H.x * 1.8 * (nf.a - 0.6) * 2.0;
@@ -999,19 +999,19 @@ void main() {
   vec3 L = normalize(uKeyDir);
   float od = 0.0, up = 0.0;
   // (v1.6 polish 2: 7 taps towards the key, 3 up: the same reach.)
-  for (int i = 0; i < 8; i++) {
-    float s = (float(i) + 0.5) * 0.135;
-    od += meanAt(p + L * s) * 0.135;
+  for (int i = 0; i < 6; i++) {
+    float s = (float(i) + 0.5) * 0.18;
+    od += meanAt(p + L * s) * 0.18;
   }
-  for (int i = 0; i < 3; i++) {
-    float s = (float(i) + 0.5) * 0.213;
-    up += meanAt(p + vec3(0.0, s, 0.0)) * 0.213;
+  for (int i = 0; i < 2; i++) {
+    float s = (float(i) + 0.5) * 0.32;
+    up += meanAt(p + vec3(0.0, s, 0.0)) * 0.32;
   }
   // (v1.6 polish 2) Down to the plate: how much fog the white plate's light crosses to reach here.
   float down = 0.0;
-  for (int i = 0; i < 4; i++) {
-    float s = (float(i) + 0.5) * 0.07;
-    down += meanAt(p - vec3(0.0, s, 0.0)) * 0.07;
+  for (int i = 0; i < 3; i++) {
+    float s = (float(i) + 0.5) * 0.093;
+    down += meanAt(p - vec3(0.0, s, 0.0)) * 0.093;
   }
   gl_FragColor = vec4(od, up, domeLit(p), down);
 }
@@ -1698,7 +1698,7 @@ export class DinnerSteam {
     // are centimetres, a smaller one. The history is resampled across the change: no pop.)
     // (Two clouds at once, a change of mind's: each sample evaluates both; fewer pixels.)
     const budget = (globalThis as { __steamPixels?: number }).__steamPixels
-      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.45 : 1);
+      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.35 : 1);
     const scale = Math.min(0.5, Math.sqrt(budget / Math.max(1, frame.size.x * frame.size.y)));
     const w = Math.max(1, Math.ceil(frame.size.x * scale)), h = Math.max(1, Math.ceil(frame.size.y * scale));
     (u.uScale!.value as Vector2).set(w / frame.size.x, h / frame.size.y);
