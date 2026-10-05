@@ -28,9 +28,9 @@ import {
   WebGLRenderTarget,
   type WebGLRenderer,
 } from 'three';
-import { COVER, PLATE_PROFILE } from './dinnerContract.ts';
+import { COVER, PLATE_PROFILE, plateTop } from './dinnerContract.ts';
 import {
-  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, EDGE, RAISED_DIR, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
+  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, EDGE, GUSH, gushOut, gushRise, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
 } from '../src/scenes/dinner/steam.ts';
 import { requestSceneDepth, type SceneDepthFrame } from '../src/render/sceneDepth.ts';
 
@@ -132,8 +132,10 @@ const RHO_MAX = 1.5, BOX_MAX = 2.6, Y_MAX = CLOUD_Y_MAX, MAP_W = 96, MAP_H = 160
 const NOISE_SIZE = 64;
 /** The seating's squeeze (s): its puffs start this long before the capture and have gone this long after it. */
 const SQUEEZE_LEAD = 0.1, SQUEEZE_LIFE = 0.45;
-/** The spill's density at its full source. */
-const SPILL_STRENGTH = 10.0;
+/** (v1.6 polish 3) The gush's parcels: how far out and up each has gone, k·dt after it left the gap (steam.ts GUSH). */
+const GUSH_OUT_K = Array.from({ length: SPILL.samples }, (_, k) => gushOut(k * SPILL.dt));
+const GUSH_RISE_K = Array.from({ length: SPILL.samples }, (_, k) => gushRise(k * SPILL.dt));
+const PLATE_PROFILE_TOP_AT_LIP = plateTop(COVER.lipRadius);
 /** The light volume: N³ voxels over the proxy box, its z-slices tiled COLS × ROWS in one 2D atlas. */
 const LIGHT_N = 32, LIGHT_COLS = 8, LIGHT_ROWS = 4;
 /** Probes of the march's occupancy along each ray. */
@@ -476,6 +478,9 @@ uniform vec4 uK[${STEAM_LAYERS}];
 /** Per clock: the spill's source at τ − k·dt (k = 0..7, faded), and whether there is any. */
 uniform vec4 uSp0[${STEAM_LAYERS}];
 uniform vec4 uSp1[${STEAM_LAYERS}];
+/** Per clock (v1.6 polish 3): the raised gap (su) at τ − k·dt (k = 0..7), for the gush. */
+uniform vec4 uGp0[${STEAM_LAYERS}];
+uniform vec4 uGp1[${STEAM_LAYERS}];
 uniform float uSpillOn[${STEAM_LAYERS}];
 
 const float RHO_MAX = ${f(RHO_MAX)};
@@ -585,52 +590,71 @@ float domeCavity(vec3 p) {
   return inside * smoothstep(-0.03, 0.02, cv.y) * (1.0 - 0.6 * exp(-max(cv.y, 0.0) / (0.05 + uLift)));
 }
 
-/** Whether the spill could be at p on clock l (the probes' test): near the dome's outer wall. */
+/**
+ * The gush (v1.6 polish 3; steam.ts GUSH): the raised gap's outflow, a curtain round the raised
+ * side. Its air left the gap k·dt ago (k = 0…7, uSp0/uSp1 its source then, uGp0/uGp1 the gap then):
+ * out over the plate's rim and up, a tube in the meridional plane through those parcels, thicker
+ * where the gap was wider (a tilt about the far rim opens the gap as (1 + cos) / 2 round it) and
+ * as it mixes in. Whether it could be at p (the probes' test):
+ */
+const float GUSH_LIP = ${f(COVER.lipRadius)};
+const float GUSH_OUT[${SPILL.samples}] = float[${SPILL.samples}](${GUSH_OUT_K.map(f).join(', ')});
+const float GUSH_RISE[${SPILL.samples}] = float[${SPILL.samples}](${GUSH_RISE_K.map(f).join(', ')});
+const float GUSH_BASE = ${f(PLATE_PROFILE_TOP_AT_LIP)};
 bool spillOccupies(vec3 p, int l) {
   if (uSpillOn[l] <= 0.0) return false;
-  vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
-  return cv.y > -0.1 && cv.y < 0.5 && abs(length(cv.xz) - domeWall(cv.y) - 0.04) < 0.08;
+  float rho = length(p.xz);
+  float c = dot(p.xz / max(rho, 1e-4), vec2(${f(RAISED_DIR.x)}, ${f(RAISED_DIR.y)}));
+  return c > 0.0 && rho > GUSH_LIP - 0.12 && rho < GUSH_LIP + 0.7 && p.y < 1.3;
 }
 
-/**
- * The spill on clock l at p: a thin sheet just off the dome's outer wall on its raised side, its
- * air the gap's outflow of climb / rise ago, rising in lobes and filaments.
- */
 float spill(vec3 p, int l, float detail) {
   if (uSpillOn[l] <= 0.0) return 0.0;
-  vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
-  float y = cv.y;
-  if (y < -0.1 || y > ${f(COVER.domeHeight + 0.03)}) return 0.0;
-  float r = length(cv.xz);
-  float d = r - domeWall(y);
-  // (v1.6 polish 2.) The gap's outflow is a thin sheet: it leaves the gap, wraps round the rim's lip
-  // (bulging ≈ 1 cm out of it) and climbs the hot wall only a little way before it mixes in, 3–6 mm
-  // thick and torn into strips: no lump at the rim, no wash over the silver's face (the judge).
-  float curl = 0.06 * exp(-pow((y - 0.01) / 0.06, 2.0));
-  float off = 0.004 + curl;
-  float thick = 0.016 + 0.03 * max(y, 0.0);
-  if (d < -0.004 || d > off + 3.0 * thick + 0.02) return 0.0;
-  float c = dot(cv.xz / max(r, 1e-4), vec2(${f(RAISED_DIR.x)}, ${f(RAISED_DIR.y)}));
-  float ang = acos(clamp(c, -1.0, 1.0));
-  float az = exp(-(ang * ang) / ${f(SPILL.spread * SPILL.spread)});
-  // When this air left the gap (it climbs the wall at the boundary layer's speed).
-  float k = (max(y, 0.0) + 0.5 * max(-y, 0.0)) / ${f(SPILL.rise)} / ${f(SPILL.dt)};
-  if (k >= ${SPILL.samples - 1}.0) return 0.0;
-  int i = int(floor(k));
-  float fk = k - float(i);
-  float a = i < 4 ? uSp0[l][i] : uSp1[l][i - 4];
-  float b = i + 1 < 4 ? uSp0[l][i + 1] : uSp1[l][i - 3];
-  float src = mix(a, b, fk);
-  if (src <= 0.0) return 0.0;
-  // Torn into strips rising with the air (its coordinates climb with it), the sheet's offset wavering.
-  float tau = uA[l].x;
-  vec3 q = vec3(cv.x * 3.2, (y - ${f(SPILL.rise)} * tau) * 1.4, cv.z * 3.2);
-  vec4 n = texture(uNoise, q * 0.5 + vec3(0.3, 0.0, 0.7));
-  float strips = smoothstep(0.32, 0.62, n.b + (n.r - 0.5) * 0.6);
-  float e = (d - off - (n.g - 0.5) * 0.02) / thick;
-  float sheet = exp(-e * e) * smoothstep(-0.004, 0.004, d);
-  float rise = exp(-max(y, 0.0) / 0.13) * smoothstep(-0.07, -0.01, y);
-  return ${f(SPILL_STRENGTH)} * src * az * sheet * rise * mix(1.0, 0.15 + 1.1 * strips, detail);
+  float rho = length(p.xz);
+  if (rho < GUSH_LIP - 0.15 || rho > GUSH_LIP + 0.65) return 0.0;
+  vec2 dir = p.xz / max(rho, 1e-4);
+  float cr = dot(dir, vec2(${f(RAISED_DIR.x)}, ${f(RAISED_DIR.y)}));
+  float w = 0.5 + 0.5 * cr;
+  if (w < 0.2) return 0.0;
+  // It leaves where the gap is widest, in two or three tongues (a slow field round the rim).
+  float ang = acos(clamp(cr, -1.0, 1.0)) * sign(dir.x * ${f(RAISED_DIR.y)} - dir.y * ${f(RAISED_DIR.x)});
+  float tongues = texture(uNoise, vec3(0.37 + 0.11 * ang, 0.61, 0.23)).r;
+  // (Round towards the side the camera sees edge-on, where the gap is still ≈ 0.85 of its widest.)
+  float da = ang - ${f(GUSH.centre)};
+  float az = exp(-da * da / ${f(GUSH.spread * GUSH.spread)}) * smoothstep(0.3, 0.7, tongues + 0.25 * exp(-da * da / 0.1));
+  if (az < 0.01) return 0.0;
+  vec2 P = vec2(rho, p.y);
+  // The tube through the parcels (newest at the gap): the nearest point on it, its radius, its
+  // source and how far its air has gone out and up (for the noise carried with it).
+  float best = 0.0, bOut = 0.0, bRise = 0.0, bR = 1.0, bD = 1e3, bK = 0.0;
+  vec2 c0 = vec2(0.0); float r0 = 0.0, s0 = 0.0;
+  for (int k = 0; k < ${SPILL.samples}; k++) {
+    float g = (k < 4 ? uGp0[l][k] : uGp1[l][k - 4]) * w;
+    float s = (k < 4 ? uSp0[l][k] : uSp1[l][k - 4]);
+    vec2 c1 = vec2(GUSH_LIP + GUSH_OUT[k], GUSH_BASE + 0.6 * g + GUSH_RISE[k]);
+    float r1 = ${f(GUSH.radius)} + 0.4 * g + ${f(GUSH.grow)} * (GUSH_OUT[k] + GUSH_RISE[k]);
+    if (k > 0 && (s > 0.0 || s0 > 0.0)) {
+      vec2 e = c1 - c0;
+      float t = clamp(dot(P - c0, e) / max(dot(e, e), 1e-6), 0.0, 1.0);
+      float rr = mix(r0, r1, t), ss = mix(s0, s, t);
+      float dd = length(P - (c0 + e * t)) / rr;
+      // (Diluted as it mixes in: its visible density falls as it spreads.)
+      float v = ss * exp(-dd * dd) * (0.06 / (0.06 + rr));
+      if (v > best) { best = v; bD = dd; bR = rr; bK = float(k - 1) + t; bOut = mix(GUSH_OUT[k - 1], GUSH_OUT[k], t); bRise = mix(GUSH_RISE[k - 1], GUSH_RISE[k], t); }
+    }
+    c0 = c1; r0 = r1; s0 = s;
+  }
+  if (best < 1e-3) return 0.0;
+  // It leaves in puffs (the exchange flow through a gap pulses as the dome rocks up), each rolled into
+  // lobes and torn at its edge, the noise carried out and up with its air (its time of leaving).
+  float te = uA[l].x - bK * ${f(SPILL.dt)};
+  vec3 q = vec3(p.x - dir.x * bOut, p.y - bRise, p.z - dir.y * bOut);
+  vec4 n = texture(uNoise, q * vec3(4.2, 3.0, 4.2) + vec3(0.41, 0.13 + 0.9 * te, 0.77));
+  float puffs = 0.55 + 0.45 * cos(6.2832 * te / 0.085 + 2.0 * ang + 3.0 * (n.r - 0.5));
+  float edge = bD / (0.6 + 0.6 * puffs) + 0.75 * (0.55 - n.b) + 0.25 * (n.a - 0.5) * detail;
+  float body = smoothstep(1.0, 0.55, edge);
+  float above = smoothstep(0.0, 0.012, p.y - plateTop(min(rho, ${f(0.8)})));
+  return ${f(GUSH.density)} * best * az * body * above;
 }
 
 /**
@@ -1245,8 +1269,8 @@ void main() {
   // colour). The checkerboard: a pixel not marched this frame (.w < 0) takes its marched edge
   // neighbours' mean as its new value and leans on its history.
   bool marched = c.w >= 0.0;
-  vec3 m1 = vec3(0.0), m2 = vec3(0.0), sp = vec3(0.0);
-  float n = 0.0, spn = 0.0, bestA = -1.0, bestW = 0.0;
+  vec3 m1 = vec3(0.0), m2 = vec3(0.0), sp = vec3(0.0), dm = vec3(0.0), dsp = vec3(0.0);
+  float n = 0.0, spn = 0.0, dn = 0.0, dspn = 0.0, bestA = -1.0, bestW = 0.0;
   for (int k = 0; k < 9; k++) {
     ivec2 o = ivec2(k % 3 - 1, k / 3 - 1);
     ivec2 q = clamp(px + o, ivec2(0), lim);
@@ -1257,12 +1281,21 @@ void main() {
     m2 += x * x;
     n += 1.0;
     if (o.x == 0 || o.y == 0) { sp += x; spn += 1.0; }
+    // (v1.6 polish 3) The neighbours that saw the same opaque surface (the cloche's rim cuts the steam:
+    // a fill or a denoise across it drew the judge's stair-steps under the rim).
+    if (abs(v.z - c.z) < 0.03 * min(v.z, c.z) + 0.003) {
+      dm += x; dn += 1.0;
+      if (o.x == 0 || o.y == 0) { dsp += x; dspn += 1.0; }
+    }
     if (v.y > bestA) { bestA = v.y; bestW = v.w; }
   }
   m1 /= max(n, 1.0);
   vec3 sd = sqrt(max(m2 / max(n, 1.0) - m1 * m1, 0.0));
-  vec3 cur = marched ? vec3(c.xy, unpackKey(c.w) * c.x) : (spn > 0.0 ? sp / spn : m1);
-  vec3 res = cur;
+  vec3 near = dn > 0.0 ? dm / dn : m1;
+  vec3 cur = marched ? vec3(c.xy, unpackKey(c.w) * c.x) : (dspn > 0.0 ? dsp / dspn : (dn > 0.0 ? near : (spn > 0.0 ? sp / spn : m1)));
+  // (v1.6 polish 3) With no history to lean on (the cloche moving over the steam, the first frame), a
+  // pixel takes its same-surface neighbourhood's mean: no single frame's dither shows as grain.
+  vec3 res = marched ? mix(near, cur, 0.4) : cur;
   if (uHistValid) {
     vec2 uv = (vec2(px) + 0.5) / vec2(lim + 1);
     vec2 puv = uv;
@@ -1545,7 +1578,7 @@ export class DinnerSteam {
       uLift: { value: 0 },
       uSeated: { value: new Vector3() },
       uLight: { value: this.light.texture },
-      uR: { value: v4() }, uH: { value: v4() }, uK: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] },
+      uR: { value: v4() }, uH: { value: v4() }, uK: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uGp0: { value: v4() }, uGp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] },
     };
     this.lightMaterial = new ShaderMaterial({
       name: 'fx_steam_light', uniforms: this.uniforms, vertexShader: FULLSCREEN_VERTEX, fragmentShader: LIGHT_FRAGMENT, depthTest: false, depthWrite: false, toneMapped: false,
@@ -1769,6 +1802,7 @@ export class DinnerSteam {
     const E = this.uniforms.uE!.value as Vector4[], F = this.uniforms.uF!.value as Vector4[], R = this.uniforms.uR!.value as Vector4[];
     const Hh = this.uniforms.uH!.value as Vector4[], K = this.uniforms.uK!.value as Vector4[];
     const G = this.uniforms.uSp0!.value as Vector4[], H = this.uniforms.uSp1!.value as Vector4[];
+    const Gp0 = this.uniforms.uGp0!.value as Vector4[], Gp1 = this.uniforms.uGp1!.value as Vector4[];
     const spillOn = this.uniforms.uSpillOn!.value as number[];
     const S0 = this.mapUniforms.uS0!.value as Vector4[], S1 = this.mapUniforms.uS1!.value as Vector4[];
     const S2 = this.mapUniforms.uS2!.value as Vector4[], S3 = this.mapUniforms.uS3!.value as Vector4[];
@@ -1825,6 +1859,7 @@ export class DinnerSteam {
       for (let k = 0; k < SPILL.samples; k++) {
         const v = fade > 0 ? fade * spillSource(tau - k * SPILL.dt, c.emitStart, c.emitEnd) : 0;
         (k < 4 ? G[l]! : H[l]!).setComponent(k % 4, v);
+        (k < 4 ? Gp0[l]! : Gp1[l]!).setComponent(k % 4, raisedGap(tau - k * SPILL.dt));
         on = Math.max(on, v);
       }
       spillOn[l] = on;
