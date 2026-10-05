@@ -418,6 +418,87 @@ byte-identical across runs (the checkerboard's parity is the march's frame count
 it), `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6, `tests/browser/scene-depth.spec.ts` 5/5,
 `tests/browser/collection.spec.ts` 3/3; `pnpm typecheck` clean.
 
+## Polish round 3: the third judge's fixes (`v1.6/steam-polish3`)
+
+The third judge scored polish 2 **5 at laptop size, 5.5 at phone size**: the integration was fixed (white plate, no
+waterline, warm colour, no crisp foot, ≈ 1.5 ms) but the body had become "a near-opaque, flatly lit cotton tuft that
+turns into a hollow fog doughnut". Seven items: four for the signature (translucency, body light, edge as sheets, no
+hollow ring), three to ship (a legible gush, no cap on the seated dome after a change of mind, τ 0.7 and two clouds
+≤ 1.5 ms). Frames are the judge's own (`frames.ts`, laptop 1240² clip of 1280 × 720 @2, WARM 2000, phone 390 × 844 @3)
+measured against its no-steam twins; the numbers are in `evidence/v1.6/steam-polish3/measurements.txt` (the new
+measuring scripts in `evidence/v1.6/steam-polish3/tools/`), the cost in `cost.txt`.
+
+1. **Translucency** (`cloudLook.core`, `.sheet`, `.sheetWidth`; `folds` in `cloud()`). The young fog's own density
+   is 0.2 (polish 2: 2.2) and the mixing skin where it meets the room's air carries the outline (1.5, ≈ 6 mm wide),
+   so the limb reads and the middle shows through; inside, the fog is folded into thin sheets drawn out along the
+   rise (the ridges of the billow field's gradient noise). Transmittance (DEBUG 1 coverage) at the plate's far rim
+   **0.33–0.41** at 0.48–0.74 s (polish 2: 0.03–0.08), through the core 0.28–0.40. The vapour summed over the frame
+   against polish 1: **1.00× at 1.2 s** (polish 2: 1.61×), 0.86–1.03× from 0.54 to 1.28 s; 1.27× at 0.48 s, where the
+   gush (5) adds what polish 1 did not have. The veil's density in the march is halved (`STEAM_LOOK.veilGain`): its
+   wisps were lit for the old, dimmer key and made 40 % of the vapour at 1.2 s.
+2. **Body light** (`STEAM_LOOK.key`, `keyFall`, `ms`, `room`, `bounce`; the light volume). Multiple scattering pulled
+   back (octaves 0.45 / 0.18 → 0.18 / 0.06), the key stronger (0.95 → 1.55) and its optical depth through the cloud
+   steeper (1.25 → 2.5×), the room a fill (0.22 → 0.12) that the cloud's own cover towards the window shades too. The
+   light volume is finer (24³ → 28³) and read 1 cm towards the key (was 2.4 cm: a lit face read the shade behind it).
+   The billows' own shade only on the boundary (inside a translucent fog it drew a mottled grey). The white plate's
+   bounce lights only the fog close over it (the share of the sphere the plate fills, cubed) and in the key's neutral
+   colour: the plate stays white through the composite's shadow suppression, not by flattening the fog. Dense body
+   p5–p95 **42 / 52 / 60 / 59** levels at 0.61 / 0.74 / 0.80 / 0.90 s (polish 2: 26 / 17 / 17 / 24). The steam's own
+   colour (DEBUG 14) lit flank − shaded flank +12 / +8 / +5 at 0.61 / 0.74 / 0.90 s: short of the 20–30 asked (the
+   composite's flanks are confounded by the backdrop behind each). Plate centre −0 … +3, its shaded right −9 … −2
+   (polish 2: −10 … −19).
+3. **Edge as sheets** (`Xb`, `Xp` in `cloud()`; `EDGE.billow`, `EDGE.wisp`). The billows and the peeling layer are
+   read in a material space drawn out 4× along the rise (was 1.6×), the peeling layer's isotropic 2–4 mm curls are
+   gone (seen through the translucent fog they read as fur), its lobes finer (≈ 4.5 mm), the skin torn into strips
+   along the flow and the torn sheets denser (`EDGE.wisp` 2.6). Anisotropy of the edge band (a structure tensor of the
+   steam-only image band-passed 2–8 px): **1.3–2.1 : 1** (polish 2: 1.2–1.7; polish 1: 1.6–6); the 2–8 mm outline
+   band 0.34–0.76 mm rms on the crown and the left wall, 0.5–2.0 on the right wall (a torn sheet doubles the outline
+   at 0.61 s); lobes per 10 cm, walls 2.0–8.6, crown 4.1–5.5 (polish 2: walls 3.9–7.8, crown 3.4–4.7): the crown is now
+   as fine as the walls, but the ≥ 6 asked is met only at 0.54 s and the ≥ 2 : 1 only on the right wall at 0.74 s.
+4. **No hollow ring** (`cloudLook.capCore`, `uK`; `ringFog`). As the stem and base empty the cap keeps a fog of its own
+   (0.24, thinning to 0.04 by 1.4 s), and the stem's core feeds it from below (the cap's fog reaches down the axis);
+   the ring's own tube is lighter (5 → 1.5) and fades from 1.1 s (was 1.35 s). The cap reads filled over the plate
+   (`pair-0.83-1.15.png`): no backdrop through a clean hole. The judge's dip measure: median **10–13** at 0.93–1.06 s,
+   4–6 at 1.12–1.15, ≤ 3 from 1.2 s (polish 2: 10–16 to 1.12 s); the dips left sit between the cap's lower edge and
+   the plate's far rim (rows y ≈ 650), not through the cap, but the ≤ 5 asked is not met before 1.1 s.
+5. **The gush** (`GUSH`, `gushOut`, `gushRise`, `raisedGap`; `spill()` in the shader; `RESOLVE_FRAGMENT`). The raised
+   gap's outflow is a curtain of puffs (the exchange flow pulses as the dome rocks up) leaving where the gap is
+   widest, rolling ≈ 3.7 cm out over the plate's rim and rising as it slows (≤ 33 cm/s, drawn up by the hot dome's boundary layer), carried with its air (its
+   noise moves out and up with each parcel), thicker where the gap was wider, gone by 0.56 s. Outside the cloche's
+   silhouette at 0.29–0.37 s: **74–116 k px** over 8 levels (polish 2: 40–61 k), p95 **67–82** (polish 2: 24–30); on the
+   cloche's flank p95 0, mean ≤ +0.1 (polish 2: p95 17–31). The resolve fills and denoises only from neighbours that
+   saw the same opaque surface (the rim cut the half-resolution steam into stair-steps; `gap-x2-0.32-0.37.png`).
+6. **No cap on the seated dome** (`cloud()`'s change-of-mind block, `captured`). The returning dome's wake drags the
+   fog it comes down past along its wall and out at the rim: the band it clears widens from the silver to ≈ 6–10 cm
+   as it comes down, so nothing stands on it when it seats (the seating's puffs at the rim stay); `captured` clears
+   its band within ≈ 0.1 s of the seating. Over the crown and shoulders (3 cm above the rim and up) at 0.67–0.80 s:
+   **43 / 1.5 k / 3.2 k / 4.7 k / 2.7 k px** over 8 levels, mean +0.1 … +3.9 (polish 2: 12 k / 27 k / 29 k / 27 k /
+   21 k, mean +8 … +28); a thin veil (p95 7–15) remains 0.70–0.80 s (`return-0.67-0.83.png`).
+7. **Cost** (`cost.txt`). Steps 18 / 14 / 12 → 15 / 12 / 11 (the march's span is bisected to the steam at both ends, so
+   fewer steps cover it as finely), the young budget 330 k → 290 k pixels and × 0.45 → × 0.35 with two clouds, the light
+   volume 28³ with 11 taps (32³ with 15 while fixing 2), the gush's tongues analytic. With the judge's `bench.ts`, in the
+   clean runs (load 4–8): **1.3–1.5 ms** for one cloud at τ 0.3 / 0.6 / 0.7 / 1.2, two clouds **1.5–1.8** at 1400² and
+   1.5–2.3 at 2000²; runs under contention read 3–6× and are listed apart. The two-cloud case is fixed costs (the
+   flow map per clock, the light volume, the resolve): halving its pixels does not move it. Not reliably ≤ 1.5 ms.
+
+**Kept** (same frames): no waterline (steam-only step median 1.6–1.8, p90 2.4–4.1), the foot (1.6–2.5), the colour (the
+bright steam's R − B +5.6 … +7.3, no drift to +9.7; over the plate +1.2 … +3.1, was +4 … +8.4: no ivory cast; the room's
+tint is warmer, #E6D7C0, since it is a smaller share of the light), determinism (the same frame byte-identical across
+runs), the clocks and `STEAM_END`, zero cost with no steam, the end (5.95 s within 2 levels of the clean frame).
+**Regressed:** the edge's temporal noise early in the hold, 1.1 levels rms at 0.58–0.67 s (polish 2: 0.8–0.9; the same
+from 0.9 s); the translucent fog shows its sampling. 40 steps take it to 0.7; no jitter, a step aligned to the ray, no
+checkerboard and a slower history did not.
+
+**The tells:** cotton wool — improved (translucent, the far rim and the well read through, sheets inside; at 1:1 the
+edge still reads partly fibrous); flat lighting — improved (p5–p95 doubled; the lit/shaded flank still small); too much
+vapour — gone (1.00× polish 1 at 1.2 s); the fog doughnut — improved (the cap is filled; the dip measure still 10–13 to
+1.06 s); the release under-reads — gone (a gush twice the area, no wash, no white bowl, no stair-steps); a cotton cap on
+the seated dome — mostly gone (a thin veil 0.70–0.80 s); the reflection in the silver — remains (not attempted).
+
+**Tests.** `tests/dinner-steam.test.ts` 25 (new: the translucent body, the cap's fog and the light's balance; the gush,
+its path, its speed and its box), `tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts`
+6/6, `tests/browser/scene-depth.spec.ts` 5/5; `pnpm typecheck` clean.
+
 ## Decisions
 
 - **A material field, not particles.** Every sample asks where its air came from (the analytic flow's inverse), so

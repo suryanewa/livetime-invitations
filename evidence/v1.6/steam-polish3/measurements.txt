@@ -1,0 +1,152 @@
+# steam polish 3 measurements (v1.6/steam-polish3; laptop 1240² clip of 1280×720 @2, WARM 2000, the judge's frames.ts; nos = the judge's no-steam twins)
+# polish 1 = judge-steam2/lap, polish 2 = judge-steam3/lap (the third judge's frames). Scripts: tools/ (new) and the judge's py/.
+
+## (1) transmittance (DEBUG 1 coverage frames): at the plate's far rim (its row in the no-steam twin), and through the core (x 560-760, y 560-700)
+0.432s far-rim T 0.43 (75 cols)  core T median 0.74 p10 0.51 p90 1.00
+0.480s far-rim T 0.34 (75 cols)  core T median 0.40 p10 0.18 p90 0.67
+0.544s far-rim T 0.34 (75 cols)  core T median 0.30 p10 0.13 p90 0.44
+0.608s far-rim T 0.33 (75 cols)  core T median 0.28 p10 0.12 p90 0.37
+0.672s far-rim T 0.38 (75 cols)  core T median 0.31 p10 0.17 p90 0.38
+0.736s far-rim T 0.41 (75 cols)  core T median 0.33 p10 0.25 p90 0.41
+   (polish 2, same script: far rim 0.03 / 0.04 / 0.04 / 0.06 / 0.08 at 0.48-0.74 s; core 0.04-0.09)
+
+## (1) vapour: summed brightening over the no-steam twin, against polish 1 (judge-steam2/lap) and polish 2 (judge-steam3/lap)
+polish 3 / polish 1:
+0.480s brightening 6.62 M  ref 5.22 M  ratio 1.27
+0.544s brightening 5.69 M  ref 5.55 M  ratio 1.02
+0.608s brightening 5.80 M  ref 5.96 M  ratio 0.97
+0.736s brightening 6.17 M  ref 6.44 M  ratio 0.96
+0.896s brightening 5.87 M  ref 6.85 M  ratio 0.86
+0.992s brightening 5.96 M  ref 6.55 M  ratio 0.91
+1.120s brightening 5.46 M  ref 5.32 M  ratio 1.03
+1.200s brightening 4.41 M  ref 4.42 M  ratio 1.00
+1.280s brightening 3.18 M  ref 3.75 M  ratio 0.85
+polish 2 / polish 1:
+0.608s brightening 7.28 M  ref 5.96 M  ratio 1.22
+0.736s brightening 8.60 M  ref 6.44 M  ratio 1.34
+0.992s brightening 9.21 M  ref 6.55 M  ratio 1.41
+1.200s brightening 7.14 M  ref 4.42 M  ratio 1.61
+## (2) dense body (o_ring) p5-p95
+0.608s dense steam 73208 px  luma p5 187 p50 211 p95 228  contrast p95-p5 42
+0.736s dense steam 75949 px  luma p5 184 p50 217 p95 236  contrast p95-p5 52
+0.800s dense steam 71470 px  luma p5 175 p50 220 p95 235  contrast p95-p5 60
+0.896s dense steam 45603 px  luma p5 166 p50 207 p95 225  contrast p95-p5 59
+## (2) the steam's own colour (DEBUG 14: tone-mapped, unpremultiplied, coverage > 1/3): lit (left 30 % of each row's span) vs shaded (right 30 %), body p5-p95
+0.480s own: lit 238  shaded 241  lit-shaded -3  body p5 203 p95 248 (p5-p95 45)
+0.608s own: lit 241  shaded 229  lit-shaded +12  body p5 190 p95 244 (p5-p95 54)
+0.736s own: lit 244  shaded 236  lit-shaded +8  body p5 194 p95 245 (p5-p95 51)
+0.896s own: lit 245  shaded 240  lit-shaded +5  body p5 222 p95 246 (p5-p95 24)
+## (2) composite flank (flank.py; confounded by the backdrop behind each flank) and o_body
+0.608s lit 211  shaded 217  lit-shaded -6  (4721/9813 px)  body p5-p95 32
+0.736s lit 202  shaded 229  lit-shaded -27  (1722/8477 px)  body p5-p95 40
+0.896s lit 198  shaded 223  lit-shaded -25  (1989/4776 px)  body p5-p95 50
+0.608s lit 207 (bg 153, +55) R-B +6.9  mid 212 (bg 159, +54) R-B +6.6  shade 204 (bg 182, +22) R-B +7.1
+0.736s lit 201 (bg 146, +55) R-B +6.2  mid 218 (bg 172, +47) R-B +6.0  shade 215 (bg 192, +23) R-B +6.8
+0.896s lit 181 (bg 135, +45) R-B +6.5  mid 215 (bg 187, +28) R-B +6.8  shade 211 (bg 192, +19) R-B +6.9
+## (3) lobes (o_lobes), 2-8 mm band (edgeband), anisotropy (aniso, DoG 2/8 px structure tensor; polish 2 1.2-1.7:1, polish 1 1.6-6:1 in the same measure)
+0.544s right wall: 6.6/10cm (7 in 10.6 cm, rms 6.0px)  crown: 5.0/10cm (7 in 14.0 cm, rms 7.5px)  left wall: 8.6/10cm (10 in 11.6 cm, rms 3.7px)
+0.576s right wall: 2.9/10cm (4 in 13.6 cm, rms 10.8px)  crown: 5.5/10cm (8 in 14.6 cm, rms 7.9px)  left wall: 7.0/10cm (8 in 11.5 cm, rms 4.6px)
+0.608s right wall: 4.1/10cm (6 in 14.7 cm, rms 15.0px)  crown: 5.1/10cm (8 in 15.8 cm, rms 7.9px)  left wall: 4.5/10cm (5 in 11.2 cm, rms 5.2px)
+0.640s right wall: 2.8/10cm (4 in 14.5 cm, rms 12.9px)  crown: 4.3/10cm (7 in 16.1 cm, rms 8.3px)  left wall: 4.1/10cm (5 in 12.3 cm, rms 6.7px)
+0.672s right wall: 4.2/10cm (5 in 11.9 cm, rms 10.5px)  crown: 4.1/10cm (7 in 17.1 cm, rms 9.1px)  left wall: 6.0/10cm (8 in 13.4 cm, rms 10.0px)
+0.736s right wall: 3.8/10cm (4 in 10.4 cm, rms 4.0px)  crown: 4.9/10cm (8 in 16.3 cm, rms 6.8px)  left wall: 2.0/10cm (3 in 15.0 cm, rms 15.9px)
+0.544s R wall: 2-8mm rms 0.52 mm, 388 bumps/10cm | crown: 2-8mm rms 0.45 mm, 580 bumps/10cm | L wall: 2-8mm rms 0.42 mm, 428 bumps/10cm
+0.608s R wall: 2-8mm rms 1.97 mm, 366 bumps/10cm | crown: 2-8mm rms 0.51 mm, 631 bumps/10cm | L wall: 2-8mm rms 0.34 mm, 406 bumps/10cm
+0.672s R wall: 2-8mm rms 1.01 mm, 287 bumps/10cm | crown: 2-8mm rms 0.58 mm, 582 bumps/10cm | L wall: 2-8mm rms 0.76 mm, 330 bumps/10cm
+0.544s R wall: 1.68:1 @-32 gx/gy 1.25 (4145 px) | crown: 1.30:1 @-35 gx/gy 1.09 (4950 px) | L wall: 1.40:1 @-19 gx/gy 1.29 (4353 px)
+0.608s R wall: 1.41:1 @-42 gx/gy 1.03 (5336 px) | crown: 1.41:1 @-39 gx/gy 1.07 (5786 px) | L wall: 1.43:1 @+30 gx/gy 1.18 (4164 px)
+0.672s R wall: 1.73:1 @-26 gx/gy 1.38 (5068 px) | crown: 1.52:1 @-31 gx/gy 1.21 (6842 px) | L wall: 1.35:1 @+25 gx/gy 1.21 (2855 px)
+0.736s R wall: 2.06:1 @-32 gx/gy 1.33 (5033 px) | crown: 1.31:1 @-26 gx/gy 1.17 (8015 px) | L wall: 1.36:1 @+6 gx/gy 1.35 (1114 px)
+## (4) hole dip (o_ringprof)
+0.928s curl dip median 10, best 24 levels
+0.960s curl dip median 10, best 26 levels
+0.992s curl dip median 13, best 27 levels
+1.024s curl dip median 13, best 26 levels
+1.056s curl dip median 10, best 23 levels
+1.088s curl dip median 9, best 18 levels
+1.120s curl dip median 4, best 14 levels
+1.152s curl dip median 6, best 13 levels
+1.200s curl dip median 3, best 12 levels
+1.248s curl dip median 0, best 11 levels
+1.312s curl dip median 0, best 5 levels
+## (5) the gush outside the silhouette (area > 8 levels, p95), and the flank inside it
+0.192s outside: area  27715 px  p95  52.0  p50  16.1 | flank: p95   0.0 mean +0.1 px>8 596
+0.224s outside: area  39576 px  p95  68.1  p50  16.2 | flank: p95   0.0 mean +0.1 px>8 631
+0.256s outside: area  58044 px  p95  75.0  p50  20.4 | flank: p95   1.0 mean +0.2 px>8 1854
+0.288s outside: area  73652 px  p95  66.6  p50  17.2 | flank: p95   0.0 mean +0.0 px>8 0
+0.304s outside: area  86646 px  p95  76.8  p50  17.1 | flank: p95   0.0 mean +0.0 px>8 0
+0.320s outside: area 101341 px  p95  80.8  p50  17.1 | flank: p95   0.0 mean +0.0 px>8 0
+0.336s outside: area 108664 px  p95  81.9  p50  16.9 | flank: p95   0.0 mean +0.0 px>8 0
+0.352s outside: area 108917 px  p95  76.8  p50  16.2 | flank: p95   0.0 mean +0.0 px>8 0
+0.368s outside: area 115990 px  p95  77.0  p50  16.1 | flank: p95   0.0 mean +0.1 px>8 864
+polish 2:
+0.288s outside: area  40424 px  p95  29.8  p50  19.4 | flank: p95  31.0 mean +4.6 px>8 36538
+0.304s outside: area  45636 px  p95  26.6  p50  19.6 | flank: p95  31.0 mean +4.6 px>8 37275
+0.320s outside: area  50895 px  p95  25.6  p50  20.3 | flank: p95  31.1 mean +4.7 px>8 37461
+0.336s outside: area  56226 px  p95  25.3  p50  20.4 | flank: p95  29.9 mean +4.6 px>8 36539
+0.352s outside: area  59664 px  p95  24.6  p50  20.6 | flank: p95  24.0 mean +3.8 px>8 32589
+0.368s outside: area  61196 px  p95  24.3  p50  20.6 | flank: p95  17.0 mean +2.9 px>8 26713
+## grain: temporal noise (tn2 over steam at 1.6 s; tn3 on the edge band)
+F/lap 100-101 (1.600s) px 23473: temporal HF rms 0.79  spatial HF rms 2.10  ratio 0.37  |diff| 1.81
+jlap 36-37 (0.576s) edge px 10399: temporal HF rms 0.81  spatial HF rms 2.65 ratio 0.31
+F/lap 36-37 (0.576s) edge px 20953: temporal HF rms 1.13  spatial HF rms 1.99 ratio 0.57
+jlap 42-43 (0.672s) edge px 38361: temporal HF rms 0.86  spatial HF rms 1.13 ratio 0.77
+F/lap 42-43 (0.672s) edge px 40244: temporal HF rms 1.10  spatial HF rms 2.23 ratio 0.49
+jlap 56-57 (0.896s) edge px 109140: temporal HF rms 0.57  spatial HF rms 0.90 ratio 0.63
+F/lap 56-57 (0.896s) edge px 108141: temporal HF rms 0.68  spatial HF rms 1.60 ratio 0.42
+jlap 100-101 (1.600s) edge px 154936: temporal HF rms 0.55  spatial HF rms 2.34 ratio 0.23
+F/lap 100-101 (1.600s) edge px 84503: temporal HF rms 0.49  spatial HF rms 3.69 ratio 0.13
+
+## plate
+0.480s centre 240->241 (+1)  right 243->245 (+2)  left 230->234 (+4)
+0.608s centre 240->240 (+0)  right 243->234 (-9)  left 230->233 (+3)
+0.736s centre 240->240 (+0)  right 243->233 (-10)  left 230->231 (+1)
+0.864s centre 240->241 (+1)  right 243->236 (-7)  left 230->230 (+0)
+0.992s centre 240->243 (+3)  right 243->238 (-4)  left 230->230 (+0)
+1.120s centre 240->243 (+3)  right 243->240 (-3)  left 230->230 (+0)
+1.280s centre 240->242 (+2)  right 243->240 (-3)  left 230->230 (+0)
+1.600s centre 240->241 (+1)  right 243->241 (-2)  left 230->230 (+0)
+5.952s centre 240->240 (+0)  right 243->243 (+0)  left 230->230 (+0)
+## waterline / steam-only step
+0.736s median step 1.4  p90 3.9  columns > 12: 0%
+0.832s median step 1.4  p90 2.6  columns > 12: 0%
+0.864s median step 1.4  p90 2.4  columns > 12: 0%
+0.896s median step 1.3  p90 2.3  columns > 12: 0%
+0.928s median step 1.3  p90 2.4  columns > 12: 0%
+0.960s median step 1.2  p90 2.1  columns > 12: 0%
+0.736s step(steam-clean) median 1.8 p90 4.1 cols>8 0% cols>12 0%
+0.832s step(steam-clean) median 1.6 p90 2.8 cols>8 0% cols>12 0%
+0.896s step(steam-clean) median 1.7 p90 2.4 cols>8 0% cols>12 0%
+0.960s step(steam-clean) median 1.6 p90 2.4 cols>8 0% cols>12 0%
+## foot band steam-only step
+0.432s step(steam-clean) median 2.5 p90 3.5 cols>8 0% cols>12 0%
+0.480s step(steam-clean) median 1.6 p90 2.6 cols>8 0% cols>12 0%
+0.544s step(steam-clean) median 1.7 p90 5.2 cols>8 3% cols>12 0%
+0.608s step(steam-clean) median 1.8 p90 5.5 cols>8 2% cols>12 0%
+0.672s step(steam-clean) median 1.8 p90 4.4 cols>8 0% cols>12 0%
+0.736s step(steam-clean) median 1.6 p90 4.1 cols>8 0% cols>12 0%
+## warmth
+0.480s bright steam (13403 px, luma 221) R-B +6.3 (median +6, p10 +6, p90 +7);  over the plate centre R-B +2.3
+0.608s bright steam (31498 px, luma 223) R-B +6.2 (median +6, p10 +6, p90 +7);  over the plate centre R-B +2.8
+0.736s bright steam (23010 px, luma 228) R-B +5.6 (median +5, p10 +5, p90 +6);  over the plate centre R-B +3.1
+0.864s bright steam (6022 px, luma 221) R-B +6.1 (median +6, p10 +5, p90 +7);  over the plate centre R-B +2.4
+0.992s bright steam (5932 px, luma 218) R-B +6.9 (median +7, p10 +6, p90 +8);  over the plate centre R-B +1.7
+1.120s bright steam (6057 px, luma 220) R-B +7.1 (median +7, p10 +6, p90 +9);  over the plate centre R-B +1.5
+1.280s bright steam (125 px, luma 216) R-B +7.3 (median +7, p10 +7, p90 +8);  over the plate centre R-B +1.2
+## (6) the return (decline at 0.5 s): a 2.5 cm band outside the seated dome's silhouette above its widest row; and its part 3 cm above the rim (crown and shoulders)
+polish 2:
+0.672s cap band: area>8  18238 px  p95  41.8  p99  64.9  mean +10.83 | over the crown and shoulders (3 cm above the rim and up): area>8  12107 p95  36.8 mean +7.94
+0.704s cap band: area>8  33499 px  p95  44.9  p99  80.1  mean +23.04 | over the crown and shoulders (3 cm above the rim and up): area>8  27403 p95  43.1 mean +23.01
+0.736s cap band: area>8  35684 px  p95  45.9  p99  80.7  mean +27.61 | over the crown and shoulders (3 cm above the rim and up): area>8  28910 p95  44.9 mean +28.48
+0.768s cap band: area>8  34990 px  p95  44.6  p99  80.9  mean +27.72 | over the crown and shoulders (3 cm above the rim and up): area>8  27280 p95  42.9 mean +28.45
+0.800s cap band: area>8  28424 px  p95  36.9  p99  70.7  mean +18.81 | over the crown and shoulders (3 cm above the rim and up): area>8  20637 p95  34.9 mean +17.60
+0.832s cap band: area>8   3867 px  p95  18.0  p99  28.9  mean +2.50 | over the crown and shoulders (3 cm above the rim and up): area>8   3596 p95  21.1 mean +2.84
+polish 3:
+0.672s cap band: area>8   5794 px  p95  33.9  p99  64.7  mean +4.18 | over the crown and shoulders (3 cm above the rim and up): area>8     43 p95   1.0 mean +0.12
+0.704s cap band: area>8   7449 px  p95  37.0  p99  79.5  mean +6.06 | over the crown and shoulders (3 cm above the rim and up): area>8   1512 p95   7.1 mean +1.67
+0.736s cap band: area>8   9762 px  p95  42.1  p99  80.5  mean +7.94 | over the crown and shoulders (3 cm above the rim and up): area>8   3221 p95  11.1 mean +3.04
+0.768s cap band: area>8  12085 px  p95  41.7  p99  80.8  mean +9.19 | over the crown and shoulders (3 cm above the rim and up): area>8   4729 p95  14.1 mean +3.91
+0.800s cap band: area>8  10388 px  p95  32.5  p99  70.5  mean +7.31 | over the crown and shoulders (3 cm above the rim and up): area>8   2747 p95  15.1 mean +2.45
+0.832s cap band: area>8      7 px  p95   2.0  p99   4.1  mean +0.25 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+## determinism: f0020, f0038, f0064 re-rendered byte-identical
+## the end: f0372 (5.95 s) within 2 levels of the no-steam twin (polish 2: 5)
