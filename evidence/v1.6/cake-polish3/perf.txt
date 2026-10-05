@@ -1,0 +1,4 @@
+scripts/cake-perf.ts http://127.0.0.1:5611 polish3 (M2 Pro, Chrome headless, Metal; 2026-10-04, after polish 3's two fixes; other sessions rendering on the machine: compare own vs plain)
+polish3 laptop · materials: own 2.69 vs plain 2.60 ms (patches +0.09) · bench (120) min 1.55 q25 1.99 med 2.47 ms: frames 757 p50 16.70 p95 16.80 p99 16.80 max 16.8 ms · GPU render at guest-ready (169 frames) p50 12.34 p95 28.49 ms · buffer 2108×1185 @1.647019614671031
+polish3 phone · materials: own 2.02 vs plain 2.02 ms (patches +0.00) · bench (120) min 1.08 q25 1.28 med 1.68 ms: frames 757 p50 16.70 p95 16.70 p99 16.80 max 16.8 ms · GPU render at guest-ready (169 frames) p50 17.00 p95 23.52 ms · buffer 780×1688 @2
+(polish 2 on the same bench: laptop patches +0.03, phone +0.02; 60 fps at both sizes, p99 16.8 ms)
