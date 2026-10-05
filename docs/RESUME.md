@@ -138,7 +138,12 @@ judge's re-check of that tell found the gush no longer takes the eye at CSS size
 sizes unchanged at 7 / 7.5, not signed), the held dome's stillness (2.2–2.5 levels a frame at 0.53–0.56 s) a slowly
 rising dome rather than a freeze, and Dinner pacing clean at both sizes — the last entry of the steam's record. The pass closes with the steam's limits recorded and the
 next approach below. Final verification: 1c61c25 (polish 6) typecheck clean, unit 461/461, browser 117/117 on a fresh
-server; 7ca077f (polish 7) the Dinner, scene-depth and posters specs 16/16, the full suites re-run at the close.
+server; 7ca077f (polish 7) the Dinner, scene-depth and posters specs 16/16, unit 461/461, browser 116/117 (the known
+bloom flake, 3/3 on re-run). A pre-push review (a workflow: three reviewers — the steam code diff, the docs against the
+evidence files, a completeness critic against Surya's three asks — and two skeptics per finding; 30 of 36 findings
+confirmed) produced the record fixes in `v1.6/docs-review` and three steam fixes in `v1.6/steam-review-fixes`, of which
+the two that keep the accept byte-identical are merged (1796b77; `docs/scenes/dinner-v1.6-steam.md`, Review fixes). The
+final suites on that build are in `docs/qualification.md`, Verification on the integrated build.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for

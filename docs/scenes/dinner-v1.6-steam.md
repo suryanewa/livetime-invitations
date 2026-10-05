@@ -978,6 +978,32 @@ page's own frames slow, `pacing-raw-after.txt`); its steam cost is at or under t
 within the box's, `shownGrow ≤ grow`); `tests/dinner.test.ts` 27, `tests/scene-depth.test.ts` 6;
 `tests/browser/dinner.spec.ts` 6/6 (fresh server); `pnpm typecheck` clean.
 
+## Review fixes before main (`v1.6/steam-review-fixes`, merged 1796b77)
+
+A pre-push code review of polish 5 and 6 (one reviewer, every finding checked by two independent skeptics) confirmed three
+defects, none visible in a plain accept. **1 (should-fix).** The seating's squeeze puffs were still gated on the cloud's
+fade (`present = s.present && s.fade > 0`) while polish 5's `leftSteamEnd` promised them `capture + SQUEEZE.life`, so a
+decline from the accepted pose at τ ≈ 2.0–2.3 s (capture at 2.37–2.67 s) squeezed puffs from a nearly faded cloud and cut
+them in one frame at τ = 2.8 s — the very cut polish 5 set out to remove — while the clock stayed alive to ≈ 3.2 s drawing
+nothing. Now `squeezeStrength` (the fog's light at the capture, on a clock that carried a cloud), `squeezeLive` (the window
+capture − lead … capture + life) and `squeezeFade` gate the puffs, the box and the clock's end: the accept byte-identical at
+seven times; in the worst late decline (2.304 s) 41.4 k px at up to 59 levels that vanished in one frame now fall
+−8 / −11 / −12 / −12 % a frame across 2.8 s, no frame losing over 27 % while the puffs show at ≥ 13 levels, gone by 3.10 s;
+the clock ends with the puffs. A capture at τ ≈ 2.9 now draws faint puffs (≈ 0.09 of the light) from a cloud that has
+fully faded, where before none were drawn. **2 (minor).** The puffs' room-frame lift followed the live cover lift, so on
+decline → change back → accept they sank up to 4 cm with the returning dish and rose again. Each clock now latches the
+highest lift since its capture (`wakeLift`, `uWake[l]`), used by `squeezeFrame` and the box top (a fixed function of time
+was tried and dropped: up to 5 mm off in the 0.5 s decline and 0.1 s early in a 0.3 s one). The accept byte-identical; the
+plain decline identical in 47 of 51 frames (the other four 1–3 px at one level); in the change-back case the puffs' height
+holds at 6.2–6.6 cm where it sank to 3.1. **3 (minor, not taken).** `spillOccupies` capped the gush at p.y < 1.3 su while
+the polish-6 gush box reaches 1.52–1.58 su; the fix (`p.y <= uSpillMax[l].y`) is correct but changes accept frames at
+0.48–0.85 s by up to 21 levels (19–39 k px) for no visible gain — the fog above 1.3 su is invisible (the gush alone changes
+≤ 1 level); the longer ray spans resample the cloud at the same step count (+0.3–0.8 % noise, +0.1–0.3 ms). It stays on the
+branch (c859360) with its test. Three new tests in `tests/dinner-steam.test.ts` (29 in all): the late-decline continuity
+and clock end, the latched lift never falling, (on the branch) the box containing the drawn tube. Evidence:
+`evidence/v1.6/steam-review-fixes/` (before/after sheets for the accept, the two late declines and the change back,
+`measurements.txt`, `tools/`).
+
 ## Decisions
 
 - **A material field, not particles.** Every sample asks where its air came from (the analytic flow's inverse), so

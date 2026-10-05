@@ -133,6 +133,10 @@ unit tests (the Party clearance test, the Sports planning test) timed out under 
   `import('/src/render/sceneDepth.ts')` got a different module instance than the app's (the HMR trap; restart the
   server before the suite or any harness that hooks `Stage.prototype`).
 - **At 7ca077f** (steam polish 7 merged): the Dinner, scene-depth and posters specs 16/16.
+- **At 1796b77 + 5ac3518** (the review's steam fixes 1 and 2 merged, the evidence cherry-picked; fix 3 left on its
+  branch — `docs/scenes/dinner-v1.6-steam.md`, Review fixes): `pnpm typecheck` clean; `dinner-steam` 29, `scene-depth` 6,
+  `dinner` 27; the Dinner, scene-depth and posters specs 16/16 on a fresh server; the Dinner posters byte-identical.
+  FINAL_SUITES_PLACEHOLDER
   The full suites at 7ca077f: `pnpm typecheck` clean, unit **461/461**, browser **116/117** with the one failure the
   known flaky bloom assertion below (the spec passed 3/3 when re-run on the same server).
 - **Dinner pacing, from the judges' own `pace.ts`** (real-time rAF intervals over three whole accepts each, laptop
