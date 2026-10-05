@@ -593,7 +593,8 @@ of a thin feature (a feature's antiderivative over a step with the field taken a
 - (4) Edge anisotropy (DoG 2/8) at 0.54–0.74 s: right wall 1.62–2.11, crown 1.33–1.81, left wall 1.90–2.23
   (1.41–2.06 / 1.30–1.52 / 1.35–1.43). **Not met on the crown**: its band (8–40 px under the top outline) holds the
   wake's tongues and the vertical sheets (gx² > gy²) but also the tops of the tongues and the folds over the crown;
-  a sharper crown band, finer tongues and striations along the rise were tried (1.24–2.0, and the grain rose).
+  a sharper crown band, finer tongues and striations along the rise were tried (1.24–2.0); taller tongues (2 cm) reach
+  1.69–2.18 on the crown but the temporal grain rises to 1.00: the trade-off was left on the grain's side.
 - (5) The dip through the cap, 0.93–1.25 s: **4 / 9 / 8 / 5 / 5 / 5 / 0 / 3 / 3 / 0** (10 / 10 / 13 / 13 / 10 / 9 / 4 / 6 / 3
   / 0). The two left over 5, at 0.96 and 0.99 s, are the lifted cloche's shadow across the cloud's lower left (luma
   202–210 at rows 660–737, x 560–640; `tools/dipwhere.py`), not a hole: the cap is joined to the plate.
