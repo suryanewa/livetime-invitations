@@ -643,18 +643,26 @@ export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infin
  * as it ages; at the boundary the mixing layer keeps a thin sheet (`sheet`, `sheetWidth`): steam's
  * bright folds. `warp` folds the lobes by the large field.
  */
-export interface CloudLook { amp: number; band: number; billow: number; warp: number; core: number; sheet: number; sheetWidth: number; capCore: number }
-export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, band: 0, billow: 0, warp: 0, core: 0, sheet: 0, sheetWidth: 0, capCore: 0 }, peel = 0): CloudLook {
+export interface CloudLook { amp: number; band: number; billow: number; warp: number; core: number; sheet: number; sheetWidth: number; capCore: number; fold: number; foldWidth: number; haze: number }
+export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, band: 0, billow: 0, warp: 0, core: 0, sheet: 0, sheetWidth: 0, capCore: 0, fold: 0, foldWidth: 0, haze: 0 }, peel = 0): CloudLook {
   out.amp = 0.008 + 0.07 * smooth(0.35, 1.5, age);
   out.band = 0.015 + 0.065 * smooth(0.3, 1.3, age);
   // (v1.6 polish 2: from the lift-off the outer layer peels and billows; the bulk keeps the dome's shape.)
   out.billow = Math.max(0.028 + EDGE.billow * peel, 0.028 + 0.042 * smooth(0.25, 1.3, age));
-  out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
+  // (v1.6 polish 4: the sheets curve and fold with the large field from the start: 0.5 → 0.9 young.)
+  out.warp = 0.9 + 0.9 * smooth(0.25, 1.5, age);
   out.core = 0.2 + (0.03 - 0.2) * smooth(0.15, 0.72, age);
-  out.sheet = 1.5 - 0.75 * smooth(0.15, 0.5, age) - 0.6 * smooth(0.4, 0.8, age);
+  // (v1.6 polish 4: the skin is light: a dense mixing skin round a thin body read as a bubble, the limb denser than the core.)
+  out.sheet = 0.6 - 0.3 * smooth(0.15, 0.5, age) - 0.2 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
   // (v1.6 polish 3) The cap's fog: the stem and base empty, the cap keeps its own (a filled mushroom, not a ring).
   out.capCore = 0.24 - 0.13 * smooth(0.25, 0.7, age) - 0.07 * smooth(0.65, 1.0, age);
+  // (v1.6 polish 4: the structural round) The body is thin, dense sheets with clear air between: the zero set of
+  // the sheet field (drawn out along the rise, folded with the air), `fold` times the core's density inside a
+  // sheet, `foldWidth` its half-width in the field's units (≈ 2 mm), `haze` the share of the core between them.
+  out.fold = 30;
+  out.foldWidth = 0.1;
+  out.haze = 0.15 - 0.05 * smooth(0.3, 1.0, age);
   return out;
 }
 

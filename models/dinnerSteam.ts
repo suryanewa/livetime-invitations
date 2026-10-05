@@ -219,7 +219,9 @@ float worleyFbm(vec3 p, int n, int seed) {
 void main() {
   vec3 p = vec3(vUv, (uLayer + 0.5) / ${NOISE_SIZE}.0);
   float a = perlinFbm(p, 4, 11);
-  float b = perlinFbm(p, 4, 23);
+  // (v1.6 polish 4: the sheet field. Its zero set is the steam's sheets: two octaves only, so each sheet is a
+  // smooth surface folded at the cell's scale, not wrinkled into felt by a third octave.)
+  float b = 0.8 * perlin(p, 4, 23) + 0.2 * perlin(p, 8, 24);
   // Perlin-Worley: billows with irregular, connected structure (Schneider, Nubis).
   float w = worleyFbm(p, 4, 37);
   float pw = clamp((0.5 + 0.5 * perlinFbm(p, 4, 41)) * 0.55 + w * 0.65 - 0.1, 0.0, 1.0);
@@ -478,6 +480,14 @@ uniform vec4 uR[${STEAM_LAYERS}];
 uniform vec4 uH[${STEAM_LAYERS}];
 /** Per clock (v1.6 polish 3): the cap's own fog (the crown closes over the ring), -, -, -. */
 uniform vec4 uK[${STEAM_LAYERS}];
+/** Per clock (v1.6 polish 4): the body's sheets: their density over the core's, their half-width (sheet-field units), the haze between them, -. */
+uniform vec4 uM[${STEAM_LAYERS}];
+/**
+ * (v1.6 polish 4) The march's current step (su), and per clock the sheet field's signed value at the ray's last
+ * sample (9: none): a sheet the step jumped is integrated analytically where the field changes sign.
+ */
+float gStep = 0.0;
+float gSheetPrev[${STEAM_LAYERS}];
 /** Per clock: the spill's source at τ − k·dt (k = 0..7, faded), and whether there is any. */
 uniform vec4 uSp0[${STEAM_LAYERS}];
 uniform vec4 uSp1[${STEAM_LAYERS}];
@@ -784,11 +794,11 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   vec2 rr = vec2(rho - uR[l].x, q.y - uR[l].y) / (0.75 * uR[l].z);
   float ring = uR[l].w * exp(-dot(rr, rr));
   // (Outside the edge's furthest reach: the dilated occupancy.)
-  if (m.a <= 1e-4) return 0.0;
+  if (m.a <= 1e-4) { gSheetPrev[l] = 9.0; return 0.0; }
   vec4 H = uH[l];
   // (Further outside the wall than the swell, the billows and the peeling layer can reach: clear, before any noise.)
   float dw = seatDistance(m.r, m.g);
-  if (dw < -(E.x + 1.3 * E.z + 2.6 * H.x + 0.01)) return 0.0;
+  if (dw < -(E.x + 1.3 * E.z + 2.6 * H.x + 0.01)) { gSheetPrev[l] = 9.0; return 0.0; }
   vec2 dir = rho > 1e-5 ? q.xz / rho : vec2(1.0, 0.0);
   // (Plan direction in x/z, height in y.)
   vec3 X = vec3(dir.x * m.r, m.g, dir.y * m.r);
@@ -816,6 +826,13 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
     dw = min(dw, dU);
   }
   float dEff = dw + E.z * (lobes - 0.5) * 2.0 + E.x * (n1.r - 0.5) * 2.0;
+  // (v1.6 polish 4) The crown's wake: the lifting dome drew the crown's air up after it, and its sheets with it:
+  // the top's boundary is drawn out into upward tongues ≈ 5 mm across and up to ≈ 1.5 cm tall (a field fast
+  // across, slow along the rise), strongest on the axis, where the drag was; carried with the air as it rises.
+  if (uK[l].y > 0.0) {
+    float crown = smoothstep(${f(CLOUD.rim + 0.25)}, ${f(CLOUD.rim + 0.55)}, m.g) * (1.0 - 0.6 * min(1.0, m.r * m.r / ${f(CLOUD.radius * CLOUD.radius)}));
+    if (crown > 0.0) dEff += uK[l].y * crown * (texture(uNoise, vec3(X.x * 5.0, X.y * 0.7, X.z * 5.0) + vec3(0.29, 0.61, 0.13)).g - 0.45) * 2.0;
+  }
   // v1.6 polish 2: the peeling layer, on the edge band only. From the lift-off the outer centimetre
   // or two is a shear layer (the room's air sliding down the wall and in, the cloud's drawn up): the
   // dense boundary takes its own lobes (≈ 1.3 cm Worley bulges: rounded, so seen edge-on each keeps
@@ -846,7 +863,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   }
   float dShade = dEff;
   dEff += fineD;
-  if (dEff < -0.06 && wisp <= 0.0) return 0.0;
+  if (dEff < -0.06 && wisp <= 0.0) { gSheetPrev[l] = 9.0; return 0.0; }
   // v1.6 polish 2: the underside is no crisp line. The undercut's head mixes the room's air into the
   // fog's foot, and as the thermal rises its stem and the wall material that rolls under the cap
   // dilute and evaporate over the hot plate: their band is ≈ 1.7 cm (the judge's torn-paper
@@ -859,11 +876,33 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   float sh = (dEff - band) / F.z;
   // (v1.6 polish 3) Inside, a thin fog folded into sheets drawn out along the rise (the ridges of the
   // billows' own gradient noise): translucent, its structure carried with the air.
-  float folds = smoothstep(0.5, 0.95, 1.0 - abs(2.0 * nb.g - 1.0));
+  // (v1.6 polish 4: the structural round) Inside, thin dense sheets with clear air between: the zero set of the
+  // sheet field (nb.g: two smooth octaves, read in the billows' frame, drawn out 4× along the rise and folded by the
+  // large field, carried, stretched and rolled with the air), a sheet ≈ 2–4 mm thick where |g| < foldWidth. The
+  // sheet is filtered to the march's step (a step jumps ≈ 22·h of the field: the sheet widens to it and thins in
+  // proportion, so its optical depth is kept and no step skips it), then eroded at its edges into strands by the
+  // detail (Schneider's remap).
+  // A thin sheet seen face-on by a step longer than it is thick is not sampled but integrated: where the field's
+  // sign changed since the ray's last sample the step crossed a sheet, whose optical depth is its density times
+  // its width in the field over the field's change per unit length (∫ profile db / |db/dt|); where the step
+  // resolves the sheet (the field changed by less than its width) it is point-sampled. Edge-on, the field hardly
+  // changes along the ray: the sheet is sampled at full density all along it (a bright fold line).
+  vec4 M = uM[l];
+  // (The sheet field's own frame: cells ≈ 3.7 cm across and 2.7× that along the rise, so a ray through the body
+  // crosses a few sheets, not a fur of them; folded by the large field.)
+  vec3 Xh = X * vec3(1.15, 0.42, 1.15) + (n1.rgb - 0.5) * (0.6 * E.w) + vec3(0.13, 0.17 + 0.03 * tau, 0.71);
+  float sb = 2.0 * texture(uNoise, Xh).g - 1.0, bp = gSheetPrev[l];
+  gSheetPrev[l] = sb;
+  float db = bp < 8.0 ? abs(sb - bp) : 0.0;
+  float wx = smoothstep(0.7 * M.y, 2.0 * M.y, db);
+  float folds = (1.0 - wx) * (1.0 - smoothstep(0.0, M.y, abs(sb))) + (sb * bp < 0.0 ? wx * min(M.y / max(db, 1e-4), 1.0) : 0.0);
+  // (Intermittent: the sheets gather where the large field is high, with clear air between; torn: holes open in
+  // them where the detail is low, so they read as veils and strands.)
+  folds *= smoothstep(0.3, 0.55, n1.b) * smoothstep(0.15, 0.4, nb.a + 0.25 * (n1.g - 0.5));
   // (v1.6 polish 3) The cap keeps its own fog as the stem and base empty: the crown closes over the
   // ring (the judge's hollow doughnut), the warm core that feeds the cap still rising through it.
   float core = mix(F.x, max(F.x, uK[l].x), max(smoothstep(0.32, 0.55, m.g), 1.0 - smoothstep(0.14, 0.36, m.r)));
-  float d = (core * (0.55 + 1.3 * folds) * (0.7 + 0.6 * (n1.g - 0.5)) + F.y * exp(-sh * sh) * (0.3 + 1.4 * strips)) * edge + wisp;
+  float d = (core * (M.z + M.x * folds) + F.y * exp(-sh * sh) * (0.3 + 1.4 * strips)) * edge + wisp;
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
   // sheets gather into a few larger wisps.
@@ -988,7 +1027,7 @@ float meanAt(vec3 p) {
     if (uA[l].y <= 0.0) continue;
     // (The veil's mean overstates a few thin ribbons' shade: a third of it.)
     // (The cloud's visible share: its fog, and a part of its sheets, as it empties with age.)
-    m += (cloudMean(p, l) * clamp(uF[l].x + 0.35 * uF[l].y, 0.1, 1.6) + 0.35 * veilMean(p, l)) * uA[l].z;
+    m += (cloudMean(p, l) * clamp(uM[l].w, 0.05, 2.0) + 0.35 * veilMean(p, l)) * uA[l].z;
   }
   return m;
 }
@@ -1035,7 +1074,8 @@ float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising
     bool inCloud = all(greaterThanEqual(p, uCloudMin[l])) && all(lessThanEqual(p, uCloudMax[l]));
     bool inVeil = all(greaterThanEqual(p, uVeilMin[l])) && all(lessThanEqual(p, uVeilMax[l]));
     bool inSpill = all(greaterThanEqual(p, uSpillMin[l])) && all(lessThanEqual(p, uSpillMax[l]));
-    float dc = inCloud && uDebug != 3 && uDebug != 5 && (uFlags & 131072) == 0 ? cloud(p, l, detail, L, so) : 0.0;
+    float dc = 0.0;
+    if (inCloud && uDebug != 3 && uDebug != 5 && (uFlags & 131072) == 0) dc = cloud(p, l, detail, L, so); else gSheetPrev[l] = 9.0;
     float dr = (inSpill ? spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 && (uFlags & 65536) == 0 ? veil(p, l, detail) : 0.0);
     // (The seating's puffs leave the cover: what it closes over does not hold them.)
     float dq = inSpill ? squeeze(p, l) * uA[l].z : 0.0;
@@ -1140,9 +1180,11 @@ void main() {
   // the history could not average out), back to the span's share in thin steam; at most twice the
   // step count, and the dense fog ends the ray soon anyway.
   float h = dt;
+  for (int l = 0; l < ${STEAM_LAYERS}; l++) gSheetPrev[l] = 9.0;
   for (int i = 0; i < 128; i++) {
     if (i >= 2 * steps || t > a1 || T < ((uFlags & 32768) != 0 ? 0.05 : 0.02)) break;
     vec3 p = ro + rd * t;
+    gStep = h;
     float localOd, rising;
     float dens = sampleAt(p, L, detail, localOd, rising);
     float seg = h;
@@ -1592,7 +1634,7 @@ export class DinnerSteam {
       uLift: { value: 0 },
       uSeated: { value: new Vector3() },
       uLight: { value: this.light.texture },
-      uR: { value: v4() }, uH: { value: v4() }, uK: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uGp0: { value: v4() }, uGp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] },
+      uR: { value: v4() }, uH: { value: v4() }, uK: { value: v4() }, uM: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uGp0: { value: v4() }, uGp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] },
     };
     this.lightMaterial = new ShaderMaterial({
       name: 'fx_steam_light', uniforms: this.uniforms, vertexShader: FULLSCREEN_VERTEX, fragmentShader: LIGHT_FRAGMENT, depthTest: false, depthWrite: false, toneMapped: false,
@@ -1814,7 +1856,7 @@ export class DinnerSteam {
     const A = this.uniforms.uA!.value as Vector4[], B = this.uniforms.uB!.value as Vector4[];
     const Cc = this.uniforms.uC!.value as Vector4[], D = this.uniforms.uD!.value as Vector4[];
     const E = this.uniforms.uE!.value as Vector4[], F = this.uniforms.uF!.value as Vector4[], R = this.uniforms.uR!.value as Vector4[];
-    const Hh = this.uniforms.uH!.value as Vector4[], K = this.uniforms.uK!.value as Vector4[];
+    const Hh = this.uniforms.uH!.value as Vector4[], K = this.uniforms.uK!.value as Vector4[], M = this.uniforms.uM!.value as Vector4[];
     const G = this.uniforms.uSp0!.value as Vector4[], H = this.uniforms.uSp1!.value as Vector4[];
     const Gp0 = this.uniforms.uGp0!.value as Vector4[], Gp1 = this.uniforms.uGp1!.value as Vector4[];
     const spillOn = this.uniforms.uSpillOn!.value as number[];
@@ -1862,7 +1904,10 @@ export class DinnerSteam {
       // (The fine curls belong to the young edge: as the band widens they would read as a felt over the aging cap.)
       Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.25) / 0.2)), s.peel, s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
-      K[l]!.set(look.capCore, 0, 0, 0);
+      K[l]!.set(look.capCore, Math.min(0.09, 0.6 * s.dragUp) * (1 - smoothstep01((s.age - 0.15) / 0.35)), 0, 0);
+      // (The body's mean density over the core's, for the light volume: the haze, the sheets' share of the volume
+      // (≈ 1.6 × their half-width: the field's density at zero) less the holes torn in them, and the skin.)
+      M[l]!.set(look.fold, look.foldWidth, look.haze, look.core * (look.haze + look.fold * look.foldWidth * 1.6 * 0.7) + 0.35 * look.sheet);
       // (The ring holds fog once it has rolled up, until the cloud has gone.)
       // (v1.6 polish 2: its core holds its fog from ≈ 0.25 s of the thermal, tears from ≈ 0.45 s and has
       // evaporated by ≈ 1.6 s; with the cloud's fade.)
