@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Color, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
-import { blackbodyAt, createFlameMaterial, SMOKE_RADIANCE, sootRadiance } from '../src/render/flame.ts';
+import { blackbodyAt, createFlameMaterial, FLAME_FOOT, SMOKE_RADIANCE, sootRadiance } from '../src/render/flame.ts';
 import { rigBirthday } from '../models/birthday.ts';
 import { CANDLE_LIGHT, flameLightColor, SMOKE_RIBBON_POINTS, waxGlowColor } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
@@ -34,7 +34,7 @@ const MPS = 5;
 describe('Birthday fire: the flame', () => {
   it('is a birthday candle flame on a short wick: 15–18 mm from the pool, 4.5–5.5 mm wide, its luminous foot wrapping the wick\'s tip; each a little different', () => {
     // v1.6 polish (judge: "a flame on a stick"): ±12 % (stratified), a 3 mm burning wick under a
-    // 15.5 mm flame, the luminous zone's foot 1.2 mm under the wick's tip, widest 1 mm over it.
+    // 15.5 mm flame, the luminous zone's foot under the wick's tip (wrapping it), widest 1 mm over it.
     const sizes = Array.from({ length: CANDLE_COUNT }, (_, i) => flameScale(i));
     expect(Math.min(...sizes)).toBeGreaterThanOrEqual(0.86);
     expect(Math.max(...sizes)).toBeLessThanOrEqual(1.14);
@@ -45,13 +45,18 @@ describe('Birthday fire: the flame', () => {
     expect((2 * FLAME_REST.radius) / MM).toBeGreaterThanOrEqual(4.5);
     expect((2 * FLAME_REST.radius) / MM).toBeLessThanOrEqual(5.5);
     expect((WICK_TIP_Y - POOL_Y) / MM).toBeCloseTo(3, 6);
-    // v1.6 polish 2: the luminous zone's foot 0.4 mm over the wick's tip (its soot forms there, the
-    // white-yellow core 1–1.5 mm over the tip); under it, the lowest ≈15–20 % of the flame is its dim
-    // blue zone (re-judge: the foot 1.2 mm under the tip drew an orange collar).
-    expect((FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length - WICK_TIP_Y) / MM).toBeCloseTo(0.4, 6);
-    const blue = (FLAME_REST.foot * FLAME_REST.length) / FLAME_REST.length;
-    expect(blue).toBeGreaterThan(0.15);
-    expect(blue).toBeLessThan(0.22);
+    // v1.6 polish 3 (judge 3: the flame hovered over its wick, 1.5 mm of frosting between the bead and
+    // the flame): the luminous zone's foot 0.8 mm under the wick's tip, wrapping it, its soot forming
+    // dim over ≈ 1.7 mm (FLAME_FOOT.ramp), so the wick is seen through a dim lower zone and the
+    // white-yellow body starts ≈ 1 mm over the tip (polish 2's foot 1.2 mm under the tip with its soot
+    // formed at once drew an orange collar; 0.4 mm over it, the hover).
+    expect((WICK_TIP_Y - (FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length)) / MM).toBeCloseTo(0.8, 6);
+    const formed = FLAME_REST.base + (FLAME_REST.foot + FLAME_FOOT.ramp) * FLAME_REST.length - WICK_TIP_Y;
+    expect(formed / MM).toBeGreaterThan(0.6);
+    expect(formed / MM).toBeLessThan(1.5);
+    const blue = FLAME_REST.foot;
+    expect(blue).toBeGreaterThan(0.06);
+    expect(blue).toBeLessThan(0.15);
     expect((FLAME_REST.base + FLAME_REST.widest * FLAME_REST.length - WICK_TIP_Y) / MM).toBeCloseTo(1, 6);
     // The bare wick under the luminous zone is at most a quarter of the flame seen above the pool.
     expect((FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length - POOL_Y) / top).toBeLessThan(0.25);

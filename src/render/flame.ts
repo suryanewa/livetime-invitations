@@ -111,6 +111,8 @@ export interface FlameUniforms {
   uWick: { value: Vector3 };
   /** The wick inside the flame, from its foot to its (curled) tip, and its radius: it hides the flame behind it. */
   uWickFoot: { value: Vector3 };
+  /** v1.6 polish 3: a point on the curled wick between its foot and its tip (the curl is a cubic: two capsules follow it). */
+  uWickMid: { value: Vector3 };
   uWickR: { value: number };
   uEmber: { value: number };
   uPhase: { value: number };
@@ -166,9 +168,10 @@ export const FLAME_BLOOM_FLOOR = { sigma: 1.1, floor: 36, fade: [18, 60] as cons
 
 /**
  * v1.6 polish 2: the luminous zone's foot: its rounded bottom `dome` of the zone tall (it was 0.32: a
- * 4 mm bowl) and the soot forming over `ramp` of the flame's length above its foot (≈ 0.3 mm).
+ * 4 mm bowl) and the soot forming over `ramp` of the flame's length above its foot (v1.6 polish 3:
+ * ≈ 1.7 mm, was 0.47: the foot now wraps the wick's tip, dim, the soot formed ≈ 1 mm over the tip).
  */
-export const FLAME_FOOT = { dome: 0.22, ramp: 0.03 } as const;
+export const FLAME_FOOT = { dome: 0.22, ramp: 0.11 } as const;
 
 /**
  * v1.6 polish 2: the blue sheath as the camera sees it over a lit room: a deep blue (`rgb`, display)
@@ -192,6 +195,7 @@ const FLAME_FRAGMENT = /* glsl */ `
   uniform vec2 uBreath;
   uniform vec3 uWick;
   uniform vec3 uWickFoot;
+  uniform vec3 uWickMid;
   uniform float uWickR;
   uniform float uEmber;
   uniform float uPhase;
@@ -428,8 +432,11 @@ const FLAME_FRAGMENT = /* glsl */ `
     float t1 = min(min(tf.x, tf.y), tf.z);
     // The wick hides the flame behind it (it is drawn already, opaque); in front of it lies a
     // hair's breadth of the blue sheath (v1.5 judge: a wick seen through blue read purple).
-    t1 = min(t1, rayCapsule(ro, rd, uWickFoot, uWick, uWickR));
-    gBlue = 0.2 + 0.8 * smoothstep(1.4 * uWickR, 2.6 * uWickR, raySegment(ro, rd, uWickFoot, uWick));
+    // (v1.6 polish 3: along the curled wick, two capsules, the upper a little thinner than the
+    // tapered tip: a straight one from the foot to the curled tip left the background showing through
+    // the flame beside the tip once the luminous zone wrapped it.)
+    t1 = min(t1, min(rayCapsule(ro, rd, uWickFoot, uWickMid, uWickR), rayCapsule(ro, rd, uWickMid, uWick, 0.8 * uWickR)));
+    gBlue = 0.2 + 0.8 * smoothstep(1.4 * uWickR, 2.6 * uWickR, min(raySegment(ro, rd, uWickFoot, uWickMid), raySegment(ro, rd, uWickMid, uWick)));
     vec3 Lbl = vec3(0.0);
     if (t1 > t0 && (intensity > 1e-4 || uBreath.y > 1e-3)) {
       float dt = (t1 - t0) / float(STEPS);
@@ -556,6 +563,7 @@ export function createFlameMaterial(name: string): ShaderMaterial & { uniforms: 
     uBreath: { value: new Vector2(0, 1) },
     uWick: { value: new Vector3() },
     uWickFoot: { value: new Vector3() },
+    uWickMid: { value: new Vector3() },
     uWickR: { value: 0.0015 },
     uEmber: { value: 0 },
     uPhase: { value: 0 },
