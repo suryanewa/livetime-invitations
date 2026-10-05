@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Color, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
-import { blackbodyAt, createFlameMaterial, FLAME_FOOT, SMOKE_RADIANCE, sootRadiance } from '../src/render/flame.ts';
+import { blackbodyAt, createFlameMaterial, FLAME_FOOT, liftOffSeen, SMOKE_RADIANCE, sootRadiance } from '../src/render/flame.ts';
 import { rigBirthday } from '../models/birthday.ts';
 import { CANDLE_LIGHT, flameLightColor, SMOKE_RIBBON_POINTS, waxGlowColor } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
@@ -470,12 +470,13 @@ describe('Birthday fire: the smoke', () => {
       expect(maxH).toBeLessThan(2);
       expect(minW).toBeLessThan(0.62);
       expect(maxBend).toBeGreaterThan(0.3);
-      // v1.6 polish 2: off the wick it is a dim wisp within one frame: what the shader draws of it,
-      // its output × (1 − cool)^5, under a third 8 ms after lift-off and under 1 % at 16 ms (re-judge:
-      // a golden sliver with a white core drifted for 2–3 frames).
-      const seen = (ms: number) => { const f = flameState(i, b.lift + ms / 1000, 'accept'); return f.intensity * (1 - f.cool) ** 5; };
-      expect(seen(8)).toBeLessThan(0.3);
-      expect(seen(16)).toBeLessThan(0.01);
+      // v1.6 polish 2: off the wick it is a dim wisp within one frame: what the shader draws of it
+      // (liftOffSeen). v1.6 polish 3 (judge 3: one frame ≈ 9 ms after lift-off still a golden sliver
+      // at full display strength): under 5 % 8 ms after lift-off, nothing from 12 ms.
+      const seen = (ms: number) => { const f = flameState(i, b.lift + ms / 1000, 'accept'); return f.intensity * liftOffSeen(f.cool); };
+      expect(seen(2)).toBeGreaterThan(0.6);
+      expect(seen(8)).toBeLessThan(0.05);
+      expect(seen(12)).toBeLessThan(1e-3);
       // Gone within 50 ms of lift-off (its light and its soot), never drifting off as a whole flame.
       const at50 = flameState(i, b.lift + 0.05, 'accept');
       expect(at50.intensity).toBeLessThan(0.02);
