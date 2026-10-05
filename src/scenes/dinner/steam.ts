@@ -92,8 +92,11 @@ export const CLOUD = {
   dragHeld: 0.2,
   /** The dome's horizontal offset (su) over which it stops dragging: still over the cloud → clear of it. */
   overlap: [0.15, 0.7] as const,
-  /** The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s. */
-  riseW: 2.4,
+  /**
+   * The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s.
+   * (v1.6 polish 6: 2.4 → 2.3, so the thinning cap stays in the frame a beat longer; the centroid still rises ≈ 6.5 cm by 1.2 s.)
+   */
+  riseW: 2.3,
   riseStart: 0.5,
   riseMix: 1.6,
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
@@ -107,10 +110,14 @@ export const CLOUD = {
   centre: 0.25,
   /** The stem and base evaporate (up to this share) as the uncovered plate re-heats them. */
   stemFade: 1.0,
-  /** The vortex ring's core in the cloud at the seat: (share of the radius, height su). */
-  ringAt: [0.78, 0.34] as const,
-  /** The vortex ring: its roll (rad) and time constant (s), its core's reach (su). */
-  roll: 5.2,
+  /**
+   * The vortex ring's core in the cloud at the seat: (share of the radius, height su). (v1.6 polish 6: 0.34 → 0.38, inside
+   * the cap's body rather than at its underside, which the thermal stretches into the stem: the sixth judge's smoke ring,
+   * its centre 0.35–0.45 of its rims.)
+   */
+  ringAt: [0.78, 0.38] as const,
+  /** The vortex ring: its roll (rad) and time constant (s), its core's reach (su). (v1.6 polish 6: 5.2 → 3.0: a rolled lip, not a doughnut.) */
+  roll: 3.0,
   rollTime: 0.7,
   ringCore: 0.2,
   /** The base's outward slump over the plate's rim (su) and its time constant (s). */
@@ -121,14 +128,31 @@ export const CLOUD = {
   turbTime: 1.0,
   /** The room's draught leans the rising cloud (su of lean per su of height). */
   lean: 0.07,
-  /** Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). */
-  erode: [0.3, 1.8] as const,
-  /** The cloud is gone by this age (s), faded out over the last `fadeOut`. */
-  life: 2.0,
-  fadeOut: 0.6,
+  /**
+   * Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). (v1.6 polish 6:
+   * 1.8 → 2.2, and from the edges in (the shader's `ERODE_CORE`): the cloud's mass now goes with its receding edge and
+   * its thinning fog, not with holes opening all through it: the sixth judge's cross-dissolve in place.)
+   */
+  erode: [0.3, 2.2] as const,
+  /**
+   * The cloud is gone by this age (s), faded out over the last `fadeOut`. (v1.6 polish 6: 2.0 / 0.6 → 2.4 / 1.0: what is
+   * left of the thinned cap goes slowly, no 0.3 s losing half of it.)
+   */
+  life: 2.4,
+  fadeOut: 1.0,
   /** Visible steam evaporates as it rises: e^(−(y − evapFrom)/evaporate) above evapFrom (su). */
   evapFrom: 1.5,
   evaporate: 1.5,
+  /**
+   * (v1.6 polish 6; the sixth judge: "past one second the cloud behaves like smoke, not condensate") The condensate's
+   * edge evaporates from the moment it meets the room's dry air: the visible boundary recedes into the cloud (su of
+   * material, at the seat) by up to `recede`, from `recedeTime[0]` of the thermal clock with time constant
+   * `recedeTime[1]` (≈ 1.7 cm by 1.0 s, 3.3 cm by 1.4 s), so the cloud thins from its edges in.
+   */
+  recede: 0.24,
+  recedeTime: [0.3, 0.4] as const,
+  /** The crown (the thermal's leading face, which pushes the room's air aside) recedes by this share less than its sides and base. */
+  recedeCrown: 0.7,
 } as const;
 
 /**
@@ -168,11 +192,17 @@ export const SPILL = {
   spread: 0.8,
   /** Its source: the raised rim's gap (su) at which it is full. */
   fullGap: 0.09,
-  /** It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). */
-  stop: [0.24, 0.3] as const,
+  /**
+   * It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). (v1.6 polish 6: 0.24–0.3 →
+   * 0.2–0.36: carried on to 0.66 s, the end of its feed swept through the shader's parcels in four frames and took 43 % of
+   * the rising puff in one.)
+   */
+  stop: [0.2, 0.36] as const,
   /** (v1.6 polish 3: the gush rises on and mixes in after the lift-off, gone by 0.56 s; polish 5: by 0.5 s, its last tenth's
-   * light, when it cost 2.7 ms of the judges' 1400² frame at the march's finer resolution.) */
-  fade: [0.34, 0.5] as const,
+   * light, when it cost 2.7 ms of the judges' 1400² frame at the march's finer resolution; polish 6: over 0.42–0.66 s, the
+   * sixth judge's "airbrushed blob that dissolves in place": its puff is carried up and out ≈ 4–6 cm on its parcels before it
+   * fades, the cost found in the march's budget.) */
+  fade: [0.42, 0.66] as const,
   /** The shader samples its source at this many past times, this far apart (s). */
   samples: 8,
   dt: 0.075,
@@ -230,8 +260,8 @@ export const VEIL = {
   t0: 0.3,
   ramp: 0.3,
   /** The first rush decays over `decay`; a `tail` share decays over `tailDecay` (s). */
-  decay: 0.4,
-  tail: 0.55,
+  decay: 0.8,
+  tail: 0.5,
   tailDecay: 1.6,
   /** Visible density goes as the flow to this power (thin steam keeps a few bright ribbons), and the plate stops steaming visibly between these τ. */
   gather: 0.4,
@@ -247,8 +277,11 @@ export const VEIL = {
   /** Its radius at the well and growth per su of height. */
   radius: 0.36,
   spread: 0.32,
-  /** Evaporation with height (su). */
-  evaporate: 0.85,
+  /**
+   * Evaporation with height (su). (v1.6 polish 6: 0.85 → 0.7, its first rush 0.4 → 0.8 s and its tail 0.55 → 0.5: the
+   * plate breathes on steadily, lower, as the cloud thins away above it, rather than a column climbing into view.)
+   */
+  evaporate: 0.7,
   /** Mean density of the veil at its source (the cloud's is 1). */
   strength: 1.6,
 } as const;
@@ -345,12 +378,14 @@ export interface CloudState {
   peel: number;
   undercutReach: number;
   undercutHeight: number;
+  /** (v1.6 polish 6) How far the visible boundary has receded into the cloud (material su). */
+  recede: number;
 }
 
 export function newCloudState(): CloudState {
   return {
     present: false, tau: 0, age: 0, dragUp: 0, dragSide: new Vector2(), rise: 0, squash: 0, cap: 1, stem: 1, skirt: 0, roll: 0, ringR: 0.4, ringY: 0.5, ringSigma: CLOUD.ringCore,
-    turb: CLOUD.turb[0], lean: new Vector2(), erode: 0, fade: 1, floor: CLOUD.floor, stemFade: 0, peel: 0, undercutReach: 0, undercutHeight: 0,
+    turb: CLOUD.turb[0], lean: new Vector2(), erode: 0, fade: 1, floor: CLOUD.floor, stemFade: 0, peel: 0, undercutReach: 0, undercutHeight: 0, recede: 0,
   };
 }
 
@@ -403,8 +438,10 @@ export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinit
   out.stem = 1 - CLOUD.stem * smooth(0.1, 1.3, a);
   out.skirt = CLOUD.skirt * (1 - Math.exp(-a / CLOUD.skirtTime)) * smooth(0.25, 0.65, a);
   out.roll = CLOUD.roll * (1 - Math.exp(-a / CLOUD.rollTime)) * smooth(0.1, 0.5, a);
-  // The ring's core sits inside the cap's edge (where the dome's shoulder was), carried with it.
-  const Ys = CLOUD.ringAt[1], Ps = CLOUD.ringAt[0] * CLOUD.radius;
+  // The ring's core sits inside the cap's edge (where the dome's shoulder was), carried with it. (v1.6 polish 6: inside
+  // the visible edge as it recedes: the lip is the condensate's rolled edge, not a ring left standing outside it.)
+  out.recede = CLOUD.recede * (1 - Math.exp(-Math.max(0, a - CLOUD.recedeTime[0]) / CLOUD.recedeTime[1]));
+  const Ys = CLOUD.ringAt[1], Ps = CLOUD.ringAt[0] * CLOUD.radius - out.recede;
   out.ringR = Ps * out.cap;
   out.ringY = Ys + U * riseWeight(Ys) * centreWeight(Ps) + out.dragUp * dragWeight(Ys) * dragCentre(Ps) - out.squash * capIntegral(Ys);
   out.ringSigma = CLOUD.ringCore * (1 + 0.4 * (out.cap - 1));
@@ -538,15 +575,18 @@ export function cloudMaterial(p: Vector3, s: CloudState, out: CloudMaterial = { 
   return out;
 }
 
+/** (v1.6 polish 6) The share of the recession at material (r, Y): the crown's leading face recedes least. */
+export const recedeWeight = (r: number, Y: number) => 1 - CLOUD.recedeCrown * smooth(CLOUD.rim + 0.3, CLOUD.rim + 0.55, Y) * (1 - Math.min(1, (r / CLOUD.radius) ** 2));
 /** The cloud at the seat: the dome's cavity, soft at the wall, clear over the porcelain (0..1, no noise). */
-export function cloudSeat(X: Vector3, floor: number = CLOUD.floor, under = 0): number {
+export function cloudSeat(X: Vector3, floor: number = CLOUD.floor, under = 0, recede = 0): number {
   const r = Math.hypot(X.x, X.z);
   const q = X.y - CLOUD.rim;
   const { radius: R, height: H, power: pw } = CLOUD;
   // A normalised distance to the cavity's wall (≈ su near it): the superellipse's p-norm radius.
   const k = q > 0 ? Math.pow(Math.pow(r / R, pw) + Math.pow(q / H, pw), 1 / pw) : r / R;
   const d = (1 - k) * Math.min(R, H);
-  const inside = smooth(0, CLOUD.wall, d);
+  const rec = recede * recedeWeight(r, X.y);
+  const inside = smooth(rec, rec + CLOUD.wall, d);
   // (v1.6 polish 2: the room's air under the base is a boundary like the wall.)
   const hp = X.y - plateTop(Math.min(r, PLATE.radius));
   const above = smooth(0, floor, hp) * (under > 0 ? smooth(under, under + CLOUD.wall, hp) : 1);
@@ -565,7 +605,7 @@ export function cloudDensity(p: Vector3, s: CloudState): number {
   cloudMaterial(p, s, mat);
   // (Never in the porcelain: the flow's roll can carry the edge of the base down onto it.)
   const above = smooth(0, 0.012, p.y - slumpSurface(Math.hypot(p.x, p.z)));
-  return cloudSeat(mat.X, s.floor, undercutAt(Math.hypot(mat.X.x, mat.X.z), s)) * Math.min(1, mat.dilution) * evaporation(p.y) * s.fade * above;
+  return cloudSeat(mat.X, s.floor, undercutAt(Math.hypot(mat.X.x, mat.X.z), s), s.recede) * Math.min(1, mat.dilution) * evaporation(p.y) * s.fade * above;
 }
 
 // ── The veil: the plate's thin column ─────────────────────────────────────────
@@ -687,7 +727,8 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   // (v1.6 polish 4: the sheets curve and fold with the large field from the start: 0.5 → 0.9 young.)
   out.warp = 0.9 + 0.9 * smooth(0.25, 1.5, age);
   // (v1.6 polish 5: 0.2 → 0.19 young, with the base's share: the held dome, less stretched by the drag, was denser.)
-  out.core = 0.19 + (0.03 - 0.19) * smooth(0.15, 0.72, age);
+  // (v1.6 polish 6: it empties over 0.25–0.75 s of the thermal, was 0.15–0.72: the visible mass peaks at ≈ 0.75 s.)
+  out.core = 0.19 + (0.03 - 0.19) * smooth(0.25, 0.75, age);
   // (v1.6 polish 4: the skin is light: a dense mixing skin round a thin body read as a bubble, the limb denser than the core.)
   out.sheet = 0.3 - 0.15 * smooth(0.15, 0.5, age) - 0.1 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
@@ -695,7 +736,11 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   // (v1.6 polish 5: young 0.24 → 0.17, with the core: the held dome, less stretched by the drag, was denser; then the cap,
   // which now holds the air the thermal carries up from the dome's lower half too, gathers the dome's fog as the core
   // empties, 0.25 by 0.75 s of the thermal, and keeps it as it rises away, to ≈ 1.4 s.)
-  out.capCore = 0.17 + 0.08 * smooth(0.4, 0.75, age) - 0.17 * smooth(0.85, 1.6, age);
+  // (v1.6 polish 6; the sixth judge: the cap gained mass after its release, 7.5 → 8.9 M, then cross-dissolved: real
+  // condensate never gains mass once it meets the room's air. It no longer gathers the dome's fog: from 0.45 s of the
+  // thermal it loses 45 % of its fog over ≈ 0.5 s as the room's dry air first mixes in, then keeps the rest, thinning only
+  // with its receding edge and its spread, until it fades over 1.6–2.6 s.)
+  out.capCore = 0.17 * (0.45 * Math.exp(-Math.max(0, age - 0.45) / 0.45) + 0.55) * (1 - smooth(1.6, 2.6, age));
   // (v1.6 polish 4: the structural round) The body is thin, dense sheets with clear air between: the zero set of
   // the sheet field (drawn out along the rise, folded with the air), `fold` times the core's density inside a
   // sheet, `foldWidth` its half-width in the field's units (≈ 2 mm), `haze` the share of the core between them.
@@ -763,8 +808,14 @@ export function steamBounds(
   spillMax.copy(cloudMax);
   if (s.present && s.fade > 0) {
     let rMax = 0, yMin = Infinity, yMax = -Infinity;
+    // (v1.6 polish 6: the outline as the condensate's edge has receded, `recede` into the cavity's p-norm: every point
+    // moved towards the cavity's centre at the rim by the recession there, the least of its share at the wall and at the
+    // receded point. The march's box follows the visible cloud, not the air that carried it.)
+    const { radius: R, height: H } = CLOUD, D = Math.min(R, H);
     for (const [P, Y] of OUTLINE) {
-      axisForward(P, Y, s, fw);
+      const w = (k: number) => recedeWeight(P * k, CLOUD.rim + (Y - CLOUD.rim) * k);
+      const k1 = Math.max(0, 1 - (s.recede * w(1)) / D), k = Math.max(0, 1 - (s.recede * Math.min(w(1), w(k1))) / D);
+      axisForward(P * k, Y >= CLOUD.rim ? CLOUD.rim + (Y - CLOUD.rim) * k : Y, s, fw);
       rMax = Math.max(rMax, fw[0]);
       yMin = Math.min(yMin, fw[1]);
       yMax = Math.max(yMax, fw[1]);
@@ -772,23 +823,28 @@ export function steamBounds(
     // (The turbulence's warp, and the billows and swell that move the edge in material space.)
     const look = cloudLook(s.age, s.erode, BOUNDS_LOOK, s.peel);
     const m = 0.1 + 1.6 * s.turb + look.amp + look.billow + EDGE.fine;
-    const lean = s.lean.length() * Math.max(0, yMax - 0.15);
-    const r = rMax + m + lean + s.dragSide.length();
-    cloudMin.set(-r, Math.max(0, yMin - m), -r);
-    cloudMax.set(r, Math.min(CLOUD_Y_MAX, yMax + m), r);
+    // (The draught's lean and the dome's side drag shift the cloud one way, by up to their full reach at its top.)
+    const h = Math.max(0, yMax - 0.15), lx = s.lean.x * h + s.dragSide.x, lz = s.lean.y * h + s.dragSide.y, r = rMax + m;
+    cloudMin.set(-r + Math.min(0, lx), Math.max(0, yMin - m), -r + Math.min(0, lz));
+    cloudMax.set(r + Math.max(0, lx), Math.min(CLOUD_Y_MAX, yMax + m), r + Math.max(0, lz));
   }
   // (v1.6 polish 3) The gush: out of the raised gap over the plate's rim and up, round the raised
   // side (where the gap is open by at least a fifth of its widest), while any of it shows.
   if (veil && spillFade(veil.tau) > 0 && veil.tau < SPILL.fade[1]) {
-    const tau = veil.tau, age = Math.min(Math.max(0, tau - 0.02), SPILL.dt * (SPILL.samples - 1));
-    let gap = 0;
-    for (let k = 0; k < SPILL.samples; k++) gap = Math.max(gap, raisedGap(tau - k * SPILL.dt));
-    const reach = gushOut(age), rise = gushRise(age);
-    const r = GUSH.radius + 0.4 * gap + GUSH.grow * (reach + rise) + 0.06;
-    const lip = COVER.lipRadius, lo = lip - r, hi = lip + reach + r;
+    // (v1.6 polish 6: only the parcels that carry any of it, and their neighbours along the tube: the oldest, which have
+    // risen furthest, once their air has gone. Its fade is later now (0.42–0.66 s): the box was the whole history's.)
+    const tau = veil.tau, lip = COVER.lipRadius;
+    let lo = Infinity, hi = -Infinity, top = -Infinity;
+    for (let k = 0; k < SPILL.samples; k++) {
+      const live = [k - 1, k, k + 1].some((j) => j >= 0 && j < SPILL.samples && spillSource(tau - j * SPILL.dt) > 0);
+      if (!live) continue;
+      const a = k * SPILL.dt, g = raisedGap(tau - a), out = gushOut(a), up = gushRise(a);
+      const r = GUSH.radius + 0.4 * g + GUSH.grow * (out + up) + 0.06;
+      lo = Math.min(lo, lip + out - r); hi = Math.max(hi, lip + out + r); top = Math.max(top, plateTop(lip) + 0.6 * g + up + r);
+    }
     spillMin.set(Infinity, 0, Infinity);
-    spillMax.set(-Infinity, plateTop(lip) + 0.6 * gap + rise + r, -Infinity);
-    for (let ang = -1.6; ang <= 1.6001; ang += 0.1) {
+    spillMax.set(-Infinity, top, -Infinity);
+    for (let ang = -1.6; lo <= hi && ang <= 1.6001; ang += 0.1) {
       const cx = RAISED_DIR.x * Math.cos(ang) - RAISED_DIR.y * Math.sin(ang), cz = RAISED_DIR.x * Math.sin(ang) + RAISED_DIR.y * Math.cos(ang);
       for (const rr of [lo, hi]) {
         spillMin.x = Math.min(spillMin.x, cx * rr); spillMax.x = Math.max(spillMax.x, cx * rr);

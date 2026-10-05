@@ -75,9 +75,16 @@ export const STEAM_LOOK = {
    * (v1.6 polish 5: the fifth judge's lit side was 222–226, under the white plate's: the key 2.0 → 3.2, so the lit steam's
    * own colour sits above the plate's white (≈ 249 against 241 after the neutral tone mapping), and the plate's bounce on
    * the fog just over it 2.0 → 1.5, so the fog over the plate's middle keeps it within +4.)
+   * (v1.6 polish 6; the sixth judge: the own colour was 249–251 everywhere, lit − shaded +1: the key's direction was no
+   * longer legible in the volume, both sides at the tone curve's shoulder. The key 3.2 → 2.8 with a steeper self-shadow
+   * (`keyFall` 3.8 → 6), so the shaded side falls off the shoulder a little; the fifth judge's brighter lit side is
+   * withdrawn. A steeper shadow still (×20, the key 2.0) gave the terminator the judge asked for, +10–19 at 0.61–0.74 s,
+   * but on this view the shaded side is the cloud's right, where the cap's rolled lip is read: it took the lip to +4
+   * levels over its notch; and it shaded the dense body under the rising cap below the cove behind it, so the visible mass
+   * dipped at 0.86–1.0 s and rose again and the shade read as smoke. The envelope and the lip are kept.)
    */
-  key: 3.2,
-  room: 0.12,
+  key: 2.8,
+  room: 0.15,
   /**
    * Their colours (v1.6 polish 2: the judge saw "cold steam in a warm room"): the key is the
    * window's daylight as the white plate renders it under this rig (neutral: R − B +0.5); the room is
@@ -92,28 +99,39 @@ export const STEAM_LOOK = {
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
   gBack: -0.3,
   back: 0.35,
-  /** The key's optical depth through the cloud is the light volume's times this (steeper: self-shadowing away from the key; polish 3: 1.25 → 2.5). */
-  keyFall: 3.8,
+  /** The key's optical depth through the cloud is the light volume's times this (steeper: self-shadowing away from the key; polish 3: 1.25 → 2.5; polish 6: 3.8 → 6, a terminator). */
+  keyFall: 6,
+  /**
+   * (v1.6 polish 6) The key's transmittance into the steam never falls below this: in fog a few optical depths thick the
+   * multiply scattered light diffuses into the deepest shade (without it, at the steeper `keyFall`, the shaded fog went
+   * darker than the wall behind it: smoke). The vortex ring's tube enters the light volume at `ringShadow` of its mean
+   * (it shades its own underside analytically: at the full mean, × `keyFall`, it left dark blots on the cap).
+   */
+  keyFloor: 0.15,
+  ringShadow: 0.1,
   /** A change of mind: how far (su) the seating cover squeezes the air under it out along the plate (≈ 5 cm). */
   squeeze: 0.3,
   squeezeFog: 5.0,
   /**
    * The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density (polish 3: 5 → 1.5; the cap
    * keeps its own fog, `capCore`; polish 5: a narrower tube, ≈ 1.5 cm, 0.55 → 0.42, that stays whole through the roll:
-   * the rolled lip the fifth judge asked for at 1.06–1.22 s).
+   * the rolled lip the fifth judge asked for at 1.06–1.22 s; polish 6: 0.42 → 0.36 and 1.25 → 0.8, its core moved up into the
+   * cap's body (steam.ts `ringAt`) and in with the receding edge: the lip stays legible, +15–20 levels over the notch inside
+   * it, while the cap's centre fills to 0.7–0.9 of its rims, a filled cap rather than the sixth judge's smoke ring; then 1.2,
+   * under the dimmer key, for the lip on the cloud's shaded side).
    */
-  ringCore: 0.42,
-  ringFog: 1.25,
+  ringCore: 0.36,
+  ringFog: 1.2,
   /** The underside's band (su: the undercut's foot, the stem and the cap's underside as it rises; the walls' is 2.5 mm young). */
   underBand: 0.1,
   /** Wrenninge's multiple-scattering octaves (their share of the key; polish 2 raised them to 0.45 / 0.18, which flattened the body; polish 3 pulls them back). */
   ms: [0.18, 0.06] as const,
-  /** The white plate's light on the fog just above it (linear radiance at the porcelain; polish 3: falls off as the cube of the plate's share of the sky, so only the fog close over it; polish 5: 2.0 → 1.5 under the brighter key). */
-  bounce: 1.5,
+  /** The white plate's light on the fog just above it (linear radiance at the porcelain; polish 3: falls off as the cube of the plate's share of the sky, so only the fog close over it; polish 5: 2.0 → 1.5 under the brighter key; polish 6: back to 2.0 under the dimmer key). */
+  bounce: 2.0,
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
-  /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
-  shadow: 0.16,
+  /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. (v1.6 polish 6: 0.16 → 0.14: the denser cloud at 0.74 s took the plate's side to −11.) */
+  shadow: 0.14,
   /** The shadow's optical depth: the fog's extinction less what it scatters forward onto the surface (≈ 1 − g). */
   shadowOd: 0.45,
   /**
@@ -141,9 +159,11 @@ export const STEAM_LOOK = {
   /**
    * The march's pixel budget: at most `maxScale` of the drawing buffer's resolution a side, and at most this many pixels
    * over the steam's footprint on screen (polish 4: the footprint's, not the buffer's; polish 5: 120 k → 240 k, 90 k → 160 k
-   * thin: the risen cap's large footprint at 1.5–2.2 s cost 6.5 ms on the phone at 270 k).
+   * thin: the risen cap's large footprint at 1.5–2.2 s cost 6.5 ms on the phone at 270 k; polish 6: 240 k → 180 k, over the
+   * tighter boxes of the receding cloud and the gush's live parcels: 0.70 march pixels per CSS pixel at the laptop's held dome,
+   * was 0.68, at ≤ 5.4 ms where the sixth judge measured 6.0–6.5 at the app's real framing).
    */
-  marchPixels: 240_000,
+  marchPixels: 180_000,
   /** (v1.6 polish 4) The march's shortest step (su, ≈ 2 mm). */
   minStep: 0.012,
   /**
@@ -157,9 +177,10 @@ export const STEAM_LOOK = {
   lowShare: 0.6,
   /**
    * (v1.6 polish 5) The march's resolution a side over the drawing buffer's, at most (one march pixel per 2 × 2 buffer
-   * pixels: a full-resolution march, one per CSS pixel at the laptop's 1.65×, cost 6.5 ms at the held dome).
+   * pixels: a full-resolution march, one per CSS pixel at the laptop's 1.65×, cost 6.5 ms at the held dome; polish 6: 0.46,
+   * the young cloud at 0.7 s, under the budget at 0.5, cost 6.3 ms at the laptop).
    */
-  maxScale: 0.5,
+  maxScale: 0.46,
   /** (v1.6 polish 5) The crown's wake tongues: their height at most (su, ≈ 2 cm; polish 4: 0.075, 1.3 cm). */
   tongue: 0.12,
   /** (v1.6 polish 3) The veil's density in the march: its wisps were lit for the old, dimmer key (it was 40 % of the vapour at 1.2 s). */
@@ -324,6 +345,14 @@ float seatDistance(float r, float Y) {
 /** Densest under the crown (the base keeps CLOUD.baseDensity). */
 float seatGrade(float Y) { return ${f(CLOUD.baseDensity)} + ${f(1 - CLOUD.baseDensity)} * smoothstep(0.05, 0.6, Y); }
 /** The cloud at the seat (cloudSeat): \`grow\` widens the soft wall (the dilated occupancy). */
+/** (v1.6 polish 6) The cloud at the seat with its visible boundary receded \`rec\` (su) into it: what is still condensate. */
+float recedeWeight(float r, float Y) { return 1.0 - ${f(CLOUD.recedeCrown)} * smoothstep(${f(CLOUD.rim + 0.3)}, ${f(CLOUD.rim + 0.55)}, Y) * (1.0 - min(1.0, r * r / ${f(CLOUD.radius * CLOUD.radius)})); }
+float seatRec(float r, float Y, float floorH, float rec) {
+  rec *= recedeWeight(r, Y);
+  float inside = smoothstep(rec, rec + ${f(CLOUD.wall)}, seatDistance(r, Y));
+  float above = smoothstep(0.0, floorH, Y - plateTop(min(r, 0.8)));
+  return inside * above * seatGrade(Y);
+}
 float seat(float r, float Y, float floorH, float grow) {
   float inside = smoothstep(-grow, ${f(CLOUD.wall)}, seatDistance(r, Y));
   float above = smoothstep(-grow, floorH, Y - plateTop(min(r, 0.8)));
@@ -655,7 +684,7 @@ float cloudMean(vec3 p, int l) {
   vec2 q = p.xz - uB[l].zw * max(0.0, p.y - 0.15);
   vec4 m = mapAt(length(q), p.y, l);
   // (v1.6 polish 2: and the vortex ring's core, at its mean: it shades its own underside.)
-  return (m.a > 0.0 ? seat(m.r, m.g, uF[l].w, 0.0) * m.b : 0.0) + (uR[l].w > 0.0 ? ${f(0.55 * 0.6)} * ${f(STEAM_LOOK.ringFog)} * uR[l].w * ringTube(length(q), p.y, l) : 0.0);
+  return (m.a > 0.0 ? seatRec(m.r, m.g, uF[l].w, uK[l].w) * m.b : 0.0) + (uR[l].w > 0.0 ? ${f(0.55 * 0.6 * STEAM_LOOK.ringShadow)} * ${f(STEAM_LOOK.ringFog)} * uR[l].w * ringTube(length(q), p.y, l) : 0.0);
 }
 
 
@@ -914,7 +943,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
     under = smoothstep(-0.01, 0.03, dw - dU);
     dw = min(dw, dU);
   }
-  float dEff = dw + E.z * (lobes - 0.5) * 2.0 + E.x * (n1.r - 0.5) * 2.0;
+  // (v1.6 polish 6) The condensate's edge evaporates as the room's dry air mixes in: the boundary recedes (uK.w).
+  float dEff = dw - uK[l].w * recedeWeight(m.r, m.g) + E.z * (lobes - 0.5) * 2.0 + E.x * (n1.r - 0.5) * 2.0;
   // (v1.6 polish 4) The crown's wake: the lifting dome drew the crown's air up after it, and its sheets with it:
   // the top's boundary is drawn out into upward tongues ≈ 5 mm across and up to ≈ 1.5 cm tall (a field fast
   // across, slow along the rise), strongest on the axis, where the drag was; carried with the air as it rises.
@@ -1020,7 +1050,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
   // sheets gather into a few larger wisps.
-  float er = uC[l].y * (1.0 - 0.6 * ring);
+  // (v1.6 polish 6: from the edges in: the boundary's outer few centimetres take the whole erosion, the core a share.)
+  float er = uC[l].y * (1.0 - 0.6 * ring) * mix(1.0, 0.4, smoothstep(0.0, 0.15, dEff));
   d *= (1.0 + 0.6 * ring) * smoothstep(er - 0.08, er + 0.12, 0.62 * n1.b + 0.38 * lobes + 0.12);
   // A change of mind: once the cover is back on the plate, the fog low over the plate (the base and
   // its slump over the rim) is swept by its skirt and leaves with the plate.
@@ -1330,7 +1361,7 @@ void main() {
     // dense fog of droplets scatters nearly all it receives, many times.)
     // (v1.6 polish 4: the octaves light the bright side only (their extinction 0.9 and 0.7 of the key's, was 0.35 and
     // 0.2): the shaded side keeps its shade, the room's fill alone.)
-    float key = ((uFlags & 1) != 0 ? 0.0 : exp(-od) * ph0) + ((uFlags & 2) != 0 ? 0.0 : ${f(STEAM_LOOK.ms[0])} * exp(-0.9 * od) * ph1 + ${f(STEAM_LOOK.ms[1])} * exp(-0.7 * od) * ph2);
+    float key = ((uFlags & 1) != 0 ? 0.0 : max(exp(-od), ${f(STEAM_LOOK.keyFloor)}) * ph0) + ((uFlags & 2) != 0 ? 0.0 : ${f(STEAM_LOOK.ms[0])} * exp(-0.9 * od) * ph1 + ${f(STEAM_LOOK.ms[1])} * exp(-0.7 * od) * ph2);
     float lit = mix(uDomeShade, 1.0, lv.z);
     // (Still under the lifting dome: no key, the room's light only through the gap.)
     float cav = (uFlags & 8388608) != 0 ? 0.0 : domeCavity(p);
@@ -1699,6 +1730,8 @@ export class DinnerSteam {
   private alive = false;
   /** How many clocks carry a cloud (set by sync). */
   private clouds = 0;
+  /** (v1.6 polish 6) Steam clocks drawn this frame (each sample evaluates every one of them). */
+  private drawnClocks = 0;
   /** (v1.6 polish 5) The union of the march's own boxes (the steam, without its shadow's reach; set by sync). */
   private readonly marchMin = new Vector3();
   private readonly marchMax = new Vector3();
@@ -1880,9 +1913,11 @@ export class DinnerSteam {
     // The march, at half the drawing buffer's resolution.
     // (The young cloud's fine edge takes the full budget; thin steam and wisps, whose finest features
     // are centimetres, a smaller one. The history is resampled across the change: no pop.)
-    // (Two clouds at once, a change of mind's: each sample evaluates both; fewer pixels.)
+    // (Two clouds at once, a change of mind's: each sample evaluates both; fewer pixels. v1.6 polish 6: half the budget, was
+    // 0.4 of polish 5's larger one: 90 k, as many as before; and 0.7 of it with one cloud among two clocks, a resumed
+    // reveal's veil beside the cloud left behind: 6.2 ms at the laptop at the full budget.)
     const budget = (globalThis as { __steamPixels?: number }).__steamPixels
-      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.4 : 1);
+      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.5 : this.drawnClocks > 1 ? 0.7 : 1);
     // (v1.6 polish 4: the budget is the steam's own footprint on screen, not the drawing buffer's: the phone's
     // portrait frame fills more of its buffer with the plate than the laptop's does, and costs the same.)
     // (v1.6 polish 5: the budget over the steam's own boxes, the march's; the scissor over the composite's, which reaches
@@ -2076,6 +2111,7 @@ export class DinnerSteam {
     let steps: number = STEAM_LOOK.steps.veil;
     let shadowOn = 0;
     this.clouds = 0;
+    this.drawnClocks = 0;
     this.l0 = -1;
     this.l0Cloud = false;
     this.clocks.forEach((c, l) => {
@@ -2097,6 +2133,7 @@ export class DinnerSteam {
       // a hollowing cloud and wisps take fewer steps.)
       if (present) steps = Math.max(steps, s.age < 0.32 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
       if (present) this.clouds++;
+      this.drawnClocks++;
       // (Its shadow once the dome has lifted off it: τ 0.3 s on.)
       shadowOn = Math.max(shadowOn, present ? Math.min(1, Math.max(0, (tau - 0.3) / 0.15)) : 1);
       B[l]!.set(s.dragSide.x, s.dragSide.y, s.lean.x, s.lean.y);
@@ -2109,14 +2146,15 @@ export class DinnerSteam {
       // (v1.6 polish 5: and the seating's puffs' strength: the clock's light at the capture, the fog it squeezed out.)
       // (v1.6 polish 5: the crown's wake tongues come after the held dome, as its crown is drawn up, and go as the cap rolls.)
       K[l]!.set(look.capCore, Math.min(STEAM_LOOK.tongue, 0.8 * dragAt(1.5)) * crownFray(Math.min(tau, c.emitEnd)) * (1 - smoothstep01((s.age - 0.55) / 0.35)),
-        Number.isFinite(c.capture) && Number.isFinite(c.emitEnd) ? leftSteamFade(c.capture, c.emitEnd, c.capture) : 0, 0);
+        Number.isFinite(c.capture) && Number.isFinite(c.emitEnd) ? leftSteamFade(c.capture, c.emitEnd, c.capture) : 0, s.recede);
       // (The body's mean density over the core's, for the light volume: the haze, the sheets' share of the volume
       // (≈ 1.6 × their half-width: the field's density at zero) less the holes torn in them, and the skin.)
       M[l]!.set(look.fold, look.foldWidth, look.haze, look.core * (look.haze + look.fold * look.foldWidth * 1.6 * 0.7) + 0.35 * look.sheet);
       // (The ring holds fog once it has rolled up, until the cloud has gone.)
       // (v1.6 polish 2: its core holds its fog from ≈ 0.25 s of the thermal, tears from ≈ 0.45 s and has
       // evaporated by ≈ 1.6 s; with the cloud's fade.)
-      R[l]!.set(s.ringR, s.ringY, s.ringSigma, smoothstep01((s.age - 0.2) / 0.35) * (1 - smoothstep01((s.age - 0.7) / 0.6)) * s.fade);
+      // (v1.6 polish 6: it lets its fog go over 0.45–2.05 s of the thermal, was 0.7–1.3: no ring left standing as the cap thins.)
+      R[l]!.set(s.ringR, s.ringY, s.ringSigma, smoothstep01((s.age - 0.2) / 0.35) * (1 - smoothstep01((s.age - 0.45) / 1.6)) * s.fade);
       // The spill's source over the last half-second (what is on the wall now left the gap then).
       const fade = spillFade(tau);
       let on = 0;

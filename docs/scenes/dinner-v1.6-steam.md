@@ -761,6 +761,122 @@ within 1.15× the plate's radius by 1.3 s, was the plate's; the cap keeping its 
 `tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6,
 `tests/browser/scene-depth.spec.ts` 5/5 (fresh server); `pnpm typecheck` clean.
 
+## Polish round 6: the condensate's envelope, the terminator, the cost at the real framing (`v1.6/steam-polish6`)
+
+The sixth judge scored polish 5 **6.5 at laptop size, 7 at phone size**: the beat works (it accumulates in the cloche's
+shape, holds it, rises off as a thermal with a rolled lip, nothing clips or pops) and the softness at 2× is this march's
+design limit; but past one second the cloud behaved like smoke, not condensate, its own lighting had gone flat, the gush
+faded in place and the laptop's cost was over budget at the app's real framing. Same budget: **≤ 6.0 ms at laptop
+1280 × 720 @2 and phone 390 × 844 @3, the whole frame pacing at 60 fps, zero with no steam**. Every number is in
+`evidence/v1.6/steam-polish6/measurements.txt` (final code; "before" is the judge's own polish-5 frames on the same
+scripts) and `cost.txt` / `pacing.txt`; the round's scripts are in `evidence/v1.6/steam-polish6/tools/` (the judge's
+`frames.ts`, `bench6.ts`, `pace.ts` and `py/clip.py`, polish 5's scripts, and `env.py`, `capw.py`, `gushc.py`, `dark.py`,
+`motion.py`, `own_lin.py`). Laptop clip as the judge's (1240² of 1280 × 720 @2, WARM 2000); its no-steam twins are
+byte-identical on this build in the scene; re-renders byte-identical.
+
+**1. The condensate's envelope** (`CLOUD.recede`, `recedeTime`, `recedeCrown`, `recedeWeight`; `capCore`; `erode`,
+the shader's edge-weighted erosion; `core`'s emptying 0.25–0.75 s of the thermal; `life` 2.0 → 2.4, `fadeOut` 0.6 → 1.0;
+`riseW` 2.4 → 2.3; the veil's `evaporate` 0.85 → 0.7, `decay` 0.4 → 0.8, `tail` 0.55 → 0.5). The visible boundary now
+recedes into the cloud from 0.3 s of the thermal (material space, up to 4 cm, time constant 0.4 s: 2.1 cm by 1.0 s,
+3.4 cm by 1.4 s), the crown's leading face 70 % less than the sides and the base; the vortex ring's core moves in with it;
+the march's and the light volume's mean take the same receded edge. The cap no longer gathers the dome's fog
+(0.17 → 0.25 was the mass gain the judge saw): it loses 45 % of it over ≈ 0.5 s from 0.45 s of the thermal and keeps the
+rest to its fade (1.6–2.6 s); the erosion's holes are the edge's (the core takes 0.4 of it) and slower (to 2.2 s).
+**Visible mass (the judge's Σ B over B > 8)**: the frame without its gush (its gush-off twin) **peaks at 5.11 M at
+0.74 s**; the frame itself 5.12 M at 0.74, 4.53 at 0.86, 4.08 at 0.99, 3.63 at 1.12, 2.85 at 1.25, 2.48 at 1.31,
+2.14 at 1.38, 1.72 at 1.50, 1.05 at 1.79, 0.44 at 2.24 s — **falling at every frame after 0.74 s, half of the
+condensate's peak by 1.30 s, the worst 0.3 s window −43 %** (1.38 → 1.66 s) (before: 7.53 at 0.99 → 8.89 at 1.12 →
+7.47 at 1.41 → 1.52 M at 1.70 s, −80 % in 0.3 s). The frame's own peak is the carried gush's, 6.49 M at 0.48–0.54 s
+(item 4). **Edges first**: the edge band's brightening falls to 0.67 / 0.57 / 0.46 / 0.38 of its peak at 0.86 / 0.93 /
+0.99 / 1.06 s while the core's holds at 0.62 / 0.58 / 0.59 / 0.59; the cloud alone (no gush, no veil) shrinks with its
+mass from 0.99 s (130 → 108 → 92 → 71 → 46 k px at 0.99–1.50 s). **Not met as the judge may measure it**: the whole
+frame's visible area still grows to 1.25 s (95 → 158 k px) as the plate's veil rises into view behind the thinning cloud,
+then falls (37 k at 2.24 s). **Vapour vs polish 1** at 1.20 / 1.28 s **0.77 / 0.80×** (target ≤ 1.2; before 2.04 /
+2.32×). **Centroid 705 → 531 rows by 1.2 s: 6.4 cm** (target ≥ 6; before 6.8).
+
+**2. A filled, plate-sized cap** (`ringAt` 0.34 → 0.38, `roll` 5.2 → 3.0, `ringCore` 0.42 → 0.36, `ringFog` 1.25 → 1.2
+after 0.8 for the item, the ring's fog over 0.45–2.05 s of the thermal, was 0.7–1.3). The ring's core sat at the cap's
+underside, which the thermal stretches 3–4× into the stem (the hollow); it is now inside the cap's body. **Centre/rims
+0.68 / 0.71 / 0.75 / 0.80 / 0.81 / 0.83 at 1.06–1.22 s** (target ≥ 0.6; before 0.35–0.45); **the lip +17.2 / +19.0 /
++19.2 / +19.3 / +19.5 / +17.5 levels over the notch inside it** (≥ 15; before +21.6…+22.0); the dip through the cap
+(`o_ringprof.py`) median 4–7, best 10–25 levels; **the cap 0.62 / 0.60 / 0.58 / 0.56 / 0.54 / 0.52 of the plate's width
+at 0.99–1.31 s** (`capw.py`, B > 10, the gilt rim's 733 px; before 0.85–0.96 on the same script; the judge's "1.3×" was
+not reproduced by any width measure here); the centroid as item 1.
+
+**3. A terminator in the steam's own colour** (`key` 3.2 → 2.8, `keyFall` 3.8 → 6, `keyFloor` 0.15, `ringShadow` 0.1,
+`bounce` 1.5 → 2.0, `room` 0.12 → 0.15, the steam's surface `shadow` 0.16 → 0.14). **Own lit − shaded +2 / +3 / +5 at
+0.61 / 0.67 / 0.74 s — not met** (target +15; before +1 / +1 / +3). The composite's brightening lit − shaded **+51 / +53 /
++52** (≥ +25), far-rim transmittance **0.31–0.45**, plate centre **+4**, its side **+5…−9** (the gush brightens it at
+0.48 s), warmth **R − B +5.2…+6.6**, no steam darker than the wall behind it. **Why not met — the trade measured**: on this
+view the key comes from up-left-front, 44° off the camera, so the held dome's right third (own.py's "shaded") is mostly
+lit through the dome's top; a terminator that legible needs a key self-shadow of ×20 (key 2.0): it gave +16 / +23 / +41,
+but the dense body under the rising cap went 10–17 levels darker than the cove behind it (38–53 k px at 0.86–0.99 s:
+smoke); with a 0.15 transmittance floor and a room fill rising with height, +10 / +12 / +19, and then the cap's rolled lip
+(read on the same shaded right side) fell to +4…+14 levels, and the visible mass dipped at 0.86–1.0 s and rose 11 % at
+1.12 s, breaking item 1. The milder setting keeps items 1 and 2 (commits 3, 3b, 3c record each step). A real terminator here
+needs the key moved (a rig decision) or a light volume that resolves the sheets (not a constant).
+
+**4. The gush carried upward** (`SPILL.fade` 0.34–0.5 → 0.42–0.66 s; `SPILL.stop` 0.24–0.3 → 0.2–0.36 s). It now rides its
+parcels up and out before it fades: on the frame less its gush-off twin (`gushc.py`) **its area stays 0.97–1.35× its
+0.416 s area to 0.62 s** (≥ 0.6 to 0.56; before 0.77 at 0.48, 0.20 at 0.50, gone by 0.51), **its centroid 2.5 cm up and
+0.8 cm out over 0.43–0.56 s** (≥ 1 cm), 6.4 cm up by 0.61 s, gone by 0.67 s. The feed's end swept through the shader's
+eight parcels in four frames once it was carried this long (−43 % of the puff in one frame at 0.576 s, a pop): it tails
+off over 0.2–0.36 s now. **The held dome's IoU in the whole frame is lost to it**: 0.53 / 0.40 / 0.43 at 0.48 / 0.54 /
+0.61 s (the gush beside the dome joins the steam mask); the dome alone (gush-off twin) **0.78 / 0.75 / 0.68** (≥ 0.75 at
+0.48 s), inside/outside the seated outline 26 / 12.7 / 6.3 / 3.2 / 2.4 / 2.0 / 2.3 / 2.0 at 0.45–0.67 s (≥ 1.6 for 0.22 s).
+
+**5. The held dome's freeze** (no change of its own: the carried gush and the receding edge move it). Mean frame-to-frame
+change in the cloud (`motion.py`) **4.7 / 2.8 / 3.9 / 6.6 / 3.9 / 3.5 at 0.53–0.61 s** — no three consecutive frames under 3
+levels while the dome holds (before 3.2 / 2.7 / 2.8 / 3.0 / 3.5). After 0.96 s the thinning cloud changes by 1.2–2.9 levels
+a frame (its brightening is lower); no frame's change over 1.8× its neighbours' (0.18–1.6 s).
+
+**6. The cost at the real framing** (`steamBounds`: the cloud's box from the receded outline, the draught's lean and side
+drag one-sided, the gush's box from its live parcels; `marchPixels` 240 k → 180 k, `maxScale` 0.5 → 0.46, half the budget
+for two clouds (was 0.4 of 240 k), 0.7 of it for one cloud among several clocks). With the tighter boxes the same budget
+went finer and dearer (7.2 ms at 0.45 s at 240 k): the budget came down with them. **March pixels per CSS pixel at the
+laptop 0.70 / 0.65 / 0.58 at 0.45 / 1.0 / 2.2 s** (before 0.68 / 0.57 / 0.48); the phone 0.85 / 0.85 / 0.81 (0.85 /
+0.85 / 0.76).
+
+| steam cost, p10 ms (bench6, N 40 × 6) | 0.3 | 0.4 | 0.45 | 0.5 | 0.6 | 0.7 | 1.0 | 1.2 | 1.5 | 2.2 | 3.0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| laptop, before (this session) | 5.6 | 6.3 | 6.0 | 4.8 | 5.6 | 6.2 | 3.9 | 4.1 | 4.4 | 4.9 | 1.7 |
+| **laptop, final** | **5.0** | **5.1** | **5.4** | **4.9** | **5.3** | **3.9** | **3.5** | **3.7** | **3.8** | **4.0** | **1.7** |
+| **phone, final** (before 3.2–4.5) | **3.8** | **4.1** | **4.2** | **4.4** | **4.7** | **3.5** | **3.3** | **4.3** | **4.3** | **4.0** | **1.3** |
+
+Two clouds (1000:decline, 1450:accept) at 1.7 / 1.8 / 1.9 s: laptop **4.5 / 4.3 / 4.5**, phone **4.1 / 3.7 / 3.9** (before
+3.6–4.1 / 4.2–4.6). The resumed reveal (900:decline, 1100:accept) at 1.7 / 1.9 / 2.1 s: laptop **4.6 / 4.9 / 4.4**, phone
+**4.1 / 4.2 / 4.1** (before 5.9–6.2 at the laptop). Late (4.5 / 5.5 / 6.0 s) 1.9 / 1.7 / 1.5. Load averages 2.8–4.1.
+**Pacing** (`pace.ts`, three whole accepts each): laptop p50 16.70, **p95 16.70**, max 16.8, steam window p95 16.70;
+phone p95 **16.70–16.80**, max 16.8; no frame over 20 ms. Zero with no steam (the scene-depth specs).
+
+**Kept / changed of what had passed**: the box clip 0 px (`vcut` 0 at 0.83–1.31 s; `clip.py` in every direction: right
+runs ≤ 14 px, the left and bottom runs the cloche's and the plate's far rim's occlusions, as before; full laptop and phone
+the same; two clouds 0 from 1.66 s, 20 px at 1.536 s at the lifting cloche's edge; Low tier 0); the decline's puffs
+unchanged (−6…−26 % a frame from 0.85 s, the faint tail as before); the return's crown 0 px; far-rim transmittance; no
+waterline (median step 0.9–1.4); grain over the backdrop temporal 0.56 / 0.73 / 0.58, spatial 0.63 / 0.63 / 0.48 at
+0.58 / 0.67 / 0.90 s (≤ 0.9); the Low tier's 0.45 / 0.57 and 0.47 / 0.50; reduced motion byte-identical to its no-steam
+twin (0.16–3.2 s); the tail 2 levels at 5.95 s; the clocks and `STEAM_END` (the tests). **Changed**: coverage core / ring
+0.97 at 0.61 s (the gush beside the dome; 1.11–1.14 at the other frames; before 1.06–1.10); the sharpness proxies at
+0.54–0.61 s (`soft.py`) are lower (grad 0.30–0.62, oedge 0.23–0.47) where the carried gush's soft puff sits in their
+outline band, as at 0.67–0.74 s they are as before (0.72 / 1.39, 0.57 / 1.32); polish 5's "eroded interior" 99 / 78 at
+0.61 / 0.67 s was the cloche's reflections inside its mask: on the steam body alone 11 / 11 then, 8 / 10 now.
+
+**What a seventh judge would still see** (the owner's view): past one second the steam now thins and shrinks as it rises
+— a compact, filled puff with a rolled lower edge, narrower than the plate, gone into faint wisps by 1.6–1.8 s while the
+plate breathes on — rather than a wide smoke mushroom that cross-dissolves; the gush rides up beside the dome and fades
+high. It is still **soft at 2×** (the design limit the judge named), the gush is still a soft airbrushed puff, only
+carried; the **own colour's terminator is not legible** (+2…+5), and on the frame's measures the gush makes the visible
+mass peak at 0.48–0.54 s, the whole frame's visible area grows to 1.25 s with the veil, and the held dome's IoU with the
+gush counted is 0.53. A judge who reads the volume's terminator as the priority will mark item 3; it cannot be had with
+these constants without the smoke-grey shade and the lip's loss measured above.
+
+**Tests.** `tests/dinner-steam.test.ts` 26 (new: the condensate's receding edge, its crown least, the ring inside the
+visible edge, no fog gained after the release; changed: the visible cap narrower than the held dome and within 0.85 of the
+plate's radius at 1.3 s, the erosion and the recession by 1.2 s, the roll over 2 rad, the cap's fog 0.6 of its 1.0 s at
+1.4 s and gone by 2.6 s, the gush fading over 0.42–0.66 s and its box at 0.6 s, its feed's tail-off, the light's
+constants); `tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6,
+`tests/browser/scene-depth.spec.ts` 5/5 (fresh server each); `pnpm typecheck` clean.
+
 ## Decisions
 
 - **A material field, not particles.** Every sample asks where its air came from (the analytic flow's inverse), so
@@ -770,7 +886,9 @@ within 1.15× the plate's radius by 1.3 s, was the plate's; the cap keeping its 
 - **Half-resolution march, depth-aware composite.** A full-resolution march cost 2–5 ms; the half-resolution one
   with probes and a light volume fits ≈ 1.5 ms with better lighting. (Polish 4: the march is budgeted by the steam's
   footprint and the CSS pixel, and its sharp features are integrated over each step rather than sampled: ≤ 3.0 ms.
-  Polish 5: 0.5 of the buffer a side, 0.82–0.85 march pixels per CSS pixel, 34 / 28 / 20 steps: ≤ 6.0 ms.)
+  Polish 5: 0.5 of the buffer a side, 0.82–0.85 march pixels per CSS pixel, 34 / 28 / 20 steps: ≤ 6.0 ms. Polish 6: the
+  boxes follow the visible, receding cloud and the gush's live parcels, 180 k march pixels, 0.46 a side at most:
+  0.58–0.85 march pixels per CSS pixel, ≤ 5.4 ms at the app's real framing.)
 - **Visible-steam physics over brightness.** In this front light, steam over the white plate is nearly invisible;
   the cloud reads against the cove, over the silver and over the table, and by its shade over the plate.
 - **The scene depth is generic** and off unless a client asks: the other scenes' frames are byte-identical.

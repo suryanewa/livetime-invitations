@@ -9,7 +9,7 @@ import { DinnerScene } from '../src/scenes/dinner/index.ts';
 import { STEAM_LOOK } from '../models/dinnerSteam.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, crownFray, dragAt, dragCentre, EDGE, heldDrag, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
+  axisForward, axisInverse, CLOUD, cloudDensity, recedeWeight, cloudLook, cloudSeat, cloudState, crownFray, dragAt, dragCentre, EDGE, heldDrag, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
   spillSource, SQUEEZE, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
 } from '../src/scenes/dinner/steam.ts';
 
@@ -47,6 +47,23 @@ function outline(tau: number) {
   }
   low = axisForward(0.6, 0.1, s)[0];
   return { top, cap, low, base: axisForward(0.6, 0.1, s) };
+}
+/**
+ * (v1.6 polish 6) The visible outline at τ: the cavity's wall moved in by the condensate's receding edge (the
+ * superellipse's p-norm distance, the crown's leading face receding least), forward-mapped: its top and its widest.
+ */
+function visibleOutline(tau: number) {
+  const s = cloudState(tau);
+  const { radius: R, height: H, power: p, rim } = CLOUD;
+  let top = 0, cap = 0;
+  for (let i = 0; i <= 60; i++) {
+    const q = (i / 60) * H, P = R * Math.pow(Math.max(0, 1 - Math.pow(q / H, p)), 1 / p);
+    const k = Math.max(0, 1 - (s.recede * recedeWeight(P, rim + q)) / Math.min(R, H));
+    const [r, y] = axisForward(P * k, rim + q * k, s);
+    top = Math.max(top, y);
+    if (q > 0.35) cap = Math.max(cap, r);
+  }
+  return { top, cap };
 }
 
 describe('Dinner steam field (v1.6)', () => {
@@ -120,9 +137,36 @@ describe('Dinner steam field (v1.6)', () => {
     expect(riseAt(0.2) * SU_CM).toBeLessThan(1.5);
     // (v1.6 polish 5: then it rises away rather than hovering: the fifth judge measured the centroid ≈ 2 cm up at 1.12 s.)
     expect(riseAt(0.8) * SU_CM).toBeGreaterThan(12);
-    // Then the cap rises and spreads while the stem narrows: a mushroom.
+    // Then the cap rises away while the stem narrows.
     expect((later.top - held.top) * SU_CM).toBeGreaterThan(8);
-    expect(later.cap).toBeGreaterThan(seat.cap * 1.15);
+    // (v1.6 polish 6; the sixth judge: "past one second the cloud behaves like smoke, not condensate": a smoke mushroom
+    // 1.3× the plate. The thermal's air spreads, but its condensate evaporates from the edge in as the room's dry air
+    // mixes in: the visible cap is narrower than the held dome by 1.3 s, and well inside the plate.)
+    const vis = visibleOutline(1.3);
+    expect(vis.cap).toBeLessThan(seat.cap);
+    expect(vis.cap).toBeLessThan(0.85 * PLATE.radius);
+    expect((vis.top - held.top) * SU_CM).toBeGreaterThan(6);
+  });
+
+  it('v1.6 polish 6: condensate, not smoke: its edge recedes from the release, the crown least, and it never gains fog', () => {
+    // The visible boundary holds through the held dome (≤ 2 mm by 0.6 s), then recedes ≈ 2–3.5 cm by 1.0–1.4 s, never back.
+    expect(cloudState(0.6).recede * SU_CM).toBeLessThan(0.2);
+    expect(cloudState(1.0).recede * SU_CM).toBeGreaterThan(1.8);
+    expect(cloudState(1.4).recede * SU_CM).toBeLessThan(3.5);
+    let prev = 0;
+    for (let tau = 0; tau <= 2.8; tau += 0.05) { const r = cloudState(tau).recede; expect(r).toBeGreaterThanOrEqual(prev); prev = r; }
+    // The crown's leading face recedes least; the sides and the base the whole of it.
+    expect(recedeWeight(0, CLOUD.rim + CLOUD.height)).toBeLessThan(0.35);
+    expect(recedeWeight(CLOUD.radius, CLOUD.rim + 0.1)).toBe(1);
+    // The vortex ring's core stays inside the visible edge (a rolled lip of the condensate, not a ring left outside it).
+    for (const tau of [0.9, 1.1, 1.3]) {
+      const s = cloudState(tau), wall = visibleOutline(tau);
+      expect(s.ringR + s.ringSigma * 0.36).toBeLessThan(wall.cap + 0.05);
+    }
+    // No fog gathers once the dome has gone: the cap's own fog never rises after the release, and goes by the cloud's end.
+    let cap = Infinity;
+    for (let tau = 0.4; tau <= 2.8; tau += 0.05) { const s = cloudState(tau), c = cloudLook(s.age, s.erode).capCore; expect(c).toBeLessThanOrEqual(cap + 1e-12); cap = c; }
+    expect(cloudLook(cloudState(3.0).age).capCore).toBeLessThan(1e-9);
   });
 
   it('v1.6 polish: holds the dome\'s shape ≈ 0.3 s with no drift, then a cap no wider than the plate that thins by 1.2 s', () => {
@@ -141,17 +185,20 @@ describe('Dinner steam field (v1.6)', () => {
       widest = Math.max(widest, o.cap + s.lean.length() * Math.max(0, o.top - 0.15) + 0.5 * (look.amp + look.billow));
     }
     expect(widest).toBeLessThanOrEqual(1.15 * PLATE.radius);
-    // Less vapour: by 1.2 s the fog inside has mostly gone (the sheets carry what is left), and evaporation is under way.
+    // Less vapour: by 1.2 s the fog inside has mostly gone (the sheets carry what is left), and evaporation is under way
+    // (v1.6 polish 6: from the edge in: the boundary has receded ≈ 2.5 cm, the erosion is slower and the edge's).
     const at12 = cloudState(1.2);
     expect(cloudLook(at12.age, at12.erode).core).toBeLessThan(0.25);
-    expect(at12.erode).toBeGreaterThan(0.3);
+    expect(at12.erode).toBeGreaterThan(0.15);
+    expect(at12.recede * SU_CM).toBeGreaterThan(2);
     // The edge: a band under a centimetre while young (v1.6 polish 4: ≈ 6 mm, the sheets that cross it carry the
     // outline), widening as the room's air mixes in, carved by 1–2 cm lobes.
     expect(cloudLook(0).band * SU_CM).toBeLessThan(0.7);
     expect(cloudLook(1.5).band).toBeGreaterThan(cloudLook(0).band * 2);
     expect(cloudLook(0).billow * SU_CM).toBeGreaterThan(0.3);
-    // The vortex ring rolls the cap's edge over more than half a turn by 1.2 s.
-    expect(at12.roll).toBeGreaterThan(Math.PI);
+    // The vortex ring rolls the cap's edge into a lip, over a third of a turn by 1.2 s (v1.6 polish 6: a rolled lip, not the
+    // sixth judge's smoke ring: more than half a turn before).
+    expect(at12.roll).toBeGreaterThan(2);
   });
 
   it('v1.6 polish 2: from the lift-off the outer layer peels while the bulk holds; room air undercuts the foot from the rim in', () => {
@@ -205,19 +252,22 @@ describe('Dinner steam field (v1.6)', () => {
     const at = (tau: number) => cloudLook(cloudState(tau).age, cloudState(tau).erode);
     expect(at(1.0).capCore).toBeGreaterThan(2 * at(1.0).core);
     expect(at(1.0).capCore).toBeGreaterThan(0.08);
-    // (v1.6 polish 5: the cap keeps its fog as it rises away, to ≈ 1.4 s, then thins: the fifth judge saw it
-    // "evaporate in place", 31 % of its mass left at 1.38 s.)
-    expect(at(1.4).capCore).toBeGreaterThan(0.8 * at(1.0).capCore);
-    expect(at(2.0).capCore).toBeLessThan(0.5 * at(1.0).capCore);
+    // (v1.6 polish 5: the cap keeps its fog as it rises away, then thins: the fifth judge saw it "evaporate in place";
+    // polish 6: it loses a third of it as the room's air first mixes in, keeps the rest and goes by the cloud's end.)
+    expect(at(1.4).capCore).toBeGreaterThan(0.6 * at(1.0).capCore);
+    expect(at(2.6).capCore).toBeLessThan(0.5 * at(1.0).capCore);
     // The light: the multiple-scattering octaves pulled back from polish 2 (0.45 / 0.18), the key's
     // shadow through the cloud steeper (1.25), the room a fill.
     expect(STEAM_LOOK.ms[0]).toBeLessThan(0.3);
     expect(STEAM_LOOK.ms[1]).toBeLessThan(0.1);
     expect(STEAM_LOOK.keyFall).toBeGreaterThan(2);
-    expect(STEAM_LOOK.room).toBeLessThan(STEAM_LOOK.key / 5);
+    expect(STEAM_LOOK.room).toBeLessThan(STEAM_LOOK.key / 10);
+    // (v1.6 polish 6: a terminator: the key's self-shadow steeper, its floor the deep shade's diffuse light, under a fifth.)
+    expect(STEAM_LOOK.keyFall).toBeGreaterThan(5);
+    expect(STEAM_LOOK.keyFloor).toBeLessThan(0.2);
   });
 
-  it('v1.6 polish 3: a gush out of the raised gap, rolling out over the rim and rising, gone by 0.5 s; its box holds it', () => {
+  it('v1.6 polish 3: a gush out of the raised gap, rolling out over the rim and rising, gone by 0.66 s; its box holds it', () => {
     // The gap opens with the tip and closes at the lift-off; nothing after 0.5 s.
     expect(raisedGap(0)).toBe(0);
     expect(raisedGap(0.2)).toBeGreaterThan(0.05);
@@ -230,12 +280,15 @@ describe('Dinner steam field (v1.6)', () => {
       expect(((gushRise(a + 0.05) - gushRise(a)) / 0.05) * SU_CM).toBeLessThan(35);
     }
     expect(gushRise(0.3) * SU_CM).toBeGreaterThan(3);
-    // (v1.6 polish 5: it fades over 0.34–0.5 s, was 0.36–0.56.)
-    expect(spillFade(0.34)).toBe(1);
-    expect(spillFade(0.35)).toBeGreaterThan(0.98);
-    expect(spillFade(0.5)).toBe(0);
-    // The box: every parcel's centre (round the raised side) at τ 0.3 and 0.45 is inside it.
-    for (const tau of [0.3, 0.45]) {
+    // (v1.6 polish 5: it fades over 0.34–0.5 s, was 0.36–0.56; polish 6: over 0.42–0.66 s, carried up and out as it goes:
+    // its oldest parcels have risen ≥ 8 cm by the time it has half gone.)
+    expect(spillFade(0.42)).toBe(1);
+    expect(spillFade(0.43)).toBeGreaterThan(0.98);
+    expect(spillFade(0.66)).toBe(0);
+    expect(gushRise(0.54 - 0.3) * SU_CM).toBeGreaterThan(5);
+    expect(gushRise(0.54 - 0.15) * SU_CM).toBeGreaterThan(8);
+    // The box: every parcel's centre (round the raised side) at τ 0.3, 0.45 and 0.6 is inside it.
+    for (const tau of [0.3, 0.45, 0.6]) {
       const s = cloudState(tau), lo = new Vector3(), hi = new Vector3();
       steamBounds(s, { tau, emitStart: -Infinity, emitEnd: Infinity }, new Vector3(), new Vector3(), new Vector3(), new Vector3(), lo, hi);
       for (let k = 0; k < SPILL.samples; k++) {
@@ -336,7 +389,9 @@ describe('Dinner steam field (v1.6)', () => {
     const f = sampleSequence('accept', first, newFrame());
     expect(f.coverPos.y - COVER_SEATED.y).toBeLessThan(0.03);
     expect(spillSource(ACCEPT.tipPeak)).toBeGreaterThan(0.9);
-    expect(spillSource(0.31)).toBe(0);
+    // (v1.6 polish 6: its feed tails off over 0.2–0.36 s as the dome lifts clear, was 0.24–0.3.)
+    expect(spillSource(0.31)).toBeLessThan(0.3);
+    expect(spillSource(0.37)).toBe(0);
     expect(spillFade(SPILL.fade[1])).toBe(0);
   });
 

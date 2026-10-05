@@ -1,0 +1,8 @@
+# pace.ts (the judge's): real-time rAF intervals over the whole Dinner accept, three accepts each, laptop then phone
+ 7:55  up 2 days, 13:25, 1 user, load averages: 2.83 3.44 3.42
+laptop run 0: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+laptop run 1: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+laptop run 2: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+phone run 0: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+phone run 1: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+phone run 2: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
