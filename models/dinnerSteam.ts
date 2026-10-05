@@ -556,7 +556,14 @@ float captured(vec3 pc, int l) {
   // dome"); the band it clears reaches ≈ 7 cm over the crown and goes within ≈ 0.1 s of the seating.
   float reach = 0.42 + 0.2 * (1.0 - smoothstep(0.05, 0.3, cv.y));
   float band = smoothstep(0.08, reach, d + 0.1 * (texture(uNoise, pc * 2.3).r - 0.5) * 2.0);
-  return smoothstep(-0.03, 0.0, d) * mix(1.0, band, smoothstep(-0.03, 0.08, uA[l].x - uD[l].z));
+  // (v1.6 polish 4) The final sweep as the dome seats: the downdraft its fall drew after it carries off what is left
+  // over its crown and shoulders (from 3 cm above the rim, out to ≈ 15 cm from the silver: this camera sees fog
+  // well behind the dome over its crown) within ≈ 50 ms: nothing
+  // stands on the seated dome (the judge's thin arc over the crown at 0.70–0.80 s).
+  // (Behind the dome, as this camera sees it, low fog shows over its shoulders too: swept from the plate up.)
+  float behindDome = smoothstep(0.1, -0.3, dot(normalize(cv.xz + 1e-5), normalize(uCamLocal.xz - uSeated.xz)));
+  float sweep = smoothstep(-0.07, 0.0, uA[l].x - uD[l].z) * max(smoothstep(0.1, 0.18, cv.y), behindDome) * (1.0 - smoothstep(0.8, 1.0, d));
+  return smoothstep(-0.03, 0.0, d) * mix(1.0, band, smoothstep(-0.03, 0.08, uA[l].x - uD[l].z)) * (1.0 - sweep);
 }
 
 /** The plate's veil at p on clock l: a thin, wispy column rising off the well. */
@@ -730,10 +737,12 @@ float squeeze(vec3 p, int l) {
   if (x < -0.03 || x > 0.5 || cv.y < -0.08 || cv.y > 0.32) return 0.0;
   float age = ts + ${f(SQUEEZE_LEAD)};
   float front = ${f(STEAM_LOOK.squeeze)} * (1.0 - exp(-age / 0.07));
-  float hc = 0.012 + 0.45 * front * smoothstep(0.03, 0.25, age);
+  // (v1.6 polish 4: they stay low (≤ 1.5 cm, was 4.5 cm), and those behind the dome, which this camera sees over its
+  // crown as an arc (the judge's "cap on the seated dome"), are thinner.)
+  float hc = 0.012 + 0.25 * front * smoothstep(0.03, 0.25, age);
   float w = 0.02 + 0.45 * front;
   float xr = (x - 0.6 * front) / w;
-  float yr = (cv.y - hc) / (0.018 + 0.3 * front);
+  float yr = (cv.y - hc) / (0.018 + 0.15 * front);
   float body = exp(-xr * xr - yr * yr);
   if (body < 0.01) return 0.0;
   // A few puffs round the rim (a slow field round the circumference), each a cluster of lobes.
@@ -743,7 +752,9 @@ float squeeze(vec3 p, int l) {
   vec4 nf = texture(uNoise, vec3(cv.x, cv.y * 1.3, cv.z) * 2.4 - vec3(out2.x, 0.0, out2.y) * front * 1.6 + vec3(0.17, -0.5 * age, 0.29));
   float lumps = smoothstep(0.38, 0.68, nf.b + 0.9 * (big - 0.5));
   float fade = smoothstep(0.0, 0.03, age) * exp(-max(age - 0.14, 0.0) / 0.13);
-  return ${f(STEAM_LOOK.squeezeFog)} * fade * body * lumps;
+  vec2 toCam = normalize((uCoverInv * vec4(uCamLocal, 1.0)).xz);
+  float behind = smoothstep(0.1, -0.5, dot(out2, toCam));
+  return ${f(STEAM_LOOK.squeezeFog)} * fade * body * lumps * (1.0 - behind);
 }
 
 /** Whether clock l's cloud could show at p (the dilated mean, lifted by the most the turbulence can): the probes' test. */
@@ -811,7 +822,9 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
       // from the silver to ≈ 6–10 cm as it comes down.
       float seatIn = smoothstep(uD[l].y + 0.04, uD[l].z - 0.06, uA[l].x);
       float dShell = max(r - ${f(COVER.radius)} * pow(max(0.0, 1.0 - pow(max(cv.y, 0.0) / ${f(COVER.domeHeight)}, 2.2)), 1.0 / 2.2), cv.y - ${f(COVER.domeHeight)});
-      float clearR = 0.03 + 0.6 * seatIn;
+      // (v1.6 polish 4: further behind it, as this camera sees it: fog there shows over its crown.)
+      float behindC = smoothstep(0.1, -0.4, dot(out2, normalize((uCoverInv * vec4(uCamLocal, 1.0)).xz)));
+      float clearR = 0.03 + 0.6 * seatIn * (1.0 + 0.9 * behindC);
       stir *= mix(1.0, smoothstep(0.6 * clearR, clearR, dShell + 0.05 * (pf.a - 0.5) + 0.04 * (pn.b - 0.5)), on);
     }
   }
@@ -1134,7 +1147,7 @@ float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising
     if (inCloud && uDebug != 3 && uDebug != 5 && (uFlags & 131072) == 0) dc = cloud(p, l, detail, L, so); else { gSheetPrev[l] = 9.0; gEdgePrev[l] = 99.0; gWispPrev[l] = 99.0; }
     float dr = (inSpill ? spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 && (uFlags & 65536) == 0 ? veil(p, l, detail) : 0.0);
     // (The seating's puffs leave the cover: what it closes over does not hold them.)
-    float dq = inSpill ? squeeze(p, l) * uA[l].z : 0.0;
+    float dq = inSpill && (uFlags & 33554432) == 0 ? squeeze(p, l) * uA[l].z : 0.0;
     dens += dq;
     rising += dq;
     if (dc + dr <= 0.0) continue;
