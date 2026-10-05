@@ -191,3 +191,29 @@ pops []
 0.672s area    6.8 →    2.2 k  mass  0.04 →  0.01 M  p90   8.1 →   8.0  share  0.6 →  0.2 %
 
 ## the search (summ.py: max area 0.416–0.624 / max p90 / share at 0.48 / legible min at 0.416–0.496 and its p90 min / area ratio min to 0.56 / IoU 0.48/0.544/0.608)
+# d20: density 2.0 (density alone)
+d20: max area 120 k  max p90 38  share@.48 33.6 %  legible min 44 k p90 min 25  ratio min 0.91  IoU 0.61/0.51/0.66
+# v60d30: whole radius ×0.6, density 3.0
+v60d30: max area 77 k  max p90 55  share@.48 29.7 %  legible min 31 k p90 min 36  ratio min 0.95  IoU 0.68/0.56/0.67
+# tA: ×0.6, 2.2
+tA: max area 69 k  max p90 47  share@.48 25.0 %  legible min 27 k p90 min 29  ratio min 0.98  IoU 0.70/0.59/0.67
+# tD: ×0.7, 1.8, fade from 0.36
+tD: max area 68 k  max p90 39  share@.48 21.0 %  legible min 26 k p90 min 20  ratio min 0.94  IoU 0.71/0.67/0.67
+# tE: ×0.7, 1.75
+tE: max area 77 k  max p90 39  share@.48 24.0 %  legible min 27 k p90 min 24  ratio min 0.95  IoU 0.69/0.60/0.67
+# tK: shownGrow 0.25, 1.9, fade 0.36
+tK: max area 64 k  max p90 41  share@.48 20.9 %  legible min 26 k p90 min 21  ratio min 0.91  IoU 0.72/0.66/0.67
+# tL: shownGrow 0.2, 1.75, fade 0.36
+tL: max area 54 k  max p90 40  share@.48 17.7 %  legible min 23 k p90 min 20  ratio min 0.92  IoU 0.75/0.68/0.67
+# tN: shownGrow 0.28, 1.7, fade 0.40
+tN: max area 71 k  max p90 38  share@.48 22.7 %  legible min 27 k p90 min 21  ratio min 0.92  IoU 0.71/0.64/0.67
+# tP: shownGrow 0.26, 1.75, fade 0.39
+tP: max area 66 k  max p90 40  share@.48 21.8 %  legible min 26 k p90 min 21  ratio min 0.93  IoU 0.71/0.65/0.67
+# tR: shownGrow 0.27, 1.7, fade 0.40
+tR: max area 69 k  max p90 39  share@.48 22.3 %  legible min 26 k p90 min 21  ratio min 0.93  IoU 0.71/0.64/0.67
+# tV: shownGrow 0.25, 1.7 (fade unchanged)
+tV: max area 68 k  max p90 39  share@.48 22.5 %  legible min 25 k p90 min 23  ratio min 0.94  IoU 0.71/0.62/0.67
+# tW: shownGrow 0.23, 1.75 (fade unchanged)
+tW: max area 64 k  max p90 40  share@.48 22.2 %  legible min 25 k p90 min 24  ratio min 0.93  IoU 0.72/0.63/0.67
+# tT: shownGrow 0.26, 1.72, fade 0.40 (chosen)
+tT: max area 67 k  max p90 39  share@.48 22.1 %  legible min 26 k p90 min 22  ratio min 0.93  IoU 0.71/0.64/0.67
