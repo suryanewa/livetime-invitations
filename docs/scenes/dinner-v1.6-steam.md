@@ -941,11 +941,27 @@ reads as a small, faint spill from the gap at 0.42–0.48 s and has thinned to a
 the shape; the gilt rim, which the before's puff washed out at 0.42–0.48 s, stays gold. Still a soft puff at 1:1 (the design
 limit), now a small one.
 
-COST_TABLE
+**Cost** (`bench6.ts` at the real framing and DSF, p10 ms; before = the judge's two runs on the polish-6 build; after = this
+build, each time re-run until its steam-hidden frame was clean, the machine being shared at load 3–23; `cost.txt`,
+`cost-raw-after.txt`). The march is the same march (footprint, scale and steps at every time are the judge's), so only the
+gush's own density evaluation differs; with the narrower drawn tube more of its box returns early.
+
+| steam cost, p10 ms | 0.3 | 0.4 | 0.45 | 0.5 | 0.55 | 0.6 | 0.65 | 0.7 |
+|---|---|---|---|---|---|---|---|---|
+| laptop, before | 4.6 / 4.8 | 5.1 / 5.2 | 5.4 / 5.5 | 4.9 / 5.0 | 5.1 | 5.3 / 5.3 | 4.8 | 3.9 / 3.9 |
+| **laptop, after** | **3.9** | **4.9** | **5.2** | **4.8** | **4.8** | **4.9** | **4.4** | **3.9** |
+| phone, before | 3.9 | 4.2 | 4.3 | 4.4 | – | 4.7 | – | 3.5 |
+| **phone, after** | **3.8** | **4.1** | **4.2** | **4.4** | – | **4.5** | – | **3.6** |
+
+The phone at 0.7 s (3.6, runs 3.6 / 3.8 / 4.1, its steam-hidden frame 2.1–2.2 ms against the judge's 1.8) is after the gush
+(τ 0.688, past the fade's end at 0.66: no spill box, `uSpillOn` 0, the before's code path exactly): machine noise, not the
+change. **Pacing** (`pace.ts`): laptop p50 16.70, **p95 16.70**, max 16.8, steam window p95 16.70, no frame over 20 ms (the
+judge's polish 6: the same). The phone's pacing could not be measured clean in this session (load 11–20: p95 33.3 with the
+page's own frames slow, `pacing-raw-after.txt`); its steam cost is at or under the before at every benched time.
 
 **Tests.** `tests/dinner-steam.test.ts` 26 (changed: the gush's fade is full to 0.4 s, was 0.42, and its drawn growth is
 within the box's, `shownGrow ≤ grow`); `tests/dinner.test.ts` 27, `tests/scene-depth.test.ts` 6;
-`tests/browser/dinner.spec.ts` BROWSER; `pnpm typecheck` clean.
+`tests/browser/dinner.spec.ts` 6/6 (fresh server); `pnpm typecheck` clean.
 
 ## Decisions
 
