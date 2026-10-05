@@ -806,8 +806,14 @@ export function steamBounds(
   spillMax.copy(cloudMax);
   if (s.present && s.fade > 0) {
     let rMax = 0, yMin = Infinity, yMax = -Infinity;
+    // (v1.6 polish 6: the outline as the condensate's edge has receded, `recede` into the cavity's p-norm: every point
+    // moved towards the cavity's centre at the rim by the recession there, the least of its share at the wall and at the
+    // receded point. The march's box follows the visible cloud, not the air that carried it.)
+    const { radius: R, height: H } = CLOUD, D = Math.min(R, H);
     for (const [P, Y] of OUTLINE) {
-      axisForward(P, Y, s, fw);
+      const w = (k: number) => recedeWeight(P * k, CLOUD.rim + (Y - CLOUD.rim) * k);
+      const k1 = Math.max(0, 1 - (s.recede * w(1)) / D), k = Math.max(0, 1 - (s.recede * Math.min(w(1), w(k1))) / D);
+      axisForward(P * k, Y >= CLOUD.rim ? CLOUD.rim + (Y - CLOUD.rim) * k : Y, s, fw);
       rMax = Math.max(rMax, fw[0]);
       yMin = Math.min(yMin, fw[1]);
       yMax = Math.max(yMax, fw[1]);
@@ -815,23 +821,28 @@ export function steamBounds(
     // (The turbulence's warp, and the billows and swell that move the edge in material space.)
     const look = cloudLook(s.age, s.erode, BOUNDS_LOOK, s.peel);
     const m = 0.1 + 1.6 * s.turb + look.amp + look.billow + EDGE.fine;
-    const lean = s.lean.length() * Math.max(0, yMax - 0.15);
-    const r = rMax + m + lean + s.dragSide.length();
-    cloudMin.set(-r, Math.max(0, yMin - m), -r);
-    cloudMax.set(r, Math.min(CLOUD_Y_MAX, yMax + m), r);
+    // (The draught's lean and the dome's side drag shift the cloud one way, by up to their full reach at its top.)
+    const h = Math.max(0, yMax - 0.15), lx = s.lean.x * h + s.dragSide.x, lz = s.lean.y * h + s.dragSide.y, r = rMax + m;
+    cloudMin.set(-r + Math.min(0, lx), Math.max(0, yMin - m), -r + Math.min(0, lz));
+    cloudMax.set(r + Math.max(0, lx), Math.min(CLOUD_Y_MAX, yMax + m), r + Math.max(0, lz));
   }
   // (v1.6 polish 3) The gush: out of the raised gap over the plate's rim and up, round the raised
   // side (where the gap is open by at least a fifth of its widest), while any of it shows.
   if (veil && spillFade(veil.tau) > 0 && veil.tau < SPILL.fade[1]) {
-    const tau = veil.tau, age = Math.min(Math.max(0, tau - 0.02), SPILL.dt * (SPILL.samples - 1));
-    let gap = 0;
-    for (let k = 0; k < SPILL.samples; k++) gap = Math.max(gap, raisedGap(tau - k * SPILL.dt));
-    const reach = gushOut(age), rise = gushRise(age);
-    const r = GUSH.radius + 0.4 * gap + GUSH.grow * (reach + rise) + 0.06;
-    const lip = COVER.lipRadius, lo = lip - r, hi = lip + reach + r;
+    // (v1.6 polish 6: only the parcels that carry any of it, and their neighbours along the tube: the oldest, which have
+    // risen furthest, once their air has gone. Its fade is later now (0.42–0.66 s): the box was the whole history's.)
+    const tau = veil.tau, lip = COVER.lipRadius;
+    let lo = Infinity, hi = -Infinity, top = -Infinity;
+    for (let k = 0; k < SPILL.samples; k++) {
+      const live = [k - 1, k, k + 1].some((j) => j >= 0 && j < SPILL.samples && spillSource(tau - j * SPILL.dt) > 0);
+      if (!live) continue;
+      const a = k * SPILL.dt, g = raisedGap(tau - a), out = gushOut(a), up = gushRise(a);
+      const r = GUSH.radius + 0.4 * g + GUSH.grow * (out + up) + 0.06;
+      lo = Math.min(lo, lip + out - r); hi = Math.max(hi, lip + out + r); top = Math.max(top, plateTop(lip) + 0.6 * g + up + r);
+    }
     spillMin.set(Infinity, 0, Infinity);
-    spillMax.set(-Infinity, plateTop(lip) + 0.6 * gap + rise + r, -Infinity);
-    for (let ang = -1.6; ang <= 1.6001; ang += 0.1) {
+    spillMax.set(-Infinity, top, -Infinity);
+    for (let ang = -1.6; lo <= hi && ang <= 1.6001; ang += 0.1) {
       const cx = RAISED_DIR.x * Math.cos(ang) - RAISED_DIR.y * Math.sin(ang), cz = RAISED_DIR.x * Math.sin(ang) + RAISED_DIR.y * Math.cos(ang);
       for (const rr of [lo, hi]) {
         spillMin.x = Math.min(spillMin.x, cx * rr); spillMax.x = Math.max(spillMax.x, cx * rr);

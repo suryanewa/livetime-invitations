@@ -159,9 +159,11 @@ export const STEAM_LOOK = {
   /**
    * The march's pixel budget: at most `maxScale` of the drawing buffer's resolution a side, and at most this many pixels
    * over the steam's footprint on screen (polish 4: the footprint's, not the buffer's; polish 5: 120 k → 240 k, 90 k → 160 k
-   * thin: the risen cap's large footprint at 1.5–2.2 s cost 6.5 ms on the phone at 270 k).
+   * thin: the risen cap's large footprint at 1.5–2.2 s cost 6.5 ms on the phone at 270 k; polish 6: 240 k → 180 k, over the
+   * tighter boxes of the receding cloud and the gush's live parcels: 0.70 march pixels per CSS pixel at the laptop's held dome,
+   * was 0.68, at ≤ 5.4 ms where the sixth judge measured 6.0–6.5 at the app's real framing).
    */
-  marchPixels: 240_000,
+  marchPixels: 180_000,
   /** (v1.6 polish 4) The march's shortest step (su, ≈ 2 mm). */
   minStep: 0.012,
   /**
@@ -175,9 +177,10 @@ export const STEAM_LOOK = {
   lowShare: 0.6,
   /**
    * (v1.6 polish 5) The march's resolution a side over the drawing buffer's, at most (one march pixel per 2 × 2 buffer
-   * pixels: a full-resolution march, one per CSS pixel at the laptop's 1.65×, cost 6.5 ms at the held dome).
+   * pixels: a full-resolution march, one per CSS pixel at the laptop's 1.65×, cost 6.5 ms at the held dome; polish 6: 0.46,
+   * the young cloud at 0.7 s, under the budget at 0.5, cost 6.3 ms at the laptop).
    */
-  maxScale: 0.5,
+  maxScale: 0.46,
   /** (v1.6 polish 5) The crown's wake tongues: their height at most (su, ≈ 2 cm; polish 4: 0.075, 1.3 cm). */
   tongue: 0.12,
   /** (v1.6 polish 3) The veil's density in the march: its wisps were lit for the old, dimmer key (it was 40 % of the vapour at 1.2 s). */
@@ -1727,6 +1730,8 @@ export class DinnerSteam {
   private alive = false;
   /** How many clocks carry a cloud (set by sync). */
   private clouds = 0;
+  /** (v1.6 polish 6) Steam clocks drawn this frame (each sample evaluates every one of them). */
+  private drawnClocks = 0;
   /** (v1.6 polish 5) The union of the march's own boxes (the steam, without its shadow's reach; set by sync). */
   private readonly marchMin = new Vector3();
   private readonly marchMax = new Vector3();
@@ -1908,9 +1913,11 @@ export class DinnerSteam {
     // The march, at half the drawing buffer's resolution.
     // (The young cloud's fine edge takes the full budget; thin steam and wisps, whose finest features
     // are centimetres, a smaller one. The history is resampled across the change: no pop.)
-    // (Two clouds at once, a change of mind's: each sample evaluates both; fewer pixels.)
+    // (Two clouds at once, a change of mind's: each sample evaluates both; fewer pixels. v1.6 polish 6: half the budget, was
+    // 0.4 of polish 5's larger one: 90 k, as many as before; and a fifth fewer with one cloud among two clocks, a resumed
+    // reveal's veil beside the cloud left behind: 6.2 ms at the laptop at the full budget.)
     const budget = (globalThis as { __steamPixels?: number }).__steamPixels
-      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.4 : 1);
+      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.5 : this.drawnClocks > 1 ? 0.8 : 1);
     // (v1.6 polish 4: the budget is the steam's own footprint on screen, not the drawing buffer's: the phone's
     // portrait frame fills more of its buffer with the plate than the laptop's does, and costs the same.)
     // (v1.6 polish 5: the budget over the steam's own boxes, the march's; the scissor over the composite's, which reaches
@@ -2104,6 +2111,7 @@ export class DinnerSteam {
     let steps: number = STEAM_LOOK.steps.veil;
     let shadowOn = 0;
     this.clouds = 0;
+    this.drawnClocks = 0;
     this.l0 = -1;
     this.l0Cloud = false;
     this.clocks.forEach((c, l) => {
@@ -2125,6 +2133,7 @@ export class DinnerSteam {
       // a hollowing cloud and wisps take fewer steps.)
       if (present) steps = Math.max(steps, s.age < 0.32 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
       if (present) this.clouds++;
+      this.drawnClocks++;
       // (Its shadow once the dome has lifted off it: τ 0.3 s on.)
       shadowOn = Math.max(shadowOn, present ? Math.min(1, Math.max(0, (tau - 0.3) / 0.15)) : 1);
       B[l]!.set(s.dragSide.x, s.dragSide.y, s.lean.x, s.lean.y);
