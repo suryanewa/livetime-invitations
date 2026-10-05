@@ -90,7 +90,7 @@ export const STEAM_LOOK = {
   gBack: -0.3,
   back: 0.35,
   /** The key's optical depth through the cloud is the light volume's times this (steeper: self-shadowing away from the key; polish 3: 1.25 → 2.5). */
-  keyFall: 4.5,
+  keyFall: 3.8,
   /** A change of mind: how far (su) the seating cover squeezes the air under it out along the plate (≈ 5 cm). */
   squeeze: 0.3,
   squeezeFog: 5.0,
@@ -134,6 +134,8 @@ export const STEAM_LOOK = {
    * the steam's footprint on screen (polish 4: the footprint's, not the buffer's).
    */
   marchPixels: 120_000,
+  /** (v1.6 polish 4) The march's shortest step (su, ≈ 2 mm). */
+  minStep: 0.012,
   /** (v1.6 polish 4) …and at most this many march pixels per CSS pixel of the footprint. */
   cssDensity: 0.31,
   /** (v1.6 polish 2) The budget once only thin steam shows (the cloud past its fog, the veil). */
@@ -863,8 +865,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   float wakeTop = 0.0;
   if (uK[l].y > 0.0) {
     float crown = smoothstep(${f(CLOUD.rim + 0.25)}, ${f(CLOUD.rim + 0.55)}, m.g) * (1.0 - 0.6 * min(1.0, m.r * m.r / ${f(CLOUD.radius * CLOUD.radius)}));
-    if (crown > 0.0) dEff += uK[l].y * crown * (texture(uNoise, vec3(X.x * 5.0, X.y * 0.7, X.z * 5.0) + vec3(0.29, 0.61, 0.13)).g - 0.45) * 2.0;
-    wakeTop = crown * uK[l].y / 0.06;
+    if (crown > 0.0) dEff += uK[l].y * crown * (texture(uNoise, vec3(X.x * 8.0, X.y * 0.6, X.z * 8.0) + vec3(0.29, 0.61, 0.13)).g - 0.45) * 2.0;
+    wakeTop = crown * uK[l].y / 0.075;
   }
   // v1.6 polish 2: the peeling layer, on the edge band only. From the lift-off the outer centimetre
   // or two is a shear layer (the room's air sliding down the wall and in, the cloud's drawn up): the
@@ -909,7 +911,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   float band = mix(E.y, ${f(STEAM_LOOK.underBand)}, max(low, under));
   // (v1.6 polish 4) The crown's top, drawn up into the dome's wake, is no lid: it frays upward over ≈ 1.5 cm in the
   // wake's tongues (its band as wide as they are tall).
-  band = mix(band, 0.06, wakeTop);
+  band = mix(band, 0.07, wakeTop);
   // (v1.6 polish 4: the boundary and the skin are integrated over the step: a 2.5 mm boundary crossed by a 3 mm
   // step was a coin toss each frame.)
   float dPrev = gEdgePrev[l];
@@ -933,7 +935,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   vec4 M = uM[l];
   // (The sheet field's own frame: cells ≈ 3.7 cm across and 2.7× that along the rise, so a ray through the body
   // crosses a few sheets, not a fur of them; folded by the large field.)
-  vec3 Xh = X * vec3(1.15, 0.55, 1.15) + (n1.rgb - 0.5) * (0.6 * E.w) + vec3(0.13, 0.17 + 0.03 * tau, 0.71);
+  // (At the crown, drawn up into the dome's wake: twice as long along the rise.)
+  vec3 Xh = X * vec3(1.15, 0.55 * (1.0 - 0.5 * wakeTop), 1.15) + (n1.rgb - 0.5) * (0.6 * E.w) + vec3(0.13, 0.17 + 0.03 * tau, 0.71);
   float sb = 2.0 * texture(uNoise, Xh).g - 1.0, bp = gSheetPrev[l];
   gSheetPrev[l] = sb;
   // (A Gaussian profile of width M.y (∫ = M.y), integrated exactly over the step with the field taken as linear
@@ -1205,7 +1208,10 @@ void main() {
     a1 = hi;
   }
   int steps = uSteps;
-  float dt = (a1 - a0) / float(steps);
+  // (v1.6 polish 4: no step shorter than ≈ 2 mm: the field's sharp features are integrated, so a short span (the
+  // edge, a limb, a thin wisp) is covered by fewer steps instead of oversampled by the full count.)
+  float dt = max((a1 - a0) / float(steps), ${f(STEAM_LOOK.minStep)});
+  steps = int(ceil((a1 - a0) / dt));
   // (The start moves every frame, along a golden-ratio sequence seeded by the steam clock: the
   // temporal resolve averages the starts, and a capture at a given τ is the same every time.)
   float t = a0 + dt * (uDebug == 10 ? 0.5 : fract(ign(fc) + 0.6180339887 * uFrame));
@@ -1280,7 +1286,7 @@ void main() {
     float sKey = ${f(STEAM_LOOK.key)} * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav) + bounce * (1.0 - 0.6 * cav);
     // (v1.6 polish 3: the room's light is brightest from the window's side, so the cloud's own cover
     // towards the key shades it too: the side away from the window is greyer.)
-    float sRoom = (uFlags & 4) != 0 ? 0.0 : ${f(STEAM_LOOK.room)} * (0.2 + 0.8 * exp(-uSigma * mix(lv.y, lv.x, 0.8) * 1.2)) * lit * (1.0 - 0.85 * cav);
+    float sRoom = (uFlags & 4) != 0 ? 0.0 : ${f(STEAM_LOOK.room)} * (0.3 + 0.7 * exp(-uSigma * mix(lv.y, lv.x, 0.7) * 1.0)) * lit * (1.0 - 0.85 * cav);
     float Ts = exp(-sig * seg);
     C += T * (1.0 - Ts) * vec2(sKey, sRoom);
     if (uDebug == 15) C += T * (1.0 - Ts) * vec2(exp(-od) - sKey, -sRoom);
@@ -2023,7 +2029,7 @@ export class DinnerSteam {
       // (The fine curls belong to the young edge: as the band widens they would read as a felt over the aging cap.)
       Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.25) / 0.2)), s.peel, s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
-      K[l]!.set(look.capCore, Math.min(0.06, 0.4 * s.dragUp) * (1 - smoothstep01((s.age - 0.15) / 0.35)), 0, 0);
+      K[l]!.set(look.capCore, Math.min(0.075, 0.5 * s.dragUp) * (1 - smoothstep01((s.age - 0.15) / 0.35)), 0, 0);
       // (The body's mean density over the core's, for the light volume: the haze, the sheets' share of the volume
       // (≈ 1.6 × their half-width: the field's density at zero) less the holes torn in them, and the skin.)
       M[l]!.set(look.fold, look.foldWidth, look.haze, look.core * (look.haze + look.fold * look.foldWidth * 1.6 * 0.7) + 0.35 * look.sheet);
