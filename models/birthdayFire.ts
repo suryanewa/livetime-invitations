@@ -812,15 +812,20 @@ export class SmokeRig {
           if (k > 0) path += Math.hypot(st.position[k * 3]! - st.position[k * 3 - 3]!, st.position[k * 3 + 1]! - st.position[k * 3 - 2]!, st.position[k * 3 + 2]! - st.position[k * 3 - 1]!);
           // The ribbon is the thread's laminar stem only: past it the volume carries the vapour.
           // (v1.6 polish 2: and the thin filament it goes on as above its transition, fading as it spreads.)
-          const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!, st.full[k]!);
+          // (v1.6 polish 4: and the breath's stream, `jet` of the parcel, until the jet rolls it into the puff.)
+          const J = st.jet[k]!;
+          const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!, st.full[k]!, J, st.carried[k]!);
           // (v1.6 polish 2: at the thread's own core width, 1–3 mm: the turbulent spread is the volume's veil.)
           // (v1.6 polish 3: widening linearly with its height, filamentWidth, and thinning as it widens.)
           // (Its sheet's turn matters only where it widens: over SMOKE_VOLUME.filamentWiden[0].)
           const face = st.rise[k]! > SMOKE_VOLUME.filamentWiden[0] ? filamentFace(t - st.age[k]!, i * SMOKE_STRAND_COUNT + s + 1, st.rise[k]! - laminar) : 1;
           const wf = filamentWidth(st.full[k]!, st.rise[k]!, face);
-          T.wid[k] = wf * MPS_UNITS;
+          // (v1.6 polish 4: the breath's stream at its own, stretched width and depth, fire.ts SMOKE.stream.)
+          T.wid[k] = (wf + (st.stream[k]! - wf) * J) * MPS_UNITS;
           // (A filament at its own width: as dense as the share of the smoke it still carries, ribbonShare.)
-          T.alp[k] = stem > 0 ? 1 - Math.exp(Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * stem * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin * (st.full[k]! / wf)) : 0;
+          const tauThread = -Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin * (st.full[k]! / wf);
+          const tauStream = -Math.log(Math.max(1e-6, 1 - st.streamAlpha[k]!));
+          T.alp[k] = stem > 0 ? 1 - Math.exp(-stem * (tauThread + (tauStream - tauThread) * J)) : 0;
           T.age[k] = st.age[k]!;
           // Noise coordinate travels with the parcel (its birth), distinct per thread.
           T.seed[k] = (t - st.age[k]!) * 2.3 + s * 7.31 + i * 3.77;

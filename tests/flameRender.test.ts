@@ -226,7 +226,8 @@ describe('v1.6 flames: the volume, the bloom and the haze', () => {
     expect(smoke.volume.puffs).toBeGreaterThan(50);
     expect(smoke.volume.dropped).toBe(0);
     // The hand-over: the ribbon carries a thread's first SMOKE_VOLUME.ribbon[0] of path at its full
-    // opacity and nothing past ribbon[1] (the volume does).
+    // opacity and nothing past ribbon[1] (the volume does). (v1.6 polish 4: the vapour leaves the ember
+    // already rising, so its first parcels are counted over ribbon[1], not ribbon[0].)
     const st = newSmokeStrand();
     const w: [number, number, number] = [0, 1, 0];
     const still: WickAt = (_b, out) => { out[0] = w[0]; out[1] = w[1]; out[2] = w[2]; };
@@ -236,7 +237,7 @@ describe('v1.6 flames: the volume, the bloom and the haze', () => {
     for (let k = 1; k < SMOKE_POINT_COUNT; k++) {
       path += Math.hypot(st.position[k * 3]! - st.position[k * 3 - 3]!, st.position[k * 3 + 1]! - st.position[k * 3 - 2]!, st.position[k * 3 + 2]! - st.position[k * 3 - 1]!) / 5;
       if (path > SMOKE_VOLUME.ribbon[1]) past++;
-      else if (path < SMOKE_VOLUME.ribbon[0]) near++;
+      else near++;
     }
     expect(past).toBeGreaterThan(10);
     expect(near).toBeGreaterThan(3);
