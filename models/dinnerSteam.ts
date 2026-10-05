@@ -73,7 +73,7 @@ export const STEAM_LOOK = {
    * The key's share (its intensity scaled to steam's in-scatter) and the room's (linear luminance).
    * (v1.6 polish 3: the judge saw "a flatly lit cotton tuft": the key 0.95 → 1.55, the room a fill, 0.22 → 0.12.)
    */
-  key: 1.55,
+  key: 2.0,
   room: 0.12,
   /**
    * Their colours (v1.6 polish 2: the judge saw "cold steam in a warm room"): the key is the
@@ -90,7 +90,7 @@ export const STEAM_LOOK = {
   gBack: -0.3,
   back: 0.35,
   /** The key's optical depth through the cloud is the light volume's times this (steeper: self-shadowing away from the key; polish 3: 1.25 → 2.5). */
-  keyFall: 2.5,
+  keyFall: 4.5,
   /** A change of mind: how far (su) the seating cover squeezes the air under it out along the plate (≈ 5 cm). */
   squeeze: 0.3,
   squeezeFog: 5.0,
@@ -102,7 +102,7 @@ export const STEAM_LOOK = {
   /** Wrenninge's multiple-scattering octaves (their share of the key; polish 2 raised them to 0.45 / 0.18, which flattened the body; polish 3 pulls them back). */
   ms: [0.18, 0.06] as const,
   /** The white plate's light on the fog just above it (linear radiance at the porcelain; polish 3: falls off as the cube of the plate's share of the sky, so only the fog close over it). */
-  bounce: 0.9,
+  bounce: 2.0,
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
   /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
@@ -153,7 +153,7 @@ const GUSH_OUT_K = Array.from({ length: SPILL.samples }, (_, k) => gushOut(k * S
 const GUSH_RISE_K = Array.from({ length: SPILL.samples }, (_, k) => gushRise(k * SPILL.dt));
 const PLATE_PROFILE_TOP_AT_LIP = plateTop(COVER.lipRadius);
 /** The light volume: N³ voxels over the proxy box, its z-slices tiled COLS × ROWS in one 2D atlas. */
-const LIGHT_N = 28, LIGHT_COLS = 7, LIGHT_ROWS = 4;
+const LIGHT_N = 32, LIGHT_COLS = 8, LIGHT_ROWS = 4;
 /** Probes of the march's occupancy along each ray. */
 const PROBES = 5;
 
@@ -945,7 +945,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   else folds = 0.5 * M.y * (erfApprox(k * sb) - erfApprox(k * bp)) / (sb - bp);
   // (Intermittent: the sheets gather where the large field is high, with clear air between; torn: holes open in
   // them where the detail is low, so they read as veils and strands.)
-  folds *= smoothstep(0.3, 0.55, n1.b) * smoothstep(0.2, 0.45, nb.b + 0.25 * (n1.g - 0.5));
+  float sheetMask = smoothstep(0.3, 0.55, n1.b) * smoothstep(0.2, 0.45, nb.b + 0.25 * (n1.g - 0.5));
+  folds *= sheetMask;
   if ((uFlags & 1048576) != 0) folds = 0.0;
   // (v1.6 polish 3) The cap keeps its own fog as the stem and base empty: the crown closes over the
   // ring (the judge's hollow doughnut), the warm core that feeds the cap still rising through it.
@@ -976,11 +977,12 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
     }
     ringShade = ${f(STEAM_LOOK.ringFog)} * uR[l].w * 1.6 * od;
   }
-  // The billows' own shade: the edge a little way towards the key.
-  if ((uFlags & 4096) == 0 && d > 0.02 && detail > 0.0 && uC[l].z < 0.3) {
-    vec4 nl = texture(uNoise, Xb + L * 0.2);
-    // (v1.6 polish 3: on the boundary's lobes only; inside a translucent fog the light volume shades the body.)
-    shadeOd = 0.24 * sat((dShade + E.z * (nl.b - nb.b) * 2.0) / 0.06) * (1.0 - smoothstep(0.04, 0.1, dShade));
+  // (v1.6 polish 4) The sheets' own shadow: a sheet between this sample and the key, within ≈ 1.5 cm, takes the key
+  // from what lies behind it (the light volume holds the body's mean, 1.5 cm voxels, and cannot see a 3 mm sheet):
+  // the sheet field that far towards the key, integrated along the way as the march integrates it.
+  if ((uFlags & 4096) == 0 && d > 0.01 && detail > 0.0 && sheetMask > 0.0) {
+    float sl = 2.0 * texture(uNoise, Xh + L * vec3(${f(0.09 * 1.15)}, ${f(0.09 * 0.55)}, ${f(0.09 * 1.15)})).g - 1.0;
+    shadeOd = core * M.x * sheetMask * gaussMean(sb, sl, M.y * 0.56419) * 0.09 * edge * m.b * seatGrade(m.g) * stir;
   }
   shadeOd += ringShade;
   return d;
@@ -1255,7 +1257,9 @@ void main() {
     // Wrenninge's octaves: each scatters again with less extinction, less light and a flatter phase.
     // (v1.6 polish 2: the octaves raised, so dense front-lit fog is about as white as the plate: a
     // dense fog of droplets scatters nearly all it receives, many times.)
-    float key = ((uFlags & 1) != 0 ? 0.0 : exp(-od) * ph0) + ((uFlags & 2) != 0 ? 0.0 : ${f(STEAM_LOOK.ms[0])} * exp(-0.35 * od) * ph1 + ${f(STEAM_LOOK.ms[1])} * exp(-0.2 * od) * ph2);
+    // (v1.6 polish 4: the octaves light the bright side only (their extinction 0.9 and 0.7 of the key's, was 0.35 and
+    // 0.2): the shaded side keeps its shade, the room's fill alone.)
+    float key = ((uFlags & 1) != 0 ? 0.0 : exp(-od) * ph0) + ((uFlags & 2) != 0 ? 0.0 : ${f(STEAM_LOOK.ms[0])} * exp(-0.9 * od) * ph1 + ${f(STEAM_LOOK.ms[1])} * exp(-0.7 * od) * ph2);
     float lit = mix(uDomeShade, 1.0, lv.z);
     // (Still under the lifting dome: no key, the room's light only through the gap.)
     float cav = (uFlags & 8388608) != 0 ? 0.0 : domeCavity(p);
@@ -1276,9 +1280,10 @@ void main() {
     float sKey = ${f(STEAM_LOOK.key)} * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav) + bounce * (1.0 - 0.6 * cav);
     // (v1.6 polish 3: the room's light is brightest from the window's side, so the cloud's own cover
     // towards the key shades it too: the side away from the window is greyer.)
-    float sRoom = (uFlags & 4) != 0 ? 0.0 : ${f(STEAM_LOOK.room)} * (0.2 + 0.8 * exp(-uSigma * mix(lv.y, lv.x, 0.6) * 0.9)) * lit * (1.0 - 0.85 * cav);
+    float sRoom = (uFlags & 4) != 0 ? 0.0 : ${f(STEAM_LOOK.room)} * (0.2 + 0.8 * exp(-uSigma * mix(lv.y, lv.x, 0.8) * 1.2)) * lit * (1.0 - 0.85 * cav);
     float Ts = exp(-sig * seg);
     C += T * (1.0 - Ts) * vec2(sKey, sRoom);
+    if (uDebug == 15) C += T * (1.0 - Ts) * vec2(exp(-od) - sKey, -sRoom);
     // (The steam's depth along the ray, weighted by what it shows: where the resolve reprojects from.)
     wt += T * (1.0 - Ts);
     tw += T * (1.0 - Ts) * tp;
@@ -1543,6 +1548,8 @@ void main() {
   if (cover < 0.002) discard;
   // (Tooling: the steam's own linear radiance / 2, unpremultiplied, where it is dense enough.)
   if (uDebug == 12) { gl_FragColor = vec4(vec3(v.y > 0.5 ? 0.5 * v.x / v.y : 0.0), 1.0); return; }
+  // (Tooling: the key's transmittance, in-scatter weighted, where the steam covers more than a third.)
+  if (uDebug == 15) { gl_FragColor = vec4(vec3(v.y > 0.33 ? v.x / v.y : 0.0), 1.0); return; }
   // (v1.6 polish 2: lit in colour: the key's light is the window's, the room's the warm greige of
   // the walls and the table that surround it, each of unit luminance.)
   float keyShare = clamp(g.z / max(v.x, 1e-6), 0.0, 1.0);
