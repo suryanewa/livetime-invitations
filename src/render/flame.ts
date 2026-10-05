@@ -789,6 +789,13 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
         vec3 key = uKey * SMOKE_KEY * phase * exp(-tauL);
         // The room's light, less what the column hides from itself.
         vec3 room = uRoom * exp(-SMOKE_OCC * vTau * chord);
+        // v1.6 polish 3: where the thread is optically thick (the dense first vapour at the wick) the
+        // light it takes in is scattered on, not lost (albedo 0.95): the volume's octaves (Wrenninge),
+        // weighted 1 − e^−τ, so a dense thread is grey-white, as the volume's dense puff is, not a grey
+        // rod darker than the wall; a thin filament (τ ≪ 1) is single-scattering as before.
+        float ms = 1.0 - exp(-tau);
+        key += uKey * SMOKE_KEY * ms * (0.5 * mix(phase, 1.0, 0.6) * exp(-0.3 * tauL) + 0.25 * exp(-0.1 * tauL));
+        room = mix(room, uRoom * (1.0 + 0.6 * ms), ms);
         vec3 src = SMOKE_ALBEDO * (key + room);
         // The flame's last glow in the first vapour (emission per unit of its density), fading as it cools.
         src += vHot * SMOKE_GLOW_RGB;
