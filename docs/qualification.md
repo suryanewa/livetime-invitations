@@ -132,8 +132,8 @@ unit tests (the Party clearance test, the Sports planning test) timed out under 
   hot-reloaded through many merges, `scene-depth.spec › dinner` counted zero depth passes because its
   `import('/src/render/sceneDepth.ts')` got a different module instance than the app's (the HMR trap; restart the
   server before the suite or any harness that hooks `Stage.prototype`).
-- **At 7ca077f** (steam polish 7 merged): the Dinner, scene-depth and posters specs 16/16. 7ca077f suites: <to be
-  filled>.
+- **At 7ca077f** (steam polish 7 merged): the Dinner, scene-depth and posters specs 16/16.
+  7ca077f suites: <to be filled>.
 - **Dinner pacing, from the judges' own `pace.ts`** (real-time rAF intervals over three whole accepts each, laptop
   1280 × 720 @2 and phone 390 × 844 @3): fifth judging p95 16.7–16.8 ms, no frame over 20 ms; sixth and seventh
   p95 16.7–16.8, max 16.8, no frame over 20 ms at either size. After polish 7 the owner measured the laptop at p95
