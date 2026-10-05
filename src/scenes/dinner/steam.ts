@@ -204,7 +204,7 @@ export function raisedGap(t: number): number {
  * from the lip and risen `gushRise(a)` (su): out to ≈ 3.7 cm, rising at up to ≈ 33 cm/s (the hot dome's
  * boundary layer and the lifting dome draw it up).
  */
-export const GUSH = { out: 0.22, outTime: 0.1, rise: 2.0, riseTime: 0.1, radius: 0.035, grow: 0.45, density: 6.0, spread: 1.1, centre: 0.5 } as const;
+export const GUSH = { out: 0.22, outTime: 0.1, rise: 2.0, riseTime: 0.1, radius: 0.035, grow: 0.45, density: 5.2, spread: 1.1, centre: 0.5 } as const;
 export const gushOut = (a: number) => GUSH.out * (1 - Math.exp(-Math.max(a, 0) / GUSH.outTime));
 export const gushRise = (a: number) => (a <= 0 ? 0 : GUSH.rise * (a - GUSH.riseTime * (1 - Math.exp(-a / GUSH.riseTime))));
 
