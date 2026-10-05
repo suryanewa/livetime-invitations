@@ -927,19 +927,10 @@ export function smokeStrand(i: number, strand: number, t: number, wickAt: WickAt
     if (dm > 0) {
       const e1 = Math.sin(dm / 0.012 + j0 + 3.1 * B.birth[k]!), e2 = Math.sin(dm / 0.019 + j1);
       const amp = 0.22 * dm * (1 - Math.exp(-dm / 0.01));
-      // v1.6 polish 3: and the jet's eddies sweep past the wick at 9–16 Hz, so each parcel leaves on
-      // the gust it met (the whole stream's: its strands are one thread at the wick) and keeps that
-      // heading as it is carried: the streak flaps, its waves running off with the flow (judge 3:
-      // the wick's stream held one shape for 150 ms). (Faded where the parcels are too far apart in
-      // birth to draw the wave: the old puff's.)
-      const bk = B.birth[k]!, da = 0.5 * (B.a[Math.min(n - 1, k + 1)]! - B.a[Math.max(0, k - 1)]!);
-      const f1 = 2 * Math.PI * (12 + 4 * rand(i, 45)), f2 = 2 * Math.PI * (8.5 + 3 * rand(i, 46));
-      const g1 = Math.exp(-0.5 * (f1 * da) ** 2), g2 = Math.exp(-0.5 * (f2 * da) ** 2);
-      const fl1 = g1 * Math.sin(f1 * bk + 6.283 * rand(i, 47)), fl2 = g2 * Math.sin(f2 * bk + 6.283 * rand(i, 48));
-      const flap = SMOKE.flap[0] * (1 - Math.exp(-dm / SMOKE.flap[1]));
-      px += (amp * (0.6 * e1 * SCREEN_RIGHT[0] + 0.5 * e2 * TOWARD_CAMERA[0]) + flap * (0.8 * fl1 * SCREEN_RIGHT[0] + 0.5 * fl2 * TOWARD_CAMERA[0])) * MPS;
-      pz += (amp * (0.6 * e1 * SCREEN_RIGHT[1] + 0.5 * e2 * TOWARD_CAMERA[1]) + flap * (0.8 * fl1 * SCREEN_RIGHT[1] + 0.5 * fl2 * TOWARD_CAMERA[1])) * MPS;
-      py += (amp * 0.7 * Math.cos(dm / 0.012 + 1.7 + j2) + flap * 0.7 * fl2) * MPS;
+      // (v1.6 polish 3: and the jet's eddies' flapping, the whole stream's: computePlume, B.fx/fy/fz.)
+      px += (amp * (0.6 * e1 * SCREEN_RIGHT[0] + 0.5 * e2 * TOWARD_CAMERA[0]) + B.fx[k]!) * MPS;
+      pz += (amp * (0.6 * e1 * SCREEN_RIGHT[1] + 0.5 * e2 * TOWARD_CAMERA[1]) + B.fz[k]!) * MPS;
+      py += (amp * 0.7 * Math.cos(dm / 0.012 + 1.7 + j2) + B.fy[k]!) * MPS;
     }
     out.position[k * 3] = px;
     out.position[k * 3 + 1] = py;
@@ -971,7 +962,7 @@ const plumeBase = (() => {
   return {
     i: -1, t: NaN, kind: 'breath' as SmokeKind, wickAt: null as WickAt | null, wake: undefined as WakeAt | undefined,
     ux: 0, uz: 0, vx: 0, vz: 0,
-    px: f(), py: f(), pz: f(), sx: f(), sy: f(), sz: f(), a: f(), birth: f(), zr: f(), zt: f(), phase: f(), dm: f(), core: f(), w: f(), rate: f(), depth: f(),
+    px: f(), py: f(), pz: f(), sx: f(), sy: f(), sz: f(), fx: f(), fy: f(), fz: f(), a: f(), birth: f(), zr: f(), zt: f(), phase: f(), dm: f(), core: f(), w: f(), rate: f(), depth: f(),
   };
 })();
 
@@ -1006,6 +997,13 @@ function computePlume(i: number, t: number, wickAt: WickAt, kind: SmokeKind, wak
   const toCentreX = SOCKET_CENTRE[0] - CANDLE_SOCKETS[i]![0], toCentreZ = SOCKET_CENTRE[1] - CANDLE_SOCKETS[i]![1];
   const laminar = smokeLaminar(i), stemLean = smokeLean(i), leanK = Math.tan(stemLean[0]) * MPS;
   const n = SMOKE_POINT_COUNT;
+  // v1.6 polish 3: the breath's jet's eddies sweep past the wick at 9–16 Hz, so each parcel leaves on
+  // the gust it met (the whole stream's: its strands are one thread at the wick) and keeps that
+  // heading as it is carried: the streak flaps, its waves running off with the flow (judge 3: the
+  // wick's stream held one shape for 150 ms). Faded where the parcels are too far apart in birth to
+  // draw the wave (the old puff's).
+  const f1 = 2 * Math.PI * (12 + 4 * rand(i, 45)), f2 = 2 * Math.PI * (8.5 + 3 * rand(i, 46));
+  const q1 = 6.283 * rand(i, 47), q2 = 6.283 * rand(i, 48);
   for (let k = 0; k < n; k++) {
     // Newest first, spaced in age (denser near the wick).
     const a = span * (k / (n - 1)) ** 1.25;
@@ -1076,6 +1074,14 @@ function computePlume(i: number, t: number, wickAt: WickAt, kind: SmokeKind, wak
     B.a[k] = a; B.birth[k] = birth; B.zr[k] = zr; B.zt[k] = zt; B.phase[k] = phase;
     const dm = drift / MPS;
     B.dm[k] = dm;
+    if (dm > 0) {
+      const da = span * 1.25 * (Math.max(k, 0.5) / (n - 1)) ** 0.25 / (n - 1);
+      const flap = SMOKE.flap[0] * (1 - Math.exp(-dm / SMOKE.flap[1]));
+      const fl1 = flap * Math.exp(-0.5 * (f1 * da) ** 2) * Math.sin(f1 * birth + q1), fl2 = flap * Math.exp(-0.5 * (f2 * da) ** 2) * Math.sin(f2 * birth + q2);
+      B.fx[k] = 0.8 * fl1 * SCREEN_RIGHT[0] + 0.5 * fl2 * TOWARD_CAMERA[0];
+      B.fz[k] = 0.8 * fl1 * SCREEN_RIGHT[1] + 0.5 * fl2 * TOWARD_CAMERA[1];
+      B.fy[k] = 0.7 * fl2;
+    } else { B.fx[k] = 0; B.fy[k] = 0; B.fz[k] = 0; }
     // Width (m): the thread thickens by diffusion, spreads turbulently above the transition and
     // in the breath's jet.
     // The first vapour off the wick rises as a starting plume: its head a thermal wider than the stem.

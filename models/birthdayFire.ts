@@ -815,7 +815,9 @@ export class SmokeRig {
           const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!, st.full[k]!);
           // (v1.6 polish 2: at the thread's own core width, 1–3 mm: the turbulent spread is the volume's veil.)
           // (v1.6 polish 3: widening linearly with its height, filamentWidth, and thinning as it widens.)
-          const wf = filamentWidth(st.full[k]!, st.rise[k]!, filamentFace(t - st.age[k]!, i * SMOKE_STRAND_COUNT + s + 1, st.rise[k]! - laminar));
+          // (Its sheet's turn matters only where it widens: over SMOKE_VOLUME.filamentWiden[0].)
+          const face = st.rise[k]! > SMOKE_VOLUME.filamentWiden[0] ? filamentFace(t - st.age[k]!, i * SMOKE_STRAND_COUNT + s + 1, st.rise[k]! - laminar) : 1;
+          const wf = filamentWidth(st.full[k]!, st.rise[k]!, face);
           T.wid[k] = wf * MPS_UNITS;
           // (A filament at its own width: as dense as the share of the smoke it still carries, ribbonShare.)
           T.alp[k] = stem > 0 ? 1 - Math.exp(Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * stem * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin * (st.full[k]! / wf)) : 0;
