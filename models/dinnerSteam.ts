@@ -75,9 +75,17 @@ export const STEAM_LOOK = {
    * (v1.6 polish 5: the fifth judge's lit side was 222–226, under the white plate's: the key 2.0 → 3.2, so the lit steam's
    * own colour sits above the plate's white (≈ 249 against 241 after the neutral tone mapping), and the plate's bounce on
    * the fog just over it 2.0 → 1.5, so the fog over the plate's middle keeps it within +4.)
+   * (v1.6 polish 6; the sixth judge: the own colour was 249–251 everywhere, lit − shaded +1: the key's direction was no
+   * longer legible in the volume, both sides at the tone curve's shoulder. The key 3.2 → 2.0 with a steeper self-shadow
+   * (`keyFall`), so the lit side sits under the shoulder and the shaded side falls off it; the fifth judge's brighter lit
+   * side is withdrawn. The room's fill rises with height (`roomLow`, `roomRise`): the air low over the table, under and
+   * beside the lifted cloche, sees the dark table and the silver over half its sky; higher, the room's walls all round.)
    */
-  key: 3.2,
-  room: 0.12,
+  key: 2.0,
+  room: 0.4,
+  /** (v1.6 polish 6) The room's share low over the table, rising to the whole of it between these heights (su). */
+  roomLow: 0.3,
+  roomRise: [0.6, 1.4] as const,
   /**
    * Their colours (v1.6 polish 2: the judge saw "cold steam in a warm room"): the key is the
    * window's daylight as the white plate renders it under this rig (neutral: R − B +0.5); the room is
@@ -92,8 +100,16 @@ export const STEAM_LOOK = {
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
   gBack: -0.3,
   back: 0.35,
-  /** The key's optical depth through the cloud is the light volume's times this (steeper: self-shadowing away from the key; polish 3: 1.25 → 2.5). */
-  keyFall: 3.8,
+  /** The key's optical depth through the cloud is the light volume's times this (steeper: self-shadowing away from the key; polish 3: 1.25 → 2.5; polish 6: 3.8 → 20, the terminator). */
+  keyFall: 20,
+  /**
+   * (v1.6 polish 6) The key's transmittance into the steam never falls below this: in fog a few optical depths thick the
+   * multiply scattered light diffuses into the deepest shade (without it, at the steeper `keyFall`, the shaded fog went
+   * darker than the wall behind it: smoke). The vortex ring's tube enters the light volume at `ringShadow` of its mean
+   * (it shades its own underside analytically: at the full mean, × `keyFall`, it left dark blots on the cap).
+   */
+  keyFloor: 0.15,
+  ringShadow: 0.3,
   /** A change of mind: how far (su) the seating cover squeezes the air under it out along the plate (≈ 5 cm). */
   squeeze: 0.3,
   squeezeFog: 5.0,
@@ -108,14 +124,14 @@ export const STEAM_LOOK = {
   ringFog: 0.8,
   /** The underside's band (su: the undercut's foot, the stem and the cap's underside as it rises; the walls' is 2.5 mm young). */
   underBand: 0.1,
-  /** Wrenninge's multiple-scattering octaves (their share of the key; polish 2 raised them to 0.45 / 0.18, which flattened the body; polish 3 pulls them back). */
-  ms: [0.18, 0.06] as const,
-  /** The white plate's light on the fog just above it (linear radiance at the porcelain; polish 3: falls off as the cube of the plate's share of the sky, so only the fog close over it; polish 5: 2.0 → 1.5 under the brighter key). */
-  bounce: 1.5,
+  /** Wrenninge's multiple-scattering octaves (their share of the key; polish 2 raised them to 0.45 / 0.18, which flattened the body; polish 3 pulls them back; polish 6: 0.18 / 0.06 → 0.1 / 0.03, the deep shade's light is `keyFloor`). */
+  ms: [0.1, 0.03] as const,
+  /** The white plate's light on the fog just above it (linear radiance at the porcelain; polish 3: falls off as the cube of the plate's share of the sky, so only the fog close over it; polish 5: 2.0 → 1.5 under the brighter key; polish 6: back to 2.0 under the dimmer key). */
+  bounce: 2.0,
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
-  /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
-  shadow: 0.16,
+  /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. (v1.6 polish 6: 0.16 → 0.14: the denser cloud at 0.74 s took the plate's side to −11.) */
+  shadow: 0.14,
   /** The shadow's optical depth: the fog's extinction less what it scatters forward onto the surface (≈ 1 − g). */
   shadowOd: 0.45,
   /**
@@ -665,7 +681,7 @@ float cloudMean(vec3 p, int l) {
   vec2 q = p.xz - uB[l].zw * max(0.0, p.y - 0.15);
   vec4 m = mapAt(length(q), p.y, l);
   // (v1.6 polish 2: and the vortex ring's core, at its mean: it shades its own underside.)
-  return (m.a > 0.0 ? seatRec(m.r, m.g, uF[l].w, uK[l].w) * m.b : 0.0) + (uR[l].w > 0.0 ? ${f(0.55 * 0.6)} * ${f(STEAM_LOOK.ringFog)} * uR[l].w * ringTube(length(q), p.y, l) : 0.0);
+  return (m.a > 0.0 ? seatRec(m.r, m.g, uF[l].w, uK[l].w) * m.b : 0.0) + (uR[l].w > 0.0 ? ${f(0.55 * 0.6 * STEAM_LOOK.ringShadow)} * ${f(STEAM_LOOK.ringFog)} * uR[l].w * ringTube(length(q), p.y, l) : 0.0);
 }
 
 
@@ -1342,7 +1358,7 @@ void main() {
     // dense fog of droplets scatters nearly all it receives, many times.)
     // (v1.6 polish 4: the octaves light the bright side only (their extinction 0.9 and 0.7 of the key's, was 0.35 and
     // 0.2): the shaded side keeps its shade, the room's fill alone.)
-    float key = ((uFlags & 1) != 0 ? 0.0 : exp(-od) * ph0) + ((uFlags & 2) != 0 ? 0.0 : ${f(STEAM_LOOK.ms[0])} * exp(-0.9 * od) * ph1 + ${f(STEAM_LOOK.ms[1])} * exp(-0.7 * od) * ph2);
+    float key = ((uFlags & 1) != 0 ? 0.0 : max(exp(-od), ${f(STEAM_LOOK.keyFloor)}) * ph0) + ((uFlags & 2) != 0 ? 0.0 : ${f(STEAM_LOOK.ms[0])} * exp(-0.9 * od) * ph1 + ${f(STEAM_LOOK.ms[1])} * exp(-0.7 * od) * ph2);
     float lit = mix(uDomeShade, 1.0, lv.z);
     // (Still under the lifting dome: no key, the room's light only through the gap.)
     float cav = (uFlags & 8388608) != 0 ? 0.0 : domeCavity(p);
@@ -1363,7 +1379,7 @@ void main() {
     float sKey = ${f(STEAM_LOOK.key)} * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav) + bounce * (1.0 - 0.6 * cav);
     // (v1.6 polish 3: the room's light is brightest from the window's side, so the cloud's own cover
     // towards the key shades it too: the side away from the window is greyer.)
-    float sRoom = (uFlags & 4) != 0 ? 0.0 : ${f(STEAM_LOOK.room)} * (0.3 + 0.7 * exp(-uSigma * mix(lv.y, lv.x, 0.7) * 1.0)) * lit * (1.0 - 0.85 * cav);
+    float sRoom = (uFlags & 4) != 0 ? 0.0 : ${f(STEAM_LOOK.room)} * mix(${f(STEAM_LOOK.roomLow)}, 1.0, smoothstep(${f(STEAM_LOOK.roomRise[0])}, ${f(STEAM_LOOK.roomRise[1])}, p.y)) * (0.3 + 0.7 * exp(-uSigma * mix(lv.y, lv.x, 0.7) * 1.0)) * lit * (1.0 - 0.85 * cav);
     float Ts = exp(-sig * seg);
     C += T * (1.0 - Ts) * vec2(sKey, sRoom);
     if (uDebug == 15) C += T * (1.0 - Ts) * vec2(exp(-od) - sKey, -sRoom);
