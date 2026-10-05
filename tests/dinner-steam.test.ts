@@ -9,7 +9,7 @@ import { DinnerScene } from '../src/scenes/dinner/index.ts';
 import { STEAM_LOOK } from '../models/dinnerSteam.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, dragAt, EDGE, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
+  axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, crownFray, dragAt, dragCentre, EDGE, heldDrag, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
   spillSource, SQUEEZE, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
 } from '../src/scenes/dinner/steam.ts';
 
@@ -79,12 +79,26 @@ describe('Dinner steam field (v1.6)', () => {
 
   it('the lifting dome drags its top up a little while it is over the plate, then lets go', () => {
     expect(dragAt(0.2)).toBeGreaterThan(0);
-    expect(dragAt(0.6) * SU_CM).toBeGreaterThan(1);
-    expect(dragAt(0.6) * SU_CM).toBeLessThan(4);
-    // Once the dome is clear of the plate (≈ 0.45 s) it drags nothing more.
-    expect(dragAt(1.0)).toBeCloseTo(dragAt(0.5), 3);
+    // (v1.6 polish 5: the held dome) While the fog holds the dome's shape its crown has taken up only a share of the
+    // drag (under a centimetre and a half on the axis); the rest catches up after the hold, 1–4 cm in all.
+    expect(dragAt(0.6) * dragCentre(0) * SU_CM).toBeLessThan(1.5);
+    expect(dragAt(0.6) * dragCentre(0) * SU_CM).toBeGreaterThan(0.5);
+    expect(dragAt(1.2) * SU_CM).toBeGreaterThan(1);
+    expect(dragAt(1.2) * SU_CM).toBeLessThan(4);
+    expect(heldDrag(CLOUD.hold[0])).toBeCloseTo(CLOUD.dragHeld, 6);
+    expect(crownFray(CLOUD.hold[0])).toBe(0);
+    expect(crownFray(CLOUD.hold[1])).toBe(1);
+    // The held dome: 0.15–0.25 s after the rim clears the cloud's side (the release, 0.4 s) its top stands within
+    // 2.5 cm of the cavity's (≈ 1 cm of drag, ≈ 1.2 cm of the bubble's slow start); a beat later it has been drawn up
+    // and is rising away.
+    expect(CLOUD.hold[0] - CLOUD.release).toBeGreaterThanOrEqual(0.15);
+    expect(CLOUD.hold[0] - CLOUD.release).toBeLessThanOrEqual(0.25);
+    expect((outline(CLOUD.hold[0]).top - outline(0).top) * SU_CM).toBeLessThan(2.5);
+    expect((outline(1.0).top - outline(CLOUD.hold[0]).top) * SU_CM).toBeGreaterThan(5);
+    // Once the dome is clear of the plate (≈ 0.45 s) and the crown has caught up (≈ 1.05 s) it drags nothing more.
+    expect(dragAt(1.4)).toBeCloseTo(dragAt(1.1), 3);
     const side = new Vector2();
-    dragAt(1.0, side);
+    dragAt(1.2, side);
     // Along the dome's path (back-left), a centimetre or so.
     expect(side.x * REVEAL_DIR.x + side.y * REVEAL_DIR.z).toBeGreaterThan(0);
     expect(side.length() * SU_CM).toBeLessThan(2.5);

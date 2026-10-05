@@ -30,7 +30,7 @@ import {
 } from 'three';
 import { COVER, PLATE_PROFILE, plateTop } from './dinnerContract.ts';
 import {
-  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, EDGE, GUSH, gushOut, gushRise, leftSteamFade, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, SQUEEZE, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
+  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, crownFray, dragAt, EDGE, GUSH, gushOut, gushRise, leftSteamFade, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, SQUEEZE, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
 } from '../src/scenes/dinner/steam.ts';
 import { requestSceneDepth, type SceneDepthFrame } from '../src/render/sceneDepth.ts';
 
@@ -2054,6 +2054,8 @@ export class DinnerSteam {
       }
       const tau = c.tau!;
       const s = cloudState(tau, c.emitStart, c.emitEnd, c.state);
+      const TT = (globalThis as { __tt?: Record<string, number> }).__tt ?? {};
+      if (TT.drag !== undefined) { s.dragUp *= TT.drag; s.dragSide.multiplyScalar(TT.drag); }
       const present = s.present && s.fade > 0;
       A[l]!.set(tau, 1, c.fade, present ? 1 : 0);
       if (this.l0 < 0 || (present && !this.l0Cloud)) { this.l0 = l; this.l0Cloud = present; this.tau0 = tau; }
@@ -2066,12 +2068,16 @@ export class DinnerSteam {
       B[l]!.set(s.dragSide.x, s.dragSide.y, s.lean.x, s.lean.y);
       Cc[l]!.set(s.turb, s.erode, s.age, s.rise);
       const look = cloudLook(s.age, s.erode, this.look, s.peel);
+      if (TT.billow !== undefined) look.billow *= TT.billow;
+      if (TT.band !== undefined) look.band *= TT.band;
+      if (TT.amp !== undefined) look.amp *= TT.amp;
       E[l]!.set(look.amp, look.band, look.billow, look.warp);
       // (The fine curls belong to the young edge: as the band widens they would read as a felt over the aging cap.)
-      Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.25) / 0.2)), s.peel, s.undercutReach, s.undercutHeight);
+      Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.25) / 0.2)) * (TT.fine ?? 1), s.peel * (TT.peel ?? 1), s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
       // (v1.6 polish 5: and the seating's puffs' strength: the clock's light at the capture, the fog it squeezed out.)
-      K[l]!.set(look.capCore, Math.min(0.075, 0.5 * s.dragUp) * (1 - smoothstep01((s.age - 0.15) / 0.35)),
+      // (v1.6 polish 5: the crown's wake tongues come after the held dome, as its crown is drawn up, and go as the cap rolls.)
+      K[l]!.set(look.capCore, Math.min(0.075, 0.5 * dragAt(1.5)) * crownFray(Math.min(tau, c.emitEnd)) * (1 - smoothstep01((s.age - 0.55) / 0.35)) * (TT.wake ?? 1),
         Number.isFinite(c.capture) && Number.isFinite(c.emitEnd) ? leftSteamFade(c.capture, c.emitEnd, c.capture) : 0, 0);
       // (The body's mean density over the core's, for the light volume: the haze, the sheets' share of the volume
       // (≈ 1.6 × their half-width: the field's density at zero) less the holes torn in them, and the skin.)

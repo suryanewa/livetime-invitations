@@ -78,6 +78,14 @@ export const CLOUD = {
   /** The dome's drag: the crown's air follows its lift by this share, and its path by `side`, while it is over the cloud. */
   dragUp: 0.32,
   dragSide: 0.1,
+  /**
+   * (v1.6 polish 5; the judge: "a legible held dome for 0.15–0.25 s after lift-off, then the crown frays") The held
+   * dome: until hold[0] (τ, s) the fog stands in the dome's shape, its crown drawn up only `dragHeld` of the dome's drag
+   * (≈ 1 cm on the axis: the air's inertia; the wake's suction has not yet set the crown moving); over hold[0] →
+   * hold[1] + 0.25 s the rest of the drag catches up and the crown frays upward into the wake's tongues.
+   */
+  hold: [0.6, 0.78] as const,
+  dragHeld: 0.3,
   /** The dome's horizontal offset (su) over which it stops dragging: still over the cloud → clear of it. */
   overlap: [0.15, 0.7] as const,
   /** The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s. */
@@ -274,15 +282,21 @@ const DRAG = (() => {
 
 /**
  * The dome's drag at accept time t, already scaled by CLOUD.dragUp / dragSide: how far the crown's
- * air has been drawn up (su, returned) and along the dome's path (`side`, plan x/z, su).
+ * air has been drawn up (su, returned) and along the dome's path (`side`, plan x/z, su). (v1.6 polish 5: during the
+ * held dome only `dragHeld` of it; the rest catches up after the hold, `heldDrag`.)
  */
 export function dragAt(t: number, side: Vector2 = new Vector2()): number {
   const f = Math.min(Math.max(t, 0), 1.5) / DRAG_DT;
   const i = Math.min(Math.floor(f), DRAG.n - 1), k = f - i;
   const lerp = (a: Float64Array) => a[i]! + (a[i + 1]! - a[i]!) * k;
-  side.set(lerp(DRAG.x) * CLOUD.dragSide, lerp(DRAG.z) * CLOUD.dragSide);
-  return lerp(DRAG.up) * CLOUD.dragUp;
+  const c = heldDrag(t);
+  side.set(lerp(DRAG.x) * CLOUD.dragSide * c, lerp(DRAG.z) * CLOUD.dragSide * c);
+  return lerp(DRAG.up) * CLOUD.dragUp * c;
 }
+/** The share of the dome's drag the crown's air has taken up by accept time t (the held dome, then the catch-up). */
+export const heldDrag = (t: number) => CLOUD.dragHeld + (1 - CLOUD.dragHeld) * smooth(CLOUD.hold[0], CLOUD.hold[1] + 0.25, t);
+/** How far the crown has frayed by τ (0 while the dome holds, 1 once the hold is over). */
+export const crownFray = (tau: number) => smooth(CLOUD.hold[0], CLOUD.hold[1], tau);
 
 /** The thermal's top rise (su) at age a (buoyant start, entraining deceleration). */
 export function riseAt(a: number): number {
