@@ -112,8 +112,11 @@ minutes, never await a background run, and write long files in pieces.
 
 State at the last write: every polish round is merged on `v1.6/integration` (cake ×3, flames ×2, steam ×2, meshopt);
 typecheck clean and the unit suite 452/452 (32 files, with `--testTimeout=1800000` for the Party clearance test);
-the Birthday and Dinner posters recaptured on the merged build; third judgings of the Birthday scene and the
-steam in progress; the full browser suite running.
+the Birthday and Dinner posters recaptured on the merged build; the full browser suite 117/117 on a freshly started
+dev server (on a server that had hot-reloaded through many merges, `scene-depth.spec › dinner` counted zero depth
+passes because its `import('/src/render/sceneDepth.ts')` got a different module instance than the app's
+`sceneDepth.ts?t=…` — the same HMR trap the judges' `Stage.prototype.render` hooks hit; restart the server before
+the suite or any prototype-hooking harness); third judgings of the Birthday scene and the steam in progress.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for
