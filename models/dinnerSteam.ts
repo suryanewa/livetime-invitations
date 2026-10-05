@@ -113,7 +113,7 @@ export const STEAM_LOOK = {
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
    * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them.
    */
-  steps: { dense: 32, thin: 24, veil: 16 },
+  steps: { dense: 28, thin: 22, veil: 16 },
   /**
    * The temporal resolve: the new frame's share of a marched pixel (v1.6 polish 4: every pixel is marched every
    * frame; a tenth, the history carried through the flow), of a pixel filled from its marched neighbours on the
@@ -157,7 +157,7 @@ const PLATE_PROFILE_TOP_AT_LIP = plateTop(COVER.lipRadius);
 /** The light volume: N³ voxels over the proxy box, its z-slices tiled COLS × ROWS in one 2D atlas. */
 const LIGHT_N = 32, LIGHT_COLS = 8, LIGHT_ROWS = 4;
 /** Probes of the march's occupancy along each ray. */
-const PROBES = 5;
+const PROBES = 3;
 
 const f = (x: number) => x.toFixed(5);
 /** A colour scaled to unit (Rec. 709) luminance, as a vector. */
@@ -1215,12 +1215,12 @@ void main() {
   float a0 = max(t0, first - dp), a1 = min(t1, last + dp);
   if (a0 < first) {
     float lo = a0, hi = first;
-    for (int k = 0; k < 3; k++) { float mid = 0.5 * (lo + hi); if (occupied(ro + rd * mid)) hi = mid; else lo = mid; }
+    for (int k = 0; k < 2; k++) { float mid = 0.5 * (lo + hi); if (occupied(ro + rd * mid)) hi = mid; else lo = mid; }
     a0 = lo;
   }
   if (a1 > last) {
     float lo = last, hi = a1;
-    for (int k = 0; k < 3; k++) { float mid = 0.5 * (lo + hi); if (occupied(ro + rd * mid)) lo = mid; else hi = mid; }
+    for (int k = 0; k < 2; k++) { float mid = 0.5 * (lo + hi); if (occupied(ro + rd * mid)) lo = mid; else hi = mid; }
     a1 = hi;
   }
   int steps = uSteps;
@@ -1814,7 +1814,9 @@ export class DinnerSteam {
     u.uDebug!.value = dbg.__steamDebug ?? 0;
     u.uFlags!.value = (globalThis as { __steamFlags?: number }).__steamFlags ?? 0;
     u.uProbes!.value = (globalThis as { __steamProbes?: number }).__steamProbes ?? PROBES;
-    u.uSteps!.value = dbg.__steamSteps ?? Math.round(this.steps * (u.uLow!.value ? STEAM_LOOK.lowShare : 1));
+    // (Two clouds at once, a change of mind's: every sample evaluates both, and the march's cost is the ray's length
+    // more than its pixels': two thirds of the steps.)
+    u.uSteps!.value = dbg.__steamSteps ?? Math.round(this.steps * (u.uLow!.value ? STEAM_LOOK.lowShare : 1) * (this.clouds > 1 ? 0.67 : 1));
     // The flow map for every drawn clock (one draw), then the light volume through it (one draw).
     renderer.setRenderTarget(this.map);
     if (!dbg.__steamSkip?.includes('map')) renderer.render(this.pass.scene, this.pass.camera);
@@ -1827,7 +1829,7 @@ export class DinnerSteam {
     // are centimetres, a smaller one. The history is resampled across the change: no pop.)
     // (Two clouds at once, a change of mind's: each sample evaluates both; fewer pixels.)
     const budget = (globalThis as { __steamPixels?: number }).__steamPixels
-      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.5 : 1);
+      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.4 : 1);
     // (v1.6 polish 4: the budget is the steam's own footprint on screen, not the drawing buffer's: the phone's
     // portrait frame fills more of its buffer with the plate than the laptop's does, and costs the same.)
     const fp = this.footprint(camera, frame.size);
