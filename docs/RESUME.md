@@ -120,19 +120,19 @@ the suite or any prototype-hooking harness). The cake is **signed** by the fourt
 phone, vanilla and cocoa (8 / 7.5 / 7.5); the flames and smoke are **signed** by the fifth judging as a whole sequence
 at laptop, phone and 540 (7 / 7 / 7) after four polish rounds (the close-up tiers — the 10× blow, the 2× smoke
 detail, the 30× macro — withheld and recorded as known gaps: a limit of the 5 mm voxel smoke, below any size a guest
-sees). The steam is at 6.5 / 7 after five rounds (the fourth a structural round at a 3 ms budget: a dense
+sees). The steam is at 7 / 7.5 after six rounds (the fourth a structural round at a 3 ms budget: a dense
 intermittent sheet field, exact per-step integration, a reprojected history, a 32³ light volume; the fifth, at 6 ms, the
-box clip — the march's probes, not `steamBounds` — the decline's rim puffs, a held dome for 0.22 s, a thermal that rises
-6.8 cm with a rolled lip, a finer march). The sixth judge: the beat works, nothing clips or pops, but past one second
-the cloud behaves like smoke (gains mass after release, a hollow ring 1.3× the plate, a 0.3 s cross-dissolve in place),
-the own-colour terminator is gone, the gush dissolves in place, and the laptop steam cost is 5–6.5 ms at the app's real
-framing (the owners' clip-sized bench had read 1.1–4.2; the judge's in-app `bench6.ts` at the real device scale is now
-the reference) — all constants; the softness at 2× (edge ≈ 0.44–1.08, anisotropy 1.04–1.35) is the design limit of a
-half-resolution analytic march, and signing needs a per-frame advected 1–2 mm density with more samples and multiple
-scattering, which does not fit 6 ms. A last constants round (polish 6: the condensate's envelope eroding from its
-edges, a filled plate-sized cap, the terminator, the gush carried up, the cost at the real framing) is in progress on
-`v1.6/steam-polish6` (worktree `.claude/worktrees/v16-steam7`, port 5618); its result, a seventh judging and the closing
-of this section are the next steps.
+box clip — the march's probes, not `steamBounds` — the decline's rim puffs, a held dome for 0.22 s, a rising thermal
+with a rolled lip; the sixth the condensate's envelope eroding from its edges, a filled plate-sized cap, the gush
+carried up, the march budget 240 k → 180 k pixels so the laptop sits at 3.5–5.5 ms at the app's real framing — cost is
+measured with the sixth judge's in-app `bench6.ts` at the real device scale, never a clip-sized bench page). The seventh
+judge: "a supervisor would sign off the beat, the timing and the technique", **not signed** — the gush an airbrushed
+ball (size and brightness constants; structure a limit of the spill parcels), no light direction in the volume (a rig
+decision: the key is 44° off the camera and the own colour sits on the tone curve's shoulder), soft and combed at 2×
+(the design limit of a half-resolution analytic march). A last constants-only round on the gush's size and brightness
+(polish 7, `v1.6/steam-polish7`, worktree `.claude/worktrees/v16-steam8`, port 5619) is in progress, to be re-checked by
+the seventh judge on that tell; then the pass closes with the steam's limits recorded and the next approach below.
+Final verification on 1c61c25 (polish 6 merged): typecheck clean, unit 461/461, browser 117/117 on a fresh server.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for

@@ -94,6 +94,57 @@ the judging is in `docs/qualification.md` v1.6.
   paused, a checkerboard march and phase budgets (a `holdDepth` hook in `sceneDepth.ts`; the main pass's multisampled
   depth cannot be reused). The depth pass lets the scene's lights take part (−0.5 ms of program re-checks); the bloom
   draws on layer 29.
+- **The later rounds, and where the pass ended.** The cake was signed by its fourth judging at square 540, laptop and
+  phone, vanilla and cocoa (8 / 7.5 / 7.5). The flames went through two more rounds — the static jet at the wick
+  replaced by a 0.5–1 mm thread torn off the ember that turns up within 80 ms of the breath halving; the smoke above
+  8 cm as sheets bounded by fold lines (`SMOKE_SHEET`) on stems that neck and waver instead of six even blurs; the first
+  puff diluted so it no longer fogs the back-right candle — and were signed by the fifth judging as a whole sequence at
+  laptop, phone and 540 (7 / 7 / 7); the close-up tiers (the 10× blow, the 2× smoke, the 30× macro) stay withheld as
+  known gaps of a 5 mm voxel smoke. The steam went through three more. Round 3 made it translucent (the fog's own
+  density 0.2 with a 6 mm mixing skin carrying the outline, far-rim transmittance 0.33–0.41, the interior folded into
+  sheets along the rise, no hollow ring, a legible gush, no cap after a change of mind), scored 5.5 / 6 with a
+  design-limit diagnosis: translucency, self-shadowing and crisp sheets cannot be sampled by a half-resolution 11–15-step
+  march at 1.3 ms without grain or boil. Round 4, at a budget lifted to 3 ms, rebuilt the field, the sampling and the
+  light on that prescription (a dense intermittent two-octave sheet field; Hillaire's exact per-step integration; every
+  pixel marched every frame with a reprojected, neighbourhood-clamped history; a 32³ light volume with the sheets
+  shadowing toward the key), and the felt, the boil, the shell, the specks and the gap's mottle were gone: 6 / 6.5.
+  Round 5, at a budget lifted once more to 6 ms while steam shows, took the fifth judge's six items: the straight cut
+  down the cloud's right flank traced not to `steamBounds` but to the march's occupancy probes stepping over the flank
+  (the per-clock boxes had carried the shadow's reach; now steam-only, probes ≤ 0.3 su apart — 0 px of cut); the
+  decline's rim puffs moved from the cover's frame into the room's air so they fade on their own clock instead of
+  leaving with the dish; the crown taking only 20 % of the dome's drag until 0.6 s so the trapped steam holds the
+  cloche's shape for 0.22 s after the rim clears it (inside/outside brightening 50 → 1.9, IoU with the seated dome
+  0.83 → 0.45) before the crown frays; a stronger thermal (23.9 cm/s, the centroid up 6.8 cm by 1.2 s, the cap keeping
+  its mass to 1.38 s, a rolled lip of +22 levels, the cap filled rather than a smoke ring); key 3.2; the march at
+  0.82–0.85 march pixels per CSS pixel with 34 / 28 / 20 steps (1 : 1 cost 6.5 ms at the held dome and was not taken).
+  Cost 1.1–4.2 ms at laptop, 1.3–5.1 at phone, p95 16.7–16.8 ms over three accepts each. Not reached: a lit side at
+  luma ≥ 232 over 40 k px (226–231: the translucency and the neutral tone curve's shoulder), an edge gradient ≥ 1.2 at
+  2× and a 2 : 1 streaked crown (the converged image of an integrated translucent field is as smooth as its
+  centimetre-scale structure; polish 3's crisper edge was grain), and the own colour's terminator fell to +1…+3 (the
+  composite still +28…+52 lit over shaded). The owner's view, which the orchestrator shares: crisp millimetre
+  filaments need a 1–2 mm advected density with many more samples a pixel, not reachable in 6 ms with this approach.
+  The sixth judging put polish 5 at 6.5 / 7: the beat worked, nothing clipped or popped, but past one second the cloud
+  behaved like smoke (gaining mass after release, a hollow ring 1.3× the plate, a 0.3 s cross-dissolve in place), the
+  own colour had gone flat, the gush dissolved where it stood, and the laptop steam cost was 5–6.5 ms at the app's real
+  framing (the owners' clip-sized bench had read 1.1–4.2; the judge's in-app bench at the real device scale is now the
+  reference). Round 6 made it condensate: the visible edge recedes into the cloud from 0.3 s of the thermal, the cap
+  gathers no fog, the mass peaks at 0.74 s and falls every frame after (half by 1.3 s; the edge band to 0.38 of its peak
+  while the core holds 0.6), the cap filled (ring centre 0.68–0.83 of its rims, a lip of +17–19 levels, 0.52–0.62 of the
+  plate's width), the gush carried 6 cm up instead of fading, the march boxes following the receding cloud and the march
+  budget 240 k → 180 k pixels so the laptop sits at 3.5–5.5 ms at the real framing (phone 3.3–4.7; p95 16.7 ms over
+  three accepts at each size). The seventh judging: **laptop 7, phone 7.5, not signed** — "a supervisor would sign off
+  the beat, the timing and the technique", but three things keep it from reading as photographed steam at delivery
+  size: the gush is a featureless airbrushed ball beside the plate at 0.42–0.62 s (its size and brightness constants,
+  its lack of structure a limit of the spill parcels); the volume has no light direction in it (own colour within 4–18
+  levels, lit − shaded +2…+11; the composite's apparent modelling is the cloche's dark reflections behind the steam) —
+  the key is 44° off the camera and lights the dome's right side through its top, and the own colour sits on the tone
+  curve's shoulder, so this is a **rig decision** (a steam-specific rim or back light against the cove), not a steam
+  constant; and at 2× the edges are soft and combed (edge 0.56–0.99, crown anisotropy 1.1–1.4) — the design limit of a
+  half-resolution analytic march. What a guest sees at CSS size is a convincing steam beat; the one thing they may notice
+  is the soft white ball beside the plate at about 0.45 s. What a later version needs to be signed is in
+  `docs/RESUME.md`: light the steam on purpose, and a density advected per frame at 1–2 mm (or a full-resolution edge
+  band with motion-vector accumulation) for both the body and the gush, with polish 6 kept as the reference for the
+  envelope, the cap, the timing, the clip and the cost.
 
 
 Surya's twelve edits on v1.4 (`docs/perfection-pass-brief.md`: *"For each of these, I won't settle for anything less than perfection. Feel free to do external research or get experimental if it helps."*). Seven owners built in parallel, three independent judges measured the integrated build (motion and physics; materials and look; the guest's real-time experience on laptop and phone), and every owner then fixed what the judges found. The per-scene records are `docs/scenes/<scene>-v1.5*.md`; spec revisions #37–#40. What each edit became:
