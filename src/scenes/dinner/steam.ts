@@ -85,13 +85,13 @@ export const CLOUD = {
    * hold[1] + 0.25 s the rest of the drag catches up and the crown frays upward into the wake's tongues.
    */
   hold: [0.6, 0.78] as const,
-  dragHeld: 0.3,
+  dragHeld: 0.2,
   /** The dome's horizontal offset (su) over which it stops dragging: still over the cloud → clear of it. */
   overlap: [0.15, 0.7] as const,
   /** The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s. */
-  riseW: 1.45,
-  riseStart: 0.3,
-  riseMix: 0.9,
+  riseW: 2.4,
+  riseStart: 0.5,
+  riseMix: 1.6,
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
   base: 0.2,
   /** The cap's radius grows by this per su of rise (a thermal's entrainment, α ≈ 0.25, over R ≈ 0.63); the stem narrows by up to `stem`. */
@@ -100,9 +100,9 @@ export const CLOUD = {
   /** The cap flattens by up to this share of its height as it rises. */
   squash: 0.12,
   /** The updraft's fall-off from the axis to the cap's edge (share of the rise the edge loses). */
-  centre: 0.38,
+  centre: 0.25,
   /** The stem and base evaporate (up to this share) as the uncovered plate re-heats them. */
-  stemFade: 0.9,
+  stemFade: 1.0,
   /** The vortex ring's core in the cloud at the seat: (share of the radius, height su). */
   ringAt: [0.78, 0.34] as const,
   /** The vortex ring: its roll (rad) and time constant (s), its core's reach (su). */
@@ -118,13 +118,13 @@ export const CLOUD = {
   /** The room's draught leans the rising cloud (su of lean per su of height). */
   lean: 0.07,
   /** Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). */
-  erode: [0.2, 1.3] as const,
+  erode: [0.3, 1.8] as const,
   /** The cloud is gone by this age (s), faded out over the last `fadeOut`. */
   life: 2.0,
   fadeOut: 0.6,
   /** Visible steam evaporates as it rises: e^(−(y − evapFrom)/evaporate) above evapFrom (su). */
-  evapFrom: 0.9,
-  evaporate: 0.9,
+  evapFrom: 1.5,
+  evaporate: 1.5,
 } as const;
 
 /**
@@ -408,7 +408,7 @@ export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinit
   out.erode = 0.97 * Math.pow(smooth(CLOUD.erode[0], CLOUD.erode[1], a), 0.85);
   out.fade = 1 - smooth(CLOUD.life - CLOUD.fadeOut, CLOUD.life, a);
   out.floor = CLOUD.floor + CLOUD.floorGrow * smooth(0, 1.0, a);
-  out.stemFade = CLOUD.stemFade * smooth(0.35, 1.4, a);
+  out.stemFade = CLOUD.stemFade * smooth(0.2, 0.9, a);
   out.peel = smooth(EDGE.peel[0], EDGE.peel[1], tau);
   const u = EDGE.undercut, ut = Math.max(0, tau - u.start);
   out.undercutReach = Math.min(u.reach, u.speed * ut);
@@ -436,8 +436,13 @@ export const centreWeight = (P: number) => 1 - CLOUD.centre * Math.min(1, (P / C
 export const dragCentre = (P: number) => 1.45 - 0.9 * Math.min(1, (P / CLOUD.radius) ** 2);
 export const verticalForward = (Y: number, P: number, s: CloudState) => Y + s.rise * riseWeight(Y) * centreWeight(P) + s.dragUp * dragWeight(Y) * dragCentre(P) - s.squash * capIntegral(Y);
 const verticalSlope = (Y: number, P: number, s: CloudState) => 1 + s.rise * riseWeightD(Y) * centreWeight(P) + s.dragUp * dragWeightD(Y) * dragCentre(P) - s.squash * capWeight(Y);
-/** The stem and base evaporate as the uncovered plate re-heats them (their share of the light left). */
-export const stemLeft = (Y: number, s: CloudState) => 1 - s.stemFade * (1 - smooth(0.12, 0.42, Y));
+/**
+ * The stem and base evaporate as the uncovered plate re-heats them (their share of the light left at height y). (v1.6
+ * polish 5: only while they are still low over it: base air that the thermal carried up into its cap keeps its fog,
+ * so the cap's underside is no hollow.)
+ */
+export const STEM_HEAT = [0.35, 0.75] as const;
+export const stemLeft = (Y: number, s: CloudState, y = 0) => 1 - s.stemFade * (1 - smooth(0.12, 0.42, Y)) * (1 - smooth(STEM_HEAT[0], STEM_HEAT[1], y));
 /** Bisection steps of the vertical solve (the map is monotonic; ≈ 0.2 mm over its bracket; v1.6 polish 2: 13 → 11). */
 export const VERTICAL_STEPS = 11;
 /** Bisection steps of the radial solve (each with a vertical solve inside). */
@@ -503,7 +508,7 @@ export function axisInverse(rho0: number, y0: number, s: CloudState, out: [numbe
     Y = 0.5 * (a + b);
     P = solveP(Y);
   }
-  out[0] = P; out[1] = Y; out[2] = stemLeft(Y, s) / (stretch * S * S);
+  out[0] = P; out[1] = Y; out[2] = stemLeft(Y, s, y0) / (stretch * S * S);
   return out;
 }
 
@@ -681,7 +686,7 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   out.sheet = 0.3 - 0.15 * smooth(0.15, 0.5, age) - 0.1 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
   // (v1.6 polish 3) The cap's fog: the stem and base empty, the cap keeps its own (a filled mushroom, not a ring).
-  out.capCore = 0.24 - 0.13 * smooth(0.25, 0.7, age) - 0.09 * smooth(0.6, 0.9, age);
+  out.capCore = 0.24 + 0.14 * smooth(0.4, 0.75, age) - 0.26 * smooth(0.85, 1.6, age);
   // (v1.6 polish 4: the structural round) The body is thin, dense sheets with clear air between: the zero set of
   // the sheet field (drawn out along the rise, folded with the air), `fold` times the core's density inside a
   // sheet, `foldWidth` its half-width in the field's units (≈ 2 mm), `haze` the share of the core between them.

@@ -30,7 +30,7 @@ import {
 } from 'three';
 import { COVER, PLATE_PROFILE, plateTop } from './dinnerContract.ts';
 import {
-  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, crownFray, dragAt, EDGE, GUSH, gushOut, gushRise, leftSteamFade, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, SQUEEZE, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
+  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, crownFray, dragAt, EDGE, GUSH, gushOut, gushRise, leftSteamFade, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, SQUEEZE, STEM_HEAT, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
 } from '../src/scenes/dinner/steam.ts';
 import { requestSceneDepth, type SceneDepthFrame } from '../src/render/sceneDepth.ts';
 
@@ -94,9 +94,13 @@ export const STEAM_LOOK = {
   /** A change of mind: how far (su) the seating cover squeezes the air under it out along the plate (≈ 5 cm). */
   squeeze: 0.3,
   squeezeFog: 5.0,
-  /** The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density (polish 3: 5 → 1.5; the cap keeps its own fog, `capCore`). */
-  ringCore: 0.55,
-  ringFog: 1.5,
+  /**
+   * The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density (polish 3: 5 → 1.5; the cap
+   * keeps its own fog, `capCore`; polish 5: a narrower tube, ≈ 1.5 cm, 0.55 → 0.42, that stays whole through the roll:
+   * the rolled lip the fifth judge asked for at 1.06–1.22 s).
+   */
+  ringCore: 0.42,
+  ringFog: 1.25,
   /** The underside's band (su: the undercut's foot, the stem and the cap's underside as it rises; the walls' is 2.5 mm young). */
   underBand: 0.1,
   /** Wrenninge's multiple-scattering octaves (their share of the key; polish 2 raised them to 0.45 / 0.18, which flattened the body; polish 3 pulls them back). */
@@ -373,7 +377,7 @@ void main() {
     Y = 0.5 * (a + b);
     P = solveP(P1, Y, s1.z);
   }
-  float dil = min(1.0, 1.0 / (stretch * S * S)) * (1.0 - s3.z * (1.0 - smoothstep(0.12, 0.42, Y)));
+  float dil = min(1.0, 1.0 / (stretch * S * S)) * (1.0 - s3.z * (1.0 - smoothstep(0.12, 0.42, Y)) * (1.0 - smoothstep(${f(STEM_HEAT[0])}, ${f(STEM_HEAT[1])}, y0)));
   float evap = exp(-max(0.0, y0 - ${f(CLOUD.evapFrom)}) / ${f(CLOUD.evaporate)});
   float k = dil * evap * s2.w * smoothstep(0.0, 0.012, y0 - slumpSurface(rho0));
   // (v1.6 polish: the march takes the seat's distance itself, for a sharp edge; the map keeps the
@@ -793,7 +797,8 @@ float ringFog(vec3 q, float rho, int l, float na, float nb, float age) {
   // Torn round the circumference: a slow field round the ring (≈ 4 cells), its threshold rising with age.
   float az = atan(q.z, q.x);
   vec4 nr = texture(uNoise, vec3(cos(az) * 0.18 + 0.41, 0.27 + 0.03 * uA[l].x, sin(az) * 0.18 + 0.66));
-  float tear = 0.22 + 0.42 * smoothstep(0.45, 1.05, age);
+  // (v1.6 polish 5: it tears later, from ≈ 0.75 s of the thermal (was 0.45): the lip stays whole while it rolls.)
+  float tear = 0.15 + 0.45 * smoothstep(0.75, 1.25, age);
   float lobesA = smoothstep(tear - 0.09, tear + 0.09, nr.r + 0.22 * (na - 0.5));
   // The rolled sheet: a spiral round the core (outward over the top, down outside, in underneath).
   float phi = atan(rc.y, rc.x);
@@ -988,7 +993,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // (v1.6 polish 3) The cap keeps its own fog as the stem and base empty: the crown closes over the
   // ring (the judge's hollow doughnut), the warm core that feeds the cap still rising through it.
   // (v1.6 polish 4: the stem that feeds it is as wide as the plate's well, so the cap is joined to the plate.)
-  float core = mix(F.x, max(F.x, uK[l].x), max(smoothstep(0.32, 0.55, m.g), (1.0 - smoothstep(0.3, 0.55, m.r)) * (1.0 - smoothstep(0.7, 0.95, uC[l].z))));
+  // (v1.6 polish 5: the stem's share fades sooner, 0.45–0.7 s of the thermal (was 0.7–0.95): the cap rises away from it.)
+  float core = mix(F.x, max(F.x, uK[l].x), max(smoothstep(0.32, 0.55, m.g), (1.0 - smoothstep(0.3, 0.55, m.r)) * (1.0 - smoothstep(0.45, 0.7, uC[l].z))));
   float d = (core * (M.z + M.x * folds) + F.y * skinMean * (0.3 + 1.4 * strips)) * edge + wisp;
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
@@ -1830,7 +1836,7 @@ export class DinnerSteam {
     }
     u.uSceneDepth!.value = frame.texture;
     // (Tooling: the key's and the camera's directions in the volume's frame.)
-    if ((globalThis as { __steamProbe?: unknown }).__steamProbe) (globalThis as { __steamProbe?: unknown }).__steamProbe = { key: (u.uKeyDir!.value as Vector3).toArray(), cam: (u.uCamLocal!.value as Vector3).toArray() };
+    if ((globalThis as { __steamProbe?: unknown }).__steamProbe) (globalThis as { __steamProbe?: unknown }).__steamProbe = { key: (u.uKeyDir!.value as Vector3).toArray(), cam: (u.uCamLocal!.value as Vector3).toArray(), vp: TMP_VP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(this.volume.matrixWorld).toArray(), size: frame.size.toArray() };
     (u.uNearFar!.value as Vector2).set(camera.near, camera.far);
     u.uOrtho!.value = (camera as OrthographicCamera).isOrthographicCamera === true;
     u.uHasDepth!.value = true;

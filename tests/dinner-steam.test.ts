@@ -110,13 +110,15 @@ describe('Dinner steam field (v1.6)', () => {
     expect(Math.hypot(f.coverPos.x, f.coverPos.z)).toBeGreaterThan(0.7);
     const seat = outline(0), held = outline(0.45), later = outline(1.3);
     // Its outline then is the cavity's within a centimetre and a half, its top drawn up into a peak after
-    // the dome, 1–5 cm (of a 10.6 cm dome).
+    // the dome, 0.5–5 cm (of a 10.6 cm dome; v1.6 polish 5: the held dome, its crown drawn up ≈ 0.8 cm, was 1–5).
     expect(Math.abs(held.cap - seat.cap) * SU_CM).toBeLessThan(1.5);
     expect(Math.abs(held.low - seat.low) * SU_CM).toBeLessThan(1.5);
-    expect((held.top - seat.top) * SU_CM).toBeGreaterThan(1);
+    expect((held.top - seat.top) * SU_CM).toBeGreaterThan(0.5);
     expect((held.top - seat.top) * SU_CM).toBeLessThan(5);
     // A buoyant bubble starts from rest: the top has risen under a centimetre and a half 0.2 s after the release.
     expect(riseAt(0.2) * SU_CM).toBeLessThan(1.5);
+    // (v1.6 polish 5: then it rises away rather than hovering: the fifth judge measured the centroid ≈ 2 cm up at 1.12 s.)
+    expect(riseAt(0.8) * SU_CM).toBeGreaterThan(12);
     // Then the cap rises and spreads while the stem narrows: a mushroom.
     expect((later.top - held.top) * SU_CM).toBeGreaterThan(8);
     expect(later.cap).toBeGreaterThan(seat.cap * 1.15);
@@ -129,14 +131,15 @@ describe('Dinner steam field (v1.6)', () => {
     expect(Math.abs(held.cap - seat.cap) * SU_CM).toBeLessThan(1.5);
     expect(Math.abs(held.low - seat.low) * SU_CM).toBeLessThan(1.5);
     for (const tau of [0.45, 0.55, 0.65]) expect(cloudState(tau).lean.length() * SU_CM).toBeLessThan(0.05);
-    // While it has substance (until evaporation has taken most of it), the cap's widest (its roll, the
-    // draught's lean at its height and the edge's mean reach included) stays within the plate.
+    // While it is still over the plate, the cap's widest (its roll, the draught's lean at its height and the edge's
+    // mean reach included) stays within ≈ the plate (v1.6 polish 5: 1.15× its radius while it rolls, by 1.3 s, as the
+    // stronger thermal rises away; the first judge measured 1.2–1.4× and called it far too much vapour).
     let widest = 0;
-    for (let tau = 0.5; cloudState(tau).erode < 0.6; tau += 0.05) {
+    for (let tau = 0.5; tau <= 1.3; tau += 0.05) {
       const s = cloudState(tau), o = outline(tau), look = cloudLook(s.age, s.erode, undefined, s.peel);
       widest = Math.max(widest, o.cap + s.lean.length() * Math.max(0, o.top - 0.15) + 0.5 * (look.amp + look.billow));
     }
-    expect(widest).toBeLessThanOrEqual(PLATE.radius);
+    expect(widest).toBeLessThanOrEqual(1.15 * PLATE.radius);
     // Less vapour: by 1.2 s the fog inside has mostly gone (the sheets carry what is left), and evaporation is under way.
     const at12 = cloudState(1.2);
     expect(cloudLook(at12.age, at12.erode).core).toBeLessThan(0.25);
@@ -201,7 +204,10 @@ describe('Dinner steam field (v1.6)', () => {
     const at = (tau: number) => cloudLook(cloudState(tau).age, cloudState(tau).erode);
     expect(at(1.0).capCore).toBeGreaterThan(2 * at(1.0).core);
     expect(at(1.0).capCore).toBeGreaterThan(0.08);
-    expect(at(1.4).capCore).toBeLessThan(0.5 * at(0.5).capCore);
+    // (v1.6 polish 5: the cap keeps its fog as it rises away, to ≈ 1.4 s, then thins: the fifth judge saw it
+    // "evaporate in place", 31 % of its mass left at 1.38 s.)
+    expect(at(1.4).capCore).toBeGreaterThan(0.8 * at(1.0).capCore);
+    expect(at(2.0).capCore).toBeLessThan(0.5 * at(1.0).capCore);
     // The light: the multiple-scattering octaves pulled back from polish 2 (0.45 / 0.18), the key's
     // shadow through the cloud steeper (1.25), the room a fill.
     expect(STEAM_LOOK.ms[0]).toBeLessThan(0.3);
@@ -249,7 +255,8 @@ describe('Dinner steam field (v1.6)', () => {
     expect(s0.base[0]).toBeLessThan(PLATE.giltRadius);
     // The base's outer air has slumped out to the gilt rim and beyond, no higher than the rim.
     expect(s1.base[0]).toBeGreaterThan(PLATE.giltRadius);
-    expect(s1.base[1]).toBeLessThan(PLATE.rimHeight + 0.05);
+    // (v1.6 polish 5: lifted ≈ 1.2 cm by the stronger thermal's wake, was 0.05 su.)
+    expect(s1.base[1]).toBeLessThan(PLATE.rimHeight + 0.08);
     // ... and the vortex ring rolls the cap's edge: the cloud's widest point is in its upper half.
     expect(outline(1.3).cap).toBeGreaterThan(axisForward(0.4, 0.3, cloudState(1.3))[0]);
   });
