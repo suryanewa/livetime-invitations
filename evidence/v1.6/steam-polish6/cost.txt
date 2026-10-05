@@ -1,0 +1,70 @@
+# v1.6 steam polish 6: the steam's cost at the app's real framing (the sixth judge's bench6.ts: the app's own Stage.prototype.render
+# wrapped, 1280x720@2 -> 2108x1185 buffer (pr 1.647) / 390x844@3 -> 780x1688 (pr 2), stage.render() with fx_steam shown/hidden
+# interleaved, 1-px read-back sync, N 40 x 6 unless noted; p10(on) - p10(off), ms). 'scale' is the march's share of the buffer a side;
+# march px per CSS px = scale x pr. Load averages 2.8-4.1 (other sessions).
+
+## baseline (v1.6/integration, served on 5619, same session)
+laptop stage captured {"buf":"2108x1185","pr":1.647019614671031}
+laptop t 0.300 {fp 1130x830 steam 1109x787 scale 0.500 steps 34","shown":true,"p10":5.6,"p25":5.5,"p50":5.3,"onP50":9.4,"offP50":4.1}
+laptop t 0.400 {fp 1305x987 steam 1296x961 scale 0.439 steps 34","shown":true,"p10":6.3,"p25":6.4,"p50":6.7,"onP50":9.2,"offP50":2.5}
+laptop t 0.450 {fp 1376x1054 steam 1370x1033 scale 0.412 steps 34","shown":true,"p10":6,"p25":6.1,"p50":6.4,"onP50":8.9,"offP50":2.5}
+laptop t 0.500 {fp 1428x1103 steam 1423x1084 scale 0.394 steps 34","shown":true,"p10":4.8,"p25":4.9,"p50":5.2,"onP50":7.7,"offP50":2.5}
+laptop t 0.600 {fp 1102x834 steam 861x756 scale 0.500 steps 34","shown":true,"p10":5.6,"p25":5.8,"p50":6.1,"onP50":8.6,"offP50":2.5}
+laptop t 0.700 {fp 1154x878 steam 888x795 scale 0.500 steps 34","shown":true,"p10":6.2,"p25":6.6,"p50":7.3,"onP50":9.8,"offP50":2.5}
+laptop t 1.000 {fp 1678x1117 steam 1281x1028 scale 0.349 steps 28","shown":true,"p10":3.9,"p25":4,"p50":4.2,"onP50":6.7,"offP50":2.5}
+laptop t 1.200 {fp 1936x1185 steam 1404x1132 scale 0.317 steps 28","shown":true,"p10":4.1,"p25":4.1,"p50":4.1,"onP50":6.6,"offP50":2.5}
+laptop t 1.500 {fp 2075x1185 steam 1501x1185 scale 0.300 steps 28","shown":true,"p10":4.4,"p25":4.5,"p50":4.9,"onP50":7.4,"offP50":2.5}
+laptop t 2.200 {fp 2097x1185 steam 1584x1185 scale 0.292 steps 28","shown":true,"p10":4.9,"p25":5,"p50":5.3,"onP50":7.8,"offP50":2.5}
+laptop t 3.000 {fp 1377x1049 steam 1022x956 scale 0.405 steps 20","shown":true,"p10":1.7,"p25":1.8,"p50":1.7,"onP50":4.2,"offP50":2.5}
+
+## final
+ 7:51  up 2 days, 13:21, 1 user, load averages: 3.76 3.89 3.54
+laptop stage captured {"buf":"2108x1185","pr":1.647019614671031}
+laptop t 0.300 {fp 1092x777 steam 1034x724 scale 0.460 steps 34","p10":5,"p25":5,"p50":5.1,"onP50":9.1,"offP50":4}
+laptop t 0.400 {fp 1176x895 steam 1162x856 scale 0.425 steps 34","p10":5.1,"p25":5.2,"p50":5.4,"onP50":8,"offP50":2.6}
+laptop t 0.450 {fp 1181x897 steam 1162x856 scale 0.425 steps 34","p10":5.4,"p25":5.5,"p50":5.9,"onP50":8.4,"offP50":2.5}
+laptop t 0.500 {fp 1245x966 steam 1233x931 scale 0.396 steps 34","p10":4.9,"p25":5,"p50":5.1,"onP50":7.6,"offP50":2.5}
+laptop t 0.600 {fp 1259x981 steam 1246x942 scale 0.392 steps 34","p10":5.3,"p25":5.4,"p50":5.6,"onP50":8.1,"offP50":2.5}
+laptop t 0.700 {fp 1138x875 steam 873x792 scale 0.460 steps 34","p10":3.9,"p25":4.1,"p50":4.3,"onP50":6.8,"offP50":2.5}
+laptop t 1.000 {fp 1411x1077 steam 1041x984 scale 0.395 steps 28","p10":3.5,"p25":3.5,"p50":3.7,"onP50":6.2,"offP50":2.5}
+laptop t 1.200 {fp 1439x1165 steam 1012x1068 scale 0.385 steps 28","p10":3.7,"p25":3.9,"p50":4.3,"onP50":6.8,"offP50":2.5}
+laptop t 1.500 {fp 1582x1185 steam 1005x1185 scale 0.367 steps 28","p10":3.8,"p25":3.8,"p50":4.1,"onP50":6.6,"offP50":2.5}
+laptop t 2.200 {fp 1758x1185 steam 1092x1185 scale 0.352 steps 28","p10":4,"p25":4.2,"p50":4.5,"onP50":7,"offP50":2.5}
+laptop t 3.000 {fp 1377x1049 steam 1022x956 scale 0.405 steps 20","p10":1.7,"p25":1.8,"p50":1.8,"onP50":4.3,"offP50":2.5}
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.300 {fp 779x871 steam 779x812 scale 0.424 steps 34","p10":3.8,"p25":3.8,"p50":3.8,"onP50":5.7,"offP50":1.9}
+phone t 0.400 {fp 780x1022 steam 780x987 scale 0.424 steps 34","p10":4.1,"p25":4.2,"p50":4.3,"onP50":6.2,"offP50":1.9}
+phone t 0.450 {fp 780x1026 steam 780x987 scale 0.424 steps 34","p10":4.2,"p25":4.3,"p50":4.5,"onP50":6.3,"offP50":1.8}
+phone t 0.500 {fp 780x1114 steam 780x1082 scale 0.424 steps 34","p10":4.4,"p25":4.5,"p50":4.6,"onP50":6.4,"offP50":1.8}
+phone t 0.600 {fp 780x1133 steam 780x1098 scale 0.424 steps 34","p10":4.7,"p25":4.6,"p50":4.7,"onP50":6.5,"offP50":1.8}
+phone t 0.700 {fp 746x886 steam 746x753 scale 0.424 steps 34","p10":3.5,"p25":3.4,"p50":3.5,"onP50":5.3,"offP50":1.8}
+phone t 1.000 {fp 780x1150 steam 780x974 scale 0.424 steps 28","p10":3.3,"p25":3.3,"p50":3.5,"onP50":5.3,"offP50":1.8}
+phone t 1.200 {fp 780x1230 steam 780x1038 scale 0.424 steps 28","p10":4.3,"p25":4.3,"p50":4.4,"onP50":6.2,"offP50":1.8}
+phone t 1.500 {fp 780x1351 steam 780x1160 scale 0.421 steps 28","p10":4.3,"p25":4.4,"p50":4.4,"onP50":6.3,"offP50":1.9}
+phone t 2.200 {fp 780x1390 steam 780x1245 scale 0.406 steps 28","p10":4,"p25":4.1,"p50":4,"onP50":5.9,"offP50":1.9}
+phone t 3.000 {fp 780x1117 steam 780x947 scale 0.424 steps 20","p10":1.3,"p25":1.2,"p50":1.3,"onP50":3.1,"offP50":1.8}
+late laptop t 4.500 {fp 1377x1049 steam 1022x956 scale 0.405 steps 20","p10":1.9,"p25":2,"p50":2,"onP50":5.2,"offP50":3.2}
+late laptop t 5.500 {fp 1377x1049 steam 1022x956 scale 0.405 steps 20","p10":1.7,"p25":1.7,"p50":1.8,"onP50":4.3,"offP50":2.5}
+late laptop t 6.000 {fp 1377x1049 steam 1022x956 scale 0.405 steps 20","p10":1.5,"p25":1.5,"p50":1.6,"onP50":4.1,"offP50":2.5}
+two laptop t 1.700 {fp 1784x1185 steam 1227x1185 scale 0.249 steps 34","p10":4.5,"p25":4.5,"p50":4.3,"onP50":8.4,"offP50":4.1}
+two laptop t 1.800 {fp 1848x1185 steam 1256x1185 scale 0.246 steps 34","p10":4.3,"p25":4.5,"p50":4.7,"onP50":7.3,"offP50":2.6}
+two laptop t 1.900 {fp 1862x1185 steam 1268x1185 scale 0.245 steps 34","p10":4.5,"p25":4.6,"p50":4.9,"onP50":7.4,"offP50":2.5}
+resumed laptop t 1.700 {fp 1705x1185 steam 1052x1185 scale 0.320 steps 28","p10":5.7,"p25":5.8,"p50":6,"onP50":10.1,"offP50":4.1}
+resumed laptop t 1.900 {fp 1729x1185 steam 1070x1185 scale 0.318 steps 28","p10":5.4,"p25":5.5,"p50":6,"onP50":10,"offP50":4}
+resumed laptop t 2.100 {fp 1751x1185 steam 1086x1185 scale 0.315 steps 28","p10":4.6,"p25":4.9,"p50":5.3,"onP50":8.1,"offP50":2.8}
+two phone t 1.700 {fp 780x1424 steam 780x1283 scale 0.300 steps 34","p10":4.1,"p25":4,"p50":4.2,"onP50":7.6,"offP50":3.4}
+two phone t 1.800 {fp 780x1441 steam 780x1305 scale 0.297 steps 34","p10":3.7,"p25":3.8,"p50":3.8,"onP50":5.8,"offP50":2}
+two phone t 1.900 {fp 780x1449 steam 780x1313 scale 0.296 steps 34","p10":3.9,"p25":3.9,"p50":4,"onP50":6,"offP50":2}
+resumed phone t 1.700 {fp 780x1378 steam 780x1231 scale 0.365 steps 28","p10":4.5,"p25":4.3,"p50":4.7,"onP50":8.2,"offP50":3.5}
+resumed phone t 1.900 {fp 780x1384 steam 780x1237 scale 0.364 steps 28","p10":4.7,"p25":4.7,"p50":4.9,"onP50":8,"offP50":3.1}
+resumed phone t 2.100 {fp 780x1389 steam 780x1243 scale 0.363 steps 28","p10":5,"p25":4.5,"p50":5.2,"onP50":8.6,"offP50":3.4}
+ 7:53  up 2 days, 13:23, 1 user, load averages: 4.11 3.74 3.51
+resumed(0.7) laptop t 1.700 {fp 1705x1185 steam 1052x1185 scale 0.300 steps 28","p10":5,"p25":5.2,"p50":5.5,"onP50":9,"offP50":3.5}
+resumed(0.7) laptop t 1.900 {fp 1729x1185 steam 1070x1185 scale 0.297 steps 28","p10":5.8,"p25":6,"p50":5.6,"onP50":9.7,"offP50":4.1}
+resumed(0.7) laptop t 2.100 {fp 1751x1185 steam 1086x1185 scale 0.295 steps 28","p10":4.2,"p25":4.6,"p50":5.1,"onP50":7.9,"offP50":2.8}
+resumed(0.7) phone t 1.700 {fp 780x1378 steam 780x1231 scale 0.342 steps 28","p10":4.1,"p25":4.5,"p50":4.3,"onP50":7.1,"offP50":2.8}
+resumed(0.7) phone t 1.900 {fp 780x1384 steam 780x1237 scale 0.341 steps 28","p10":4.2,"p25":4.3,"p50":4.7,"onP50":6.9,"offP50":2.2}
+resumed(0.7) phone t 2.100 {fp 780x1389 steam 780x1243 scale 0.340 steps 28","p10":4.1,"p25":4.2,"p50":4.2,"onP50":6.1,"offP50":1.9}
+resumed(0.7,N40x6) laptop t 1.700 {fp 1705x1185 steam 1052x1185 scale 0.300 steps 28","p10":4.6,"p25":5.1,"p50":5.5,"onP50":8.3,"offP50":2.8}
+resumed(0.7,N40x6) laptop t 1.900 {fp 1729x1185 steam 1070x1185 scale 0.297 steps 28","p10":4.9,"p25":5.1,"p50":5.5,"onP50":8,"offP50":2.5}
+resumed(0.7,N40x6) laptop t 2.100 {fp 1751x1185 steam 1086x1185 scale 0.295 steps 28","p10":4.4,"p25":4.5,"p50":4.7,"onP50":7.2,"offP50":2.5}
