@@ -215,13 +215,14 @@ export const FLAME = {
   /** Half the widest width (5.2 mm). */
   radius: 2.6 * MM,
   /**
-   * The luminous (soot) zone's foot: this far below the wick's tip (v1.6 polish 2: negative, 0.4 mm
-   * over it: its soot forms within a few tenths of a millimetre there, so the white-yellow core starts
-   * 1–1.5 mm over the tip, and under the foot, round the wick's tip, the flame is its dim, see-through
-   * blue zone, the lowest ≈15 % of it. At 1.2 mm under the tip the newly formed soot, cooler and in a
-   * hollow shell, drew a saturated orange collar on the lowest 15–20 % of the bright part.)
+   * The luminous (soot) zone's foot: this far below the wick's tip. v1.6 polish 3: 0.8 mm under it,
+   * wrapping the curled tip, its soot forming dim over ≈ 1.7 mm (src/render/flame.ts FLAME_FOOT.ramp):
+   * the wick is seen through the flame's dim lower zone, its tip glowing at the edge, and the
+   * white-yellow body starts ≈ 1 mm over the tip (judge 3: at polish 2's 0.4 mm over the tip, with its
+   * soot formed within 0.5 mm, the flame hovered 1.5 mm over the bead; at polish 1's 1.2 mm under it,
+   * formed at once, the young soot in a hollow shell drew a saturated orange collar).
    */
-  foot: -0.4 * MM,
+  foot: 0.8 * MM,
   /** The flame is widest this far above the wick's tip. */
   widest: 1.0 * MM,
 } as const;

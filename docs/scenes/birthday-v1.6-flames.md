@@ -734,3 +734,150 @@ byte-identical guard; the accepted still at 8 s and under reduced motion shows n
 `5-light-alone-x4-before-after.webp`, `5-light-through-the-blow-0-304ms.webp`,
 `lit-group-1s-every-128ms.webp`, `accepted-4s-8s-reduced-motion-540x2.webp`, `frame-cost.txt`,
 `measurements.txt`, `light-measurements.txt`.
+
+## Polish round 3: the third judge's fixes (v1.6 polish 3, branch `v1.6/flames-polish3`)
+
+The third judge signed the flame at rest (7.5 at laptop, phone and 540), the blow at laptop and phone (7)
+and the smoke's first 0.3–0.8 s (7), but not the flames as a whole, and named three fixes and an optional
+fourth: a white "marshmallow" at each wick after the flame goes out (new in polish 2), the smoke filaments
+reading as wire, the flame hovering over its wick at 30×, and the lift-off's brushed foot and last sliver
+frame; optionally the light's halo peaking at each candle's own base. Each fix is its own commit, measured
+with the judge's own scripts on frames through the real controller. Numbers:
+`evidence/v1.6/flames-polish3/measurements.txt`.
+
+### 1. No marshmallow at the wick (`fire.ts`, the ribbon's lighting in `flame.ts`)
+
+The static rounded capsule (5 × 10 mm, +15–20 levels, 160–300 ms) was the ribbon: it drew the wick's stream
+3.15–3.4 mm wide (the puff's head, × 3.4 at birth for 0.45 s) and nearly opaque, carried end-on by the
+dying breath, and half the burst's vapour rose after the breath had passed.
+
+- **The burst leaves with the breath.** It e-folds in 0.08 s (was 0.2; `SMOKE.puff` 12 → 30, the same
+  vapour): the wick stops boiling off the flame's fuel as soon as the flame's heat leaves it. Share of the
+  wick's vapour given off while the breath is ≥ 0.4 m/s at the wick: 35–40 % → 58–62 %.
+- **A thread at the wick.** The puff's head widens as it leaves, over its first 60 ms of age, as far as the
+  breath it met rolls it (`puffMet`, `puffGrow`, `puffFor` 0.25 s): every thread is the ember's own
+  ≈ 1 mm at the wick (1.0–1.13 mm at 160–300 ms).
+- **The stream flaps.** The jet's eddies sweep past the wick at 9–16 Hz: each parcel leaves on the gust
+  it met and keeps that heading (`SMOKE.flap`: at most 5 mm, faded where the parcels are too far apart in
+  birth to draw the wave), so the streak's waves run off with the flow; once a candle, its strands one
+  thread at the wick.
+- **Dynamics and continuity.** The plume's rise, transition and waves follow the emission rate up to the
+  old burst's peak (`SMOKE.qDynamics` 6: the shorter, denser burst is the same hot gas). The breath's roll
+  winds the burst's smooth path and turns each parcel's own waves rigidly with it (wound from the waved
+  positions, a spiral turned 8 rad multiplied the 10 Hz waves into 3 mm jumps between milliseconds).
+  Largest move between 1 ms samples: 0.9–1.4 mm.
+- **Dense ribbons scatter on** (`createSmokeMaterial`): where a thread is optically thick its light is
+  the volume's octaves (× 1 − e^−τ), so the dense jet at the ember is grey-white, not a grey rod.
+- **Measured.** The capsule is gone at 10× and in the group view: a 1 mm jet leaves the ember and widens
+  into the puff, its angle swinging up as the breath decays. The first puff is kept (group view, clean
+  wicks): +22.7 at 0.16 s, +23–27 at 0.19 s, +24–46 at 0.22–0.29 s (judge: +16, +20–31, +25–34), R−G −6
+  to −7.
+
+### 2. The smoke from 1 to 4 s: filaments widen into veils, no knots (`birthdaySmoke.ts`, `SmokeRig`, `flame.ts`)
+
+- **Widening.** A filament widens linearly with its height over the wick from 5 cm, by 30 mm per m
+  (`SMOKE_VOLUME.filamentWiden`, `filamentWidth`), and thins as it widens (the same smoke over the width).
+  It is a folded sheet: along it, stretches turn edge-on (a crisper line, a fifth of the widening) and
+  face-on every few centimetres (`filamentFace`, the pattern carried up with the smoke), all face-on
+  12 cm over its stem's end (`filamentFace` 0.12 m): face-on veils as it fades.
+- **Knots.** Where a thread runs towards the lens its strip's quads piled onto one spot, through a fold its
+  two legs overlapped, and where it turned on screen tighter than its own half-width its inner edge folded
+  over and the quads fanned into a star: the strip's smoke is drawn once there (× 0.3 end-on, × 0.5 through
+  a reversal, × 0.6 in a tight turn) and the strip narrowed to the turn's radius.
+- **Measured** (2× close-up, the median half-width of the peaks by height over the wick):
+
+  | | 0–4 cm | 4–8 | 8–12 | 12–16 | 16–20 cm |
+  |---|---|---|---|---|---|
+  | judge, 1.97 s | 0.69 | 0.81 | 0.96 | 1.19 | 1.09 mm |
+  | now, 1.97 s | 0.67 | 0.88 | 1.42 | 2.26 | 2.96 mm |
+  | judge, 2.99 s | 0.66 | 0.78 | 1.00 | 1.09 | 1.11 mm |
+  | now, 2.99 s | 0.67 | 0.84 | 1.44 | 2.10 | 2.62 mm |
+
+  Peak brightness at 16–20 cm +7.8 → +4.9 levels (density falling with width). Knots over their filament:
+  judge +24 and +12 at 1.97 s → none over +6 at any of 1.07–3.50 s. At laptop and 540 @2 the threads soften
+  into wisps over ≈ 8 cm (the judge's white wire); the accepted still at 8 s has no smoke.
+- **Traded.** The second judge's crisp-line count (lines ≤ 1.2 mm half-width over 1–15 cm above each stem)
+  falls from 2.3–4.3 to 0.2–0.8 a plume: above the stems the filaments now widen, as this judge asked; the
+  stems and the first centimetres over them stay lines.
+
+### 3. The wick inside the flame (`FLAME.foot`, `FLAME_FOOT.ramp`, the flame's wick occluder)
+
+- The luminous zone's foot is 0.8 mm **under** the wick's tip (polish 2: 0.4 mm over it), its soot forming
+  dim over ≈ 1.7 mm (`FLAME_FOOT.ramp` 0.11, was 0.03): the wick is seen through the flame's dim lower
+  zone, its curled tip glowing at the edge, and the golden body starts ≈ 1 mm over the tip (polish 1's
+  1.2 mm under, its soot formed at once, drew the orange collar).
+- The flame's wick occluder follows the curl: two capsules through a point 1.2 mm under the tip (the curl
+  is a cube of the height up the braid), the upper one inside the tapered tip; the straight capsule from
+  the foot to the curled tip left the background showing through the flame beside the tip once the
+  luminous zone wrapped it (a pale crescent).
+- **Measured** (30×, bloom off). Flame 3: from a 0.77 mm gap over the ember (the judge read ≈ 1.5 mm of
+  frosting between the bead and the flame) to the flame reaching 0.48 mm below the ember's top. Flame 1:
+  the wick enters the flame at its lowest point, ≈ 1 mm of it inside. No collar: saturated orange in the
+  bright part's lowest 0–5 / 5–10 / 10–15 / 15–20 % 55/19/10/22 → 39/7/10/22 %; laptop, each flame's lowest
+  20 %, mean 23 → 26 %. The march's stipple at 12× and 30× is unchanged.
+
+### 4. The lift-off: no brushed foot, no sliver frame (`flame.ts`)
+
+- In a gust the march takes up to twice the steps (32 → 64 with the turbulence, `uNoise.y`) from a
+  white-noise start: drawn out to a thin neck in a box widened for the turbulence, the foot was a few steps
+  across and the interleaved-gradient jitter's diagonals showed as brushed streaks.
+- Off its fuel the soot's glow, and its absorption, are gone by cool 0.25 (≈ 8.5 ms after lift-off):
+  × (1 − smoothstep(0, 0.25, cool))² over the T⁵ fall (`liftOffSeen`): half its light 4 ms after
+  lift-off, 9 % at 6 ms, none from 8.5 ms. A frame 9 ms after lift-off showed the golden sliver at full
+  display strength (its 20 % of radiance still saturates red: the core is ≈ 30 × over); now only the ember.
+  (Fading the glow alone left the soot's absorption: a brown smudge for one frame.)
+- **Measured** (10×, the back flame's R−B over its pixels against frame 0): 128 ms 74.0 → 73.9 % with a
+  smooth foot; 144 ms (9 ms after its lift-off) 86.2 → 1.3 % (the ember); 160 ms 1.8 → 1.6 %.
+
+### 5. The halo at each candle's base (optional): a hand-off
+
+The halo peaking at each candle's own base is `FLAME_POOL` in `models/cakeShaders.ts` (the cake owner's):
+its profile is `exp(−rI²)` from the candle's surface and its visibility loop skips the candle's own top
+(`if (j == i) continue`). The flames' own light (`flameLightLoop`) already hides each flame from the foot of
+its own candle (a disc of radius r_c (H + D) / H). The pool's placement comes from the candles' and flames'
+true positions (`candleA`, `pos`), which also place its spokes: moving them would move the shadows. Hand-off
+to the cake owner: take the candle's own top into the pool's visibility (the disc above), or give the halo a
+ring profile peaking 2–4 cm out. Nothing changed here.
+
+### Tells
+
+Gone: the marshmallow (a 1 mm jet at the ember, widening into the puff), the wire (filaments 2.1–3.0 mm
+half-width at 12–20 cm, widening linearly), the fold knots (none over +6), the hover (the wick inside the
+flame), the brushed foot and the sliver frame. Remaining, recorded: the jet at the ember stays attached to it
+while the breath decays (a continuous source: its angle swings over ≈ 150 ms; +28 levels at its densest);
+the crisp-line count above the stems is traded for the widening; the flame leans as one piece (not
+addressed: the judge's 0.99 correlation was not reproduced with its script on a 20× strip, 0.70 here); the
+blue candles' cool-white wax tops (the light and the cake); the 192 px dots' orange bottom pixel; the
+halo's peak (§5, a hand-off).
+
+### Cost (`evidence/v1.6/flames-polish3/frame-cost.txt`)
+
+The whole fire: lit 1.38–1.60 ms laptop (the judge's server, polish 2, in the same minutes: 1.79) / 1.19 ms
+phone; the gust (0.12 s) 1.71 ms (polish 2: 1.85); the first puff 1.02 ms; the smoke at 1.5 s 0.78 / 0.76 ms
+(+ 0.57–0.76 ms of physics on the main thread; polish 2's code 0.51–0.70 in the same run). Budget ≤ 2.0 ms:
+met.
+
+### Verification
+
+`pnpm typecheck`; `tests/birthdayFire.test.ts` 37/37 (new: the burst leaves with the breath and the thread
+at the wick stays the ember's millimetre; the filament's linear widening and its edge-on / face-on
+stretches; rewritten: the foot under the wick's tip with its dim ramp, the lift-off's seen fraction through
+`liftOffSeen`), `tests/flameRender.test.ts` 7/7, `tests/birthday.test.ts` 34/34 (continuity and C¹),
+`birthdayChange` 7/7, `birthdayMeltCarry` 2/2, `scene-depth` 6/6. Browser (`BASE_URL=http://127.0.0.1:5613`,
+fresh server): `birthday.spec` 7/7 (a first run on a machine at load average 20 timed out twice waiting for
+the accepted pose in 4 s; real-time playback measured 1.43 s at 60 fps on both this branch and polish 2's
+server, and the next two full runs passed), `bloom.spec` 3/3, `scene-depth.spec` 5/5, `posters.spec`
+Birthday 1/1 (the shipped posters are not stale: at most 0.01 % of pixels over 24/255, so no recapture).
+Kept qualities re-measured: the lit 1 s strip's
+tip-x sd 0.95–2.12 px, dominant 1–2 Hz, area ±1.2–2.4 %, correlation −0.05; the accepted still at 8 s
+identical to the judge's (no smoke), reduced motion the same.
+
+### Evidence (`evidence/v1.6/flames-polish3/`)
+
+`1-blow-closeup-10x-puff-back-160-304ms-judge-above-now-below.webp`,
+`1-group-puff-1to1-160-256ms-judge-above-now-below.webp`, `1-4-blow-closeup-10x-0-400ms-every-16ms.webp`,
+`2-smoke-2x-1.97s-judge-vs-now.webp`, `2-smoke-2x-1.07-1.58-1.97-2.48-2.99-3.50s.webp`,
+`2-fold-knot-2x-1.97s-x6-judge-vs-now.webp`, `2-smoke-laptop-1to1-1.5-2.5s-judge-vs-now.webp`,
+`2-accepted-540x2-4s-8s-reduced-judge-vs-now.webp`, `3-foot-macro-30x-nobloom-f1-f3-judge-vs-now.webp`,
+`3-macro-30x-f1-f3-judge-vs-now.webp`, `3-laptop-flames-x4-judge-vs-now.webp`,
+`4-liftoff-closeup-10x-128-160ms-judge-vs-now.webp`, `measurements.txt`, `frame-cost.txt`.

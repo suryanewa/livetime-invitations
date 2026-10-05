@@ -8,7 +8,7 @@ import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
 import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, SMOKE_GLOW, sootRadiance } from '../src/render/flame.ts';
 import { addHaze } from '../src/render/heatHaze.ts';
 import { markDepthOccluders, SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
-import { ribbonShare, SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
+import { filamentFace, filamentWidth, ribbonShare, SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
 import {
   FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, POOL_Y, rand, restLean, WICK_TIP_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeLaminar, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
@@ -263,6 +263,8 @@ export interface FlameRig {
   wick: WickLook;
   /** Where the charred braid's curl carries the tip (candle space, at full char): the ember and the smoke leave from there. */
   curlTip: Vector3;
+  /** v1.6 polish 3: the curl's share WICK_MID below the tip (the curl grows as the cube of the height up the braid). */
+  curlMid: number;
   /** v1.6: the flame's HDR twin, drawn in the bloom pass only (src/render/bloom.ts). */
   twin: Mesh;
   /** v1.6: the live clock and flicker gain it was posed with (the heat haze shimmers only while live). */
@@ -290,6 +292,8 @@ export interface WickLook {
 }
 
 /** Wick colours (linear): waxed cotton, char, ash; how far the charred braid curls its top over (units). */
+/** v1.6 polish 3: where the flame's wick occluder bends (scene units under the tip: 1.2 mm). */
+const WICK_MID = 1.2 * 0.005;
 const WICK = { fresh: [0.8, 0.75, 0.64], char: [0.016, 0.015, 0.014], ash: [0.33, 0.32, 0.31], curl: 1.0 * 0.005 } as const;
 
 /** The way candle `index`'s braid curls (the wick's own x–z, radians from +x): each its own, round the master's lean. */
@@ -511,7 +515,10 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
   bead.visible = false;
   node.add(bead);
   material.addEventListener('dispose', () => (bead.material as MeshStandardMaterial).dispose());
-  return { node, quad, material, wickTip: top, index, shorten: 0, lights, wickMaterial: w.material, wick: w.look, curlTip, twin, live, bead };
+  // (v1.6 polish 3: the curl at WICK_MID under the tip, as the material bends it: × the cube of the
+  // height up the braid's unsquashed length.)
+  const braid = Math.max(1e-6, box.max.y - box.min.y), kMid = Math.max(0, 1 - WICK_MID / wickSquash / braid);
+  return { node, quad, material, wickTip: top, index, shorten: 0, lights, wickMaterial: w.material, wick: w.look, curlTip, curlMid: kMid ** 3, twin, live, bead };
 }
 
 let beadShared: SphereGeometry | null = null;
@@ -639,6 +646,8 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
   const c = r.wick.char.value;
   u.uWick.value.set(r.wickTip.x + r.curlTip.x * c, r.wickTip.y + r.curlTip.y * c - r.shorten, r.wickTip.z + r.curlTip.z * c).applyMatrix4(toNode);
   u.uWickFoot.value.set(r.wickTip.x, r.wickTip.y - 4 * MM_UNITS - r.shorten, r.wickTip.z).applyMatrix4(toNode);
+  const cm = r.curlMid * c;
+  u.uWickMid.value.set(r.wickTip.x + r.curlTip.x * cm, r.wickTip.y - WICK_MID - r.shorten, r.wickTip.z + r.curlTip.z * cm).applyMatrix4(toNode);
   u.uEmber.value = ember;
   u.uPhase.value = fl.phase;
   u.uWave.value = fl.wave;
@@ -805,9 +814,13 @@ export class SmokeRig {
           // (v1.6 polish 2: and the thin filament it goes on as above its transition, fading as it spreads.)
           const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!, st.full[k]!);
           // (v1.6 polish 2: at the thread's own core width, 1–3 mm: the turbulent spread is the volume's veil.)
-          T.wid[k] = st.full[k]! * MPS_UNITS;
+          // (v1.6 polish 3: widening linearly with its height, filamentWidth, and thinning as it widens.)
+          // (Its sheet's turn matters only where it widens: over SMOKE_VOLUME.filamentWiden[0].)
+          const face = st.rise[k]! > SMOKE_VOLUME.filamentWiden[0] ? filamentFace(t - st.age[k]!, i * SMOKE_STRAND_COUNT + s + 1, st.rise[k]! - laminar) : 1;
+          const wf = filamentWidth(st.full[k]!, st.rise[k]!, face);
+          T.wid[k] = wf * MPS_UNITS;
           // (A filament at its own width: as dense as the share of the smoke it still carries, ribbonShare.)
-          T.alp[k] = stem > 0 ? 1 - Math.exp(Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * stem * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin) : 0;
+          T.alp[k] = stem > 0 ? 1 - Math.exp(Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * stem * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin * (st.full[k]! / wf)) : 0;
           T.age[k] = st.age[k]!;
           // Noise coordinate travels with the parcel (its birth), distinct per thread.
           T.seed[k] = (t - st.age[k]!) * 2.3 + s * 7.31 + i * 3.77;
