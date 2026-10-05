@@ -1,0 +1,35 @@
+11:02  up 2 days, 16:32, 1 user, load averages: 3.59 4.09 4.36
+laptop stage captured {"buf":"2108x1185","pr":1.647019614671031}
+laptop t 0.300 {"stat":"tau 0.288 buf 2108x1185 fp 1092x777 steam 1034x724 scale 0.460 steps 34","shown":true,"p10":3.9,"p25":4,"p50":4.2,"onP50":6.7,"offP50":2.5}
+laptop t 0.400 {"stat":"tau 0.384 buf 2108x1185 fp 1176x895 steam 1162x856 scale 0.425 steps 34","shown":true,"p10":4.9,"p25":5,"p50":5.3,"onP50":7.9,"offP50":2.6}
+laptop t 0.450 {"stat":"tau 0.448 buf 2108x1185 fp 1181x897 steam 1162x856 scale 0.425 steps 34","shown":true,"p10":8.7,"p25":11.1,"p50":27.6,"onP50":44.2,"offP50":16.6}
+laptop t 0.500 {"stat":"tau 0.496 buf 2108x1185 fp 1245x966 steam 1233x931 scale 0.396 steps 34","shown":true,"p10":14.7,"p25":17.8,"p50":18.8,"onP50":30.7,"offP50":11.9}
+laptop t 0.550 {"stat":"tau 0.544 buf 2108x1185 fp 1247x970 steam 1234x932 scale 0.396 steps 34","shown":true,"p10":20.5,"p25":20.1,"p50":19.7,"onP50":34.8,"offP50":15.1}
+11:06  up 2 days, 16:36, 1 user, load averages: 3.92 4.16 4.36
+laptop stage captured {"buf":"2108x1185","pr":1.647019614671031}
+laptop t 0.450 {"stat":"tau 0.448 buf 2108x1185 fp 1181x897 steam 1162x856 scale 0.425 steps 34","shown":true,"p10":9.3,"p25":10.9,"p50":23,"onP50":32.5,"offP50":9.5}
+laptop t 0.500 {"stat":"tau 0.496 buf 2108x1185 fp 1245x966 steam 1233x931 scale 0.396 steps 34","shown":true,"p10":17.7,"p25":18.3,"p50":24.4,"onP50":40.5,"offP50":16.1}
+laptop t 0.550 {"stat":"tau 0.544 buf 2108x1185 fp 1247x970 steam 1234x932 scale 0.396 steps 34","shown":true,"p10":18.6,"p25":19.9,"p50":19.6,"onP50":34.5,"offP50":14.9}
+11:14  up 2 days, 16:44, 1 user, load averages: 7.35 9.85 7.10
+laptop stage captured {"buf":"2108x1185","pr":1.647019614671031}
+laptop t 0.450 {"stat":"tau 0.448 buf 2108x1185 fp 1181x897 steam 1162x856 scale 0.425 steps 34","shown":true,"p10":5.2,"p25":5.3,"p50":5.6,"onP50":8.1,"offP50":2.5}
+laptop t 0.500 {"stat":"tau 0.496 buf 2108x1185 fp 1245x966 steam 1233x931 scale 0.396 steps 34","shown":true,"p10":4.8,"p25":4.8,"p50":5,"onP50":7.6,"offP50":2.6}
+11:15  up 2 days, 16:45, 1 user, load averages: 6.56 9.53 7.05
+laptop stage captured {"buf":"2108x1185","pr":1.647019614671031}
+laptop t 0.550 {"stat":"tau 0.544 buf 2108x1185 fp 1247x970 steam 1234x932 scale 0.396 steps 34","shown":true,"p10":7,"p25":8.2,"p50":14.2,"onP50":20.8,"offP50":6.6}
+laptop t 0.600 {"stat":"tau 0.592 buf 2108x1185 fp 1259x981 steam 1246x942 scale 0.392 steps 34","shown":true,"p10":16.9,"p25":18.1,"p50":19.9,"onP50":31.1,"offP50":11.2}
+laptop t 0.650 {"stat":"tau 0.640 buf 2108x1185 fp 1280x996 steam 1262x956 scale 0.386 steps 34","shown":true,"p10":4.4,"p25":4.4,"p50":4.6,"onP50":7.1,"offP50":2.5}
+11:16  up 2 days, 16:46, 1 user, load averages: 4.92 8.73 6.87
+laptop stage captured {"buf":"2108x1185","pr":1.647019614671031}
+laptop t 0.550 {"stat":"tau 0.544 buf 2108x1185 fp 1247x970 steam 1234x932 scale 0.396 steps 34","shown":true,"p10":18.4,"p25":19.1,"p50":26.1,"onP50":43.6,"offP50":17.5}
+laptop t 0.600 {"stat":"tau 0.592 buf 2108x1185 fp 1259x981 steam 1246x942 scale 0.392 steps 34","shown":true,"p10":19.8,"p25":21.1,"p50":20.5,"onP50":34.9,"offP50":14.4}
+laptop t 0.700 {"stat":"tau 0.688 buf 2108x1185 fp 1138x875 steam 873x792 scale 0.460 steps 34","shown":true,"p10":3.9,"p25":4,"p50":4.4,"onP50":6.9,"offP50":2.5}
+11:22  up 2 days, 16:52, 1 user, load averages: 8.79 8.90 7.06
+laptop stage captured {"buf":"2108x1185","pr":1.647019614671031}
+laptop t 0.550 {"stat":"tau 0.544 buf 2108x1185 fp 1247x970 steam 1234x932 scale 0.396 steps 34","shown":true,"p10":4.8,"p25":4.9,"p50":4.9,"onP50":7.6,"offP50":2.7}
+laptop t 0.600 {"stat":"tau 0.592 buf 2108x1185 fp 1259x981 steam 1246x942 scale 0.392 steps 34","shown":true,"p10":4.9,"p25":4.9,"p50":5,"onP50":7.5,"offP50":2.5}
+11:24  up 2 days, 16:54, 1 user, load averages: 12.95 10.10 7.57
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.300 {"stat":"tau 0.288 buf 780x1688 fp 779x871 steam 779x812 scale 0.424 steps 34","shown":true,"p10":3.8,"p25":3.8,"p50":4,"onP50":5.9,"offP50":1.9}
+phone t 0.400 {"stat":"tau 0.384 buf 780x1688 fp 780x1022 steam 780x987 scale 0.424 steps 34","shown":true,"p10":5.6,"p25":6.2,"p50":8.3,"onP50":11.6,"offP50":3.3}
+phone t 0.450 {"stat":"tau 0.448 buf 780x1688 fp 780x1026 steam 780x987 scale 0.424 steps 34","shown":true,"p10":14.1,"p25":17.2,"p50":18.4,"onP50":34.9,"offP50":16.5}
