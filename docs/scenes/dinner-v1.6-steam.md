@@ -585,12 +585,13 @@ of a thin feature (a feature's antiderivative over a step with the field taken a
   of which the steam over the cove (rows above the plate's far rim, 12 k / 7 k px) **0.74 / 0.65** and the plate's far
   rim seen through the fog (4.6 k / 5.5 k px) 1.51 / 1.47: the rim's own lines (2.25 in the clean frame) at the
   transmittance asked for. Far-rim transmittance **0.31–0.39** at 0.48–0.74 s.
-- (2) Own colour (DEBUG 14) lit − shaded **+27 / +23 / +22** at 0.61 / 0.67 / 0.74 s (+12 / +8), a coherent gradient
+- (2) Own colour (DEBUG 14) lit − shaded **+28 / +23 / +22** at 0.61 / 0.67 / 0.74 s (+12 / +8), a coherent gradient
   left to right (`own-colour-0.61-0.74-levels180-255.png`, `key-transmittance-0.61-0.74.png`); eroded interior (s8)
   p5–p95 **57 / 55 / 46** (52 / 27).
-- (3) Coverage by depth from the outline (`tools/cov.py`, DEBUG 1): 4–16 px 0.15–0.21, 16–32 px 0.29–0.40, 32–64 px
-  0.52–0.65, 64–128 px 0.71–0.75; core / 1–2 cm ring **1.25–1.54** (0.81–0.82): coverage rises to the core, no shell.
-- (4) Edge anisotropy (DoG 2/8) at 0.54–0.74 s: right wall 1.62–2.11, crown 1.33–1.81, left wall 1.90–2.23
+- (3) Coverage by depth from the outline (`tools/cov.py`, DEBUG 1) at 0.54–0.74 s: 4–16 px 0.16–0.21, 16–32 px
+  0.31–0.40, 32–64 px 0.60–0.65, 64–128 px 0.74–0.75; core / 1–2 cm ring **1.25–1.42** (0.81–0.82): coverage rises to
+  the core, no shell.
+- (4) Edge anisotropy (DoG 2/8) at 0.54–0.74 s: right wall 1.63–2.01, crown 1.33–1.81, left wall 1.90–2.23
   (1.41–2.06 / 1.30–1.52 / 1.35–1.43). **Not met on the crown**: its band (8–40 px under the top outline) holds the
   wake's tongues and the vertical sheets (gx² > gy²) but also the tops of the tongues and the folds over the crown;
   a sharper crown band, finer tongues and striations along the rise were tried (1.24–2.0); taller tongues (2 cm) reach
@@ -602,14 +603,16 @@ of a thin feature (a feature's antiderivative over a step with the field taken a
   0.67–0.83 s (43 / 1512 / 3221 / 4729 / 2747 / 0); the puffs at the front rim remain (`return-0.64-0.83.png`).
 - (7) Cost (`cost.txt`): laptop 1280 × 720 @2 **0.8–2.0 ms**, two clouds 2.3; phone 390 × 844 @3 (its buffer at the app's
   dpr cap 2) **0.7–2.6**, two clouds 2.4; the judges' squares 1400² 1.9–2.9, 2000² 2.0–3.0. The whole Dinner frame with
-  steam 3.2–4.9 ms (without 1.8–2.4). Real-time pacing of the whole accept (`tools/pace.ts`, three accepts each):
+  steam, p50–p95, laptop 3.2–4.9 ms, phone 2.5–4.9 (without 1.8–2.4). Real-time pacing of the whole accept (`tools/pace.ts`, three accepts each):
   **p95 16.7–16.8 ms, max 16.8, no frame over 20 ms**, laptop and phone. Zero with no steam (unchanged).
 - (8) The roll: the cap is folded sheets now, not a featureless blob, but no distinct rolled lip (`cap-roll-0.93-1.25.png`).
 - Kept: the gush 74–126 k px outside the silhouette at 0.29–0.37 s, p95 64–78, the flank unwashed (0); vapour 0.87–1.14×
   polish 1 (1.21 at 0.48 s with the gush; polish 3 1.27); plate centre +0…+4, its right −2…−9; no waterline (median step
-  1.3–1.6); warm colour (R − B +5.3…+6.7); the dome's shape (IoU with the seated dome 0.45 / 0.55 / 0.48 / 0.45 / 0.42 at
+  1.3–1.6); warm colour (R − B +5.3…+6.6); the dome's shape (IoU with the seated dome 0.46 / 0.55 / 0.48 / 0.45 / 0.42 at
   0.48–0.74 s, polish 3 0.46 / 0.53 / 0.47 / 0.44 / 0.40); the end (5.95 s within 2 levels of clean); determinism; the
-  clocks; `STEAM_END`; reduced motion; the Low tier (checkerboard, 60 % of the steps).
+  clocks; `STEAM_END`; reduced motion; the Low tier (checkerboard, 60 % of the steps). Where the summary header of
+  `measurements.txt` disagrees with its own rows (own colour +27 at 0.61 s, coverage 1.25–1.54, the right wall 1.62–2.11,
+  warmth to +6.7, IoU 0.45 at 0.48 s) the figures here are the rows'.
 - Also gone: the salt-and-pepper over the cloche's dark reflections at 0.43–0.48 s and the gap's grey mottle at 0.32–0.35
   s (`speckle-1to1-0.43-0.48-p3left-p4right.png`, `gap-1to1-0.32-0.35-p3left-p4right.png`). Not changed: bright steam
   (> 40 over the cove) 9–27 k px at luma 222–226 (polish 3 6–31 k at 218–228): translucent white steam over a 192-level
@@ -655,7 +658,7 @@ the seat with it. They are now in the room's air where they were squeezed out (r
 capture, as before), drawn up a few centimetres in the dish's wake (≤ 4 cm, those over the porcelain most), with the
 strength the fog had at the seating and their own fade (≈ 10 % a frame) to nothing by `SQUEEZE.life` (0.62 s); the
 clock that carries them outlives them (`leftSteamEnd`). **Area over 8 levels 45.8 k at 0.816 s, 49.5 k at 0.832 s,
-then −7…−26 % a frame down to 2.5 k at 1.136 s (max 13 levels)**; the last 2.5 k px of the faint tail (≤ 12 levels)
+peaks 51.2 k at 0.848 s, then −7…−26 % a frame down to 2.5 k at 1.136 s (max 13 levels)**; the last 2.5 k px of the faint tail (≤ 12 levels)
 lose 36–49 % a frame and are gone by 1.22 s. The target (no frame losing over 30 % of the puffs' area) holds while
 they show at 13 levels or more. Over the seated dome's crown still 0 px (`decline-puffs-0.784-1.120.png`).
 
@@ -722,7 +725,7 @@ density 0.55 → 0.35. The gush's last tenth of light (0.5–0.56 s) cost 2.7 ms
 march: it fades by 0.5 s (0.34–0.5, was 0.36–0.56).
 
 **Kept / changed of what had passed:** far-rim transmittance **0.43 / 0.37 / 0.35 / 0.34 / 0.39 / 0.47** at 0.43–0.74 s;
-coverage still rising to the core (core / 1–2 cm ring 1.06–1.10, polish 4 1.25–1.54); the return's crown 0 px; no specks
+coverage still rising to the core (core / 1–2 cm ring 1.06–1.10, polish 4 1.25–1.42); the return's crown 0 px; no specks
 (0.43–0.48 s at 3×); the gush 28–122 k px outside the silhouette at 0.19–0.37 s, p95 48–81, the flank's p95 0–1 (as polish 4); the white plate
 (centre +1…+4, right 0…−10); no waterline (median step 1.1–1.6, 0 % over 12); eroded interior s8 p5–p95 99 / 78 / 58
 (polish 4 57 / 55 / 46); determinism (re-renders byte-identical); the clocks, `STEAM_END`, reduced motion (the tests);
@@ -785,8 +788,8 @@ rest to its fade (1.6–2.6 s); the erosion's holes are the edge's (the core tak
 **Visible mass (the judge's Σ B over B > 8)**: the frame without its gush (its gush-off twin) **peaks at 5.11 M at
 0.74 s**; the frame itself 5.12 M at 0.74, 4.53 at 0.86, 4.08 at 0.99, 3.63 at 1.12, 2.85 at 1.25, 2.48 at 1.31,
 2.14 at 1.38, 1.72 at 1.50, 1.05 at 1.79, 0.44 at 2.24 s — **falling at every frame after 0.74 s, half of the
-condensate's peak by 1.30 s, the worst 0.3 s window −43 %** (1.38 → 1.66 s) (before: 7.53 at 0.99 → 8.89 at 1.12 →
-7.47 at 1.41 → 1.52 M at 1.70 s, −80 % in 0.3 s). The frame's own peak is the carried gush's, 6.49 M at 0.48–0.54 s
+condensate's peak by 1.30 s, the worst 0.3 s window −43 %** (1.38 → 1.66 s) (before, on the same Σ B: 7.58 at 0.99 → 8.89 at
+1.12 → 7.47 at 1.41 → 1.31 M at 1.73 s, −82 % in 0.32 s). The frame's own peak is the carried gush's, 6.49 M at 0.48–0.54 s
 (item 4). **Edges first**: the edge band's brightening falls to 0.67 / 0.57 / 0.46 / 0.38 of its peak at 0.86 / 0.93 /
 0.99 / 1.06 s while the core's holds at 0.62 / 0.58 / 0.59 / 0.59; the cloud alone (no gush, no veil) shrinks with its
 mass from 0.99 s (130 → 108 → 92 → 71 → 46 k px at 0.99–1.50 s). **Not met as the judge may measure it**: the whole
@@ -799,15 +802,15 @@ after 0.8 for the item, the ring's fog over 0.45–2.05 s of the thermal, was 0.
 underside, which the thermal stretches 3–4× into the stem (the hollow); it is now inside the cap's body. **Centre/rims
 0.68 / 0.71 / 0.75 / 0.80 / 0.81 / 0.83 at 1.06–1.22 s** (target ≥ 0.6; before 0.35–0.45); **the lip +17.2 / +19.0 /
 +19.2 / +19.3 / +19.5 / +17.5 levels over the notch inside it** (≥ 15; before +21.6…+22.0); the dip through the cap
-(`o_ringprof.py`) median 4–7, best 10–25 levels; **the cap 0.62 / 0.60 / 0.58 / 0.56 / 0.54 / 0.52 of the plate's width
+(`o_ringprof.py`) median 0–7, best 9–27 levels at 0.93–1.25 s; **the cap 0.62 / 0.60 / 0.58 / 0.56 / 0.54 / 0.52 of the plate's width
 at 0.99–1.31 s** (`capw.py`, B > 10, the gilt rim's 733 px; before 0.85–0.96 on the same script; the judge's "1.3×" was
 not reproduced by any width measure here); the centroid as item 1.
 
 **3. A terminator in the steam's own colour** (`key` 3.2 → 2.8, `keyFall` 3.8 → 6, `keyFloor` 0.15, `ringShadow` 0.1,
 `bounce` 1.5 → 2.0, `room` 0.12 → 0.15, the steam's surface `shadow` 0.16 → 0.14). **Own lit − shaded +2 / +3 / +5 at
 0.61 / 0.67 / 0.74 s — not met** (target +15; before +1 / +1 / +3). The composite's brightening lit − shaded **+51 / +53 /
-+52** (≥ +25), far-rim transmittance **0.31–0.45**, plate centre **+4**, its side **+5…−9** (the gush brightens it at
-0.48 s), warmth **R − B +5.2…+6.6**, no steam darker than the wall behind it. **Why not met — the trade measured**: on this
++52** (≥ +25), far-rim transmittance **0.31–0.44** at 0.43–0.74 s, plate centre **+1…+4**, its side **+6…−9** (the gush brightens
+it at 0.48 s) at 0.48–1.6 s, warmth **R − B +4.9…+5.8** at 0.48–0.86 s, no steam darker than the wall behind it. **Why not met — the trade measured**: on this
 view the key comes from up-left-front, 44° off the camera, so the held dome's right third (own.py's "shaded") is mostly
 lit through the dome's top; a terminator that legible needs a key self-shadow of ×20 (key 2.0): it gave +16 / +23 / +41,
 but the dense body under the rising cap went 10–17 levels darker than the cove behind it (38–53 k px at 0.86–0.99 s:
@@ -822,7 +825,7 @@ parcels up and out before it fades: on the frame less its gush-off twin (`gushc.
 0.8 cm out over 0.43–0.56 s** (≥ 1 cm), 6.4 cm up by 0.61 s, gone by 0.67 s. The feed's end swept through the shader's
 eight parcels in four frames once it was carried this long (−43 % of the puff in one frame at 0.576 s, a pop): it tails
 off over 0.2–0.36 s now. **The held dome's IoU in the whole frame is lost to it**: 0.53 / 0.40 / 0.43 at 0.48 / 0.54 /
-0.61 s (the gush beside the dome joins the steam mask); the dome alone (gush-off twin) **0.78 / 0.75 / 0.68** (≥ 0.75 at
+0.61 s (the gush beside the dome joins the steam mask); the dome alone (gush-off twin) **0.84 / 0.78 / 0.68** (≥ 0.75 at
 0.48 s), inside/outside the seated outline 26 / 12.7 / 6.3 / 3.2 / 2.4 / 2.0 / 2.3 / 2.0 at 0.45–0.67 s (≥ 1.6 for 0.22 s).
 
 **5. The held dome's freeze** (no change of its own: the carried gush and the receding edge move it). Mean frame-to-frame
