@@ -906,7 +906,7 @@ Gush alone = the frame less its gush-off twin (`__steamFlags` 67108864; `gush7.p
 | laptop clip | before | after | target |
 |---|---|---|---|
 | gush's share of the frame's visible steam at 0.48 s | 50.8 % (3.65 of 7.18 M) | **22.1 %** (0.98 of 4.46 M) | ≤ 25 % |
-| its area (D > 4) at 0.416–0.624 s | 112–156 k | **46.6–67.4 k** (0.416–0.56: 50.0 / 46.6 / 52.7 / 61.0 / 66.7 / 57.4 / 52.9 / 60.7 / 67.4 / 62.3; then 47.1 / 38.8 / 36.0 / 8.6) | ≤ 70 k |
+| its area (D > 4) at 0.416–0.624 s | 112–156 k | **≤ 67.4 k** (0.416–0.56: 50.0 / 46.6 / 52.7 / 61.0 / 66.7 / 57.4 / 52.9 / 60.7 / 67.4 / 62.3; then 47.1 / 38.8 / 36.0 / 8.6) | ≤ 70 k |
 | its p90 at 0.416–0.624 s | 10–65 (64.8 / 51.8 / 52.0 … 35.0 at 0.416–0.544) | **7–38.9** (38.9 / 28.6 / 26.9 / 26.9 / 25.2 / 20.9 / 17.9 / 17.1 / 15.9 at 0.416–0.544) | ≤ 40 |
 | legible spill: D > 8 outside the seated outline, right of its centre, 0.416–0.496 s | 64–97 k, p90 47–73 | **26.1–43.3 k** (29.8 / 26.1 / 34.0 / 41.6 / 43.3 / 35.2), **p90 21.9–42.7** | ≥ 25 k, p90 ≥ 20 |
 | centroid up over 0.43–0.56 s | +1.26 → +3.80 cm (+2.5) | **+0.95 → +3.27 cm (+2.3)**; +4.7 cm by 0.61 s | ≥ 1 cm |
@@ -920,8 +920,9 @@ Gush alone = the frame less its gush-off twin (`__steamFlags` 67108864; `gush7.p
 **Exit and motion.** No pop: `motion.py` on the whole frame finds none (before none); the gush's own change per frame
 (Σ |ΔD|) is 0.10 / 0.11 / 0.14 / 0.10 / 0.06 M at 0.608–0.672 s, smooth into nothing (before 0.37 / 0.47 / 0.64 / 0.40 /
 0.19). Its D > 4 area falls 36.0 → 8.6 k at 0.608 → 0.624 s, but that is a haze of p90 7 levels (mass 0.20 → 0.05 M; before
-the same exit was 125 → 61 → 9.7 k at 0.624–0.656 s at p90 10 → 7). A stricter test on the gush's mass alone flags its puffs'
-pulses mid-flight at 0.496 / 0.512 / 0.576 s (before 0.496 / 0.576 / 0.640 s), each a change of ≤ 0.25 M (before ≤ 1.09 M).
+the same exit was 125 → 61 → 9.7 k at 0.624–0.656 s at p90 10 → 7). A stricter test on the gush's thresholded mass (Σ D over D > 4)
+flags its puffs' pulses mid-flight at 0.496 / 0.512 / 0.576 s and the haze's crossing of the 4-level cut at 0.624 s (before
+0.496 / 0.576 / 0.640 s), each a change of ≤ 0.25 M (before ≤ 1.09 M); the unthresholded Σ |ΔD| has no exit step.
 **The held dome's stillness shows** (`motion.py`'s freeze, polish 6's item 5): 2.5 / 2.2 / 2.5 levels at 0.528–0.56 s (before
 4.7 / 2.8 / 3.9, the big carried gush's motion counted in); the dome alone (its gush-off twin, unchanged) is 2.8 / 2.7 / 2.7 /
 2.9 at 0.528–0.576 s, a freeze by the same test. Polish 6 met item 5 through the gush's motion; with a puff this size the
