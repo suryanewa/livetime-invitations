@@ -386,3 +386,65 @@ Tests: `tests/birthdayPiping.test.ts` 9 (new: the side rosette's kiss flush in t
 
 Not in this round: the shared rig's key is still frontal-left at 40° and its shadow map still cannot resolve a candle
 (the analytic shadow stands in on the top coat only); `MASTER.cakeRadius` was not re-measured down (0.2 mm of scan).
+
+## Polish round 3 (2026-10-04: the third judge's two remaining fixes)
+
+The third VFX judge signed cocoa at square 540 and phone (7.5 / 8) and passed the four rosette and coat tests, but held
+vanilla at every size and cocoa at laptop for two things: the flames' light on the vanilla top ("the lilac tint now sits
+in six overlapping halos and turns the shadows into mauve-brown smudges") and the cocoa top's arcs ("stitched leather").
+Frames and numbers through the live stage with the judge's own `judge.mjs`, extended to project the candles' rings and
+the top's outline into every frame (`tools/`), against v1.6/integration fdebfc5 rendered the same way:
+`evidence/v1.6/cake-polish3/` (`final/`, `noflame/` the flames' light off, `noshadow/` the candles' key shadows off,
+`cream/` a warm-cream flame colour, the `compare-*.webp` strips, `measurements.txt`, `perf.txt`). `models/cakeShaders.ts`
+only; the recipe and the flame files are untouched (their uniforms read by reference); the chain is still
+`patchMaterial → patchFlameLight → patchBinVisibility`.
+
+1. **The flames' light on the top coat is hue-preserving** (`FLAME_POOL`, the coat's `directDiffuse` and `afterLights`).
+   The soot-coloured light (≈ 1,900 K) added to a blue whose blue channel is already in the Neutral tone curve's
+   shoulder raised red 2.7× faster than green and none of the blue: the hue went to 232–234° in the halos and the
+   candles' shadows, lit mostly by it, turned mauve. Now, on the top coat only:
+   - each candle's halo scales the coat's own light (diffuse, direct and room, as lit at that point) by
+     `gain` × its irradiance × the flame colour's peak channel: the halo is the coat's colour whatever the flame's, and a
+     key shadow inside a halo is scaled with the coat round it, so it stays blue and keeps its depth;
+   - the flames' broad light is answered as a white light at the flame's peak channel (its terms divided by the light's
+     colour per channel), at `broad` 0.2 (was 0.28 of the soot colour);
+   - the halo is tighter: `reach` 1.2 cm from the candle's surface (was 2 cm), `gain` 1.0.
+   The sides and the piping keep the flames' warm light as before.
+   Measured (on vs the flames' light off; laptop crop / square 540 @2 / phone; before → after):
+   - halo R: 0.5 cm +34–41 → +11–13, 1 cm +30–34 → +7–9, 2 cm +15–20 → +3–5, 3 cm +10–14 → +2–3 (the judge's
+     top-surface macro: +12–13, +8–10, +3–4, +3–4);
+   - the halo's hue: 232–239° → 219.3–222.6°, its shift from the coat's own colour +11–18° → −0.7…+1.9° (≤ 0.8° at
+     0.5 cm in the macro); the side's 218.8–219.0° (the judge's 220.5°);
+   - the whole top (coat pixels inside the top's outline): mean lift +20.3 R / +7.3 G / +0.2 B → +6.0 / +4.5 / +3.4,
+     median hue 225.2° → 220.2° (off 219.8°), share more than 3° off 74 % → 3 % (macro 75 % → 4 %);
+   - the candles' shadows inside the halos: hue 231.4–232.9°, saturation 0.20 against the lit coat's 224.5–225.2° /
+     0.27 → 219.5–220.0° / 0.358–0.363 against 220.0–220.2° / 0.329–0.332 (with the light off 219.0–219.7° / 0.37);
+     the judge's laptop streak 157,172,218 h225.1 s0.280 → 146,174,228 h219.5 s0.360 (the coat beside it h219.1 s0.341);
+   - a warm-cream flame colour (1, 0.78, 0.55; the flames polish's direction) gives the same halo (+11–13 R at 0.5 cm),
+     0 % of the top more than 3° off: the response holds for either light.
+2. **The arcs no longer alias** (`cakeTopArcs`, `TOP_ARCS.aa` / `fade`, `SPEC_AA`). The spatula's ridges (σ 0.7 mm
+   and 1.2 mm across the 10 and 17 mm spirals) were narrower than a laptop pixel (≈ 0.7 mm, ≈ 2 mm across the spirals
+   in depth); sampled at pixel centres, with the cocoa's satin 0.15–0.26 roughness, their highlights broke into evenly
+   spaced specks along the arcs:
+   - the arcs are prefiltered by the pixel's footprint (the derivative of r across the spirals, of the position along
+     them): each ridge, trough and lip is widened to √(σ² + w²) with its area kept (height × σ/σ'), so its slope falls
+     with the pixel instead of aliasing; where a spiral's pitch nears 2–3 pixels its marks fade to their mean;
+   - the coat's specular is anti-aliased (Tokuyoshi & Kaplanyan): the bumped normal's spread over the pixel adds to
+     α² (kernel 1/2π, at most 0.18); three's own term sees only the mesh's normal.
+   Macro views keep the ridges as they were (the footprint is far below σ there). Isolated highlights on the cocoa top
+   (pixels over their 7×7 median, candles and sugar pearls excluded; > 8 / > 14 luma): laptop 50 / 8 → 6 / 0, square
+   540 @2 147 / 70 → 27 / 1, phone 66 / 27 → 1 / 0; the vanilla top has none before or after.
+
+Kept: the top's texture alone (flames and candle shadows off, laptop patch 176,72 40×40) σ 3.29 (was 3.81: the
+aliasing's pixel noise is gone; ≥ 3), as shipped 6.78; the sides' σ unchanged (4.84); the rosettes, shells, pearls,
+contract, melt and bin clearance untouched (the recipe and the masters are not re-exported). Frame cost (`perf.txt`):
+the frosting's patches +0.09 ms at laptop, +0.00 at phone, 60 fps (p99 16.8 ms).
+
+Tests: `pnpm typecheck` clean; `tests/birthday.test.ts` 34, `tests/birthdayPiping.test.ts` 9, `tests/bin.test.ts` +
+`tests/masters.test.ts` 25, `tests/browser/birthday.spec.ts` 7 (on 127.0.0.1:5611).
+
+Still open: the flames' own specular on the top coat keeps the flame's colour (warm reflections, as a satin surface
+should show them); the macro-only list (the concentric arcs at macro, the tail-tip horn, toothpaste ropes, the regular
+star kiss, pinhole specks, uniformly glossy cocoa piping) was not in this round. When the flames polish lands, the halo
+follows its per-candle intensities (breathing and fading) but not its colour; `FLAME_POOL.gain` and `broad` are the
+knobs if its intensities change.
