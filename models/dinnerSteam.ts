@@ -30,7 +30,7 @@ import {
 } from 'three';
 import { COVER, PLATE_PROFILE, plateTop } from './dinnerContract.ts';
 import {
-  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, crownFray, dragAt, EDGE, GUSH, gushOut, gushRise, leftSteamFade, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, SQUEEZE, STEM_HEAT, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
+  CAP_BAND, CLOUD, CLOUD_Y_MAX, TUNE, cloudLook, crownFray, dragAt, EDGE, GUSH, gushOut, gushRise, leftSteamFade, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, SQUEEZE, STEM_HEAT, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
 } from '../src/scenes/dinner/steam.ts';
 import { requestSceneDepth, type SceneDepthFrame } from '../src/render/sceneDepth.ts';
 
@@ -100,7 +100,7 @@ export const STEAM_LOOK = {
   /**
    * The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density (polish 3: 5 → 1.5; the cap
    * keeps its own fog, `capCore`; polish 5: a narrower tube, ≈ 1.5 cm, 0.55 → 0.42, that stays whole through the roll:
-   * the rolled lip the fifth judge asked for at 1.06–1.22 s).
+   * the rolled lip the fifth judge asked for at 1.06–1.22 s.
    */
   ringCore: 0.42,
   ringFog: 1.25,
@@ -324,6 +324,14 @@ float seatDistance(float r, float Y) {
 /** Densest under the crown (the base keeps CLOUD.baseDensity). */
 float seatGrade(float Y) { return ${f(CLOUD.baseDensity)} + ${f(1 - CLOUD.baseDensity)} * smoothstep(0.05, 0.6, Y); }
 /** The cloud at the seat (cloudSeat): \`grow\` widens the soft wall (the dilated occupancy). */
+/** (v1.6 polish 6) The cloud at the seat with its visible boundary receded \`rec\` (su) into it: what is still condensate. */
+float recedeWeight(float r, float Y) { return 1.0 - ${f(CLOUD.recedeCrown)} * smoothstep(${f(CLOUD.rim + 0.3)}, ${f(CLOUD.rim + 0.55)}, Y) * (1.0 - min(1.0, r * r / ${f(CLOUD.radius * CLOUD.radius)})); }
+float seatRec(float r, float Y, float floorH, float rec) {
+  rec *= recedeWeight(r, Y);
+  float inside = smoothstep(rec, rec + ${f(CLOUD.wall)}, seatDistance(r, Y));
+  float above = smoothstep(0.0, floorH, Y - plateTop(min(r, 0.8)));
+  return inside * above * seatGrade(Y);
+}
 float seat(float r, float Y, float floorH, float grow) {
   float inside = smoothstep(-grow, ${f(CLOUD.wall)}, seatDistance(r, Y));
   float above = smoothstep(-grow, floorH, Y - plateTop(min(r, 0.8)));
@@ -655,7 +663,7 @@ float cloudMean(vec3 p, int l) {
   vec2 q = p.xz - uB[l].zw * max(0.0, p.y - 0.15);
   vec4 m = mapAt(length(q), p.y, l);
   // (v1.6 polish 2: and the vortex ring's core, at its mean: it shades its own underside.)
-  return (m.a > 0.0 ? seat(m.r, m.g, uF[l].w, 0.0) * m.b : 0.0) + (uR[l].w > 0.0 ? ${f(0.55 * 0.6)} * ${f(STEAM_LOOK.ringFog)} * uR[l].w * ringTube(length(q), p.y, l) : 0.0);
+  return (m.a > 0.0 ? seatRec(m.r, m.g, uF[l].w, uK[l].w) * m.b : 0.0) + (uR[l].w > 0.0 ? ${f(0.55 * 0.6)} * ${f(STEAM_LOOK.ringFog)} * uR[l].w * ringTube(length(q), p.y, l) : 0.0);
 }
 
 
@@ -914,7 +922,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
     under = smoothstep(-0.01, 0.03, dw - dU);
     dw = min(dw, dU);
   }
-  float dEff = dw + E.z * (lobes - 0.5) * 2.0 + E.x * (n1.r - 0.5) * 2.0;
+  // (v1.6 polish 6) The condensate's edge evaporates as the room's dry air mixes in: the boundary recedes (uK.w).
+  float dEff = dw - uK[l].w * recedeWeight(m.r, m.g) + E.z * (lobes - 0.5) * 2.0 + E.x * (n1.r - 0.5) * 2.0;
   // (v1.6 polish 4) The crown's wake: the lifting dome drew the crown's air up after it, and its sheets with it:
   // the top's boundary is drawn out into upward tongues ≈ 5 mm across and up to ≈ 1.5 cm tall (a field fast
   // across, slow along the rise), strongest on the axis, where the drag was; carried with the air as it rises.
@@ -1020,7 +1029,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
   // sheets gather into a few larger wisps.
-  float er = uC[l].y * (1.0 - 0.6 * ring);
+  // (v1.6 polish 6: from the edges in: the boundary's outer few centimetres take the whole erosion, the core a share.)
+  float er = uC[l].y * (1.0 - 0.6 * ring) * mix(1.0, 0.4, smoothstep(0.0, 0.15, dEff));
   d *= (1.0 + 0.6 * ring) * smoothstep(er - 0.08, er + 0.12, 0.62 * n1.b + 0.38 * lobes + 0.12);
   // A change of mind: once the cover is back on the plate, the fog low over the plate (the base and
   // its slump over the rim) is swept by its skirt and leaves with the plate.
@@ -2109,7 +2119,7 @@ export class DinnerSteam {
       // (v1.6 polish 5: and the seating's puffs' strength: the clock's light at the capture, the fog it squeezed out.)
       // (v1.6 polish 5: the crown's wake tongues come after the held dome, as its crown is drawn up, and go as the cap rolls.)
       K[l]!.set(look.capCore, Math.min(STEAM_LOOK.tongue, 0.8 * dragAt(1.5)) * crownFray(Math.min(tau, c.emitEnd)) * (1 - smoothstep01((s.age - 0.55) / 0.35)),
-        Number.isFinite(c.capture) && Number.isFinite(c.emitEnd) ? leftSteamFade(c.capture, c.emitEnd, c.capture) : 0, 0);
+        Number.isFinite(c.capture) && Number.isFinite(c.emitEnd) ? leftSteamFade(c.capture, c.emitEnd, c.capture) : 0, s.recede);
       // (The body's mean density over the core's, for the light volume: the haze, the sheets' share of the volume
       // (≈ 1.6 × their half-width: the field's density at zero) less the holes torn in them, and the skin.)
       M[l]!.set(look.fold, look.foldWidth, look.haze, look.core * (look.haze + look.fold * look.foldWidth * 1.6 * 0.7) + 0.35 * look.sheet);

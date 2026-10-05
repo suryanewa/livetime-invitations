@@ -42,6 +42,8 @@ import { newFrame, REVEAL_DIR, sampleSequence } from './sequences.ts';
  */
 
 const frame = newFrame();
+/** (Tuning, temporary.) */
+export const TUNE = (globalThis as { __steamTune?: Record<string, number> }).__steamTune ?? {};
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -92,8 +94,11 @@ export const CLOUD = {
   dragHeld: 0.2,
   /** The dome's horizontal offset (su) over which it stops dragging: still over the cloud → clear of it. */
   overlap: [0.15, 0.7] as const,
-  /** The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s. */
-  riseW: 2.4,
+  /**
+   * The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s.
+   * (v1.6 polish 6: 2.4 → 2.3, so the thinning cap stays in the frame a beat longer; the centroid still rises ≈ 6.5 cm by 1.2 s.)
+   */
+  riseW: 2.3,
   riseStart: 0.5,
   riseMix: 1.6,
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
@@ -121,14 +126,31 @@ export const CLOUD = {
   turbTime: 1.0,
   /** The room's draught leans the rising cloud (su of lean per su of height). */
   lean: 0.07,
-  /** Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). */
-  erode: [0.3, 1.8] as const,
-  /** The cloud is gone by this age (s), faded out over the last `fadeOut`. */
-  life: 2.0,
-  fadeOut: 0.6,
+  /**
+   * Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). (v1.6 polish 6:
+   * 1.8 → 2.2, and from the edges in (the shader's `ERODE_CORE`): the cloud's mass now goes with its receding edge and
+   * its thinning fog, not with holes opening all through it: the sixth judge's cross-dissolve in place.)
+   */
+  erode: [0.3, 2.2] as const,
+  /**
+   * The cloud is gone by this age (s), faded out over the last `fadeOut`. (v1.6 polish 6: 2.0 / 0.6 → 2.4 / 1.0: what is
+   * left of the thinned cap goes slowly, no 0.3 s losing half of it.)
+   */
+  life: 2.4,
+  fadeOut: 1.0,
   /** Visible steam evaporates as it rises: e^(−(y − evapFrom)/evaporate) above evapFrom (su). */
   evapFrom: 1.5,
   evaporate: 1.5,
+  /**
+   * (v1.6 polish 6; the sixth judge: "past one second the cloud behaves like smoke, not condensate") The condensate's
+   * edge evaporates from the moment it meets the room's dry air: the visible boundary recedes into the cloud (su of
+   * material, at the seat) by up to `recede`, from `recedeTime[0]` of the thermal clock with time constant
+   * `recedeTime[1]` (≈ 2.4 cm by 1.0 s, 3.3 cm by 1.4 s), so the cloud thins from its edges in.
+   */
+  recede: 0.2,
+  recedeTime: [0.3, 0.3] as const,
+  /** The crown (the thermal's leading face, which pushes the room's air aside) recedes by this share less than its sides and base. */
+  recedeCrown: 0.7,
 } as const;
 
 /**
@@ -230,8 +252,8 @@ export const VEIL = {
   t0: 0.3,
   ramp: 0.3,
   /** The first rush decays over `decay`; a `tail` share decays over `tailDecay` (s). */
-  decay: 0.4,
-  tail: 0.55,
+  decay: 0.8,
+  tail: 0.5,
   tailDecay: 1.6,
   /** Visible density goes as the flow to this power (thin steam keeps a few bright ribbons), and the plate stops steaming visibly between these τ. */
   gather: 0.4,
@@ -247,8 +269,11 @@ export const VEIL = {
   /** Its radius at the well and growth per su of height. */
   radius: 0.36,
   spread: 0.32,
-  /** Evaporation with height (su). */
-  evaporate: 0.85,
+  /**
+   * Evaporation with height (su). (v1.6 polish 6: 0.85 → 0.7, its first rush 0.4 → 0.8 s and its tail 0.55 → 0.5: the
+   * plate breathes on steadily, lower, as the cloud thins away above it, rather than a column climbing into view.)
+   */
+  evaporate: 0.7,
   /** Mean density of the veil at its source (the cloud's is 1). */
   strength: 1.6,
 } as const;
@@ -345,12 +370,14 @@ export interface CloudState {
   peel: number;
   undercutReach: number;
   undercutHeight: number;
+  /** (v1.6 polish 6) How far the visible boundary has receded into the cloud (material su). */
+  recede: number;
 }
 
 export function newCloudState(): CloudState {
   return {
     present: false, tau: 0, age: 0, dragUp: 0, dragSide: new Vector2(), rise: 0, squash: 0, cap: 1, stem: 1, skirt: 0, roll: 0, ringR: 0.4, ringY: 0.5, ringSigma: CLOUD.ringCore,
-    turb: CLOUD.turb[0], lean: new Vector2(), erode: 0, fade: 1, floor: CLOUD.floor, stemFade: 0, peel: 0, undercutReach: 0, undercutHeight: 0,
+    turb: CLOUD.turb[0], lean: new Vector2(), erode: 0, fade: 1, floor: CLOUD.floor, stemFade: 0, peel: 0, undercutReach: 0, undercutHeight: 0, recede: 0,
   };
 }
 
@@ -403,8 +430,10 @@ export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinit
   out.stem = 1 - CLOUD.stem * smooth(0.1, 1.3, a);
   out.skirt = CLOUD.skirt * (1 - Math.exp(-a / CLOUD.skirtTime)) * smooth(0.25, 0.65, a);
   out.roll = CLOUD.roll * (1 - Math.exp(-a / CLOUD.rollTime)) * smooth(0.1, 0.5, a);
-  // The ring's core sits inside the cap's edge (where the dome's shoulder was), carried with it.
-  const Ys = CLOUD.ringAt[1], Ps = CLOUD.ringAt[0] * CLOUD.radius;
+  // The ring's core sits inside the cap's edge (where the dome's shoulder was), carried with it. (v1.6 polish 6: inside
+  // the visible edge as it recedes: the lip is the condensate's rolled edge, not a ring left standing outside it.)
+  out.recede = CLOUD.recede * (1 - Math.exp(-Math.max(0, a - CLOUD.recedeTime[0]) / CLOUD.recedeTime[1]));
+  const Ys = CLOUD.ringAt[1], Ps = CLOUD.ringAt[0] * CLOUD.radius - out.recede;
   out.ringR = Ps * out.cap;
   out.ringY = Ys + U * riseWeight(Ys) * centreWeight(Ps) + out.dragUp * dragWeight(Ys) * dragCentre(Ps) - out.squash * capIntegral(Ys);
   out.ringSigma = CLOUD.ringCore * (1 + 0.4 * (out.cap - 1));
@@ -538,15 +567,18 @@ export function cloudMaterial(p: Vector3, s: CloudState, out: CloudMaterial = { 
   return out;
 }
 
+/** (v1.6 polish 6) The share of the recession at material (r, Y): the crown's leading face recedes least. */
+export const recedeWeight = (r: number, Y: number) => 1 - CLOUD.recedeCrown * smooth(CLOUD.rim + 0.3, CLOUD.rim + 0.55, Y) * (1 - Math.min(1, (r / CLOUD.radius) ** 2));
 /** The cloud at the seat: the dome's cavity, soft at the wall, clear over the porcelain (0..1, no noise). */
-export function cloudSeat(X: Vector3, floor: number = CLOUD.floor, under = 0): number {
+export function cloudSeat(X: Vector3, floor: number = CLOUD.floor, under = 0, recede = 0): number {
   const r = Math.hypot(X.x, X.z);
   const q = X.y - CLOUD.rim;
   const { radius: R, height: H, power: pw } = CLOUD;
   // A normalised distance to the cavity's wall (≈ su near it): the superellipse's p-norm radius.
   const k = q > 0 ? Math.pow(Math.pow(r / R, pw) + Math.pow(q / H, pw), 1 / pw) : r / R;
   const d = (1 - k) * Math.min(R, H);
-  const inside = smooth(0, CLOUD.wall, d);
+  const rec = recede * recedeWeight(r, X.y);
+  const inside = smooth(rec, rec + CLOUD.wall, d);
   // (v1.6 polish 2: the room's air under the base is a boundary like the wall.)
   const hp = X.y - plateTop(Math.min(r, PLATE.radius));
   const above = smooth(0, floor, hp) * (under > 0 ? smooth(under, under + CLOUD.wall, hp) : 1);
@@ -565,7 +597,7 @@ export function cloudDensity(p: Vector3, s: CloudState): number {
   cloudMaterial(p, s, mat);
   // (Never in the porcelain: the flow's roll can carry the edge of the base down onto it.)
   const above = smooth(0, 0.012, p.y - slumpSurface(Math.hypot(p.x, p.z)));
-  return cloudSeat(mat.X, s.floor, undercutAt(Math.hypot(mat.X.x, mat.X.z), s)) * Math.min(1, mat.dilution) * evaporation(p.y) * s.fade * above;
+  return cloudSeat(mat.X, s.floor, undercutAt(Math.hypot(mat.X.x, mat.X.z), s), s.recede) * Math.min(1, mat.dilution) * evaporation(p.y) * s.fade * above;
 }
 
 // ── The veil: the plate's thin column ─────────────────────────────────────────
@@ -687,7 +719,8 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   // (v1.6 polish 4: the sheets curve and fold with the large field from the start: 0.5 → 0.9 young.)
   out.warp = 0.9 + 0.9 * smooth(0.25, 1.5, age);
   // (v1.6 polish 5: 0.2 → 0.19 young, with the base's share: the held dome, less stretched by the drag, was denser.)
-  out.core = 0.19 + (0.03 - 0.19) * smooth(0.15, 0.72, age);
+  // (v1.6 polish 6: it empties over 0.25–0.75 s of the thermal, was 0.15–0.72: the visible mass peaks at ≈ 0.75 s.)
+  out.core = 0.19 + (0.03 - 0.19) * smooth(0.25, 0.75, age);
   // (v1.6 polish 4: the skin is light: a dense mixing skin round a thin body read as a bubble, the limb denser than the core.)
   out.sheet = 0.3 - 0.15 * smooth(0.15, 0.5, age) - 0.1 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
@@ -695,7 +728,11 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   // (v1.6 polish 5: young 0.24 → 0.17, with the core: the held dome, less stretched by the drag, was denser; then the cap,
   // which now holds the air the thermal carries up from the dome's lower half too, gathers the dome's fog as the core
   // empties, 0.25 by 0.75 s of the thermal, and keeps it as it rises away, to ≈ 1.4 s.)
-  out.capCore = 0.17 + 0.08 * smooth(0.4, 0.75, age) - 0.17 * smooth(0.85, 1.6, age);
+  // (v1.6 polish 6; the sixth judge: the cap gained mass after its release, 7.5 → 8.9 M, then cross-dissolved: real
+  // condensate never gains mass once it meets the room's air. It no longer gathers the dome's fog: from 0.45 s of the
+  // thermal it loses 30 % of its fog over ≈ 0.3 s as the room's dry air first mixes in, then keeps the rest, thinning only
+  // with its receding edge and its spread, until it fades over 1.6–2.6 s.)
+  out.capCore = 0.17 * (0.3 * Math.exp(-Math.max(0, age - 0.45) / 0.3) + 0.7) * (1 - smooth(1.6, 2.6, age));
   // (v1.6 polish 4: the structural round) The body is thin, dense sheets with clear air between: the zero set of
   // the sheet field (drawn out along the rise, folded with the air), `fold` times the core's density inside a
   // sheet, `foldWidth` its half-width in the field's units (≈ 2 mm), `haze` the share of the core between them.
