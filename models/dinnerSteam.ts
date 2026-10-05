@@ -142,7 +142,7 @@ export const STEAM_LOOK = {
   thinPixels: 90_000,
   lowShare: 0.6,
   /** (v1.6 polish 3) The veil's density in the march: its wisps were lit for the old, dimmer key (it was 40 % of the vapour at 1.2 s). */
-  veilGain: 0.5,
+  veilGain: 0.35,
 } as const;
 
 /** The flow map's domain and resolution (per clock): ρ ∈ [0, RHO_MAX], y ∈ [0, Y_MAX] (su). */
@@ -593,7 +593,9 @@ float veil(vec3 p, int l, float detail) {
   float ridge = 1.0 - fold * fold;
   // (A few ribbons, not a curtain: the large field leaves most of the column clear.)
   float sheets = smoothstep(0.8 + 0.1 * (1.0 - src), 0.995, ridge) * smoothstep(0.42 + 0.15 * (1.0 - src), 0.75, n.b);
-  float wisps = mix(0.6, 0.06 + 4.2 * sheets, smoothstep(0.02, 0.2, h));
+  // (v1.6 polish 4: while the plate's first rush is strong the column is a full one, feeding the cap from below
+  // (the judge's hollow between the cap and the plate); as it thins it keeps only its ribbons.)
+  float wisps = mix(0.6, 0.06 + 0.7 * src * src * (1.0 - smoothstep(0.6, 0.9, te)) * (0.6 + 0.8 * n.b) + 4.2 * sheets, smoothstep(0.02, 0.2, h));
   return ${f(VEIL.strength * STEAM_LOOK.veilGain)} * src * smoothstep(0.0, ${f(VEIL.base)}, h) * exp(-h / ${f(VEIL.evaporate)})
     * pow(${f(VEIL.radius)} / w, 2.0) * lateral * wisps * (1.0 - smoothstep(${f(VEIL.length - VEIL.top)}, ${f(VEIL.length)}, h));
 }
@@ -953,7 +955,8 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   if ((uFlags & 1048576) != 0) folds = 0.0;
   // (v1.6 polish 3) The cap keeps its own fog as the stem and base empty: the crown closes over the
   // ring (the judge's hollow doughnut), the warm core that feeds the cap still rising through it.
-  float core = mix(F.x, max(F.x, uK[l].x), max(smoothstep(0.32, 0.55, m.g), 1.0 - smoothstep(0.14, 0.36, m.r)));
+  // (v1.6 polish 4: the stem that feeds it is as wide as the plate's well, so the cap is joined to the plate.)
+  float core = mix(F.x, max(F.x, uK[l].x), max(smoothstep(0.32, 0.55, m.g), (1.0 - smoothstep(0.3, 0.55, m.r)) * (1.0 - smoothstep(0.6, 0.85, uC[l].z))));
   float d = (core * (M.z + M.x * folds) + F.y * skinMean * (0.3 + 1.4 * strips)) * edge + wisp;
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the

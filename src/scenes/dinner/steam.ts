@@ -85,10 +85,10 @@ export const CLOUD = {
   riseStart: 0.3,
   riseMix: 0.9,
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
-  base: 0,
+  base: 0.2,
   /** The cap's radius grows by this per su of rise (a thermal's entrainment, α ≈ 0.25, over R ≈ 0.63); the stem narrows by up to `stem`. */
   capGrow: 0.08,
-  stem: 0.3,
+  stem: 0.15,
   /** The cap flattens by up to this share of its height as it rises. */
   squash: 0.12,
   /** The updraft's fall-off from the axis to the cap's edge (share of the rise the edge loses). */
