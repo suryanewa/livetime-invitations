@@ -1914,10 +1914,10 @@ export class DinnerSteam {
     // (The young cloud's fine edge takes the full budget; thin steam and wisps, whose finest features
     // are centimetres, a smaller one. The history is resampled across the change: no pop.)
     // (Two clouds at once, a change of mind's: each sample evaluates both; fewer pixels. v1.6 polish 6: half the budget, was
-    // 0.4 of polish 5's larger one: 90 k, as many as before; and a fifth fewer with one cloud among two clocks, a resumed
+    // 0.4 of polish 5's larger one: 90 k, as many as before; and 0.7 of it with one cloud among two clocks, a resumed
     // reveal's veil beside the cloud left behind: 6.2 ms at the laptop at the full budget.)
     const budget = (globalThis as { __steamPixels?: number }).__steamPixels
-      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.5 : this.drawnClocks > 1 ? 0.8 : 1);
+      ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.5 : this.drawnClocks > 1 ? 0.7 : 1);
     // (v1.6 polish 4: the budget is the steam's own footprint on screen, not the drawing buffer's: the phone's
     // portrait frame fills more of its buffer with the plate than the laptop's does, and costs the same.)
     // (v1.6 polish 5: the budget over the steam's own boxes, the march's; the scissor over the composite's, which reaches
