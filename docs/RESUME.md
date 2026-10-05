@@ -141,14 +141,14 @@ Still open at the time of writing (updated when the pass closes):
   rather than computes (a real-time dependence in its stepping is the suspect). Run it with a long `--testTimeout`
   until it is diagnosed. (On 2026-10-05, with the machine quiet — load average 3.7, one judge reading — the whole unit
   suite, this test included, ran in 85 s, so the wall time tracks the machine's load, which fits that suspect.)
-- `tests/browser/bloom.spec.ts › Birthday: the lit candles bloom…` is timing-sensitive in its last assertion (two
-  stills of the blown-out accepted pose, bloom on and off, must be byte-identical): on 2026-10-05 it failed 3 of 9 runs
-  against the integration server while a judge was rendering on the same server, and 0 of 6 against a quiet server on
-  the pre-merge build; the merge that preceded it changed only Dinner steam files, and no Birthday file imports them.
-  Suspect: the poll for `accepted-pose` resolves before the fire has settled (`settle()` returns early while a
-  `pendingFire` is armed), so the smoke tail is still live and `prepareFrame` catches the real clock up between the
-  two snapshots; under load the snapshot takes long enough for a step to land between them. Fix in the test: wait for
-  the settled still, as `scene-depth.spec › birthday` does, before the last `withAndWithout`.
+- `tests/browser/bloom.spec.ts › Birthday: the lit candles bloom…` is flaky in its last assertion (two stills of the
+  just-accepted pose, bloom on and off, must be byte-identical), and the flake predates v1.6's steam merge: a script that
+  repeats the test's steps and takes three consecutive `captureStill(720)` calls found consecutive stills differing on
+  **both** the merged build and the pre-merge build (5 of 5 runs on the pre-merge build). The difference is two pixels
+  by 1–7 levels, inside the smoke's region: GPU-level nondeterminism in the live smoke march (the poll for
+  `accepted-pose` returns before the fire has settled, so the smoke tail is still drawn), not a logic change. Fix in the
+  test: wait for the settled still (no smoke, as `scene-depth.spec › birthday` does) before the last `withAndWithout`,
+  or compare with a tolerance of a few pixels. Script and still pairs: the session scratchpad's `bloomflake/`.
 - a second full `pnpm models birthday` to confirm the compressed export is deterministic (the meshopt owner could
   not finish one under load; the uncompressed export reproduced the committed bytes and the codec is deterministic);
 - `docs/coverage.md` §8 still says "KHR_mesh_quantization with no decoder" (generated from `coverage.json`);
