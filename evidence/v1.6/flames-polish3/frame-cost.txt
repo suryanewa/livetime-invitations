@@ -1,0 +1,20 @@
+Frame cost, v1.6 flames polish 3. M2 Pro, Chrome/Metal (ANGLE), headless; the live stage held at a moment
+(Stage.render only), each frame waited on with a 1-pixel readPixels; alternating 12-frame batches per case,
+12 batches, medians (the polish 2 harness, scratchpad/flames4/cost.mjs). The machine was shared and loaded
+(load average 5-20 during the session): batch noise ~0.2-0.4 ms; the differences are the costs. A/B: the
+judge's server (127.0.0.1:5508, v1.6/integration with flames polish 2) measured in the same minutes.
+
+laptop 1280x720 @2 (2,108 x 1,185)              fire = full - nofx (flames, bloom, haze, smoke)
+  lit guest-ready      polish 3 1.38-1.60 ms    polish 2 (same minutes) 1.79 ms
+  the gust, 0.12 s     polish 3 1.71 ms         polish 2 1.85 ms   (the march takes up to 2x the steps in a gust)
+  first puff, 0.3 s    polish 3 1.02 ms
+  smoke 1.5 s          polish 3 0.78 ms (smoke 1.04: the wider filaments)
+phone 390x844 @2 (780 x 1,688)
+  lit guest-ready      polish 3 1.19 ms
+  smoke 1.5 s          polish 3 0.76 ms
+
+The smoke's physics on the main thread (node, the same code, 6 candles x 5 strands x 96 parcels, plus the
+ribbons' filament widths): 0.57-0.76 ms a frame while smoke shows (polish 2's code in the same run: 0.51-0.70).
+None while the flames burn. With it the smoke at 1.5 s is ~1.5 ms (laptop and phone).
+
+Budget: the whole fire <= 2.0 ms at both sizes: met.

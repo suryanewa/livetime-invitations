@@ -1,0 +1,54 @@
+v1.6 flames polish 3: the third judge's fixes, measured with its own scripts (scratchpad/judge-birthday3, copied to
+scratchpad/flames4 and pointed at 127.0.0.1:5613) on frames through the real controller; "judge" = its frames on
+v1.6/integration 2175bd4 (flames polish 2), "now" = v1.6/flames-polish3.
+
+1. THE MARSHMALLOW (10x close-up of the back wick, 160-304 ms; group view 1:1)
+ cause: the ribbon drew the wick's stream 3.15-3.4 mm wide (the puff's head x 3.4 at birth, for 0.45 s), dense
+        (alpha 0.97), carried end-on by the dying breath: a 5 x 10 mm capsule at the wick.
+ the thread at the wick (its newest parcels): 3.15-3.4 mm -> 1.0-1.13 mm at 160-300 ms (the head widens over its
+        first 60 ms of age, as far as the breath it met rolls it).
+ the burst: e-folding 0.2 -> 0.08 s (x 12 -> x 30, the same vapour). Share of all the wick's vapour given off while
+        the breath is >= 0.4 m/s at the wick: 35-40 % -> 58-62 %; given off 0.1-0.3 s after lift-off (the breath
+        mostly gone): 0.55-0.78 -> 0.40-0.63 (rate x s).
+ the stream: a 1 mm jet from the ember widening into the puff, flapping on the jet's eddies (9-16 Hz, <= 5 mm, the
+        waves running off with the flow); dense ribbons scatter on (grey-white, no grey rod).
+ first puff kept (puff.py, group view, clean wicks): +22.7 at 0.16 s, +23-27 at 0.19 s, +24-46 at 0.22-0.29 s,
+        R-G -6 to -7 (judge: +16, +20-31, +25-34; R-G -5 to -6).
+ the box the capsule filled (x 232-292, y 192-258): mean +16-19 (judge +13-14), p90 +28 (judge +20): the jet and
+        the puff's cloud; same shape over 48 ms 69-100 % (judge 82-96 %): the jet stays attached to its source
+        while the breath decays (its angle swings from ~30 to ~50 deg over 150 ms).
+ continuity (largest parcel move between 1 ms samples, 0.6 s after lift-off): 0.9-1.4 mm (polish 2's code on the
+        same probe 0.9-2.5 mm: the roll wound the waved positions).
+
+2. SMOKE 1-4 s (2x close-up 600 @2, widths.py: median half-width of the peaks by height over the wick)
+          0-4 cm  4-8    8-12   12-16  16-20 cm
+ judge 1.97 s  0.69  0.81  0.96  1.19  1.09 mm      now 1.97 s  0.67  0.88  1.42  2.26  2.96 mm
+ judge 2.99 s  0.66  0.78  1.00  1.09  1.11 mm      now 2.99 s  0.67  0.84  1.44  2.10  2.62 mm
+ now 1.07 / 1.58 / 2.48 / 3.50 s at 12-16 cm: 2.35 / 2.31 / 2.50 / 2.16 mm; at 16-20 cm 2.11 / 3.39 / 2.33 / 2.68 mm
+ peak height 16-20 cm (density falling with width): 1.97 s +7.8 -> +4.9; 2.99 s +5.9 -> +4.7 levels.
+ knots (knots.py: local maxima more than 1 cm from a wick, their excess over the filament round them):
+        judge 1.97 s +24 (700,240), +12 (382,471) -> now at 1.07 / 1.58 / 1.97 / 2.48 / 2.99 / 3.50 s none over +6.
+ judge 2's crisp-line count (sheets3.py, per plume): 2.3 / 4.3 / 3.3 at 1.07 / 1.97 / 2.99 s -> 0.8 / 0.2 / 0.5: the
+        filaments above the stems now widen (judge 3's fix); the stems and the first centimetres over them stay lines.
+ laptop 1.5 / 2.5 s and 540 @2 at 4 s: the threads soften into wisps over ~8 cm (judge: white wire); 8 s: no smoke.
+
+3. THE WICK INSIDE THE FLAME (30x, 400 @2, 24.8 px/mm, bloom off)
+ flame 3: the flame's lowest edge over the ember's top: 0.77 mm gap (judge's own reading: ~1.5 mm of frosting
+        between the bead and the flame) -> the flame reaches 0.48 mm below the ember's top; the curled tip glows
+        at the flame's lower edge.
+ flame 1: the wick enters the flame at its lowest point, ~1 mm of it inside, seen through the dim lower zone.
+ saturated orange in the bright part's lowest 0-5 / 5-10 / 10-15 / 15-20 % (foot.py, flame 1): 55/19/10/22 ->
+        39/7/10/22 % (no collar). Laptop, each flame's lowest 20 %: judge's frame 6-46 % (mean 23) -> 6-57 % (mean 26).
+ the march's stipple at 12x / 30x (high-pass sd in the flame): 1.84 / 1.57 -> 1.85 / 1.57.
+
+4. LIFT-OFF (10x close-up, fe.py: the back flame's sum of R-B over flame pixels, against frame 0)
+ 128 ms (7 ms before its lift-off): 74.0 % -> 73.9 %, foot smooth (judge: brushed striations)
+ 144 ms (9 ms after):  86.2 % (golden sliver) -> 1.3 % (the ember alone)
+ 160 ms:               1.8 % -> 1.6 %
+ liftOffSeen (what the shader draws of a flame off its fuel): 4 ms 0.50, 6 ms 0.09, from 8.5 ms 0 (polish 2: 8 ms 0.23).
+
+KEPT
+ lit 1 s group strip (grp2.py): tip-x sd 0.95-2.12 px, dominant 1-2 Hz, area +-1.2-2.4 %, corr -0.05
+        (judge: 0.95-2.10 px, 1-2 Hz, +-1.2-2.7 %, -0.01).
+ the accepted still at 8 s: identical to the judge's above the candles (max |diff| 0); reduced motion the same.
+ browser: birthday.spec 7/7, bloom.spec 3/3 (the byte-identical guard included), scene-depth.spec 5/5, posters.spec Birthday 1/1 (not stale).
