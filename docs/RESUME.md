@@ -110,19 +110,24 @@ they awaited their own background renders/tests or ran a >10-minute call on the 
 (load average 30–90 with several rendering sessions); brief them to commit WIP often, keep calls under ~3
 minutes, never await a background run, and write long files in pieces.
 
-State at the last write: every polish round is merged on `v1.6/integration` (cake ×3, flames ×2, steam ×2, meshopt);
-typecheck clean and the unit suite 452/452 (32 files, with `--testTimeout=1800000` for the Party clearance test);
-the Birthday and Dinner posters recaptured on the merged build; the full browser suite 117/117 on a freshly started
-dev server (on a server that had hot-reloaded through many merges, `scene-depth.spec › dinner` counted zero depth
-passes because its `import('/src/render/sceneDepth.ts')` got a different module instance than the app's
+State at the last write (2026-10-05): every polish round so far is merged on `v1.6/integration` (cake ×3, flames ×4,
+steam ×4, meshopt); typecheck clean, the unit suite 460/460 (with `--testTimeout=1800000` for the Party clearance
+test), the Birthday and Dinner posters recaptured on the merged build, the full browser suite 117/117 on a freshly
+started dev server (on a server that had hot-reloaded through many merges, `scene-depth.spec › dinner` counted zero
+depth passes because its `import('/src/render/sceneDepth.ts')` got a different module instance than the app's
 `sceneDepth.ts?t=…` — the same HMR trap the judges' `Stage.prototype.render` hooks hit; restart the server before
-the suite or any prototype-hooking harness); the cake **signed** by the fourth judging at square 540, laptop and phone, vanilla and cocoa (8 / 7.5 / 7.5); the
-flames and smoke **signed** by the fifth judging as a whole sequence at laptop, phone and 540 (7 / 7 / 7) after four
-polish rounds (the close-up tiers — the 10× blow, the 2× smoke detail, the 30× macro — withheld and recorded as
-known gaps: a limit of the 5 mm voxel smoke, below any size a guest sees); the steam at 5.5 / 6 after three polish
-rounds, with the fourth judge's design-limit diagnosis, so its budget was lifted to 3 ms and a structural fourth
-round commissioned (a dense intermittent sheet field, full-resolution edge sampling with motion-vector temporal
-accumulation, real self-shadowed light transport) — in progress.
+the suite or any prototype-hooking harness). The cake is **signed** by the fourth judging at square 540, laptop and
+phone, vanilla and cocoa (8 / 7.5 / 7.5); the flames and smoke are **signed** by the fifth judging as a whole sequence
+at laptop, phone and 540 (7 / 7 / 7) after four polish rounds (the close-up tiers — the 10× blow, the 2× smoke
+detail, the 30× macro — withheld and recorded as known gaps: a limit of the 5 mm voxel smoke, below any size a guest
+sees). The steam is at 6 / 6.5 after four rounds (the fourth a structural round at a 3 ms budget: a dense
+intermittent sheet field, exact per-step integration, a reprojected history, a 32³ light volume); the fifth judge
+called what remains constants (a bounding-box clip on the cloud's right flank from `steamBounds`, a rim-puff pop on
+a decline, no held dome in the 0.15–0.25 s after lift-off, hovering rather than rising with no rolled lip, a dim lit
+side) plus a resolution limit at 3 ms (soft at 2×, the crown under 2:1), so the budget was lifted to ≤ 6 ms while
+steam shows and a final constants-and-resolution round commissioned (`v1.6/steam-polish5`, worktree
+`.claude/worktrees/v16-steam6`, port 5617) — in progress; its result, the sixth judging and the closing of this
+section are the next steps.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for
