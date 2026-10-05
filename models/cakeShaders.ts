@@ -380,8 +380,9 @@ export interface FoodFlames {
  * key's candle shadows in it, so a shadow inside a halo stays blue and as deep as without the flames),
  * and the broad light is answered as a white light at the flame's peak channel, at `broad`. The halo is
  * tighter (`reach` 1.2 cm: e^-1 at 1.2 cm from the candle, gone by 3 cm). Measured on the laptop crop,
- * square 540 @2 and phone against the flames' light off: +11–14 R at 0.5 cm, +7–9 at 1 cm, +3–5 at 2 cm,
- * the halo's hue within 2.5° of the coat's own; the top's mean +6 R, 3 % of it more than 3° off.
+ * square 540 @2 and phone against the flames' light off: +11–13 R at 0.5 cm, +7–9 at 1 cm, +3–5 at 2 cm,
+ * the halo's hue within 2° of the coat's own; the top's mean +6 R, 3 % of it more than 3° off; the candles'
+ * shadows in the halos h219.5–220° s0.36 against the lit coat's 220° / 0.33 (evidence/v1.6/cake-polish3).
  */
 export const FLAME_POOL = { gain: 1.0, wrap: 0.5, reach: 0.06, broad: 0.2 } as const;
 
