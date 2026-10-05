@@ -1,10 +1,12 @@
-# ownlin.py <d12dir> frames : the steam's own LINEAR radiance (DEBUG 12: 0.5 * L where coverage > 0.5) on own.py's spans
+# ownlin.py <d16dir> (SC=4; or a DEBUG 12 dir with SC=2) frames : the steam's own LINEAR radiance (DEBUG 12: 0.5 * L where coverage > 0.5) on own.py's spans
 # (rows 460-720, left 30 % = lit, right 30 % = shaded), medians and p10/p90, and the ratio lit/shaded.
-import sys, numpy as np
+import sys, os, numpy as np
+SC = float(os.environ.get("SC", 4))  # DEBUG 16: 4 (L/4); DEBUG 12: 2
 from PIL import Image
 for i in map(int, sys.argv[2:]):
-    a = np.asarray(Image.open(f'{sys.argv[1]}/f{i:04d}.png').convert('L')).astype(float) * 2 / 255
-    m = a > 0.02
+    a = np.asarray(Image.open(f"{sys.argv[1]}/f{i:04d}.png").convert("L")).astype(float) * SC / 255
+    raw = np.asarray(Image.open(f"{sys.argv[1]}/f{i:04d}.png").convert("L")).astype(float)
+    m = (a > 0.04) & (raw != np.asarray(Image.open(f"nos/f{i:04d}.png").convert("L")).astype(float))  # not the scene outside the box
     lit, sh = [], []
     for y in range(460, 720, 2):
         xs = np.nonzero(m[y, 300:1100])[0] + 300
