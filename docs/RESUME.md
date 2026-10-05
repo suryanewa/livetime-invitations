@@ -117,9 +117,12 @@ dev server (on a server that had hot-reloaded through many merges, `scene-depth.
 passes because its `import('/src/render/sceneDepth.ts')` got a different module instance than the app's
 `sceneDepth.ts?t=…` — the same HMR trap the judges' `Stage.prototype.render` hooks hit; restart the server before
 the suite or any prototype-hooking harness); the cake **signed** by the fourth judging at square 540, laptop and phone, vanilla and cocoa (8 / 7.5 / 7.5); the
-flames signed at rest at every size and for the blow and early smoke at laptop and phone, a third polish round on
-the smoke's wire-like filaments, a static puff at the wick and the flame's foot; the steam's third polish round on
-translucency, body light, stretched-sheet edges, the hollow ring, the gush, the return cap and the last 0.1 ms.
+flames and smoke **signed** by the fifth judging as a whole sequence at laptop, phone and 540 (7 / 7 / 7) after four
+polish rounds (the close-up tiers — the 10× blow, the 2× smoke detail, the 30× macro — withheld and recorded as
+known gaps: a limit of the 5 mm voxel smoke, below any size a guest sees); the steam at 5.5 / 6 after three polish
+rounds, with the fourth judge's design-limit diagnosis, so its budget was lifted to 3 ms and a structural fourth
+round commissioned (a dense intermittent sheet field, full-resolution edge sampling with motion-vector temporal
+accumulation, real self-shadowed light transport) — in progress.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for
