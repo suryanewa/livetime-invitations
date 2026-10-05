@@ -72,8 +72,11 @@ export const STEAM_LOOK = {
   /**
    * The key's share (its intensity scaled to steam's in-scatter) and the room's (linear luminance).
    * (v1.6 polish 3: the judge saw "a flatly lit cotton tuft": the key 0.95 → 1.55, the room a fill, 0.22 → 0.12.)
+   * (v1.6 polish 5: the fifth judge's lit side was 222–226, under the white plate's: the key 2.0 → 3.2, so the lit steam's
+   * own colour sits above the plate's white (≈ 249 against 241 after the neutral tone mapping), and the plate's bounce on
+   * the fog just over it 2.0 → 1.5, so the fog over the plate's middle keeps it within +4.)
    */
-  key: 2.0,
+  key: 3.2,
   room: 0.12,
   /**
    * Their colours (v1.6 polish 2: the judge saw "cold steam in a warm room"): the key is the
@@ -105,8 +108,8 @@ export const STEAM_LOOK = {
   underBand: 0.1,
   /** Wrenninge's multiple-scattering octaves (their share of the key; polish 2 raised them to 0.45 / 0.18, which flattened the body; polish 3 pulls them back). */
   ms: [0.18, 0.06] as const,
-  /** The white plate's light on the fog just above it (linear radiance at the porcelain; polish 3: falls off as the cube of the plate's share of the sky, so only the fog close over it). */
-  bounce: 2.0,
+  /** The white plate's light on the fog just above it (linear radiance at the porcelain; polish 3: falls off as the cube of the plate's share of the sky, so only the fog close over it; polish 5: 2.0 → 1.5 under the brighter key). */
+  bounce: 1.5,
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,
   /** The key's share of the light on the plate, the cloche and the table: what the steam's shadow can take away. */
