@@ -166,6 +166,12 @@ Still open at the time of writing (updated when the pass closes):
   or — since the reveal is a pure function of time and deterministic — an offline fluid simulation baked into a sparse 4D
   volume texture that the runtime only marches (the cheapest route to film-quality filaments; the asset's size and the
   change-of-mind cases are the design questions). Either is a version of its own, with its own budget decision;
+- `tests/browser/resilience.spec.ts › 30 stage re-creations…` failed once in five full-suite runs this session (2026-10-05,
+  at 5ac3518): `dinner: Static` found one `WebGLRenderer` and one `WebGL2RenderingContext` still reachable after two
+  forced collections, then passed 4/4 alone. The check runs right after `setQualityTier('static')` resolves, so a
+  renderer still referenced by an in-flight task (a pending frame or disposal) can survive the collection: a GC-timing
+  race in the test, not a leak (every other run found zero). Fix in the test: wait a frame (or poll the count) before the
+  Static reachability check.
 - ~~a second full `pnpm models birthday` to confirm the compressed export is deterministic~~ — done 2026-10-05 at
   7ca077f: two consecutive runs byte-identical to each other and to the committed GLB (`docs/qualification.md`,
   Verification on the integrated build);

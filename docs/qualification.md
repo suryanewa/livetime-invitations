@@ -136,7 +136,11 @@ unit tests (the Party clearance test, the Sports planning test) timed out under 
 - **At 1796b77 + 5ac3518** (the review's steam fixes 1 and 2 merged, the evidence cherry-picked; fix 3 left on its
   branch — `docs/scenes/dinner-v1.6-steam.md`, Review fixes): `pnpm typecheck` clean; `dinner-steam` 29, `scene-depth` 6,
   `dinner` 27; the Dinner, scene-depth and posters specs 16/16 on a fresh server; the Dinner posters byte-identical.
-  FINAL_SUITES_PLACEHOLDER
+  The full suites on that build: `pnpm typecheck` clean; unit **463/463** (two tests added by the fixes); browser
+  **115/117**, the two failures the known bloom flake (passed 1/1 on re-run) and `resilience.spec › 30 stage re-creations…`
+  failing once at `dinner: Static` with one renderer and one context still reachable after two forced collections —
+  passed 4/4 on re-run and in every earlier full run of the session (a GC-timing race in the check, right after
+  `setQualityTier('static')`; recorded in `docs/RESUME.md`).
   The full suites at 7ca077f: `pnpm typecheck` clean, unit **461/461**, browser **116/117** with the one failure the
   known flaky bloom assertion below (the spec passed 3/3 when re-run on the same server).
 - **Dinner pacing, from the judges' own `pace.ts`** (real-time rAF intervals over three whole accepts each, laptop
@@ -150,7 +154,11 @@ unit tests (the Party clearance test, the Sports planning test) timed out under 
   runs had 1–22 frames of 33–100 ms, clustered where the other sessions' GPU work landed, not where the scene's cost
   rises: the in-app whole-frame render cost through the accept is flat (p50 9.2–10.8 ms, p90 ≤ 12.6, max 13–17 ms at
   both sizes; Dinner 3.2–6.2). Birthday has ≈ 6 ms of headroom against Dinner's 10, so it drops vsync under background
-  load where Dinner does not. BIRTHDAY_QUIET_RUN_PLACEHOLDER
+  load where Dinner does not. **On a quiet machine** (load average 3.0–3.9, no other browser, the same harness, 2026-10-05 at 5ac3518, laptop ×3 and
+  phone ×3 each, `evidence/v1.6/verification/pacing-final.txt`): Birthday p50 16.70, p95 16.70–16.80, max 16.8, no frame
+  over 20 ms in all six runs; Dinner p50 16.70, p95 16.70–16.80, max 16.8 in five of six runs — the sixth (laptop run 0) had
+  one 33.3 ms frame, the very first frame of the accept (a first-use hitch, not the steam), none after. Both scenes pace at
+  60 fps at both sizes on the integrated build.
 - **A known flaky test:** `tests/browser/bloom.spec.ts › Birthday: the lit candles bloom…` fails now and then in its
   last assertion (two stills of the just-accepted pose, bloom on and off, must be byte-identical). Consecutive stills
   differ by two pixels by 1–7 levels inside the smoke's region on the merged build and on the pre-merge build alike:
