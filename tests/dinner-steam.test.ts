@@ -163,7 +163,8 @@ describe('Dinner steam field (v1.6)', () => {
     const k = STEAM_LOOK.keyTint, r = STEAM_LOOK.roomTint;
     expect(Math.abs(k.r - k.b)).toBeLessThan(0.01);
     expect(r.r - r.b).toBeGreaterThan(0.04);
-    expect(r.r - r.b).toBeLessThan(0.2); // (linear: #E2DBD0)
+    // (v1.6 polish 3: #E6D7C0, linear R − B 0.26: the room is a smaller share of the light, so its tint is warmer; not orange.)
+    expect(r.r - r.b).toBeLessThan(0.3);
     // The plate's shadow is a fraction of the key's share; dense fog in front of a surface casts none on it (the composite).
     expect(STEAM_LOOK.shadow).toBeLessThanOrEqual(0.2);
     // The march's budgets: the young cloud's fine edge the most, thin steam less; steps by phase.
