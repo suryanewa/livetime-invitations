@@ -242,6 +242,18 @@ describe('v1.6 flames: the volume, the bloom and the haze', () => {
     expect(past).toBeGreaterThan(10);
     expect(near).toBeGreaterThan(3);
     expect(a).toBeTruthy();
+    // v1.6 polish 4: two seconds on, the filaments that have widened above the stems are sheets with their
+    // folds (src/render/flame.ts SMOKE_SHEET); the stems and the breath's stream are plain threads.
+    scene.sample('accept', 1.97);
+    scene.beforeRender();
+    const sheet = smoke.mesh.geometry.getAttribute('aSheet').array as Float32Array, fold = smoke.mesh.geometry.getAttribute('aFold').array as Float32Array;
+    expect(Math.max(...sheet)).toBeGreaterThan(0.3);
+    expect(Math.max(...sheet)).toBeLessThanOrEqual(1);
+    expect(sheet.filter((v) => v === 0).length).toBeGreaterThan(sheet.length * 0.2);
+    expect(Math.min(...fold)).toBeGreaterThanOrEqual(-1);
+    expect(Math.max(...fold)).toBeLessThanOrEqual(1);
+    expect(Math.min(...fold)).toBeLessThan(-0.8);
+    expect(Math.max(...fold)).toBeGreaterThan(0.8);
     // Settled (the canonical accepted pose: posters, reduced motion): nothing.
     scene.pose('accepted');
     scene.settle();

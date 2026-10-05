@@ -65,7 +65,7 @@ export const SMOKE_VOLUME = {
    * travel, handing it over by `ribbon[1]`. The volume draws the rest (mass conserved).
    */
   ribbon: [0.002, 0.008] as const,
-  filament: [1.0, 0.01, 0.03, 0.06, 0.24] as const,
+  filament: [1.0, 0.01, 0.03, 0.06, 0.3] as const,
   /** The first vapour (born within `puffHead[0]`–`[1]` s of the flame letting go) is the volume's once `[2]`–`[3]` m up (all but its condensing foot). */
   puffHead: [0.12, 0.3, 0.0, 0.004] as const,
   /**
@@ -89,7 +89,7 @@ export const SMOKE_VOLUME = {
    * as it rises `filamentFace` m over its stem's end.
    */
   filamentWiden: [0.05, 0.03] as const,
-  filamentEdge: 0.2,
+  filamentEdge: 0.08,
   filamentFace: 0.12,
   /** How far above its transition (m) a plume's sheets and folds are fully developed (the march's turbulence, 0 → 1). */
   develop: 0.045,

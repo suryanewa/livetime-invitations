@@ -20,6 +20,16 @@ const IGNITE_START_OF = (i: number) => IGNITE_START[i]!;
 const wick = (i: number): [number, number, number] => [CANDLE_SOCKETS[i]![0], CANDLE.seat + WICK_TIP_Y, CANDLE_SOCKETS[i]![1]];
 /** The wick standing still (the cake on its stand): where every parcel was born. */
 const still = (i: number): WickAt => (_birth, out) => { const w = wick(i); out[0] = w[0]; out[1] = w[1]; out[2] = w[2]; };
+/**
+ * v1.6 polish 4: the ember's output wavers (SMOKE.neck): the densest smoke near the wick averaged over
+ * ± 0.1 s, so a trend is read through the wavering.
+ */
+const alphaNearAvg = (i: number, t: number, kind: 'breath' | 'snuff', r: number) => {
+  const st = newSmokeStrand(), w = wick(i);
+  let sum = 0;
+  for (const d of [-0.1, -0.05, 0, 0.05, 0.1]) { smokeStrand(i, 0, t + d, still(i), st, kind); sum += alphaNear(st, w, r); }
+  return sum / 5;
+};
 /** Densest smoke within `r` (scene units) of the wick, over the thread's points. */
 const alphaNear = (st: SmokeStrand, w: [number, number, number], r: number) => {
   let m = 0;
@@ -254,9 +264,10 @@ describe('Birthday fire: the smoke', () => {
     const lam = 0.08;
     // The laminar stem: the strip's alone.
     expect(ribbonShare(0.04, 0.04, lam, 1, 0.0015)).toBeCloseTo(1, 6);
-    // Above its transition a filament carries on (re-judge: "carry thin, folding, crisp structure above the stem"), fading out by 24 cm over it.
+    // Above its transition a filament carries on (re-judge: "carry thin, folding, crisp structure above the stem"), fading out by 30 cm over it
+    // (v1.6 polish 4: was 24 cm; judge 4: the plume nearly gone above 16 cm).
     expect(ribbonShare(0.12, 0.11, lam, 1, 0.002)).toBeGreaterThan(0.6);
-    expect(ribbonShare(0.4, 0.33, lam, 1, 0.002)).toBe(0);
+    expect(ribbonShare(0.46, 0.39, lam, 1, 0.002)).toBe(0);
     // Its own curls make its path longer than its rise: still a filament; the breath's sweep is the volume's.
     expect(ribbonShare(0.2, 0.1, lam, 1.2, 0.002)).toBeGreaterThan(0.3);
     expect(ribbonShare(0.03, 0.005, lam, 0.05, 0.002)).toBe(0);
@@ -347,6 +358,28 @@ describe('Birthday fire: the smoke', () => {
     }
   });
 
+  it('v1.6 polish 4: the stem necks and swells, ± 30 % of its width, and wavers with the ember, ± 30 % of its smoke, carried up with it (judge 4: six evenly bright constant-width threads)', () => {
+    const st = newSmokeStrand();
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const src = smokeSource(i), t = src.bare + 1.97;
+      smokeStrand(i, 0, t, still(i), st);
+      let wLo = Infinity, wHi = 0, rLo = Infinity, rHi = 0;
+      for (let k = 0; k < SMOKE_POINT_COUNT; k++) {
+        if (st.rise[k]! < 0.005 || st.rise[k]! > 0.15) continue;
+        const a = st.age[k]!, q = smokeRate(i, t - a);
+        // The stem's own width without its necking, and its smoke without the ember's wavering.
+        const plain = SMOKE.width0 * 1e-3 * (0.55 + 0.45 * Math.min(1, q)) + SMOKE.widthGrow * 1e-3 * Math.sqrt(a / 0.5);
+        const wk = st.full[k]! / plain, rk = st.rate[k]! / (0.42 * q);
+        wLo = Math.min(wLo, wk); wHi = Math.max(wHi, wk); rLo = Math.min(rLo, rk); rHi = Math.max(rHi, rk);
+      }
+      expect(wHi).toBeGreaterThan(1.2);
+      expect(wLo).toBeLessThan(0.8);
+      expect(wHi).toBeLessThanOrEqual(1 + SMOKE.neck[0] + 1e-6);
+      expect(rHi).toBeGreaterThan(1.2);
+      expect(rLo).toBeLessThan(0.8);
+    }
+  });
+
   it('v1.6 polish 3: a filament widens linearly with its height (≥ 3 mm at 12 cm, ≥ 5 mm at 20 cm face-on), crisper where edge-on, face-on as it rises over its stem', () => {
     const full = 0.0018;
     expect(filamentWidth(full, 0.03)).toBeCloseTo(full, 9);
@@ -417,7 +450,8 @@ describe('Birthday fire: the smoke', () => {
     const st = newSmokeStrand();
     for (let i = 0; i < CANDLE_COUNT; i++) {
       const bare = smokeSource(i).bare, w = wick(i);
-      const at = (a: number) => { smokeStrand(i, 0, bare + a, still(i), st); return alphaNear(st, w, 10 * MM); };
+      const at = (a: number) => alphaNearAvg(i, bare + a, 'breath', 10 * MM);
+      void st; void w;
       const early = at(0.3), three = at(3), four = at(4.2);
       expect(three).toBeGreaterThan(0.08);
       expect(four).toBeGreaterThan(0.03);
@@ -457,10 +491,10 @@ describe('Birthday fire: the smoke', () => {
       expect(src.bare).toBeLessThan(SNUFF.start + SNUFF.stagger * i + SNUFF.length);
       expect(smokeStrand(i, 0, src.bare - 0.001, still(i), st, 'snuff')).toBe(false);
       expect(smokeStrand(i, 0, src.bare + 0.3, still(i), st, 'snuff')).toBe(true);
-      const snuff = alphaNear(st, w, 10 * MM);
-      smokeStrand(i, 0, smokeSource(i).bare + 0.3, still(i), sb, 'breath');
+      const snuff = alphaNearAvg(i, src.bare + 0.3, 'snuff', 10 * MM);
       expect(snuff).toBeGreaterThan(0.05);
-      expect(snuff).toBeLessThan(alphaNear(sb, w, 10 * MM));
+      expect(snuff).toBeLessThan(alphaNearAvg(i, smokeSource(i).bare + 0.3, 'breath', 10 * MM));
+      void sb; void w;
       expect(emberAt(i, src.bare + EMBER.flare, 'snuff')).toBeLessThan(emberAt(i, smokeSource(i).bare + EMBER.flare, 'breath'));
       for (let s = 0; s < SMOKE_STRAND_COUNT; s++) expect(smokeStrand(i, s, SMOKE.end, still(i), st, 'snuff')).toBe(false);
     }

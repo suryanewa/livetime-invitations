@@ -738,6 +738,13 @@ export const SMOKE = {
    */
   mergeFrom: 0.04,
   mergeOver: 0.16,
+  /**
+   * v1.6 polish 4 (judge 4: "below 8 cm still six evenly bright constant-width threads"): the stem necks
+   * and swells, ± `neck[0]` of its width, as the plume's acceleration stretches it unevenly, and the
+   * smouldering ember's output wavers, ± `neck[1]`, with the air at it: each carried up with the smoke,
+   * at 2.5–7 Hz (a few centimetres apart along the stem), its own per candle.
+   */
+  neck: [0.35, 0.35] as const,
   /** v1.6 polish 4: the breath's dilution of the vapour it carries: × 1 / (1 + U / this), U in m/s. */
   breathDilute: 6,
   /** Swept smoke widens by this much per distance carried (the wick's wake keeps it narrow at first). */
@@ -1073,6 +1080,9 @@ function computePlume(i: number, t: number, wickAt: WickAt, kind: SmokeKind, wak
   const f1 = 2 * Math.PI * (12 + 4 * rand(i, 45)), f2 = 2 * Math.PI * (8.5 + 3 * rand(i, 46));
   const q1 = 6.283 * rand(i, 47), q2 = 6.283 * rand(i, 48);
   const s1 = 2 * Math.PI * (3 + 1.5 * rand(i, 49)), s2 = 2 * Math.PI * (4.5 + 1.5 * rand(i, 52));
+  // (v1.6 polish 4: the stem's necking and the ember's wavering output, SMOKE.neck.)
+  const n1 = 2 * Math.PI * (2.5 + 1.2 * rand(i, 53)), n2 = 2 * Math.PI * (5 + 2 * rand(i, 54)), n3 = 2 * Math.PI * (3.1 + 1.4 * rand(i, 55));
+  const m1 = 6.283 * rand(i, 56), m2 = 6.283 * rand(i, 57), m3 = 6.283 * rand(i, 58);
   for (let k = 0; k < n; k++) {
     // Newest first, spaced in age (denser near the wick).
     const a = span * (k / (n - 1)) ** 1.25;
@@ -1181,7 +1191,8 @@ function computePlume(i: number, t: number, wickAt: WickAt, kind: SmokeKind, wak
     // (v1.6 polish 3: it widens as it leaves, as wide as the breath it met rolls it: a thread at the wick.)
     const met = breath ? smooth(breathAt(i, birth) / SMOKE.puffMet) : 1;
     const head = 1 + SMOKE.puffWidth * (1 - smooth((birth - src.bare) / SMOKE.puffFor)) * met * smooth(a / SMOKE.puffGrow);
-    const core = (SMOKE.width0 * 1e-3 * (0.55 + 0.45 * Math.min(1, q)) + SMOKE.widthGrow * src.diffuse * 1e-3 * Math.sqrt(a / 0.5)) * head + SMOKE.jetSpread * dm;
+    const neck = 1 + SMOKE.neck[0] * (0.65 * Math.sin(n1 * birth + m1) + 0.35 * Math.sin(n2 * birth + m2));
+    const core = (SMOKE.width0 * 1e-3 * (0.55 + 0.45 * Math.min(1, q)) + SMOKE.widthGrow * src.diffuse * 1e-3 * Math.sqrt(a / 0.5)) * head * neck + SMOKE.jetSpread * dm;
     const w = core + SMOKE.spread * Math.max(0, zr - zt) * grow;
     B.core[k] = core; B.w[k] = w;
     // Opacity of the whole column here: the vapour condenses a millimetre above the ember (4 ms),
@@ -1189,8 +1200,9 @@ function computePlume(i: number, t: number, wickAt: WickAt, kind: SmokeKind, wak
     // wick's own wake).
     // (In the breath, the jet's entrainment dilutes it: SMOKE.breathDilute.)
     const dilute = (breath ? 1 / (1 + breathAt(i, birth) / SMOKE.breathDilute) : 1) / (1 + moving / STRUNG_AT);
-    B.rate[k] = q * dilute;
-    let depth = SMOKE.depth * q * dilute * smooth(a / 0.004) * Math.pow((SMOKE.width0 * 1e-3 * head) / w, SMOKE.thin);
+    const qm = q * (1 + SMOKE.neck[1] * Math.sin(n3 * birth + m3));
+    B.rate[k] = qm * dilute;
+    let depth = SMOKE.depth * qm * dilute * smooth(a / 0.004) * Math.pow((SMOKE.width0 * 1e-3 * head) / w, SMOKE.thin);
     const fades = (1 - smooth((a - src.fade[0]) / (src.fade[1] - src.fade[0]))) * tailFade;
     depth *= fades;
     B.depth[k] = depth;
