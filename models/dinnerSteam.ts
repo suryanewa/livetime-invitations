@@ -241,7 +241,7 @@ export const STEAM_LOOK = {
    * per su, length over width), the band's sheets (haze, width, density, frequency: shares), its depth (su) and the
    * crown's extra length. Off (`tear` 0) it is the polish-7 field.
    */
-  edgeBand: { boundary: 0.5, tear: 0.015, tearFreq: 19, tearLength: 5, haze: 1, width: 1, fold: 1, freq: 1, depth: 0.06, crown: 2 },
+  edgeBand: { boundary: 0.25, tear: 0.02, tearFreq: 26, tearLength: 5, haze: 1, width: 1, fold: 1, freq: 1, depth: 0.06, crown: 2 },
   /**
    * (v1.6 polish 8) The full-resolution edge pass: march pixels per CSS pixel over the silhouette's band (`css`), at most
    * this share of the drawing buffer a side (`maxScale`), the band's ring radius (CSS px, ≈ 0.45 cm at the laptop), the
@@ -1225,7 +1225,9 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
     shadeOd = core * M.x * sheetMask * gaussMean(sb, sl, M.y * 0.56419) * 0.09 * edge * m.b * seatGrade(m.g) * stir;
   }
   shadeOd += ringShade;
-  gRim = 1.0 - smoothstep(0.0, uTune[3].w, dShade);
+  // (The condensate's own outer layer, just inside its torn boundary: outside it, in the faint haze and the tears' tips, the
+  // glow made a soft halo that blurred the outline.)
+  gRim = (1.0 - smoothstep(0.0, uTune[3].w, dEff)) * smoothstep(-0.25 * uTune[3].w, 0.0, dEff);
   return d;
 }
 
