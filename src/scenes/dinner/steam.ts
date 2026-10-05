@@ -702,12 +702,34 @@ export function leftSteamFade(tau: number, cut: number, capture = Infinity): num
  */
 export const SQUEEZE = { lead: 0.1, life: 0.62 } as const;
 
+/**
+ * (v1.6 review) The seating's puffs' strength on a clock (the shader's uK.z; 0: no puffs): the light its fog had at the
+ * capture, on a clock that carried a cloud (`emitStart`: a reveal resumed part-way carries none) and was closed over. It
+ * does not follow that cloud's own fade after the capture: the puffs were gated on it as well, so a decline late in the
+ * cloud's life (captured after τ ≈ 2.2) lost them in one frame at τ = CLOUD.release + CLOUD.life (2.8 s), while the
+ * clock that carries them (`leftSteamEnd`) ran on to their end drawing nothing.
+ */
+export function squeezeStrength(emitStart: number, emitEnd: number, capture: number): number {
+  return emitStart < 0.05 && Number.isFinite(capture) && Number.isFinite(emitEnd) ? leftSteamFade(capture, emitEnd, capture) : 0;
+}
+/** Whether a clock's seating puffs can show at τ: a strength, and τ within their window round the capture. */
+export function squeezeLive(tau: number, emitStart: number, emitEnd: number, capture: number): boolean {
+  return squeezeStrength(emitStart, emitEnd, capture) > 0 && tau >= capture - SQUEEZE.lead && tau <= capture + SQUEEZE.life;
+}
+/** The puffs' own fade `ts` s after the capture (the CPU mirror of the shader's `squeeze` fade: in ≈ 0.03 s, ≈ 10 % a frame, to nothing by `life`). */
+export function squeezeFade(ts: number): number {
+  if (ts < -SQUEEZE.lead || ts > SQUEEZE.life) return 0;
+  const age = ts + SQUEEZE.lead;
+  return smooth(0, 0.03, age) * Math.exp(-Math.max(age - 0.16, 0) / 0.15) * (1 - smooth(SQUEEZE.life - 0.14, SQUEEZE.life, ts));
+}
+
 /** When steam left behind at `cut` has gone: its own life, or below 1 % of its light (≤ STEAM_END); never before its squeeze's puffs. */
 export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infinity): number {
   let until = steamEndAfter(cut, emitStart);
   for (let t = cut; t < until; t += 0.02) {
     if (leftSteamFade(t, cut, capture) < 0.01) { until = Math.min(until, Math.ceil(t * 100) / 100); break; }
   }
+  // (v1.6 review: the puffs are drawn to the end of their life whatever the cloud's own fade, `squeezeStrength`.)
   if (Number.isFinite(capture) && emitStart < 0.05) until = Math.max(until, Math.min(STEAM_END, Math.ceil((capture + SQUEEZE.life) * 100) / 100));
   return until;
 }
