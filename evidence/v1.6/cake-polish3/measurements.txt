@@ -1,0 +1,94 @@
+v1.6 cake polish 3: measurements. Frames through the live stage (tools/judge.mjs: the third judge's judge.mjs on
+127.0.0.1:5611, with the candles' rings and the top's outline projected into each frame, and CREAM=r,g,b to override
+the flames' light colour). 'before' (base/) = v1.6/integration fdebfc5 rendered the same way (its numbers reproduce
+the judge's: laptop streak 157,172,218 h225.1 s0.280, top-surface top +20.8 R, 75 % > 3 deg); 'after' (final/) =
+v1.6/cake-polish3. NOPOOL=1 zeroes the flames' intensities (the flames' light off: off/), NOSHADOW=1 the candles' key
+shadows. Masks: tops.py = coat pixels (blue in the off frame) inside the top's outline 1.2 cm in from the tier's edge;
+falloff2.py = rings 0.5-5 cm from each candle's surface (median lift, the halo's hue on, its shift from the off frame);
+shadow.py = pixels darkened >= 6 % by the candle shadows within 3 cm of a candle vs the lit coat there; specks.py =
+top-coat pixels brighter than their 7x7 median (candles, their 1 cm and the sugar pearls excluded).
+
+== FIX 1: the flames' light on the vanilla top (on vs the flames' light off, NOPOOL=1) ==
+-- halo (falloff2.py: median lift on rings round each candle, from its surface; the halo's hue and its shift from the coat's own)
+   laptop before: ranges: 0.5cm R +35..+41 G +13..+15 hue 232.7-238.7 dh +11.9..+17.7 | 1cm R +31..+32 G +11..+12 hue 228.7-233.1 dh +9.1..+13.0 | 2cm R +16..+19 G +5..+6 hue 225.0-227.5 dh +5.0..+7.1 | 3cm R +10..+14 G +4..+4 hue 221.6-225.3 dh +1.9..+4.9
+   laptop after:  ranges: 0.5cm R +11..+12 G +8..+9 hue 220.5-222.6 dh +0.1..+1.9 | 1cm R +7..+9 G +6..+7 hue 220.0-221.3 dh -0.1..+0.5 | 2cm R +3..+5 G +2..+4 hue 219.8-222.1 dh -0.2..+1.0 | 3cm R +3..+3 G +2..+2 hue 218.5-221.5 dh -0.5..+1.1
+   laptop after, cream light (1, 0.78, 0.55): ranges: 0.5cm R +11..+12 G +8..+10 hue 220.5-221.5 dh +0.1..+1.1 | 1cm R +7..+9 G +6..+7 hue 220.0-220.7 dh -1.4..+0.5 | 2cm R +3..+5 G +2..+5 hue 218.8-222.1 dh -1.2..+1.1 | 3cm R +3..+3 G +2..+2 hue 218.7-221.6 dh -0.9..+1.2
+   square540@2 before: ranges: 0.5cm R +35..+40 G +13..+15 hue 232.5-236.1 dh +12.5..+16.1 | 1cm R +30..+34 G +11..+12 hue 229.8-231.8 dh +10.2..+12.2 | 2cm R +16..+20 G +5..+7 hue 224.1-227.0 dh +4.5..+6.0 | 3cm R +10..+13 G +3..+5 hue 221.4-225.1 dh +1.9..+4.3
+   square540@2 after:  ranges: 0.5cm R +11..+12 G +8..+10 hue 220.3-221.1 dh -0.2..+0.6 | 1cm R +7..+9 G +5..+7 hue 219.3-221.2 dh -0.7..+1.4 | 2cm R +3..+4 G +2..+3 hue 219.4-221.6 dh -0.1..+1.0 | 3cm R +2..+3 G +2..+2 hue 218.0-221.0 dh -0.6..+0.5
+   square540@2 after, cream light (1, 0.78, 0.55): ranges: 0.5cm R +11..+12 G +8..+10 hue 220.3-221.1 dh -0.2..+0.6 | 1cm R +7..+9 G +6..+7 hue 219.3-221.2 dh -1.2..+1.4 | 2cm R +3..+4 G +2..+3 hue 219.4-221.9 dh -0.1..+1.4 | 3cm R +2..+3 G +2..+2 hue 218.6-220.7 dh -0.6..+0.5
+   phone before: ranges: 0.5cm R +34..+38 G +13..+15 hue 232.3-236.0 dh +12.4..+15.7 | 1cm R +31..+34 G +11..+12 hue 227.8-237.5 dh +9.0..+15.9 | 2cm R +15..+20 G +5..+7 hue 224.8-228.0 dh +4.2..+7.6 | 3cm R +10..+14 G +4..+4 hue 220.3-226.0 dh +1.8..+4.8
+   phone after:  ranges: 0.5cm R +11..+13 G +8..+9 hue 219.5-221.8 dh +0.1..+1.4 | 1cm R +7..+9 G +5..+7 hue 219.3-221.2 dh -0.0..+0.8 | 2cm R +3..+5 G +2..+4 hue 220.2-222.2 dh -0.2..+1.6 | 3cm R +2..+3 G +2..+2 hue 218.5-221.2 dh -1.3..+1.0
+   phone after, cream light (1, 0.78, 0.55): ranges: 0.5cm R +11..+13 G +8..+9 hue 219.5-221.8 dh +0.1..+1.1 | 1cm R +7..+9 G +5..+7 hue 219.3-221.2 dh -0.7..+0.8 | 2cm R +3..+5 G +2..+4 hue 219.0-222.2 dh -0.4..+1.1 | 3cm R +2..+3 G +2..+3 hue 218.7-221.2 dh -1.0..+0.5
+   top-surface macro before: ranges: 0.5cm R +32..+38 G +12..+14 hue 231.9-234.3 dh +11.4..+13.8 | 1cm R +31..+34 G +11..+12 hue 229.3-231.8 dh +10.0..+12.2 | 2cm R +16..+18 G +6..+7 hue 223.3-225.2 dh +3.9..+6.2 | 3cm R +12..+13 G +4..+4 hue 221.6-223.6 dh +1.9..+4.7
+   top-surface macro after:  ranges: 0.5cm R +12..+13 G +8..+10 hue 220.3-221.3 dh -0.4..+0.8 | 1cm R +8..+10 G +6..+7 hue 219.5-221.2 dh -0.1..+1.2 | 2cm R +3..+4 G +2..+2 hue 219.6-220.8 dh +0.1..+0.9 | 3cm R +3..+4 G +2..+2 hue 219.1-220.2 dh -0.0..+1.4
+-- the whole top (tops.py: coat pixels inside the top's outline 1.2 cm in from the edge)
+   before laptop: top n=13085 lift R/G/B +20.3/+7.3/+0.2 (median R +18.0) hue on 225.4 off 219.8; |dhue|>3 74% (>+3 74%) >6 45%
+   after  laptop: top n=13086 lift R/G/B +6.0/+4.5/+3.4 (median R +4.0) hue on 220.2 off 219.8; |dhue|>3 3% (>+3 3%) >6 1%
+   after, cream laptop: top n=13086 lift R/G/B +5.9/+4.9/+3.8 (median R +4.0) hue on 220.0 off 219.8; |dhue|>3 0% (>+3 0%) >6 0%
+   before square540@2: top n=13712 lift R/G/B +20.3/+7.2/+0.2 (median R +18.0) hue on 225.2 off 219.8; |dhue|>3 74% (>+3 74%) >6 45%
+   after  square540@2: top n=13716 lift R/G/B +6.0/+4.5/+3.4 (median R +4.0) hue on 220.2 off 219.8; |dhue|>3 3% (>+3 3%) >6 1%
+   after, cream square540@2: top n=13716 lift R/G/B +5.8/+4.8/+3.8 (median R +4.0) hue on 220.0 off 219.8; |dhue|>3 0% (>+3 0%) >6 0%
+   before phone: top n=16129 lift R/G/B +20.2/+7.2/+0.1 (median R +18.0) hue on 225.2 off 219.8; |dhue|>3 74% (>+3 74%) >6 45%
+   after  phone: top n=16130 lift R/G/B +6.0/+4.5/+3.3 (median R +4.0) hue on 220.2 off 219.8; |dhue|>3 3% (>+3 3%) >6 1%
+   after, cream phone: top n=16130 lift R/G/B +5.9/+4.9/+3.8 (median R +4.0) hue on 220.0 off 219.8; |dhue|>3 0% (>+3 0%) >6 0%
+   before top-surface: top n=876620 lift R/G/B +20.8/+7.3/+0.0 (median R +18.0) hue on 224.8 off 219.5; |dhue|>3 75% (>+3 75%) >6 43%
+   after  top-surface: top n=876651 lift R/G/B +6.5/+4.5/+3.1 (median R +4.0) hue on 219.8 off 219.5; |dhue|>3 4% (>+3 3%) >6 2%
+-- the side's hue (side.py, the top tier's side) and the judge's patches (rgb.py)
+   base/on laptop: side n=12753 rgb 139,169,223 hue 219.0 sat 0.381
+   final/on laptop: side n=12753 rgb 139,169,223 hue 219.0 sat 0.381
+   final/off laptop: side n=12752 rgb 139,169,223 hue 219.0 sat 0.381
+                on/vanilla-m-hero-close.png     [590,450,40,30] rgb 141,172,228 hue 218.8 sat 0.385
+                on/vanilla-m-hero-close.png     [560,260,60,60] rgb 169,192,243 hue 221.5 sat 0.305
+                on/vanilla-m-hero-close.png     [590,450,40,30] rgb 141,172,228 hue 218.8 sat 0.385
+                on/vanilla-m-hero-close.png     [560,260,60,60] rgb 162,191,245 hue 219.2 sat 0.337
+               off/vanilla-m-hero-close.png     [590,450,40,30] rgb 141,172,228 hue 218.8 sat 0.385
+               off/vanilla-m-hero-close.png     [560,260,60,60] rgb 159,189,243 hue 219.0 sat 0.345
+-- the candles' key shadows inside the halos (shadow.py: darkened >= 6 % by the shadows, within 3 cm of a candle, vs the lit coat there)
+   before laptop: shadow n=719 rgb 167,172,209 h232.9 s0.201 | lit n=7620 rgb 178,195,244 h224.5 s0.270 | dh +8.3 ds -0.070 | shadow depth 10.4%
+   after  laptop: shadow n=612 rgb 145,172,226 h220.0 s0.358 | lit n=8639 rgb 165,192,246 h220.0 s0.329 | dh -0.0 ds +0.029 | shadow depth 8.9%
+   flames' light off laptop: shadow n=818 rgb 134,161,212 h219.2 s0.368 | lit n=9159 rgb 161,188,244 h220.5 s0.340 | dh -1.3 ds +0.028 | shadow depth 12.3%
+   before square540@2: shadow n=736 rgb 166,171,208 h232.9 s0.202 | lit n=8086 rgb 179,195,244 h225.2 s0.266 | dh +7.6 ds -0.064 | shadow depth 11.1%
+   after  square540@2: shadow n=641 rgb 144,172,226 h219.5 s0.363 | lit n=9048 rgb 165,192,247 h220.2 s0.332 | dh -0.7 ds +0.031 | shadow depth 9.3%
+   flames' light off square540@2: shadow n=834 rgb 133,159,210 h219.7 s0.367 | lit n=9624 rgb 161,188,244 h220.5 s0.340 | dh -0.7 ds +0.027 | shadow depth 13.2%
+   before phone: shadow n=866 rgb 167,173,209 h231.4 s0.201 | lit n=9449 rgb 178,195,244 h224.5 s0.270 | dh +6.9 ds -0.070 | shadow depth 10.5%
+   after  phone: shadow n=752 rgb 145,173,227 h219.5 s0.361 | lit n=10620 rgb 165,192,246 h220.0 s0.329 | dh -0.5 ds +0.032 | shadow depth 8.9%
+   flames' light off phone: shadow n=1016 rgb 134,161,211 h219.0 s0.365 | lit n=11268 rgb 161,188,244 h220.5 s0.340 | dh -1.5 ds +0.025 | shadow depth 12.3%
+   the judge's laptop streak (rgb.py 190,104 vs 190,92):
+                on/vanilla-laptop-crop.png      [190,104,20,6] rgb 157,172,218 hue 225.1 sat 0.280
+                on/vanilla-laptop-crop.png      [190,92,20,6] rgb 167,191,244 hue 220.8 sat 0.316
+                on/vanilla-laptop-crop.png      [190,104,20,6] rgb 146,174,228 hue 219.5 sat 0.360
+                on/vanilla-laptop-crop.png      [190,92,20,6] rgb 162,191,245 hue 219.1 sat 0.341
+               off/vanilla-laptop-crop.png      [190,104,20,6] rgb 139,166,219 hue 219.3 sat 0.367
+               off/vanilla-laptop-crop.png      [190,92,20,6] rgb 159,189,244 hue 218.9 sat 0.348
+== FIX 2: the top's arcs at laptop and 540 @2 (specks.py: top-coat pixels > their 7x7 median by > 8/14/20 luma, candles and their 1 cm excluded) ==
+   before (judge 3) cocoa laptop: top px 5815  >8: 111  >14: 61  >20: 45  | not pearls: >8: 50 >14: 8 >20: 1  hp sigma 8.32 max 149
+   after            cocoa laptop: top px 5815  >8: 61  >14: 50  >20: 42  | not pearls: >8: 6 >14: 0 >20: 0  hp sigma 8.29 max 150
+   before           vanilla laptop: top px 5815  >8: 46  >14: 27  >20: 24  | not pearls: >8: 0 >14: 0 >20: 0  hp sigma 3.70 max 57
+   after            vanilla laptop: top px 5815  >8: 33  >14: 29  >20: 24  | not pearls: >8: 0 >14: 0 >20: 0  hp sigma 3.59 max 61
+   before (judge 3) cocoa square540@2: top px 6047  >8: 192  >14: 110  >20: 92  | not pearls: >8: 147 >14: 70 >20: 53  hp sigma 10.93 max 167
+   after            cocoa square540@2: top px 6047  >8: 68  >14: 42  >20: 38  | not pearls: >8: 27 >14: 1 >20: 1  hp sigma 10.49 max 173
+   before           vanilla square540@2: top px 6047  >8: 67  >14: 31  >20: 25  | not pearls: >8: 0 >14: 0 >20: 0  hp sigma 4.61 max 64
+   after            vanilla square540@2: top px 6047  >8: 31  >14: 28  >20: 26  | not pearls: >8: 0 >14: 0 >20: 0  hp sigma 4.40 max 66
+   before (judge 3) cocoa phone: top px 7120  >8: 128  >14: 85  >20: 63  | not pearls: >8: 66 >14: 27 >20: 11  hp sigma 7.56 max 131
+   after            cocoa phone: top px 7120  >8: 64  >14: 57  >20: 53  | not pearls: >8: 1 >14: 0 >20: 0  hp sigma 7.36 max 132
+   before           vanilla phone: top px 7120  >8: 48  >14: 33  >20: 26  | not pearls: >8: 0 >14: 0 >20: 0  hp sigma 3.45 max 54
+   after            vanilla phone: top px 7120  >8: 48  >14: 35  >20: 31  | not pearls: >8: 0 >14: 0 >20: 0  hp sigma 3.39 max 55
+== kept: the top's texture (sigp.py laptop 176,72 40x40; flames and candle shadows off = texture alone) ==
+   before, texture alone
+[176,72,40,40] cov 100% raw 3.81 det 3.74 hp 2.50 rgb 159,188,243
+   after,  texture alone
+[176,72,40,40] cov 100% raw 3.29 det 3.22 hp 1.92 rgb 159,188,243
+   before, as shipped
+[176,72,40,40] cov 99% raw 8.01 det 6.86 hp 4.17 rgb 171,189,239
+   after,  as shipped
+[176,72,40,40] cov 100% raw 6.78 det 6.19 hp 3.20 rgb 160,188,243
+   cocoa before, as shipped
+[176,72,40,40] cov 100% raw 5.62 det 4.74 hp 3.30 rgb 108,58,39
+   cocoa after,  as shipped
+[176,72,40,40] cov 100% raw 5.43 det 4.61 hp 2.24 rgb 101,59,41
+    base    top n= 24 raw med 7.34 | detrended med 6.68 max 8.19 | highpass med 3.74 | L 191  e.g. win@168,72
+    base  upper n= 23 raw med 4.84 | detrended med 3.21 max 3.94 | highpass med 2.29 | L 151  e.g. win@272,212
+base lower none
+   final    top n= 29 raw med 6.36 | detrended med 5.76 max 7.75 | highpass med 3.06 | L 187  e.g. win@168,64
+   final  upper n= 23 raw med 4.84 | detrended med 3.21 max 3.95 | highpass med 2.29 | L 151  e.g. win@272,212
+final lower none

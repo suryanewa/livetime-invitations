@@ -371,8 +371,20 @@ export interface FoodFlames {
  * `broad` of its strength (the whole top's wash; its shadows stay). Calibrated against the flames
  * polish's light (FLAME_LIGHT_CAL 2.0 on v1.6/integration, a trial merge): the top's centre +7 R, the
  * halo +29–36 R within a centimetre of a candle, +14–17 at 3 cm (at the old 1.0: +3–4 and half that).
+ *
+ * v1.6 polish 3 (the third judge's fix 1: "the lilac tint now sits in six overlapping halos and turns
+ * the shadows into mauve-brown smudges"): the soot-coloured light added to a blue coat whose blue is
+ * already in the tone curve's shoulder raised red at 2.7× green, rotating the hue to 232°. On the top
+ * coat the flames' light is now hue-preserving, whatever its colour: the halo scales the coat's own
+ * light (`gain` × the halo's irradiance × the flame colour's peak channel: the coat as lit there, the
+ * key's candle shadows in it, so a shadow inside a halo stays blue and as deep as without the flames),
+ * and the broad light is answered as a white light at the flame's peak channel, at `broad`. The halo is
+ * tighter (`reach` 1.2 cm: e^-1 at 1.2 cm from the candle, gone by 3 cm). Measured on the laptop crop,
+ * square 540 @2 and phone against the flames' light off: +11–13 R at 0.5 cm, +7–9 at 1 cm, +3–5 at 2 cm,
+ * the halo's hue within 2° of the coat's own; the top's mean +6 R, 3 % of it more than 3° off; the candles'
+ * shadows in the halos h219.5–220° s0.36 against the lit coat's 220° / 0.33 (evidence/v1.6/cake-polish3).
  */
-export const FLAME_POOL = { gain: 4.5, wrap: 0.5, reach: 0.1, broad: 0.28 } as const;
+export const FLAME_POOL = { gain: 1.0, wrap: 0.5, reach: 0.06, broad: 0.2 } as const;
 
 /**
  * v1.6 polish 2 (fix 3): the candles' shadows from the key on the top coat, analytic (the rig's
@@ -383,6 +395,13 @@ export const FLAME_POOL = { gain: 4.5, wrap: 0.5, reach: 0.1, broad: 0.28 } as c
  * environment) is shadowed too, `window` of the coat's indirect diffuse, `windowSoft` × softer.
  */
 export const KEY_CANDLE_SHADOW = { soft0: 0.003, soft: 0.2, strength: 0.85, window: 0.32, windowSoft: 1.5 } as const;
+
+/**
+ * v1.6 polish 3 (fix 2): the coat's specular anti-aliasing (Tokuyoshi & Kaplanyan, "Improved Geometric
+ * Specular Antialiasing", 2019): the filter kernel's variance (1/2π for a pixel-wide Gaussian) and the
+ * clamp on the roughness it may add (α² + at most `kappa`).
+ */
+export const SPEC_AA = { sigma2: 0.15915494, kappa: 0.18 } as const;
 
 /** Thickness range of the packed `_FOOD` attribute (mm): scripts/masters/recipes/birthdayFinish.ts FOOD_THICK_MM. */
 export const FOOD_THICK_MM = 16;
@@ -431,7 +450,7 @@ export const FOOD: Record<'body' | 'piping' | 'cocoaBody' | 'cocoaPiping', FoodL
  * (× pitch); `relief` and `value` their height (× the coat's `wave`) and colour, `noise` the
  * hand-mixed mid-scale colour that replaced the old rings.
  */
-export const TOP_ARCS = { pitch: [0.05, 0.083], segMin: 0.9, segVar: 1.6, gaps: 0.58, lipLen: 0.012, drift: 0.35, relief: 1.0, value: 1.1, noise: 1.9 } as const;
+export const TOP_ARCS = { pitch: [0.05, 0.083], segMin: 0.9, segVar: 1.6, gaps: 0.58, lipLen: 0.012, drift: 0.35, relief: 1.0, value: 1.1, noise: 1.9, fade: [0.3, 0.5], aa: 1.0 } as const;
 
 const FOOD_NOISE = /* glsl */ `${CAKE_NOISE}
 vec3 cakeHash33(vec3 p) { p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.xxy + p.yxx) * p.zyx); }
@@ -442,7 +461,11 @@ vec3 cakeSaturate(vec3 c, float k) { float l = dot(c, vec3(0.2126, 0.7152, 0.072
 // aside beside it, rising out of the ridge where the blade landed and ending in the lip where it was
 // lifted. P in cake space (scene units, the cake's axis at x = z = 0). Returns the height (≈ ±1) and
 // in lip how much of it is a start or stop ridge.
-float cakeTopArcs(vec3 P, out float lip) {
+// v1.6 polish 3 (fix 2: "stitched leather"): prefiltered by the pixel's footprint w (scene units: x across
+// the spirals, y along them): a ridge or lip narrower than the pixel is widened to it, its area kept
+// (σ' = √(σ² + w²), height × σ/σ'), so its slope falls with the pixel and its highlight cannot break
+// into evenly spaced specks; where a pass's pitch nears the pixel the marks fade to their mean.
+float cakeTopArcs(vec3 P, vec2 w, out float lip) {
   float rr = length(P.xz), th = atan(P.z, P.x);
   float h = 0.0;
   lip = 0.0;
@@ -462,13 +485,18 @@ float cakeTopArcs(vec3 P, out float lip) {
     float segL = ${(TOP_ARCS.segMin + TOP_ARCS.segVar / 2).toFixed(3)};
     vec3 rs = cakeHash33(vec3(m, 2.9, 11.3 + 5.0 * fk));
     if (rs.x < ${TOP_ARCS.gaps.toFixed(3)}) continue;
-    float amp = 0.3 + 0.7 * rs.y * rs.y;
+    float pf = ${TOP_ARCS.aa.toFixed(3)} * w.x / pitch;
+    float amp = (0.3 + 0.7 * rs.y * rs.y) * (1.0 - smoothstep(${TOP_ARCS.fade[0].toFixed(3)}, ${TOP_ARCS.fade[1].toFixed(3)}, pf));
+    if (amp <= 0.0) continue;
     float wu = ${TOP_ARCS.lipLen.toFixed(4)} / max(rr * segL, 1e-3);
+    float pu = ${TOP_ARCS.aa.toFixed(3)} * w.y / max(rr * segL, 1e-3);
     float ends = smoothstep(0.0, wu, u) * smoothstep(0.0, wu, 1.0 - u);
     float env = smoothstep(0.0, 4.0 * wu, u) * (1.0 - smoothstep(1.0 - 6.0 * wu, 1.0 - 1.5 * wu, u));
-    float ridge = exp(-pow((f - 0.5) / 0.07, 2.0)) - 0.45 * exp(-pow((f - 0.64) / 0.1, 2.0));
-    float band = exp(-pow((f - 0.5) / 0.22, 2.0)) * ends;
-    float st = exp(-pow((u - 1.5 * wu) / wu, 2.0)) * band, sp = exp(-pow((u - 1.0 + 2.0 * wu) / (1.3 * wu), 2.0)) * band;
+    float sR = length(vec2(0.07, pf)), sV = length(vec2(0.1, pf)), sB = length(vec2(0.22, pf));
+    float ridge = (0.07 / sR) * exp(-pow((f - 0.5) / sR, 2.0)) - 0.45 * (0.1 / sV) * exp(-pow((f - 0.64) / sV, 2.0));
+    float band = (0.22 / sB) * exp(-pow((f - 0.5) / sB, 2.0)) * ends;
+    float wS = length(vec2(wu, pu)), wP = length(vec2(1.3 * wu, pu));
+    float st = (wu / wS) * exp(-pow((u - 1.5 * wu) / wS, 2.0)) * band, sp = (1.3 * wu / wP) * exp(-pow((u - 1.0 + 2.0 * wu) / wP, 2.0)) * band;
     h += amp * (ridge * env + 0.7 * st + 1.2 * sp);
     lip += amp * (st + sp);
   }
@@ -594,8 +622,10 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
     // v1.6 polish 2 (fix 4): the top's marks are broken spiral arcs, not banded rings (the old r-banded
     // streaks read as water ripples); the hand-mixed colour between them is isotropic, mid-scale.
     float sT = 0.0;
+    // (The pixel's footprint on the top, across the spirals (in r) and along them; here, in uniform flow.)
+    vec2 arcW = vec2(length(vec2(dFdx(rr), dFdy(rr))), max(length(dFdx(P)), length(dFdy(P))));
     if (onTop > 0.0) {
-      foodArcs = cakeTopArcs(P, foodArcLip);
+      foodArcs = cakeTopArcs(P, arcW, foodArcLip);
       sT = ${f(TOP_ARCS.value)} * foodArcs + ${f(TOP_ARCS.noise)} * ((cakeNoise(vec3(P.x * 16.0, P.z * 16.0, P.y * 16.0 + warpT)) - 0.5) + 0.5 * (cakeNoise(P * 37.0 + 5.1) - 0.5));
     }
     float blot = (cakeNoise(P * 6.0 + 11.0) - 0.5) + 0.5 * (cakeNoise(P * 14.0 + 23.0) - 0.5);
@@ -664,6 +694,15 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
   }
   // A pinhole is a pit (≈ 0.3 mm deep).
   ${coat && look.pinholes > 0 ? 'if (foodPin > 0.0) normal = cakeBump(-vViewPosition, normal, -0.0015 * foodPin, faceDirection);' : ''}
+  ${coat ? `// v1.6 polish 3 (fix 2): specular anti-aliasing (Tokuyoshi & Kaplanyan's projected-space NDF
+  // filtering): the bumped normal's spread over the pixel widens the lobe (three's own term sees only the
+  // mesh's normal), so relief finer than the pixel reads as satin, not as specks.
+  {
+    vec3 dnx = dFdx(normal), dny = dFdy(normal);
+    float kr2 = min(2.0 * ${f(SPEC_AA.sigma2)} * (dot(dnx, dnx) + dot(dny, dny)), ${f(SPEC_AA.kappa)});
+    float r2 = roughnessFactor * roughnessFactor;
+    roughnessFactor = sqrt(sqrt(min(r2 * r2 + kr2, 1.0)));
+  }` : ''}
   // The scattered light sees a softened normal (relief shows in the specular, not in the diffuse).
   foodDiffN = normalize(mix(normal, normalize(vNormal) * faceDirection, ${f(look.diffSoft)}));
   ${glint ? `foodGlintP = vFoodP / ${f(cell)};
@@ -679,11 +718,21 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
   // light adds to the diffuse (three's lambert just above and the terms here) is scaled by foodK.
   vec3 foodDD0 = reflectedLight.directDiffuse - irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );
   float foodK = 1.0;
+  // v1.6 polish 3 (fix 1): and on the top coat the flames' light is answered hue-preserving: as a white
+  // light at the flame's peak channel (whatever the flame's colour), so it lifts the coat's own blue
+  // instead of adding a red-heavy light that turns it lilac (foodHueK, per channel, on this light's terms).
+  vec3 foodHueK = vec3(1.0);
   {
     mat3 kRt = transpose(mat3(viewMatrix));
     vec3 kP = kRt * (geometryPosition - viewMatrix[3].xyz);
     if (foodScene) foodKeyL = kRt * directLight.direction;
-    if (foodOnTopCoat(kP)) foodK = foodScene ? mix(1.0, foodCandleShadow(kP, foodKeyL, ${f(KEY_CANDLE_SHADOW.soft)}), ${f(KEY_CANDLE_SHADOW.strength)}) : mix(1.0, ${f(FLAME_POOL.broad)}, foodTop);
+    if (foodOnTopCoat(kP)) {
+      foodK = foodScene ? mix(1.0, foodCandleShadow(kP, foodKeyL, ${f(KEY_CANDLE_SHADOW.soft)}), ${f(KEY_CANDLE_SHADOW.strength)}) : mix(1.0, ${f(FLAME_POOL.broad)}, foodTop);
+      if (!foodScene) {
+        vec3 lc = max(directLight.color, vec3(1e-7));
+        foodHueK = mix(vec3(1.0), vec3(max(lc.r, max(lc.g, lc.b))) / lc, foodTop);
+      }
+    }
   }` : ''}
   // Pre-integrated scattering (analytic): a wrap whose width grows with thinness, the wrapped light
   // tinted by the frosting, added where the lambert is dark.
@@ -716,7 +765,7 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
   float against = saturate(0.4 + 0.6 * dot(-geometryViewDir, directLight.direction));
   reflectedLight.directDiffuse += ${f(look.rim)} * edgeV * edgeV * edgeV * against * foodThin * directLight.color * foodTint * albedoD;
   }
-  ${flames ? 'reflectedLight.directDiffuse = foodDD0 + (reflectedLight.directDiffuse - foodDD0) * foodK;' : ''}
+  ${flames ? 'reflectedLight.directDiffuse = foodDD0 + (reflectedLight.directDiffuse - foodDD0) * foodK * foodHueK;' : ''}
   if (foodScene) {
   ${glint ? `
   // Sugar glints: two sizes of crystal (fine ones seen close up, rarer coarse ones that read as a
@@ -796,7 +845,13 @@ float foodCandleShadow(vec3 P, vec3 L, float soft) {
       }
       pool += uPoolI[i] / (d2 + uPoolR2) * nl * vis;
     }
-    reflectedLight.directDiffuse += ${f(FLAME_POOL.gain)} * pool * uPoolColor * mix(vec3(1.0), ${v3(tint)}, 0.5) * BRDF_Lambert(material.diffuseContribution);
+    // v1.6 polish 3 (fix 1): the halo scales the coat's own light (its colour as lit here, the candles'
+    // key shadows in it) instead of adding the flame's red-heavy colour: hue-preserving whatever the
+    // flame's colour (its peak channel sets the strength), and a shadow inside a halo stays the coat's
+    // blue, as deep relative to the coat round it as without the flames.
+    float poolK = ${f(FLAME_POOL.gain)} * pool * max(uPoolColor.r, max(uPoolColor.g, uPoolColor.b));
+    reflectedLight.directDiffuse *= 1.0 + poolK;
+    reflectedLight.indirectDiffuse *= 1.0 + poolK;
   }
   }` : ''}
   ${ivoryK > 0 ? `// Ivory in the shade too (the room's light comes out of butter warm, not the room's blue).
