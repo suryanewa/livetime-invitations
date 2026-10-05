@@ -80,7 +80,7 @@ export const STEAM_LOOK = {
    * and the white plate that reflects them.
    */
   keyTint: new Color('#F5F5F5'),
-  roomTint: new Color('#E3D9C9'),
+  roomTint: new Color('#E6D7C0'),
   /** Henyey-Greenstein asymmetry (water droplets scatter forward). */
   g: 0.7,
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
