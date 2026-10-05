@@ -217,7 +217,7 @@ describe('Dinner steam field (v1.6)', () => {
     expect(STEAM_LOOK.room).toBeLessThan(STEAM_LOOK.key / 5);
   });
 
-  it('v1.6 polish 3: a gush out of the raised gap, rolling out over the rim and rising, gone by 0.56 s; its box holds it', () => {
+  it('v1.6 polish 3: a gush out of the raised gap, rolling out over the rim and rising, gone by 0.5 s; its box holds it', () => {
     // The gap opens with the tip and closes at the lift-off; nothing after 0.5 s.
     expect(raisedGap(0)).toBe(0);
     expect(raisedGap(0.2)).toBeGreaterThan(0.05);
@@ -230,8 +230,10 @@ describe('Dinner steam field (v1.6)', () => {
       expect(((gushRise(a + 0.05) - gushRise(a)) / 0.05) * SU_CM).toBeLessThan(35);
     }
     expect(gushRise(0.3) * SU_CM).toBeGreaterThan(3);
-    expect(spillFade(0.35)).toBe(1);
-    expect(spillFade(0.56)).toBe(0);
+    // (v1.6 polish 5: it fades over 0.34–0.5 s, was 0.36–0.56.)
+    expect(spillFade(0.34)).toBe(1);
+    expect(spillFade(0.35)).toBeGreaterThan(0.98);
+    expect(spillFade(0.5)).toBe(0);
     // The box: every parcel's centre (round the raised side) at τ 0.3 and 0.45 is inside it.
     for (const tau of [0.3, 0.45]) {
       const s = cloudState(tau), lo = new Vector3(), hi = new Vector3();
