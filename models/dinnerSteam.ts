@@ -93,7 +93,7 @@ export const STEAM_LOOK = {
   squeezeFog: 5.0,
   /** The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density. */
   ringCore: 0.55,
-  ringFog: 2.0,
+  ringFog: 1.5,
   /** The underside's band (su: the undercut's foot, the stem and the cap's underside as it rises; the walls' is 2.5 mm young). */
   underBand: 0.1,
   /** Wrenninge's multiple-scattering octaves (their share of the key; v1.6 polish 2: 0.45 / 0.18 → raised). */
@@ -123,6 +123,8 @@ export const STEAM_LOOK = {
   /** (v1.6 polish 2) The budget once only thin steam shows (the cloud past its fog, the veil). */
   thinPixels: 200_000,
   lowShare: 0.6,
+  /** (v1.6 polish 3) The veil's density in the march: its wisps were lit for the old, dimmer key (it was 40 % of the vapour at 1.2 s). */
+  veilGain: 0.5,
 } as const;
 
 /** The flow map's domain and resolution (per clock): ρ ∈ [0, RHO_MAX], y ∈ [0, Y_MAX] (su). */
@@ -538,7 +540,7 @@ float veil(vec3 p, int l, float detail) {
   // (A few ribbons, not a curtain: the large field leaves most of the column clear.)
   float sheets = smoothstep(0.8 + 0.1 * (1.0 - src), 0.995, ridge) * smoothstep(0.42 + 0.15 * (1.0 - src), 0.75, n.b);
   float wisps = mix(0.6, 0.06 + 4.2 * sheets, smoothstep(0.02, 0.2, h));
-  return ${f(VEIL.strength)} * src * smoothstep(0.0, ${f(VEIL.base)}, h) * exp(-h / ${f(VEIL.evaporate)})
+  return ${f(VEIL.strength * STEAM_LOOK.veilGain)} * src * smoothstep(0.0, ${f(VEIL.base)}, h) * exp(-h / ${f(VEIL.evaporate)})
     * pow(${f(VEIL.radius)} / w, 2.0) * lateral * wisps * (1.0 - smoothstep(${f(VEIL.length - VEIL.top)}, ${f(VEIL.length)}, h));
 }
 
@@ -822,7 +824,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   float folds = smoothstep(0.5, 0.95, 1.0 - abs(2.0 * nb.g - 1.0));
   // (v1.6 polish 3) The cap keeps its own fog as the stem and base empty: the crown closes over the
   // ring (the judge's hollow doughnut), the warm core that feeds the cap still rising through it.
-  float core = mix(F.x, max(F.x, uK[l].x), smoothstep(0.32, 0.55, m.g));
+  float core = mix(F.x, max(F.x, uK[l].x), max(smoothstep(0.32, 0.55, m.g), 1.0 - smoothstep(0.14, 0.36, m.r)));
   float d = (core * (0.55 + 1.3 * folds) * (0.7 + 0.6 * (n1.g - 0.5)) + F.y * exp(-sh * sh) * (0.3 + 1.4 * strips)) * edge + wisp;
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
@@ -1816,7 +1818,7 @@ export class DinnerSteam {
       // (The ring holds fog once it has rolled up, until the cloud has gone.)
       // (v1.6 polish 2: its core holds its fog from ≈ 0.25 s of the thermal, tears from ≈ 0.45 s and has
       // evaporated by ≈ 1.6 s; with the cloud's fade.)
-      R[l]!.set(s.ringR, s.ringY, s.ringSigma, smoothstep01((s.age - 0.2) / 0.35) * (1 - smoothstep01((s.age - 0.95) / 0.65)) * s.fade);
+      R[l]!.set(s.ringR, s.ringY, s.ringSigma, smoothstep01((s.age - 0.2) / 0.35) * (1 - smoothstep01((s.age - 0.7) / 0.6)) * s.fade);
       // The spill's source over the last half-second (what is on the wall now left the gap then).
       const fade = spillFade(tau);
       let on = 0;

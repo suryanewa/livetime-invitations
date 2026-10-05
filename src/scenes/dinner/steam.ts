@@ -374,7 +374,7 @@ export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinit
   out.erode = 0.97 * Math.pow(smooth(CLOUD.erode[0], CLOUD.erode[1], a), 0.85);
   out.fade = 1 - smooth(CLOUD.life - CLOUD.fadeOut, CLOUD.life, a);
   out.floor = CLOUD.floor + CLOUD.floorGrow * smooth(0, 1.0, a);
-  out.stemFade = CLOUD.stemFade * smooth(0.15, 1.3, a);
+  out.stemFade = CLOUD.stemFade * smooth(0.35, 1.4, a);
   out.peel = smooth(EDGE.peel[0], EDGE.peel[1], tau);
   const u = EDGE.undercut, ut = Math.max(0, tau - u.start);
   out.undercutReach = Math.min(u.reach, u.speed * ut);
@@ -631,10 +631,10 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   out.billow = Math.max(0.028 + EDGE.billow * peel, 0.028 + 0.042 * smooth(0.25, 1.3, age));
   out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
   out.core = 0.22 + (0.03 - 0.22) * smooth(0.15, 0.72, age);
-  out.sheet = 1.5 - 0.75 * smooth(0.15, 0.5, age) - 0.6 * smooth(0.4, 1.05, age);
+  out.sheet = 1.5 - 0.75 * smooth(0.15, 0.5, age) - 0.6 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
   // (v1.6 polish 3) The cap's fog: the stem and base empty, the cap keeps its own (a filled mushroom, not a ring).
-  out.capCore = 0.24 - 0.2 * smooth(0.25, 0.7, age);
+  out.capCore = 0.24 - 0.13 * smooth(0.25, 0.7, age) - 0.07 * smooth(0.65, 1.0, age);
   return out;
 }
 
