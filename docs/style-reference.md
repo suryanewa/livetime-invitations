@@ -146,8 +146,9 @@ the judging is in `docs/qualification.md` v1.6.
   was the soft white ball beside the plate at about 0.45 s, so a seventh, constants-only round cut the gush's density
   (5.2 → 1.72) and its drawn growth: its share of the visible steam at 0.48 s fell from 51 to 22 %, the cloche's shape
   reads again in the whole frame (IoU 0.53 → 0.71 at 0.48 s), the cloud itself byte-identical. As merged (7ca077f, seven
-  polish rounds) the steam stands at the seventh judging's 7 / 7.5, not signed, with that judge's re-check of the gush,
-  the phone pacing and the held dome's stillness pending. What a later version needs to be signed is in
+  polish rounds) the steam stands at the seventh judging's 7 / 7.5, not signed; that judge's re-check of polish 7 found
+  the gush no longer takes the eye at CSS size (the reveal there 7.5 / 7.5), the dome's stillness not a visible freeze,
+  and pacing at p95 16.7–16.8 ms at both sizes. What a later version needs to be signed is in
   `docs/RESUME.md`: light the steam on purpose, and a density advected per frame at 1–2 mm (or a full-resolution edge
   band with motion-vector accumulation) for both the body and the gush, with polish 6 and 7 (7ca077f) kept as the
   reference for the envelope, the cap, the gush's size, the timing, the clip and the cost.
@@ -166,7 +167,7 @@ record's "Known gaps".
   the 30× macro are withheld: detail finer than 3 mm is the 5 mm voxel smoke's limit ("a balloon on a string"), the
   stream a clean line at 10×, the 2× smoke only 0.44–0.59 mm lines. The live smoke march is not bit-deterministic
   between consecutive stills (two pixels by 1–7 levels; the `bloom.spec` flake).
-- **Steam: 7 / 7.5, not signed** (the seventh judge's re-check of polish 7 pending). Soft and combed edges at 2× (edge
+- **Steam: 7 / 7.5, not signed** (confirmed by the seventh judge's re-check of polish 7; 7.5 / 7.5 at CSS size). Soft and combed edges at 2× (edge
   0.56–0.99, crown anisotropy 1.13–1.41: the design limit of a half-resolution analytic march); no light direction in
   the volume (own lit − shaded +2…+5: the key 44° off the camera lights the dome through its top and the own colour
   sits on the tone curve's shoulder — a rig decision); the gush a structureless soft puff at 0.42–0.62 s (a limit of

@@ -134,8 +134,9 @@ decision: the key is 44° off the camera and the own colour sits on the tone cur
 (the design limit of a half-resolution analytic march). A last constants-only round on the gush's size and brightness
 (polish 7, merged 7ca077f: density 5.2 → 1.72, a drawn growth under the box's so the cloud stays byte-identical; the
 gush's share of the visible steam 51 → 22 %, the whole-frame dome IoU 0.53 → 0.71) closed the steam work; the seventh
-judge's re-check of that tell, the phone pacing and the held dome's stillness (2.2–2.5 levels a frame at 0.53–0.56 s,
-re-exposed by the smaller gush) is the last entry of the record. The pass closes with the steam's limits recorded and the
+judge's re-check of that tell found the gush no longer takes the eye at CSS size (the reveal there 7.5 / 7.5; device
+sizes unchanged at 7 / 7.5, not signed), the held dome's stillness (2.2–2.5 levels a frame at 0.53–0.56 s) a slowly
+rising dome rather than a freeze, and Dinner pacing clean at both sizes — the last entry of the steam's record. The pass closes with the steam's limits recorded and the
 next approach below. Final verification: 1c61c25 (polish 6) typecheck clean, unit 461/461, browser 117/117 on a fresh
 server; 7ca077f (polish 7) the Dinner, scene-depth and posters specs 16/16, the full suites re-run at the close.
 
