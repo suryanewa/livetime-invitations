@@ -112,10 +112,14 @@ export const CLOUD = {
   centre: 0.25,
   /** The stem and base evaporate (up to this share) as the uncovered plate re-heats them. */
   stemFade: 1.0,
-  /** The vortex ring's core in the cloud at the seat: (share of the radius, height su). */
-  ringAt: [0.78, 0.34] as const,
-  /** The vortex ring: its roll (rad) and time constant (s), its core's reach (su). */
-  roll: 5.2,
+  /**
+   * The vortex ring's core in the cloud at the seat: (share of the radius, height su). (v1.6 polish 6: 0.34 → 0.38, inside
+   * the cap's body rather than at its underside, which the thermal stretches into the stem: the sixth judge's smoke ring,
+   * its centre 0.35–0.45 of its rims.)
+   */
+  ringAt: [0.78, 0.38] as const,
+  /** The vortex ring: its roll (rad) and time constant (s), its core's reach (su). (v1.6 polish 6: 5.2 → 3.0: a rolled lip, not a doughnut.) */
+  roll: 3.0,
   rollTime: 0.7,
   ringCore: 0.2,
   /** The base's outward slump over the plate's rim (su) and its time constant (s). */

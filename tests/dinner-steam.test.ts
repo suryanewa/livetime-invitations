@@ -143,6 +143,7 @@ describe('Dinner steam field (v1.6)', () => {
     // 1.3× the plate. The thermal's air spreads, but its condensate evaporates from the edge in as the room's dry air
     // mixes in: the visible cap is narrower than the held dome by 1.3 s, and well inside the plate.)
     const vis = visibleOutline(1.3);
+    expect(vis.cap).toBeLessThan(seat.cap);
     expect(vis.cap).toBeLessThan(0.85 * PLATE.radius);
     expect((vis.top - held.top) * SU_CM).toBeGreaterThan(6);
   });
@@ -195,8 +196,9 @@ describe('Dinner steam field (v1.6)', () => {
     expect(cloudLook(0).band * SU_CM).toBeLessThan(0.7);
     expect(cloudLook(1.5).band).toBeGreaterThan(cloudLook(0).band * 2);
     expect(cloudLook(0).billow * SU_CM).toBeGreaterThan(0.3);
-    // The vortex ring rolls the cap's edge over more than half a turn by 1.2 s.
-    expect(at12.roll).toBeGreaterThan(Math.PI);
+    // The vortex ring rolls the cap's edge into a lip, over a third of a turn by 1.2 s (v1.6 polish 6: a rolled lip, not the
+    // sixth judge's smoke ring: more than half a turn before).
+    expect(at12.roll).toBeGreaterThan(2);
   });
 
   it('v1.6 polish 2: from the lift-off the outer layer peels while the bulk holds; room air undercuts the foot from the rim in', () => {

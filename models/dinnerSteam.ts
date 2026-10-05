@@ -100,10 +100,12 @@ export const STEAM_LOOK = {
   /**
    * The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density (polish 3: 5 → 1.5; the cap
    * keeps its own fog, `capCore`; polish 5: a narrower tube, ≈ 1.5 cm, 0.55 → 0.42, that stays whole through the roll:
-   * the rolled lip the fifth judge asked for at 1.06–1.22 s.
+   * the rolled lip the fifth judge asked for at 1.06–1.22 s; polish 6: 0.42 → 0.36 and 1.25 → 0.8, its core moved up into the
+   * cap's body (steam.ts `ringAt`) and in with the receding edge: the lip stays legible, +15–20 levels over the notch inside
+   * it, while the cap's centre fills to 0.7–0.9 of its rims, a filled cap rather than the sixth judge's smoke ring).
    */
-  ringCore: 0.42,
-  ringFog: 1.25,
+  ringCore: 0.36,
+  ringFog: 0.8,
   /** The underside's band (su: the undercut's foot, the stem and the cap's underside as it rises; the walls' is 2.5 mm young). */
   underBand: 0.1,
   /** Wrenninge's multiple-scattering octaves (their share of the key; polish 2 raised them to 0.45 / 0.18, which flattened the body; polish 3 pulls them back). */
@@ -2126,7 +2128,8 @@ export class DinnerSteam {
       // (The ring holds fog once it has rolled up, until the cloud has gone.)
       // (v1.6 polish 2: its core holds its fog from ≈ 0.25 s of the thermal, tears from ≈ 0.45 s and has
       // evaporated by ≈ 1.6 s; with the cloud's fade.)
-      R[l]!.set(s.ringR, s.ringY, s.ringSigma, smoothstep01((s.age - 0.2) / 0.35) * (1 - smoothstep01((s.age - 0.7) / 0.6)) * s.fade);
+      // (v1.6 polish 6: it lets its fog go over 0.45–2.05 s of the thermal, was 0.7–1.3: no ring left standing as the cap thins.)
+      R[l]!.set(s.ringR, s.ringY, s.ringSigma, smoothstep01((s.age - 0.2) / 0.35) * (1 - smoothstep01((s.age - 0.45) / 1.6)) * s.fade);
       // The spill's source over the last half-second (what is on the wall now left the gap then).
       const fade = spillFade(tau);
       let on = 0;
