@@ -118,10 +118,10 @@ export const STEAM_LOOK = {
   shadowOd: 0.45,
   /**
    * March steps by what is showing: the dense young cloud, the cloud thinning into wisps, the
-   * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them. (v1.6 polish 5: 28 / 22 / 16 → 40 / 30 / 20,
+   * plate's veil (and the spill) alone. The Low tier takes `lowShare` of them. (v1.6 polish 5: 28 / 22 / 16 → 34 / 28 / 20,
    * for the grain at the finer march.)
    */
-  steps: { dense: 40, thin: 30, veil: 20 },
+  steps: { dense: 34, thin: 28, veil: 20 },
   /**
    * The temporal resolve: the new frame's share of a marched pixel (v1.6 polish 4: every pixel is marched every
    * frame; a tenth, the history carried through the flow), of a pixel filled from its marched neighbours on the
@@ -140,19 +140,20 @@ export const STEAM_LOOK = {
   warm: 4,
   /**
    * The march's pixel budget: at most `maxScale` of the drawing buffer's resolution a side, and at most this many pixels
-   * over the steam's footprint on screen (polish 4: the footprint's, not the buffer's; polish 5: 120 k → 360 k, 90 k → 270 k
-   * thin).
+   * over the steam's footprint on screen (polish 4: the footprint's, not the buffer's; polish 5: 120 k → 360 k, 90 k → 160 k
+   * thin: the risen cap's large footprint at 1.5–2.2 s cost 6.5 ms on the phone at 270 k).
    */
   marchPixels: 360_000,
   /** (v1.6 polish 4) The march's shortest step (su, ≈ 2 mm). */
   minStep: 0.012,
   /**
-   * (v1.6 polish 4) …and at most this many march pixels per CSS pixel² of the footprint. (v1.6 polish 5: 0.31 → 1.0, one
-   * march pixel per CSS pixel where `maxScale` allows: the phone's 2× buffer, 0.82 a side at the laptop's 1.65×.)
+   * (v1.6 polish 4) …and at most this many march pixels per CSS pixel² of the footprint. (v1.6 polish 5: 0.31 → 0.72:
+   * 0.85 march pixels per CSS pixel a side at the phone's 2× buffer, 0.82 at the laptop's 1.65× (`maxScale`); at 1.0 the
+   * phone's held dome cost 7.0 ms.)
    */
-  cssDensity: 1.0,
+  cssDensity: 0.72,
   /** (v1.6 polish 2) The budget once only thin steam shows (the cloud past its fog, the veil). */
-  thinPixels: 270_000,
+  thinPixels: 160_000,
   lowShare: 0.6,
   /** (v1.6 polish 5) The composite's upsample: 0 bilinear, 1 Catmull-Rom held within the nearest 2 × 2's range. */
   upsampleSharp: 0,
