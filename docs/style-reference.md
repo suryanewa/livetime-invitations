@@ -1,6 +1,6 @@
 # Style reference — v1.6 · the Hollywood pass
 
-## v1.6 (2026-10-03): the Hollywood pass
+## v1.6 (2026-10-03 → 05): the Hollywood pass
 
 Surya, on v1.5: *"Everything looks great for the most part, but there are two issues"* — three, each at the same
 bar, **"I'm expecting Hollywood CGI level work here"**: the cake ("still has a plasticky, too perfect and geometric
@@ -83,7 +83,8 @@ the judging is in `docs/qualification.md` v1.6.
   research (bundled flames oscillate; a single candle is steady), by per-candle 1/f sway (RMS 2°), breathing (RMS
   3.2 %) and 100–300 ms flutters; a blow that bends from the base, stretches ×1.58 and tears within 44 ms, lift-off
   dimming to 0.3 % in 16 ms; the light (1, 0.84, 0.45), +6 / +5 / +1 levels on the top centre, breathing, fading
-  candle by candle; whole fire ≤ 1.2 ms. The steam: the density as the signed distance to the cavity wall in material
+  candle by candle; the whole fire 1.21 ms lit after these two rounds, ≤ 1.6 ms as merged (1.44–1.63 lit after round 4,
+  `evidence/v1.6/flames-polish4/frame-cost.txt`). The steam: the density as the signed distance to the cavity wall in material
   coordinates carved by billows (an edge band of 2.5 mm widening to 1.4 cm, lobes peeling from lift-off, room air
   undercutting the foot); material-space jitter with a reprojected temporal history (no octave under 6.6 mm); room 0.3 /
   key 1.25 with a two-lobe phase, key and room kept separate through the march and tinted at the composite (red −
@@ -95,12 +96,13 @@ the judging is in `docs/qualification.md` v1.6.
   depth cannot be reused). The depth pass lets the scene's lights take part (−0.5 ms of program re-checks); the bloom
   draws on layer 29.
 - **The later rounds, and where the pass ended.** The cake was signed by its fourth judging at square 540, laptop and
-  phone, vanilla and cocoa (8 / 7.5 / 7.5). The flames went through two more rounds — the static jet at the wick
+  phone, vanilla and cocoa (8 / 7.5 / 7.5; signed at square, laptop and phone; the 30× macro stays at 5.5 / 5 as a
+  known gap, below any size a guest sees). The flames went through two more rounds — the static jet at the wick
   replaced by a 0.5–1 mm thread torn off the ember that turns up within 80 ms of the breath halving; the smoke above
   8 cm as sheets bounded by fold lines (`SMOKE_SHEET`) on stems that neck and waver instead of six even blurs; the first
   puff diluted so it no longer fogs the back-right candle — and were signed by the fifth judging as a whole sequence at
   laptop, phone and 540 (7 / 7 / 7); the close-up tiers (the 10× blow, the 2× smoke, the 30× macro) stay withheld as
-  known gaps of a 5 mm voxel smoke. The steam went through three more. Round 3 made it translucent (the fog's own
+  known gaps of a 5 mm voxel smoke. The steam went through five more (rounds 3–7, seven in all). Round 3 made it translucent (the fog's own
   density 0.2 with a 6 mm mixing skin carrying the outline, far-rim transmittance 0.33–0.41, the interior folded into
   sheets along the rise, no hollow ring, a legible gush, no cap after a change of mind), scored 5.5 / 6 with a
   design-limit diagnosis: translucency, self-shadowing and crisp sheets cannot be sampled by a half-resolution 11–15-step
@@ -143,11 +145,12 @@ the judging is in `docs/qualification.md` v1.6.
   half-resolution analytic march. What a guest sees at CSS size is a convincing steam beat; the one thing they may notice
   was the soft white ball beside the plate at about 0.45 s, so a seventh, constants-only round cut the gush's density
   (5.2 → 1.72) and its drawn growth: its share of the visible steam at 0.48 s fell from 51 to 22 %, the cloche's shape
-  reads again in the whole frame (IoU 0.53 → 0.71 at 0.48 s), the cloud itself byte-identical. What a later version
-  needs to be signed is in
+  reads again in the whole frame (IoU 0.53 → 0.71 at 0.48 s), the cloud itself byte-identical. As merged (7ca077f, seven
+  polish rounds) the steam stands at the seventh judging's 7 / 7.5, not signed, with that judge's re-check of the gush,
+  the phone pacing and the held dome's stillness pending. What a later version needs to be signed is in
   `docs/RESUME.md`: light the steam on purpose, and a density advected per frame at 1–2 mm (or a full-resolution edge
-  band with motion-vector accumulation) for both the body and the gush, with polish 6 kept as the reference for the
-  envelope, the cap, the timing, the clip and the cost.
+  band with motion-vector accumulation) for both the body and the gush, with polish 6 and 7 (7ca077f) kept as the
+  reference for the envelope, the cap, the gush's size, the timing, the clip and the cost.
 
 ### Known gaps (v1.6)
 

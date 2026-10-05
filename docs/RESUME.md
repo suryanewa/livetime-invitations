@@ -103,24 +103,26 @@ branch (`v1.6/integration`, worktree `.claude/worktrees/v16-int`, port 5508) mer
 hand-resolved conflict in `src/render/stage.ts` (the depth pass runs first, then bloom prepare, scene, haze,
 composite), a meshopt side task (`v1.6/meshopt`), one VFX judge per object (read-only, own frames, against
 photographs and film references), then a fresh polish owner per object working from the judge's ranked tells
-(`v1.6/cake-polish`, `v1.6/steam-polish`; the flames' smoke pass on `v1.6/flames`), then a second judging.
+(`v1.6/cake-polish`, `v1.6/steam-polish`; the flames' smoke pass on `v1.6/flames`), then a second judging, and so on
+round by round until a signature or a recorded limit: by 2026-10-05 the cake had three polish rounds, the flames four
+and the steam seven (`v1.6/<object>-polish<N>`).
 
 Infrastructure lesson (also in the orchestrator's memory): subagents were killed by a 10-minute watchdog whenever
 they awaited their own background renders/tests or ran a >10-minute call on the shared, heavily loaded machine
 (load average 30–90 with several rendering sessions); brief them to commit WIP often, keep calls under ~3
 minutes, never await a background run, and write long files in pieces.
 
-State at the last write (2026-10-05): every polish round so far is merged on `v1.6/integration` (cake ×3, flames ×4,
-steam ×4, meshopt); typecheck clean, the unit suite 460/460 (with `--testTimeout=1800000` for the Party clearance
-test), the Birthday and Dinner posters recaptured on the merged build, the full browser suite 117/117 on a freshly
-started dev server (on a server that had hot-reloaded through many merges, `scene-depth.spec › dinner` counted zero
+State at the last write (2026-10-05): every polish round is merged on `v1.6/integration` (cake ×3, flames ×4,
+steam ×7 — polish 1–7, the last at 7ca077f — and meshopt); at 1c61c25 (steam polish 6) typecheck clean, the unit suite
+461/461 (with `--testTimeout=1800000` for the Party clearance test), the Birthday and Dinner posters recaptured on the
+merged build, the full browser suite 117/117 (1c61c25) on a freshly started dev server (on a server that had hot-reloaded through many merges, `scene-depth.spec › dinner` counted zero
 depth passes because its `import('/src/render/sceneDepth.ts')` got a different module instance than the app's
 `sceneDepth.ts?t=…` — the same HMR trap the judges' `Stage.prototype.render` hooks hit; restart the server before
 the suite or any prototype-hooking harness). The cake is **signed** by the fourth judging at square 540, laptop and
 phone, vanilla and cocoa (8 / 7.5 / 7.5); the flames and smoke are **signed** by the fifth judging as a whole sequence
 at laptop, phone and 540 (7 / 7 / 7) after four polish rounds (the close-up tiers — the 10× blow, the 2× smoke
 detail, the 30× macro — withheld and recorded as known gaps: a limit of the 5 mm voxel smoke, below any size a guest
-sees). The steam is at 7 / 7.5 after six rounds (the fourth a structural round at a 3 ms budget: a dense
+sees). The steam was scored 7 / 7.5 by the seventh judging after six polish rounds (the fourth a structural round at a 3 ms budget: a dense
 intermittent sheet field, exact per-step integration, a reprojected history, a 32³ light volume; the fifth, at 6 ms, the
 box clip — the march's probes, not `steamBounds` — the decline's rim puffs, a held dome for 0.22 s, a rising thermal
 with a rolled lip; the sixth the condensate's envelope eroding from its edges, a filled plate-sized cap, the gush
@@ -158,13 +160,16 @@ Still open at the time of writing (updated when the pass closes):
   or — since the reveal is a pure function of time and deterministic — an offline fluid simulation baked into a sparse 4D
   volume texture that the runtime only marches (the cheapest route to film-quality filaments; the asset's size and the
   change-of-mind cases are the design questions). Either is a version of its own, with its own budget decision;
-- a second full `pnpm models birthday` to confirm the compressed export is deterministic (the meshopt owner could
-  not finish one under load; the uncompressed export reproduced the committed bytes and the codec is deterministic);
+- a second full `pnpm models birthday` to confirm the compressed export is deterministic — open: to be run on a quiet
+  machine (the meshopt owner could not finish one under load; the uncompressed export reproduced the committed bytes,
+  and the compressed export of a test document is bit-deterministic in `tests/masters.test.ts`);
 - `docs/coverage.md` §8 still says "KHR_mesh_quantization with no decoder" (generated from `coverage.json`);
 - the Business reader's pictogram and the Party key are not wired to the bloom (`markBloom`: one line each; it
   changes Business's posters and adds a pass on every lit Business frame — Surya's call);
-- the judges' shared-rig note: the key is too frontal for the decorated cake face; a raking key or a soft top/back
-  light would help every food shot — not done, it changes every scene.
+- the rig — two asks, one decision: a raking or side key for the decorated cake face, and a steam-specific rim or
+  back light against the cove so the volume carries a light direction (the key, 44° off the camera, lights the dome
+  through its top; no steam constant can make a terminator); either changes every scene's look and posters — not
+  done (below, decision 3).
 
 ### Decisions for Surya (v1.6)
 

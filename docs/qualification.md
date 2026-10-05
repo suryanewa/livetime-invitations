@@ -94,12 +94,12 @@ CPU throttling does not stress the GPU, so the simulated run says little about a
 - Drawing buffer at the showcase stage (≈400 CSS px, DPR 1.5 → 600², MSAA 4×): ≈13 MiB. **Total ≈ 20 MiB** against the 48 MiB budget.
 - **Risk recorded:** at the master's 2.5 MP drawing-buffer ceiling, MSAA 4× alone would need ≈90 MiB. Embeds larger than ≈700 CSS px at DPR 1.5 should create the renderer without MSAA; this is a decision for Milestone 7 integration guidance.
 
-## v1.6: the Hollywood pass, first judging (2026-10-03)
+## v1.6: the Hollywood pass (2026-10-03 → 05), first judging (2026-10-03)
 
 Surya's three items on v1.5 (`docs/hollywood-pass-brief.md`), each at "Hollywood CGI level". Each object was
 rebuilt by one owner, then judged by an independent VFX-supervisor agent that rendered its own frames through the
 production stage against photographs and film references at the three real sizes and in macro, and demanded fixes
-before signing; a second owner per object then made them (the second judging is recorded below it when done).
+before signing; a second owner per object then made them, and each later judging and round is recorded below.
 
 | Object | First build | Judge's scores (0–10 vs "Hollywood CGI") | Verdict and the five demanded fixes |
 | --- | --- | --- | --- |
@@ -108,9 +108,11 @@ before signing; a second owner per object then made them (the second judging is 
 | Steam | Raymarched volume from the dome's cavity, material-space advection, vortex roll, scattering, steam shadow, scene depth (`dinner-v1.6-steam.md`) | laptop: form 3.5, motion 5, lighting 3.5, integration 4.5 → **4**; phone 5 / 5.5 / 4.5 / 5 → **5** | Not signed: "the timing is right … but it reads as a frosted cotton-wool ball with a crawling sand grain; the dome shape holds ~0.1 s". Fixes: (1) a sharp lobed edge and silky interior (a narrow threshold band carved by flow-advected billows, noise stretched along the flow, no upsample blur at the edge); (2) no grain (jitter anchored in material space or TAA, no octaves finer than ~4 px); (3) light it as a body (room ~0.3, steep key falloff, two-lobe phase, a legible offset shadow on the plate); (4) a visible bright sheet spilling from the gap at 0.15–0.35 s, then the dome-shaped wall held crisp for 0.25–0.4 s; (5) less vapour (cap no wider than the plate, half the opacity by 1.2 s), a real vortex ring, backlit wisps through 3–5 s, the returning cover pushing the cloud aside |
 
 Also landed: meshopt compression of every runtime GLB (−58 % raw, −45 % gzip; the cake 31.9 → 11.0 MiB raw after
-its regeneration grew it from 12.5), decoded geometry bit-identical, 36 capture stills pixel-identical.
+its regeneration grew it from 12.5), decoded geometry bit-identical, 36 capture stills pixel-identical. Whether a
+second full `pnpm models birthday` on the merged build reproduces the committed compressed GLB byte for byte is
+open: to be run on a quiet machine (the verification below).
 
-### Second judging, after the polish rounds (2026-10-03)
+### Second and later judgings, after the polish rounds (2026-10-03 → 05)
 
 | Object | Polish round | Re-judge's scores (first judging in brackets) | Verdict and what remains |
 | --- | --- | --- | --- |

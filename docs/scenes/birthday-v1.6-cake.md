@@ -196,6 +196,9 @@ product-shot evenness the brief mentions; the material now carries the depth.
 Regenerate: `pnpm models birthday`, `pnpm dev --host 127.0.0.1 --port 5601`, then
 `node --experimental-transform-types --no-warnings scripts/cake-evidence.ts final http://127.0.0.1:5601 sizes,macros,cocoa,strip`
 and `node --experimental-transform-types --no-warnings scripts/cake-perf.ts http://127.0.0.1:5601 v16`.
+Since the meshopt side task the export is compressed: the piping generator is bit-deterministic (tests below), but a
+second full `pnpm models birthday` on the merged build has not been shown byte-identical to the committed GLB — open:
+to be run on a quiet machine.
 
 ## Tests
 
