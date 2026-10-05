@@ -66,8 +66,12 @@ export const CLOUD = {
   /** The clear layer over the hot porcelain at the seat, and how much deeper it gets as the plate re-heats the air (su). */
   floor: 0.035,
   floorGrow: 0.1,
-  /** Densest under the crown (warm saturated air rises; the dome's cool wall condenses it): the base keeps this share. */
-  baseDensity: 0.55,
+  /**
+   * Densest under the crown (warm saturated air rises; the dome's cool wall condenses it): the base keeps this share
+   * (v1.6 polish 5: 0.55 → 0.35, with the young core 0.2 → 0.19: the held dome is denser than polish 4's drawn-up one;
+   * this keeps the plate's far rim seen through it at a transmittance of 0.34–0.46 while the lit upper body stays dense).
+   */
+  baseDensity: 0.35,
   /**
    * τ (s) at which the thermal clock starts: the dome is clearing the cloud's side (it is clear of
    * the plate's middle by 0.44 s). Before it, and for a beat after it, the fog stands in the dome's
@@ -78,12 +82,20 @@ export const CLOUD = {
   /** The dome's drag: the crown's air follows its lift by this share, and its path by `side`, while it is over the cloud. */
   dragUp: 0.32,
   dragSide: 0.1,
+  /**
+   * (v1.6 polish 5; the judge: "a legible held dome for 0.15–0.25 s after lift-off, then the crown frays") The held
+   * dome: until hold[0] (τ, s) the fog stands in the dome's shape, its crown drawn up only `dragHeld` of the dome's drag
+   * (≈ 1 cm on the axis: the air's inertia; the wake's suction has not yet set the crown moving); over hold[0] →
+   * hold[1] + 0.25 s the rest of the drag catches up and the crown frays upward into the wake's tongues.
+   */
+  hold: [0.6, 0.78] as const,
+  dragHeld: 0.2,
   /** The dome's horizontal offset (su) over which it stops dragging: still over the cloud → clear of it. */
   overlap: [0.15, 0.7] as const,
   /** The thermal's top rise: scale W (su/s), buoyant start and entrainment time constants (s): peak ≈ 22 cm/s at ≈ 0.6 s. */
-  riseW: 1.45,
-  riseStart: 0.3,
-  riseMix: 0.9,
+  riseW: 2.4,
+  riseStart: 0.5,
+  riseMix: 1.6,
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
   base: 0.2,
   /** The cap's radius grows by this per su of rise (a thermal's entrainment, α ≈ 0.25, over R ≈ 0.63); the stem narrows by up to `stem`. */
@@ -92,9 +104,9 @@ export const CLOUD = {
   /** The cap flattens by up to this share of its height as it rises. */
   squash: 0.12,
   /** The updraft's fall-off from the axis to the cap's edge (share of the rise the edge loses). */
-  centre: 0.38,
+  centre: 0.25,
   /** The stem and base evaporate (up to this share) as the uncovered plate re-heats them. */
-  stemFade: 0.9,
+  stemFade: 1.0,
   /** The vortex ring's core in the cloud at the seat: (share of the radius, height su). */
   ringAt: [0.78, 0.34] as const,
   /** The vortex ring: its roll (rad) and time constant (s), its core's reach (su). */
@@ -110,13 +122,13 @@ export const CLOUD = {
   /** The room's draught leans the rising cloud (su of lean per su of height). */
   lean: 0.07,
   /** Erosion (evaporation of the thin parts first): starts, and completes over (s of the thermal clock). */
-  erode: [0.2, 1.3] as const,
+  erode: [0.3, 1.8] as const,
   /** The cloud is gone by this age (s), faded out over the last `fadeOut`. */
   life: 2.0,
   fadeOut: 0.6,
   /** Visible steam evaporates as it rises: e^(−(y − evapFrom)/evaporate) above evapFrom (su). */
-  evapFrom: 0.9,
-  evaporate: 0.9,
+  evapFrom: 1.5,
+  evaporate: 1.5,
 } as const;
 
 /**
@@ -158,8 +170,9 @@ export const SPILL = {
   fullGap: 0.09,
   /** It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). */
   stop: [0.24, 0.3] as const,
-  /** (v1.6 polish 3: the gush rises on and mixes in after the lift-off, gone by 0.56 s.) */
-  fade: [0.36, 0.56] as const,
+  /** (v1.6 polish 3: the gush rises on and mixes in after the lift-off, gone by 0.56 s; polish 5: by 0.5 s, its last tenth's
+   * light, when it cost 2.7 ms of the judges' 1400² frame at the march's finer resolution.) */
+  fade: [0.34, 0.5] as const,
   /** The shader samples its source at this many past times, this far apart (s). */
   samples: 8,
   dt: 0.075,
@@ -274,15 +287,21 @@ const DRAG = (() => {
 
 /**
  * The dome's drag at accept time t, already scaled by CLOUD.dragUp / dragSide: how far the crown's
- * air has been drawn up (su, returned) and along the dome's path (`side`, plan x/z, su).
+ * air has been drawn up (su, returned) and along the dome's path (`side`, plan x/z, su). (v1.6 polish 5: during the
+ * held dome only `dragHeld` of it; the rest catches up after the hold, `heldDrag`.)
  */
 export function dragAt(t: number, side: Vector2 = new Vector2()): number {
   const f = Math.min(Math.max(t, 0), 1.5) / DRAG_DT;
   const i = Math.min(Math.floor(f), DRAG.n - 1), k = f - i;
   const lerp = (a: Float64Array) => a[i]! + (a[i + 1]! - a[i]!) * k;
-  side.set(lerp(DRAG.x) * CLOUD.dragSide, lerp(DRAG.z) * CLOUD.dragSide);
-  return lerp(DRAG.up) * CLOUD.dragUp;
+  const c = heldDrag(t);
+  side.set(lerp(DRAG.x) * CLOUD.dragSide * c, lerp(DRAG.z) * CLOUD.dragSide * c);
+  return lerp(DRAG.up) * CLOUD.dragUp * c;
 }
+/** The share of the dome's drag the crown's air has taken up by accept time t (the held dome, then the catch-up). */
+export const heldDrag = (t: number) => CLOUD.dragHeld + (1 - CLOUD.dragHeld) * smooth(CLOUD.hold[0], CLOUD.hold[1] + 0.25, t);
+/** How far the crown has frayed by τ (0 while the dome holds, 1 once the hold is over). */
+export const crownFray = (tau: number) => smooth(CLOUD.hold[0], CLOUD.hold[1], tau);
 
 /** The thermal's top rise (su) at age a (buoyant start, entraining deceleration). */
 export function riseAt(a: number): number {
@@ -394,7 +413,7 @@ export function cloudState(tau: number, emitStart = -Infinity, emitEnd = Infinit
   out.erode = 0.97 * Math.pow(smooth(CLOUD.erode[0], CLOUD.erode[1], a), 0.85);
   out.fade = 1 - smooth(CLOUD.life - CLOUD.fadeOut, CLOUD.life, a);
   out.floor = CLOUD.floor + CLOUD.floorGrow * smooth(0, 1.0, a);
-  out.stemFade = CLOUD.stemFade * smooth(0.35, 1.4, a);
+  out.stemFade = CLOUD.stemFade * smooth(0.2, 0.9, a);
   out.peel = smooth(EDGE.peel[0], EDGE.peel[1], tau);
   const u = EDGE.undercut, ut = Math.max(0, tau - u.start);
   out.undercutReach = Math.min(u.reach, u.speed * ut);
@@ -422,8 +441,13 @@ export const centreWeight = (P: number) => 1 - CLOUD.centre * Math.min(1, (P / C
 export const dragCentre = (P: number) => 1.45 - 0.9 * Math.min(1, (P / CLOUD.radius) ** 2);
 export const verticalForward = (Y: number, P: number, s: CloudState) => Y + s.rise * riseWeight(Y) * centreWeight(P) + s.dragUp * dragWeight(Y) * dragCentre(P) - s.squash * capIntegral(Y);
 const verticalSlope = (Y: number, P: number, s: CloudState) => 1 + s.rise * riseWeightD(Y) * centreWeight(P) + s.dragUp * dragWeightD(Y) * dragCentre(P) - s.squash * capWeight(Y);
-/** The stem and base evaporate as the uncovered plate re-heats them (their share of the light left). */
-export const stemLeft = (Y: number, s: CloudState) => 1 - s.stemFade * (1 - smooth(0.12, 0.42, Y));
+/**
+ * The stem and base evaporate as the uncovered plate re-heats them (their share of the light left at height y). (v1.6
+ * polish 5: only while they are still low over it: base air that the thermal carried up into its cap keeps its fog,
+ * so the cap's underside is no hollow.)
+ */
+export const STEM_HEAT = [0.35, 0.75] as const;
+export const stemLeft = (Y: number, s: CloudState, y = 0) => 1 - s.stemFade * (1 - smooth(0.12, 0.42, Y)) * (1 - smooth(STEM_HEAT[0], STEM_HEAT[1], y));
 /** Bisection steps of the vertical solve (the map is monotonic; ≈ 0.2 mm over its bracket; v1.6 polish 2: 13 → 11). */
 export const VERTICAL_STEPS = 11;
 /** Bisection steps of the radial solve (each with a vertical solve inside). */
@@ -489,7 +513,7 @@ export function axisInverse(rho0: number, y0: number, s: CloudState, out: [numbe
     Y = 0.5 * (a + b);
     P = solveP(Y);
   }
-  out[0] = P; out[1] = Y; out[2] = stemLeft(Y, s) / (stretch * S * S);
+  out[0] = P; out[1] = Y; out[2] = stemLeft(Y, s, y0) / (stretch * S * S);
   return out;
 }
 
@@ -624,12 +648,21 @@ export function wakeFade(sinceCapture: number): number {
 export function leftSteamFade(tau: number, cut: number, capture = Infinity): number {
   return stirFade(tau - cut) * wakeFade(tau - capture);
 }
-/** When steam left behind at `cut` has gone: its own life, or below 1 % of its light (≤ STEAM_END). */
+/**
+ * The seating's squeeze (a change of mind that sets the cover back over fog; the shader's `squeeze`): its puffs
+ * start `lead` s before the capture and have gone `life` s after it; from the capture they keep the strength the fog
+ * had then and fade on their own clock (v1.6 polish 5: they had faded with the clock's wake fade as well, and were
+ * cut off with their box as the decline lifted the dish).
+ */
+export const SQUEEZE = { lead: 0.1, life: 0.62 } as const;
+
+/** When steam left behind at `cut` has gone: its own life, or below 1 % of its light (≤ STEAM_END); never before its squeeze's puffs. */
 export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infinity): number {
   let until = steamEndAfter(cut, emitStart);
   for (let t = cut; t < until; t += 0.02) {
     if (leftSteamFade(t, cut, capture) < 0.01) { until = Math.min(until, Math.ceil(t * 100) / 100); break; }
   }
+  if (Number.isFinite(capture) && emitStart < 0.05) until = Math.max(until, Math.min(STEAM_END, Math.ceil((capture + SQUEEZE.life) * 100) / 100));
   return until;
 }
 
@@ -653,12 +686,16 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   out.billow = Math.max(0.028 + EDGE.billow * peel, 0.028 + 0.042 * smooth(0.25, 1.3, age));
   // (v1.6 polish 4: the sheets curve and fold with the large field from the start: 0.5 → 0.9 young.)
   out.warp = 0.9 + 0.9 * smooth(0.25, 1.5, age);
-  out.core = 0.2 + (0.03 - 0.2) * smooth(0.15, 0.72, age);
+  // (v1.6 polish 5: 0.2 → 0.19 young, with the base's share: the held dome, less stretched by the drag, was denser.)
+  out.core = 0.19 + (0.03 - 0.19) * smooth(0.15, 0.72, age);
   // (v1.6 polish 4: the skin is light: a dense mixing skin round a thin body read as a bubble, the limb denser than the core.)
   out.sheet = 0.3 - 0.15 * smooth(0.15, 0.5, age) - 0.1 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
   // (v1.6 polish 3) The cap's fog: the stem and base empty, the cap keeps its own (a filled mushroom, not a ring).
-  out.capCore = 0.24 - 0.13 * smooth(0.25, 0.7, age) - 0.09 * smooth(0.6, 0.9, age);
+  // (v1.6 polish 5: young 0.24 → 0.17, with the core: the held dome, less stretched by the drag, was denser; then the cap,
+  // which now holds the air the thermal carries up from the dome's lower half too, gathers the dome's fog as the core
+  // empties, 0.25 by 0.75 s of the thermal, and keeps it as it rises away, to ≈ 1.4 s.)
+  out.capCore = 0.17 + 0.08 * smooth(0.4, 0.75, age) - 0.17 * smooth(0.85, 1.6, age);
   // (v1.6 polish 4: the structural round) The body is thin, dense sheets with clear air between: the zero set of
   // the sheet field (drawn out along the rise, folded with the air), `fold` times the core's density inside a
   // sheet, `foldWidth` its half-width in the field's units (≈ 2 mm), `haze` the share of the core between them.

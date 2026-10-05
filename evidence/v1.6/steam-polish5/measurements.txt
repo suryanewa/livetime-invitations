@@ -1,0 +1,201 @@
+# v1.6 steam polish 5: measurements on the final code (v1.6/steam-polish5), the fifth judge's views and scripts
+# Laptop 1240^2 clip (CLIP=180,100,620,620 of 1280x720 @2), WARM 2000, the fifth judge's frames.ts (+GLOBALS/TIER) on dev
+# server 5617; its no-steam twins (nos/, byte-identical on this build) and the decline's (decn, re-rendered as decn6 for
+# 0.70-1.44 s: byte-identical where they overlap). tools/rall.sh renders the set, tools/mall5.sh runs every measure.
+# New scripts (tools/): puffs.py (the seating's rim puffs), rise.py (the judge's centroid and mass, definitions recovered:
+# they reproduce its 672 -> 616 rows and 6.56 / 2.02 M on its frames), lip.py (the rolled lip at the cap's right side, the
+# vortex ring's core projected through proj.py, and the ring's centre against its rims), bright.py, soft.py (sharpness
+# proxies: the fifth judge's inline edge-gradient and finest-detail scripts were not saved; these are calibrated on its
+# frames below), domeviz.py.
+#
+# Re-render determinism: frames at 0.608 and 1.120 s byte-identical across runs.
+
+## the same scripts on the fifth judge's polish-4 frames (judge-steam5/lap), for reference
+# sharpness (soft.py)
+0.480s grad 0.45  oedge 0.57  fine 0.42
+0.544s grad 0.72  oedge 0.82  fine 0.45
+0.576s grad 0.73  oedge 1.09  fine 0.48
+0.608s grad 0.75  oedge 1.03  fine 0.48
+0.672s grad 0.71  oedge 0.93  fine 0.51
+0.736s grad 0.58  oedge 0.83  fine 0.47
+# polish 3 (judge-steam4/lap)
+0.480s grad 0.56  oedge 0.60  fine 0.72
+0.544s grad 1.21  oedge 1.65  fine 0.81
+0.608s grad 0.96  oedge 1.68  fine 0.66
+0.672s grad 0.76  oedge 1.67  fine 0.64
+0.736s grad 0.65  oedge 1.87  fine 0.57
+# bright (bright.py)
+0.480s luma>=232   1.4 k | bright(>215)   6.9 k at 225 p90 235 | plate centre +4 right +4
+0.544s luma>=232   5.2 k | bright(>215)  21.1 k at 226 p90 235 | plate centre +4 right -3
+0.608s luma>=232   4.7 k | bright(>215)  26.6 k at 225 p90 234 | plate centre +3 right -6
+0.672s luma>=232   3.3 k | bright(>215)  25.6 k at 225 p90 233 | plate centre +3 right -8
+0.736s luma>=232   5.3 k | bright(>215)  23.5 k at 226 p90 235 | plate centre +3 right -9
+# polish 2 (judge-steam3/lap)
+0.480s luma>=232  25.2 k | bright(>215)  52.7 k at 230 p90 236 | plate centre -1 right -15
+0.544s luma>=232  45.7 k | bright(>215)  74.0 k at 232 p90 237 | plate centre -1 right -14
+0.608s luma>=232  50.9 k | bright(>215)  79.5 k at 232 p90 237 | plate centre -1 right -14
+0.672s luma>=232  50.7 k | bright(>215)  79.8 k at 232 p90 237 | plate centre -2 right -16
+0.736s luma>=232  90.7 k | bright(>215) 100.5 k at 237 p90 242 | plate centre -3 right -19
+# rise (rise.py)
+0.480s centroid   672  top  526  mass  5.66 M  above 760  3.81 M
+0.608s centroid   647  top  496  mass  4.81 M  above 760  4.57 M
+0.736s centroid   642  top  457  mass  5.47 M  above 760  5.18 M
+0.992s centroid   623  top  413  mass  6.79 M  above 760  6.56 M
+1.120s centroid   616  top  386  mass  6.24 M  above 760  6.11 M
+1.200s centroid   620  top  383  mass  4.75 M  above 760  4.68 M
+1.376s centroid   639  top  485  mass  2.04 M  above 760  2.02 M
+# decline puffs on polish 4's own decline frames (judge-steam5/dec)
+0.768s area>8  41296 max 127.3|0.784s area>8  41353 (+0 %) max 124.7|0.800s area>8  37456 (-9 %) max 122.5|0.816s area>8  30000 (-20 %) max 105.6|0.832s area>8   2740 (-91 %) max  14.9|0.848s area>8      0 (-100 %) max   1.0
+
+## polish 5, final code (tools/mall5.sh m8)
+## (1) box clip: vcut (longest straight cut, px) / vcut2 (0.83-1.31 s)
+0.832s 0 | 0.864s 0 | 0.896s 0 | 0.928s 0 | 0.960s 0 | 0.992s 0 | 1.024s 0 | 1.056s 0 | 1.088s 0 | 1.120s 0 | 1.152s 0 | 1.184s 0 | 1.216s 0 | 1.248s 0 | 1.280s 0 | 1.312s 0 | 
+0.832s  18 px at x 927; 0.864s  27 px at x 938; 0.896s  13 px at x 718; 0.928s  18 px at x 758; 0.960s  19 px at x 757; 0.992s  16 px at x 760; 1.024s  39 px at x 958; 1.056s  41 px at x 961; 1.088s  43 px at x 964; 1.120s  20 px at x 930; 1.152s  18 px at x 973; 1.184s  14 px at x 975; 1.216s  11 px at x 978; 1.248s  13 px at x 984; 1.280s  20 px at x 992; 1.312s  22 px at x 946; 
+## (2) rim puffs on a decline at 0.5 s (area > 8 levels, change)
+0.704s area>8  39887 max 112.6 | 0.720s area>8  41207 (+3 %) max 115.4 | 0.736s area>8  43002 (+4 %) max 122.9 | 0.752s area>8  44247 (+3 %) max 127.6 | 0.768s area>8  45199 (+2 %) max 130.5 | 0.784s area>8  46337 (+3 %) max 125.4 | 0.800s area>8  48053 (+4 %) max 122.2 | 0.816s area>8  45839 (-5 %) max 102.1 | 0.832s area>8  49493 (+8 %) max  86.7 | 0.848s area>8  51167 (+3 %) max  77.8 | 0.864s area>8  47354 (-7 %) max  69.6 | 0.880s area>8  43129 (-9 %) max  62.7 | 0.896s area>8  38368 (-11 %) max  56.0 | 0.912s area>8  33892 (-12 %) max  51.7 | 0.928s area>8  30166 (-11 %) max  50.9 | 0.944s area>8  27807 (-8 %) max  47.9 | 0.960s area>8  24899 (-10 %) max  44.9 | 0.976s area>8  21930 (-12 %) max  34.9 | 0.992s area>8  19371 (-12 %) max  26.0 | 1.008s area>8  17002 (-12 %) max  24.7 | 1.024s area>8  14567 (-14 %) max  22.7 | 1.040s area>8  11521 (-21 %) max  20.9 | 1.056s area>8   8754 (-24 %) max  19.9 | 1.072s area>8   6464 (-26 %) max  17.9 | 1.088s area>8   4784 (-26 %) max  16.1 | 1.104s area>8   3646 (-24 %) max  14.9 | 1.120s area>8   3112 (-15 %) max  13.9 | 1.136s area>8   2450 (-21 %) max  12.9 | 1.152s area>8   1561 (-36 %) max  11.1 | 1.168s area>8    832 (-47 %) max  10.8 | 1.184s area>8    454 (-45 %) max   9.8 | 1.200s area>8    231 (-49 %) max   8.8 | 1.216s area>8      3 (-99 %) max   8.1 | 1.232s area>8      0 (-100 %) max   7.1 | 1.248s area>8      0 max   5.8 | 1.264s area>8      0 max   4.8 | 1.280s area>8      0 max   3.0
+## crown over the seated dome (cap.py)
+0.704s over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.02
+0.736s over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+0.768s over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+0.800s over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+0.832s over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+0.864s over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+## (3) held dome: domefill
+0.448s in 47.1 out 0.9 r 50.3|0.480s in 56.9 out 3.0 r 19.2|0.512s in 58.3 out 7.8 r 7.5|0.544s in 56.6 out 17.6 r 3.2|0.576s in 58.2 out 25.0 r 2.3|0.608s in 62.6 out 32.8 r 1.9|0.640s in 58.0 out 27.2 r 2.1|0.672s in 55.2 out 29.2 r 1.9|0.704s in 51.3 out 34.3 r 1.5|0.736s in 45.9 out 38.8 r 1.2|0.800s in 38.3 out 38.9 r 1.0
+## IoU
+0.480s 0.83 | 0.544s 0.78 | 0.608s 0.66 | 0.672s 0.55 | 0.736s 0.45 | 
+## (4) rise (judge's centroid B>10 above row 760; mass B>8 above 760)
+0.480s centroid   704  top  604  mass  3.73 M  above 760  2.75 M
+0.608s centroid   681  top  561  mass  4.29 M  above 760  4.01 M
+0.736s centroid   657  top  498  mass  5.53 M  above 760  5.22 M
+0.864s centroid   618  top  427  mass  6.43 M  above 760  6.23 M
+0.992s centroid   584  top  357  mass  7.58 M  above 760  7.53 M
+1.120s centroid   552  top  290  mass  8.89 M  above 760  8.87 M
+1.200s centroid   521  top  245  mass  8.76 M  above 760  8.75 M
+1.280s centroid   488  top  194  mass  8.43 M  above 760  8.43 M
+1.376s centroid   452  top  139  mass  7.81 M  above 760  7.81 M
+1.472s centroid   430  top  120  mass  6.52 M  above 760  6.51 M
+1.600s centroid   485  top  284  mass  3.37 M  above 760  3.37 M
+1.056s right core  43.7 below  35.3 inner  22.0 outer  21.4 contrast +21.7 @(856,608)
+1.088s right core  43.7 below  35.8 inner  21.8 outer  22.6 contrast +22.0 @(858,592)
+1.120s right core  43.5 below  36.0 inner  21.8 outer  23.9 contrast +21.7 @(860,576)
+1.152s right core  42.8 below  36.1 inner  21.2 outer  25.8 contrast +21.6 @(863,560)
+1.184s right core  42.0 below  35.5 inner  20.3 outer  28.1 contrast +21.7 @(865,543)
+1.216s right core  40.9 below  34.6 inner  19.1 outer  27.9 contrast +21.8 @(868,526)
+1.056s doughnut: centre  23.6  front rim  84.0  back rim  46.2  centre/rims 0.36
+1.088s doughnut: centre  24.3  front rim  91.3  back rim  47.1  centre/rims 0.35
+1.120s doughnut: centre  25.0  front rim  90.0  back rim  47.2  centre/rims 0.36
+1.152s doughnut: centre  25.5  front rim  78.6  back rim  45.2  centre/rims 0.41
+1.184s doughnut: centre  25.3  front rim  73.6  back rim  43.0  centre/rims 0.43
+1.216s doughnut: centre  25.4  front rim  73.1  back rim  40.5  centre/rims 0.45
+## (5) bright steam
+0.480s luma>=232   7.0 k | bright(>215)  22.8 k at 227 p90 239 | plate centre +3 right +0
+0.544s luma>=232  11.3 k | bright(>215)  35.0 k at 228 p90 238 | plate centre +3 right -6
+0.608s luma>=232  12.3 k | bright(>215)  41.4 k at 228 p90 237 | plate centre +4 right -7
+0.672s luma>=232   9.8 k | bright(>215)  40.5 k at 226 p90 236 | plate centre +4 right -9
+0.736s luma>=232   9.4 k | bright(>215)  28.2 k at 228 p90 238 | plate centre +4 right -10
+## (6) sharpness
+0.480s grad 0.52  oedge 0.55  fine 0.41
+0.544s grad 1.01  oedge 1.06  fine 0.44
+0.576s grad 1.06  oedge 1.07  fine 0.43
+0.608s grad 1.00  oedge 1.20  fine 0.44
+0.672s grad 0.73  oedge 1.45  fine 0.58
+0.736s grad 0.55  oedge 1.39  fine 0.51
+## grain (hfsplit, tn2)
+m8/lap 36: all T 0.77 S 1.43 (10639) | upper T 0.82 S 0.94 (6982) | lower T 0.64 S 2.01 (3657)
+m8/lap 42: all T 0.76 S 1.06 (23640) | upper T 0.77 S 0.63 (11533) | lower T 0.75 S 1.33 (12107)
+m8/lap 56: all T 0.52 S 0.54 (96277) | upper T 0.53 S 0.44 (78549) | lower T 0.51 S 0.83 (17728)
+## anisotropy DoG 2/8
+0.544s R wall: 1.44:1 @-29 gx/gy 1.21 (3752 px) | crown: 1.35:1 @+88 gx/gy 0.74 (5273 px) | L wall: 1.33:1 @+9 gx/gy 1.31 (3508 px)
+0.608s R wall: 1.53:1 @-19 gx/gy 1.39 (4148 px) | crown: 1.05:1 @-80 gx/gy 0.96 (5207 px) | L wall: 2.23:1 @+4 gx/gy 2.20 (3190 px)
+0.672s R wall: 2.17:1 @-23 gx/gy 1.61 (4750 px) | crown: 1.04:1 @-66 gx/gy 0.98 (6032 px) | L wall: 2.28:1 @+20 gx/gy 1.79 (1124 px)
+0.736s R wall: 2.76:1 @-17 gx/gy 2.10 (5466 px) | crown: 1.29:1 @-13 gx/gy 1.26 (6967 px) | L wall: 2.50:1 @+2 gx/gy 2.49 (861 px)
+0.800s R wall: 2.10:1 @-25 gx/gy 1.55 (6128 px) | crown: 1.22:1 @-23 gx/gy 1.15 (8374 px) | L wall: 1.68:1 @+37 gx/gy 1.15 (1230 px)
+0.864s R wall: 2.13:1 @-39 gx/gy 1.15 (6770 px) | crown: 1.31:1 @-34 gx/gy 1.11 (9971 px) | L wall: 1.84:1 @+28 gx/gy 1.36 (984 px)
+## kept: transmittance
+0.432s far-rim T 0.43 (73 cols)  core T median 1.00 p10 0.85 p90 1.00
+0.480s far-rim T 0.37 (74 cols)  core T median 0.76 p10 0.24 p90 1.00
+0.544s far-rim T 0.35 (75 cols)  core T median 0.38 p10 0.19 p90 1.00
+0.608s far-rim T 0.34 (75 cols)  core T median 0.32 p10 0.18 p90 0.95
+0.672s far-rim T 0.39 (75 cols)  core T median 0.31 p10 0.19 p90 0.57
+0.736s far-rim T 0.47 (75 cols)  core T median 0.29 p10 0.16 p90 0.45
+## own colour
+0.480s own: lit 249  shaded 248  lit-shaded +1  body p5 239 p95 251 (p5-p95 12)
+0.608s own: lit 250  shaded 249  lit-shaded +1  body p5 147 p95 251 (p5-p95 104)
+0.672s own: lit 250  shaded 249  lit-shaded +1  body p5 153 p95 251 (p5-p95 98)
+0.736s own: lit 250  shaded 247  lit-shaded +3  body p5 193 p95 251 (p5-p95 58)
+0.896s own: lit 250  shaded 245  lit-shaded +5  body p5 242 p95 250 (p5-p95 8)
+## composite lit/shaded
+0.608s composite lit 212 shaded 211 (+1) | brightening lit 61 shaded 33 (+28)
+0.672s composite lit 202 shaded 218 (-16) | brightening lit 80 shaded 28 (+52)
+0.736s composite lit 209 shaded 217 (-8) | brightening lit 76 shaded 25 (+51)
+## eroded interior s8
+0.480s raw p5-p95 12 (104451 px) | s8: form p5-p95 11  grain rms 0.7 
+0.608s raw p5-p95 100 (162163 px) | s8: form p5-p95 99  grain rms 5.0 
+0.672s raw p5-p95 74 (165351 px) | s8: form p5-p95 78  grain rms 3.1 
+0.736s raw p5-p95 58 (169889 px) | s8: form p5-p95 58  grain rms 2.2 
+## coverage by depth
+0.544s 4-16: 0.25 | 16-32: 0.57 | 32-64: 0.75 | 64-128: 0.76 | 128-400: nan || 1-2 cm ring 0.72 core(>64) 0.76 ratio 1.06
+0.608s 4-16: 0.23 | 16-32: 0.50 | 32-64: 0.73 | 64-128: 0.76 | 128-400: nan || 1-2 cm ring 0.70 core(>64) 0.76 ratio 1.08
+0.672s 4-16: 0.24 | 16-32: 0.50 | 32-64: 0.70 | 64-128: 0.72 | 128-400: 0.72 || 1-2 cm ring 0.67 core(>64) 0.72 ratio 1.07
+0.736s 4-16: 0.25 | 16-32: 0.47 | 32-64: 0.65 | 64-128: 0.69 | 128-400: 0.65 || 1-2 cm ring 0.62 core(>64) 0.68 ratio 1.10
+## dip through the cap
+0.928s curl dip median 3, best 9 levels
+0.960s curl dip median 0, best 11 levels
+0.992s curl dip median 0, best 16 levels
+1.024s curl dip median 4, best 14 levels
+1.056s curl dip median 5, best 25 levels
+1.088s curl dip median 6, best 26 levels
+1.120s curl dip median 3, best 22 levels
+1.152s curl dip median 2, best 18 levels
+1.216s curl dip median 0, best 17 levels
+1.248s curl dip median 0, best 13 levels
+## gush
+0.192s outside: area  27896 px  p95  47.6  p50  16.9 | flank: p95   0.0 mean +0.1 px>8 427
+0.224s outside: area  38578 px  p95  68.3  p50  18.1 | flank: p95   0.0 mean +0.1 px>8 458
+0.256s outside: area  54861 px  p95  74.9  p50  22.9 | flank: p95   1.0 mean +0.2 px>8 1748
+0.288s outside: area  68334 px  p95  66.9  p50  19.2 | flank: p95   0.0 mean +0.0 px>8 0
+0.304s outside: area  81567 px  p95  78.7  p50  18.4 | flank: p95   0.0 mean +0.0 px>8 0
+0.320s outside: area 101121 px  p95  80.7  p50  18.5 | flank: p95   0.0 mean +0.0 px>8 0
+0.336s outside: area 112320 px  p95  80.7  p50  18.3 | flank: p95   0.0 mean +0.0 px>8 0
+0.352s outside: area 115194 px  p95  73.9  p50  18.0 | flank: p95   0.0 mean +0.0 px>8 0
+0.368s outside: area 122315 px  p95  75.7  p50  17.9 | flank: p95   0.0 mean +0.0 px>8 0
+## vapour vs polish 1
+0.480s brightening 4.36 M  ref 5.22 M  ratio 0.84
+0.608s brightening 4.69 M  ref 5.96 M  ratio 0.79
+0.736s brightening 5.84 M  ref 6.44 M  ratio 0.91
+0.992s brightening 7.85 M  ref 6.55 M  ratio 1.20
+1.200s brightening 9.00 M  ref 4.42 M  ratio 2.04
+1.280s brightening 8.70 M  ref 3.75 M  ratio 2.32
+## warmth
+0.480s bright steam (22765 px, luma 227) R-B +4.8 (median +5, p10 +3, p90 +6);  over the plate centre R-B +1.4
+0.608s bright steam (41429 px, luma 228) R-B +4.5 (median +4, p10 +3, p90 +6);  over the plate centre R-B +1.5
+0.736s bright steam (28196 px, luma 228) R-B +4.4 (median +4, p10 +3, p90 +6);  over the plate centre R-B +1.7
+0.864s bright steam (29827 px, luma 230) R-B +4.6 (median +5, p10 +3, p90 +6);  over the plate centre R-B +1.3
+0.992s bright steam (40616 px, luma 231) R-B +4.6 (median +4, p10 +4, p90 +6);  over the plate centre R-B +0.9
+1.120s bright steam (50074 px, luma 231) R-B +4.2 (median +4, p10 +3, p90 +5);  over the plate centre R-B +0.7
+## plate
+0.480s centre 240->243 (+3)  right 243->243 (+0)  left 230->232 (+2)
+0.608s centre 240->244 (+4)  right 243->235 (-7)  left 230->231 (+1)
+0.736s centre 240->244 (+4)  right 243->232 (-10)  left 230->230 (+0)
+0.992s centre 240->243 (+3)  right 243->240 (-3)  left 230->230 (+0)
+1.280s centre 240->242 (+2)  right 243->241 (-2)  left 230->230 (+0)
+1.600s centre 240->241 (+1)  right 243->241 (-2)  left 230->230 (+0)
+## waterline
+0.736s median step 1.6  p90 2.3  columns > 12: 0%
+0.832s median step 1.3  p90 2.0  columns > 12: 0%
+0.896s median step 1.1  p90 1.9  columns > 12: 0%
+0.960s median step 1.1  p90 1.7  columns > 12: 0%
+## doughnut/lip see (4)
+
+## extras
+# the end and the tail (max brightening over the clean twin)
+2.240s max 52 levels, px > 8: 36574
+3.200s max 43 levels, px > 8: 9053
+3.776s max 25 levels, px > 8: 6916
+4.480s max 22 levels, px > 8: 1738
+5.120s max 20 levels, px > 8: 6528
+5.952s max 2 levels, px > 8: 0
+# Low tier (TIER=low: checkerboard, 60 % of the steps) grain at 0.61 s
+exp/low 38: all T 0.54 S 0.89 (14070) | upper T 0.62 S 0.67 (5847) | lower T 0.47 S 1.00 (8223)
+# frame-to-frame |dB| mean 0.32-1.44 s: no frame over 1.8x its neighbours' median (no pop)
