@@ -170,8 +170,9 @@ export const SPILL = {
   fullGap: 0.09,
   /** It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). */
   stop: [0.24, 0.3] as const,
-  /** (v1.6 polish 3: the gush rises on and mixes in after the lift-off, gone by 0.56 s.) */
-  fade: [0.36, 0.56] as const,
+  /** (v1.6 polish 3: the gush rises on and mixes in after the lift-off, gone by 0.56 s; polish 5: by 0.5 s, its last tenth's
+   * light, when it cost 2.7 ms of the judges' 1400² frame at the march's finer resolution.) */
+  fade: [0.34, 0.5] as const,
   /** The shader samples its source at this many past times, this far apart (s). */
   samples: 8,
   dt: 0.075,

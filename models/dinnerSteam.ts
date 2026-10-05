@@ -140,10 +140,10 @@ export const STEAM_LOOK = {
   warm: 4,
   /**
    * The march's pixel budget: at most `maxScale` of the drawing buffer's resolution a side, and at most this many pixels
-   * over the steam's footprint on screen (polish 4: the footprint's, not the buffer's; polish 5: 120 k → 360 k, 90 k → 160 k
+   * over the steam's footprint on screen (polish 4: the footprint's, not the buffer's; polish 5: 120 k → 240 k, 90 k → 160 k
    * thin: the risen cap's large footprint at 1.5–2.2 s cost 6.5 ms on the phone at 270 k).
    */
-  marchPixels: 360_000,
+  marchPixels: 240_000,
   /** (v1.6 polish 4) The march's shortest step (su, ≈ 2 mm). */
   minStep: 0.012,
   /**
@@ -1189,7 +1189,7 @@ float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising
     bool inSpill = all(greaterThanEqual(p, uSpillMin[l])) && all(lessThanEqual(p, uSpillMax[l]));
     float dc = 0.0;
     if (inCloud && uDebug != 3 && uDebug != 5 && (uFlags & 131072) == 0) dc = cloud(p, l, detail, L, so); else { gSheetPrev[l] = 9.0; gEdgePrev[l] = 99.0; gWispPrev[l] = 99.0; }
-    float dr = (inSpill ? spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 && (uFlags & 65536) == 0 ? veil(p, l, detail) : 0.0);
+    float dr = (inSpill && (uFlags & 67108864) == 0 ? spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 && (uFlags & 65536) == 0 ? veil(p, l, detail) : 0.0);
     // (The seating's puffs leave the cover: what it closes over does not hold them.)
     float dq = inSpill && (uFlags & 33554432) == 0 ? squeeze(p, l) * uK[l].z : 0.0;
     dens += dq;
@@ -1658,7 +1658,7 @@ const COMPOSITE_VERTEX = VOLUME_VERTEX;
 const EULER = new Euler();
 const TMP_FP = new Vector3(), FP = new Vector4();
 const TMP_VP = new Matrix4(), TMP_M = new Matrix4(), TMP_A = new Vector3(), TMP_B = new Vector3(), TMP_E = new Vector3(), TMP_C = new Color(), TMP_D = new Color();
-const TMP_SL = new Vector3(), TMP_SH = new Vector3();
+const TMP_SL = new Vector3(), TMP_SH = new Vector3(), FP_ALL = new Vector4();
 
 /** The scene's shadow-casting key light (spot or directional), or null. */
 function findKey(scene: Object3D): Object3D | null {
@@ -1719,6 +1719,9 @@ export class DinnerSteam {
   private alive = false;
   /** How many clocks carry a cloud (set by sync). */
   private clouds = 0;
+  /** (v1.6 polish 5) The union of the march's own boxes (the steam, without its shadow's reach; set by sync). */
+  private readonly marchMin = new Vector3();
+  private readonly marchMax = new Vector3();
 
   constructor() {
     this.object.name = 'fx_steam';
@@ -1904,15 +1907,19 @@ export class DinnerSteam {
       ?? (this.steps === STEAM_LOOK.steps.dense ? STEAM_LOOK.marchPixels : STEAM_LOOK.thinPixels) * (this.clouds > 1 ? 0.4 : 1);
     // (v1.6 polish 4: the budget is the steam's own footprint on screen, not the drawing buffer's: the phone's
     // portrait frame fills more of its buffer with the plate than the laptop's does, and costs the same.)
-    const fp = this.footprint(camera, frame.size);
+    // (v1.6 polish 5: the budget over the steam's own boxes, the march's; the scissor over the composite's, which reaches
+    // over the steam's shadow and costs an early return a pixel there. At the held dome the composite's footprint was
+    // 1.7× the steam's, and took its resolution.)
+    const fp = FP_ALL.copy(this.footprint(camera, frame.size, this.uniforms.uBoxMin!.value as Vector3, this.uniforms.uBoxMax!.value as Vector3));
+    const ft = this.footprint(camera, frame.size, this.marchMin, this.marchMax);
     // (And at most `cssDensity` march pixels per CSS pixel² of it: detail is judged at the page's scale, and a 3×
     // phone's buffer packs four times the laptop's pixels into each CSS pixel.)
     const dpr = Math.max(1, renderer.getPixelRatio());
-    const spend = Math.min(budget, ((globalThis as { __steamCss?: number }).__steamCss ?? STEAM_LOOK.cssDensity) * (fp.z * fp.w) / (dpr * dpr));
-    const scale = Math.min((globalThis as { __steamMaxScale?: number }).__steamMaxScale ?? STEAM_LOOK.maxScale, Math.sqrt(spend / Math.max(1, fp.z * fp.w)));
+    const spend = Math.min(budget, ((globalThis as { __steamCss?: number }).__steamCss ?? STEAM_LOOK.cssDensity) * (ft.z * ft.w) / (dpr * dpr));
+    const scale = Math.min((globalThis as { __steamMaxScale?: number }).__steamMaxScale ?? STEAM_LOOK.maxScale, Math.sqrt(spend / Math.max(1, ft.z * ft.w)));
     this.scissor.set(Math.floor(fp.x * scale) - 4, Math.floor(fp.y * scale) - 4, Math.ceil(fp.z * scale) + 8, Math.ceil(fp.w * scale) + 8);
     const st = (globalThis as { __steamStats?: string[] }).__steamStats;
-    if (st) st.push(`tau ${this.tau0.toFixed(3)} buf ${frame.size.x}x${frame.size.y} fp ${fp.z}x${fp.w} scale ${scale.toFixed(3)} steps ${this.steps}`);
+    if (st) st.push(`tau ${this.tau0.toFixed(3)} buf ${frame.size.x}x${frame.size.y} fp ${fp.z}x${fp.w} steam ${ft.z}x${ft.w} scale ${scale.toFixed(3)} steps ${this.steps}`);
     const w = Math.max(1, Math.ceil(frame.size.x * scale)), h = Math.max(1, Math.ceil(frame.size.y * scale));
     (u.uScale!.value as Vector2).set(w / frame.size.x, h / frame.size.y);
     (u.uMarchSize!.value as Vector2).set(w, h);
@@ -1956,11 +1963,11 @@ export class DinnerSteam {
   private readonly scissor = new Vector4();
 
   /**
-   * The steam's footprint on screen (drawing-buffer pixels: x, y, width, height): the union box's corners
-   * projected (the whole buffer if a corner is behind the camera).
+   * A box's footprint on screen (drawing-buffer pixels: x, y, width, height): its corners projected (the whole buffer
+   * if a corner is behind the camera).
    */
-  private footprint(camera: PerspectiveCamera | OrthographicCamera, size: Vector2): Vector4 {
-    const lo = this.uniforms.uBoxMin!.value as Vector3, hi = this.uniforms.uBoxMax!.value as Vector3;
+  private footprint(camera: PerspectiveCamera | OrthographicCamera, size: Vector2, lo: Vector3, hi: Vector3): Vector4 {
+    if (lo.x > hi.x) return FP.set(0, 0, 1, 1);
     const vp = TMP_VP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(this.volume.matrixWorld);
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (let k = 0; k < 8; k++) {
@@ -2084,6 +2091,8 @@ export class DinnerSteam {
     const lightMax = (this.uniforms.uLightMax!.value as Vector3).set(-Infinity, -Infinity, -Infinity);
     const min = (this.uniforms.uBoxMin!.value as Vector3).set(Infinity, Infinity, Infinity);
     const max = (this.uniforms.uBoxMax!.value as Vector3).set(-Infinity, -Infinity, -Infinity);
+    this.marchMin.set(Infinity, Infinity, Infinity);
+    this.marchMax.set(-Infinity, -Infinity, -Infinity);
     const limMin = TMP_A.set(-BOX_MAX, 0, -BOX_MAX), limMax = TMP_B.set(BOX_MAX, Y_MAX, BOX_MAX);
     let any = false;
     let steps: number = STEAM_LOOK.steps.veil;
@@ -2171,6 +2180,8 @@ export class DinnerSteam {
         // the light volume's only. Stretched over the shadow, a ray's span through the box was 2–3× the steam's,
         // and its three probes, that far apart, stepped over the cloud's flank where the ray grazes it: the
         // judge's straight vertical cut down the cloud's right side at 0.86–1.25 s.
+        this.marchMin.min(lo);
+        this.marchMax.max(hi);
         const eLo = TMP_SL.copy(lo), eHi = TMP_SH.copy(hi);
         if (lit) {
           // Its shadow on the plate and the table falls away from the key: the composite's box reaches over it.
