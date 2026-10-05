@@ -212,7 +212,7 @@ export const STEAM_LOOK = {
    * through the outer centimetres, `taps`, at a fall of 200) was a sharp light point-sampled by the march: temporal grain
    * 1.5–1.7 against 0.9.
    */
-  backLight: { light: 2.5, g: 0.6, fall: 60, ms: 0, dir: [0.8, 0.25, 0.55] as const, rim: 0.08, taps: 0 },
+  backLight: { light: 1.3, g: 0.6, fall: 60, ms: 0, dir: [0.8, 0.25, 0.55] as const, rim: 0.05, taps: 0 },
   /**
    * (v1.6 polish 8) The window's spread, as the steam sees it: the rig's key is the window's centre, high and in front;
    * the window is wide and its lower part lights the steam from its side, low (towards the camera, left, up: 0.4, 0.85,
@@ -228,13 +228,14 @@ export const STEAM_LOOK = {
   exposure: 0.79,
   shoulder: 0.5,
   /**
-   * (v1.6 polish 8) Against the cove (beyond `near` su from the camera: not the plate, the cloche or the table) the steam's
-   * light is added to the cove's (`cove`: its radiance behind the steam, before the tone curve) and tone mapped with it,
-   * where the steam's own radiance is high (`lo` → `hi`: the back light's rim): a thin, brightly lit edge is brighter than
-   * its coverage of a white colour, as light is (the over-composite caps a wisp of coverage 0.2 at 203 over a cove of 191;
-   * light adds to 245). The body keeps the over-composite.
+   * (v1.6 polish 8) The back light's light is composited as light, not as part of the steam's own colour: against the cove
+   * (beyond `near` su from the camera: not the plate, the cloche or the table) it is added to the steam's light and the
+   * cove's (`cove`: its radiance behind the steam, before the tone curve) and tone mapped with them, and the composite adds
+   * what it adds there (`share`). A thin, brightly backlit edge is brighter than its coverage of a white colour, as light
+   * is: the over-composite caps a wisp of coverage 0.2 at 203 over a cove of 191, light adds to ≈ 245. Folded into the own
+   * colour (an over-layer) it lit the shaded side's body: own colour lit − shaded +6…+13 where it is +20…+24 without it.
    */
-  radiance: { share: 1, lo: 0.6, hi: 2.4, near: 9, cove: [0.55, 0.53, 0.5] as const },
+  radiance: { share: 1, near: 9, cove: [0.55, 0.53, 0.5] as const },
   /**
    * (v1.6 polish 8) The edge band (the shader's `uEdge`): the boundary's band (share), the tears (amplitude su, frequency
    * per su, length over width), the band's sheets (haze, width, density, frequency: shares), its depth (su) and the
@@ -243,10 +244,11 @@ export const STEAM_LOOK = {
   edgeBand: { boundary: 0.5, tear: 0.015, tearFreq: 19, tearLength: 5, haze: 1, width: 1, fold: 1, freq: 1, depth: 0.06, crown: 2 },
   /**
    * (v1.6 polish 8) The full-resolution edge pass: march pixels per CSS pixel over the silhouette's band (`css`), at most
-   * this share of the drawing buffer a side (`maxScale`), the band's ring radius (CSS px, ≈ 0.75 cm at the laptop) and the
-   * coverage under which the ring counts as outside the steam (`inner`).
+   * this share of the drawing buffer a side (`maxScale`), the band's ring radius (CSS px, ≈ 0.45 cm at the laptop), the
+   * coverage under which the ring counts as outside the steam (`inner`), its share of the march's steps (`steps`: its rays
+   * cross the outer layer) and the clouds it refines (younger than `age` s of their thermal: to ≈ 1.2 s of the reveal).
    */
-  edge: { css: 1.0, maxScale: 0.75, ring: 10, inner: 0.05 },
+  edge: { css: 1.0, maxScale: 0.75, ring: 6, inner: 0.05, steps: 0.6, age: 0.8 },
   /**
    * (v1.6 polish 8) The key's share of the steam's colour (its tint #F5F5F5, the room's the rest): fixed, as the march's
    * fourth value now carries the back light's share for the composite's rim.
@@ -623,7 +625,23 @@ uniform vec4 uEdge[3];
  */
 uniform bool uEdgePass;
 uniform sampler2D uLowTex;
+/** (The half-resolution march itself, before its resolve: whether its steam is the gush or the veil.) */
+uniform sampler2D uLowRaw;
 uniform vec2 uEdgeRing;
+/**
+ * (v1.6 polish 8) The edge pass's band at uv (the march's resolution): 1 near the silhouette (the half-resolution steam's
+ * coverage within the ring's radius falls under \`uEdgeRing.y\` / 2), 0 inside (all of it over \`uEdgeRing.y\`), and the
+ * coverage's maximum (nothing there under 0.004). The resolve blends the band in by it: no seam where it ends.
+ */
+vec2 edgeBand(vec2 uv, vec2 size) {
+  float a0 = texture(uLowTex, uv).y, amin = a0, amax = a0;
+  for (int k = 0; k < 8; k++) {
+    float an = float(k) * 0.785398;
+    float ak = texture(uLowTex, uv + uEdgeRing.x * vec2(cos(an), sin(an) * size.x / size.y)).y;
+    amin = min(amin, ak); amax = max(amax, ak);
+  }
+  return vec2(1.0 - smoothstep(0.5 * uEdgeRing.y, uEdgeRing.y, amin), amax);
+}
 /** Per clock: τ, drawn (0/1), fade, carries the cloud (0/1). */
 uniform vec4 uA[${STEAM_LAYERS}];
 /** Per clock: side drag (x, z), the draught's lean (x, z). */
@@ -1432,14 +1450,11 @@ void main() {
   // the half-resolution steam (-2: inside) or nothing (outside).
   if (uEdgePass) {
     vec2 uv = fc / uMarchSize;
-    float a0 = texture(uLowTex, uv).y, amin = a0, amax = a0;
-    for (int k = 0; k < 8; k++) {
-      float an = float(k) * 0.785398;
-      float ak = texture(uLowTex, uv + uEdgeRing.x * vec2(cos(an), sin(an) * uMarchSize.x / uMarchSize.y)).y;
-      amin = min(amin, ak); amax = max(amax, ak);
-    }
-    if (amax < 0.004) { gl_FragColor = vec4(0.0, 0.0, used, 1.0); return; }
-    if (amin > uEdgeRing.y) { gl_FragColor = vec4(0.0, 0.0, used, -2.0); return; }
+    vec2 eb = edgeBand(uv, uMarchSize);
+    if (eb.y < 0.004) { gl_FragColor = vec4(0.0, 0.0, used, 1.0); return; }
+    // (The gush and the veil, thin and soft all through, keep the half-resolution steam: they are not the cloud's torn edge.)
+    float wr = texelFetch(uLowRaw, ivec2(uv * vec2(textureSize(uLowRaw, 0))), 0).w;
+    if (eb.x <= 0.0 || unpackRising(wr)) { gl_FragColor = vec4(0.0, 0.0, used, -2.0); return; }
   }
   vec4 v0 = uModelView * vec4(ro, 1.0);
   vec4 v1 = uModelView * vec4(rd, 0.0);
@@ -1576,10 +1591,12 @@ void main() {
     if ((uFlags & 134217728) == 0 && ob < 7.0 && rising < dens) {
       if (uTune[3].x > 0.0) ob += uSigma * uTune[1].w * (0.012 * steamMean(p + Bd * 0.006) + 0.03 * steamMean(p + Bd * 0.03));
       // (v1.6 polish 8) The rim: only the cloud's outer layer, smoothly (\`gRim\`).
-      float rimK = uTune[3].w > 0.0 ? rimW : 1.0;
+      float rimK = uTune[3].w > 0.0 ? rimW * rimW : 1.0;
       // (The cloud's own: the gush, the veil and the seating's puffs, thin and rising, would glow as a haze.)
       sB = uTune[1].z * (4.0 * 3.14159265) * (exp(-ob) * phB + uTune[2].y * exp(-0.6 * ob) * ph2) * (1.0 - cav) * (1.0 - clamp(rising / dens, 0.0, 1.0)) * rimK;
-      if (uTune[2].w > 0.5) sRoom += sB; else sKey += sB;
+      // (Not the steam's own colour: the composite adds it as light, the rim's glow over the cove; \`uTune[2].w\` < 0 folds it
+      // back into the own colour, the key's channel, for comparison.)
+      if (uTune[2].w < 0.0) sKey += sB;
       // (v1.6 polish 8: what the back light adds, carried to the composite in the key's old place: its rim is the light
       // the composite adds to the cove's.)
       cb += T * (1.0 - exp(-sig * seg)) * sB;
@@ -1600,7 +1617,7 @@ void main() {
   // Premultiplied luminance, coverage, the depth used, and (packed) the key's share of the light,
   // the steam's depth along the ray and whether it is the rising veil or spill.
   float lum = C.x + C.y;
-  gl_FragColor = vec4(lum, alpha, used, packMarch(lum > 1e-5 ? cb / lum : 0.0, rw > 0.5 * wt, wt > 1e-4 ? tw / wt : 0.0));
+  gl_FragColor = vec4(lum, alpha, used, packMarch(lum + cb > 1e-5 ? cb / (lum + cb) : 0.0, rw > 0.5 * wt, wt > 1e-4 ? tw / wt : 0.0));
 }
 `;
 
@@ -1744,6 +1761,12 @@ void main() {
       } else if (uDebug == 11) res = vec3(0.4, 1.0, 0.2);
     } else if (uDebug == 11) res = vec3(0.0, 1.0, 0.0);
   }
+  // (v1.6 polish 8) The edge pass: its band blended into the half-resolution steam where it ends.
+  if (uEdgePass) {
+    vec2 uv = (vec2(px) + 0.5) / uMarchSize;
+    float bw = edgeBand(uv, uMarchSize).x;
+    if (bw < 1.0) { vec4 lo = texture(uLowTex, uv); res = mix(vec3(lo.xy, lo.w), res, bw); }
+  }
   gl_FragColor = vec4(res.xy, c.z, res.z);
 }
 `;
@@ -1789,8 +1812,6 @@ uniform float uShoulderShape;
  */
 uniform float uRadiance;
 uniform float uCoveNear;
-uniform float uRadLo;
-uniform float uRadHi;
 uniform vec3 uCoveLin;
 varying vec3 vLocal;
 ${LIGHT_GLSL}
@@ -1904,7 +1925,9 @@ void main() {
   // the walls and the table that surround it, each of unit luminance.)
   // (v1.6 polish 8: the march's fourth value is the back light's share of the light now (it was the key's): the steam's
   // colour is the key's and the room's in a fixed proportion, \`STEAM_LOOK.keyShare\`, the room's tint being near neutral.)
-  float backShare = clamp(g.z / max(v.x, 1e-6), 0.0, 1.0);
+  // (The back light's light, carried as its share s of the steam's light with it: g.z = s · lum, so it is lum · s / (1 − s).)
+  float backShare = clamp(g.z / max(v.x, 1e-6), 0.0, 0.95);
+  float backLum = v.x * backShare / (1.0 - backShare);
   float keyShare = ${f(STEAM_LOOK.keyShare)};
   gl_FragColor = vec4(steamTone(mix(uRoomTint, uKeyTint, keyShare) * (uExposure * uToneExposure * v.x / max(v.y, 1e-4))), 1.0);
   #include <colorspace_fragment>
@@ -1915,12 +1938,11 @@ void main() {
   if (uRadiance > 0.0) {
     float cove = smoothstep(uCoveNear, uCoveNear + 1.0, own);
     if (cove > 0.0) {
-      vec3 Cl = mix(uRoomTint, uKeyTint, keyShare) * (uExposure * uToneExposure * v.x / max(v.y, 1e-4));
-      vec3 behind = sRGBTransferOETF(vec4(steamTone(uCoveLin), 1.0)).rgb;
-      vec3 sum = sRGBTransferOETF(vec4(steamTone(uCoveLin * (1.0 - v.y) + Cl * v.y), 1.0)).rgb;
-      // (Only the back light's rim: the gush and the window's thin lit edges keep the over-composite.)
-      float hdr = smoothstep(uRadLo, uRadHi, backShare * dot(Cl, vec3(0.2126, 0.7152, 0.0722)));
-      over += uRadiance * cove * hdr * max(sum - (over + (1.0 - v.y) * behind), 0.0);
+      // (The back light's light added to the steam's and the cove's, tone mapped with them: what it adds there.)
+      vec3 tint = mix(uRoomTint, uKeyTint, keyShare) * (uExposure * uToneExposure);
+      vec3 base = uCoveLin * (1.0 - v.y) + tint * v.x;
+      vec3 glow = sRGBTransferOETF(vec4(steamTone(base + tint * backLum), 1.0)).rgb - sRGBTransferOETF(vec4(steamTone(base), 1.0)).rgb;
+      over += uRadiance * cove * max(glow, 0.0);
     }
   }
   gl_FragColor = vec4(over, cover);
@@ -2007,6 +2029,8 @@ export class DinnerSteam {
   private alive = false;
   /** How many clocks carry a cloud (set by sync). */
   private clouds = 0;
+  /** (v1.6 polish 8) The youngest present cloud's thermal age (s; Infinity: none): the edge pass refines the young cloud. */
+  private youngest = Infinity;
   /** (v1.6 polish 6) Steam clocks drawn this frame (each sample evaluates every one of them). */
   private drawnClocks = 0;
   /** (v1.6 polish 5) The union of the march's own boxes (the steam, without its shadow's reach; set by sync). */
@@ -2092,7 +2116,7 @@ export class DinnerSteam {
       uBackDir: { value: new Vector3(0, 0, -1) },
       uWinDir: { value: new Vector3(-1, 0, 0) },
       uLightPass: { value: 0 },
-      uEdgePass: { value: false }, uLowTex: { value: null }, uEdgeRing: { value: new Vector2(0.01, 0.05) },
+      uEdgePass: { value: false }, uLowTex: { value: null }, uLowRaw: { value: null }, uEdgeRing: { value: new Vector2(0.01, 0.05) },
       uTune: { value: [new Vector4(), new Vector4(), new Vector4(), new Vector4()] },
       uEdge: { value: [new Vector4(1, 0, 19, 4), new Vector4(1, 1, 1, 1), new Vector4(0.09, 1, 0, 0)] },
       uR: { value: v4() }, uH: { value: v4() }, uK: { value: v4() }, uM: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uGp0: { value: v4() }, uGp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] }, uWake: { value: [0, 0, 0] },
@@ -2144,7 +2168,7 @@ export class DinnerSteam {
       uKeyDir: this.uniforms.uKeyDir!, uShadowOn: this.uniforms.uShadowOn!, uSigma: this.uniforms.uSigma!, uFlags: this.uniforms.uFlags!,
       uExposure: { value: STEAM_LOOK.exposure },
       uToneExposure: { value: 1 }, uShoulder: { value: STEAM_LOOK.shoulder }, uShoulderShape: { value: 1 },
-      uRadiance: { value: STEAM_LOOK.radiance.share }, uCoveNear: { value: STEAM_LOOK.radiance.near }, uRadLo: { value: STEAM_LOOK.radiance.lo }, uRadHi: { value: STEAM_LOOK.radiance.hi },
+      uRadiance: { value: STEAM_LOOK.radiance.share }, uCoveNear: { value: STEAM_LOOK.radiance.near },
       uCoveLin: { value: new Vector3(...STEAM_LOOK.radiance.cove) },
     };
     this.material = new ShaderMaterial({
@@ -2215,8 +2239,6 @@ export class DinnerSteam {
       this.compositeUniforms.uShoulderShape!.value = t.shape ?? 1;
       this.compositeUniforms.uRadiance!.value = t.radiance ?? rd.share;
       this.compositeUniforms.uCoveNear!.value = t.coveNear ?? rd.near;
-      this.compositeUniforms.uRadLo!.value = t.radLo ?? rd.lo;
-      this.compositeUniforms.uRadHi!.value = t.radHi ?? rd.hi;
       this.compositeUniforms.uToneExposure!.value = renderer.toneMappingExposure;
       const rt = (globalThis as { __steamRoomTint?: string }).__steamRoomTint;
       (this.compositeUniforms.uRoomTint!.value as Vector3).copy(unitLuminance(rt ? TMP_D.set(rt) : STEAM_LOOK.roomTint));
@@ -2306,12 +2328,17 @@ export class DinnerSteam {
     // its neighbourhood). The composite reads it.
     const E = STEAM_LOOK.edge, eq = globalThis as { __steamEdgeCss?: number; __steamNoEdge?: boolean };
     const sE = Math.min(E.maxScale, (eq.__steamEdgeCss ?? E.css) / dpr);
-    if (!checker && !eq.__steamNoEdge && !dbg.__steamSkip?.includes('resolve') && sE > scale * 1.05) {
+    // (Only while a cloud is young (`edge.age`, its thermal's seconds): the dome, its release and its rise, where the
+    // sheets tear; after it the thinning cloud's wisps are centimetres across, and its band is most of it.)
+    if (!checker && !eq.__steamNoEdge && !dbg.__steamSkip?.includes('resolve') && sE > scale * 1.05 && this.youngest < E.age) {
       const we = Math.max(1, Math.ceil(frame.size.x * sE)), he = Math.max(1, Math.ceil(frame.size.y * sE));
       (u.uScale!.value as Vector2).set(we / frame.size.x, he / frame.size.y);
       (u.uMarchSize!.value as Vector2).set(we, he);
       u.uEdgePass!.value = true;
       u.uLowTex!.value = this.compositeUniforms.uVolume!.value;
+      u.uLowRaw!.value = this.half.texture;
+      // (Its rays cross the cloud's outer layer: fewer steps.)
+      u.uSteps!.value = Math.max(8, Math.round((u.uSteps!.value as number) * E.steps));
       (u.uEdgeRing!.value as Vector2).set((E.ring * dpr) / frame.size.x, E.inner);
       if (this.edgeHalf.width !== we || this.edgeHalf.height !== he) this.edgeHalf.setSize(we, he);
       this.edgeScissor.set(Math.floor(fp.x * sE) - 4, Math.floor(fp.y * sE) - 4, Math.ceil(fp.z * sE) + 8, Math.ceil(fp.w * sE) + 8);
@@ -2331,6 +2358,7 @@ export class DinnerSteam {
       // (Unbound again: the half-resolution resolve next frame writes the texture it holds; a bound sampler on its target,
       // read or not, is a feedback loop.)
       u.uLowTex!.value = null;
+      u.uLowRaw!.value = null;
     }
     renderer.setRenderTarget(prev);
     renderer.setClearColor(TMP_C, alpha);
@@ -2500,6 +2528,7 @@ export class DinnerSteam {
     let steps: number = STEAM_LOOK.steps.veil;
     let shadowOn = 0;
     this.clouds = 0;
+    this.youngest = Infinity;
     this.drawnClocks = 0;
     this.l0 = -1;
     this.l0Cloud = false;
@@ -2523,6 +2552,7 @@ export class DinnerSteam {
       // a hollowing cloud and wisps take fewer steps.)
       if (present) steps = Math.max(steps, s.age < 0.32 ? STEAM_LOOK.steps.dense : STEAM_LOOK.steps.thin);
       if (present) this.clouds++;
+      if (present) this.youngest = Math.min(this.youngest, s.age);
       this.drawnClocks++;
       // (Its shadow once the dome has lifted off it: τ 0.3 s on.)
       shadowOn = Math.max(shadowOn, present ? Math.min(1, Math.max(0, (tau - 0.3) / 0.15)) : 1);
