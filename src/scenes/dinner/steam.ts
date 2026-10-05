@@ -252,8 +252,10 @@ export function raisedGap(t: number): number {
  * 1.72; `shownGrow` 0.26: the drawn tube widens by that much of the parcels' travel, where the box (`steamBounds`) keeps
  * `grow`'s 0.45 as their reach. The box is the march's footprint and its rays' spans: a smaller one would change the march's
  * resolution and samples and redraw the cloud; this way the cloud alone is byte-identical and the gush is a smaller puff.)
+ * (v1.6 polish 8: `density` 1.72 → 1.35 under the steam's new light: the room's ambient and the window's spread light the
+ * thin puff fully where the dense body shades itself; its share of the visible steam at 0.48 s is kept, ≈ 21 %.)
  */
-export const GUSH = { out: 0.22, outTime: 0.1, rise: 2.0, riseTime: 0.1, radius: 0.035, grow: 0.45, density: 1.72, spread: 1.1, centre: 0.5, shownGrow: 0.26 } as const;
+export const GUSH = { out: 0.22, outTime: 0.1, rise: 2.0, riseTime: 0.1, radius: 0.035, grow: 0.45, density: 1.35, spread: 1.1, centre: 0.5, shownGrow: 0.26 } as const;
 export const gushOut = (a: number) => GUSH.out * (1 - Math.exp(-Math.max(a, 0) / GUSH.outTime));
 export const gushRise = (a: number) => (a <= 0 ? 0 : GUSH.rise * (a - GUSH.riseTime * (1 - Math.exp(-a / GUSH.riseTime))));
 

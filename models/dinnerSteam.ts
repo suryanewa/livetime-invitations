@@ -221,7 +221,7 @@ export const STEAM_LOOK = {
    * of its own (`steamTone`: the scene's neutral curve with its shoulder from `shoulder`, rolling off exponentially), so the
    * lit side and the shade no longer both land at 246–251 of 255: the scene's curve maps 1.0 → 242, 2.0 → 250.
    */
-  exposure: 0.845,
+  exposure: 0.79,
   shoulder: 0.5,
   /**
    * (v1.6 polish 8) Against the cove (beyond `near` su from the camera: not the plate, the cloche or the table) the steam's
@@ -230,7 +230,12 @@ export const STEAM_LOOK = {
    * its coverage of a white colour, as light is (the over-composite caps a wisp of coverage 0.2 at 203 over a cove of 191;
    * light adds to 245). The body keeps the over-composite.
    */
-  radiance: { share: 1, lo: 1.6, hi: 3.0, near: 9, cove: [0.55, 0.53, 0.5] as const },
+  radiance: { share: 1, lo: 0.4, hi: 1.6, near: 9, cove: [0.55, 0.53, 0.5] as const },
+  /**
+   * (v1.6 polish 8) The key's share of the steam's colour (its tint #F5F5F5, the room's the rest): fixed, as the march's
+   * fourth value now carries the back light's share for the composite's rim.
+   */
+  keyShare: 0.5,
 } as const;
 
 /** The flow map's domain and resolution (per clock): ρ ∈ [0, RHO_MAX], y ∈ [0, Y_MAX] (su). */
@@ -1419,7 +1424,7 @@ void main() {
   float ph1 = mix(hg(cosT, 0.5 * uG), hg(cosT, ${f(0.5 * STEAM_LOOK.gBack)}), ${f(STEAM_LOOK.back)}), ph2 = 1.0 / (4.0 * 3.14159265);
   float detail = uLow || uDebug == 9 ? 0.0 : 1.0;
   vec2 C = vec2(0.0);
-  float T = 1.0, wt = 0.0, tw = 0.0, rw = 0.0;
+  float T = 1.0, wt = 0.0, tw = 0.0, rw = 0.0, cb = 0.0;
   // Each sample stands for the span since the last one. (v1.6 polish 2: no bisection where the ray
   // enters the steam: lanes bisected at different steps, serialising the GPU's groups (≈ 0.9 ms at
   // the held dome); the jittered start and the history find the edge as well.)
@@ -1493,8 +1498,12 @@ void main() {
     float ob = uSigma * (uTune[1].w * (l2.x
       + (uTune[3].x > 0.0 ? 0.008 * steamMean(p + Bd * 0.004) + 0.016 * steamMean(p + Bd * 0.016) + 0.032 * steamMean(p + Bd * 0.04) : 0.0)) + 0.07 * dens);
     if ((uFlags & 134217728) == 0) {
-      float sB = uTune[1].z * (4.0 * 3.14159265) * (exp(-ob) * phB + uTune[2].y * exp(-0.6 * ob) * ph2) * (1.0 - cav);
+      // (The cloud's own: the gush, the veil and the seating's puffs, thin and rising, would glow as a haze.)
+      float sB = uTune[1].z * (4.0 * 3.14159265) * (exp(-ob) * phB + uTune[2].y * exp(-0.6 * ob) * ph2) * (1.0 - cav) * (1.0 - clamp(rising / dens, 0.0, 1.0));
       if (uTune[2].w > 0.5) sRoom += sB; else sKey += sB;
+      // (v1.6 polish 8: what the back light adds, carried to the composite in the key's old place: its rim is the light
+      // the composite adds to the cove's.)
+      cb += T * (1.0 - exp(-sig * seg)) * sB;
     }
     C += T * (1.0 - Ts) * vec2(sKey, sRoom);
     if (uDebug == 15) C += T * (1.0 - Ts) * vec2(exp(-od) - sKey, -sRoom);
@@ -1512,7 +1521,7 @@ void main() {
   // Premultiplied luminance, coverage, the depth used, and (packed) the key's share of the light,
   // the steam's depth along the ray and whether it is the rising veil or spill.
   float lum = C.x + C.y;
-  gl_FragColor = vec4(lum, alpha, used, packMarch(lum > 1e-5 ? C.x / lum : 0.5, rw > 0.5 * wt, wt > 1e-4 ? tw / wt : 0.0));
+  gl_FragColor = vec4(lum, alpha, used, packMarch(lum > 1e-5 ? cb / lum : 0.0, rw > 0.5 * wt, wt > 1e-4 ? tw / wt : 0.0));
 }
 `;
 
@@ -1807,7 +1816,10 @@ void main() {
   if (uDebug == 15 || uDebug == 17) { gl_FragColor = vec4(vec3(v.y > 0.33 ? v.x / v.y : 0.0), 1.0); return; }
   // (v1.6 polish 2: lit in colour: the key's light is the window's, the room's the warm greige of
   // the walls and the table that surround it, each of unit luminance.)
-  float keyShare = clamp(g.z / max(v.x, 1e-6), 0.0, 1.0);
+  // (v1.6 polish 8: the march's fourth value is the back light's share of the light now (it was the key's): the steam's
+  // colour is the key's and the room's in a fixed proportion, \`STEAM_LOOK.keyShare\`, the room's tint being near neutral.)
+  float backShare = clamp(g.z / max(v.x, 1e-6), 0.0, 1.0);
+  float keyShare = ${f(STEAM_LOOK.keyShare)};
   gl_FragColor = vec4(steamTone(mix(uRoomTint, uKeyTint, keyShare) * (uExposure * uToneExposure * v.x / max(v.y, 1e-4))), 1.0);
   #include <colorspace_fragment>
   // (Tooling: the steam's own colour, unpremultiplied, where it covers more than a third.)
@@ -1820,7 +1832,8 @@ void main() {
       vec3 Cl = mix(uRoomTint, uKeyTint, keyShare) * (uExposure * uToneExposure * v.x / max(v.y, 1e-4));
       vec3 behind = sRGBTransferOETF(vec4(steamTone(uCoveLin), 1.0)).rgb;
       vec3 sum = sRGBTransferOETF(vec4(steamTone(uCoveLin * (1.0 - v.y) + Cl * v.y), 1.0)).rgb;
-      float hdr = smoothstep(uRadLo, uRadHi, dot(Cl, vec3(0.2126, 0.7152, 0.0722)));
+      // (Only the back light's rim: the gush and the window's thin lit edges keep the over-composite.)
+      float hdr = smoothstep(uRadLo, uRadHi, backShare * dot(Cl, vec3(0.2126, 0.7152, 0.0722)));
       over += uRadiance * cove * hdr * max(sum - (over + (1.0 - v.y) * behind), 0.0);
     }
   }
