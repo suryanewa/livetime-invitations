@@ -518,7 +518,7 @@ Cloud Rendering in Frostbite*, 2016); remapped, eroded density and a history rep
 distant, slow clouds; this steam is close and fast, so every pixel is marched every frame and the history smooths, it
 does not reconstruct); multiple-scattering octaves (Wrenninge, *Art-Directable Multiple Volumetric Scattering*,
 SIGGRAPH 2015), here only on the lit side; Bauer, *Creating the Atmospheric World of Red Dead Redemption 2* (SIGGRAPH
-2019: froxel-free raymarched clouds with temporal accumulation and a light-direction secondary tap); Houdini pyro's
+2019: raymarched volumes amortised by temporal accumulation); Houdini pyro's
 disturbance and shredding (sheets drawn out along the velocity, torn where the noise is low). The step-exact integration
 of a thin feature (a feature's antiderivative over a step with the field taken as linear along it) is this round's own.
 
