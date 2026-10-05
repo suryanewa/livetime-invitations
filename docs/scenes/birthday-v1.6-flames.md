@@ -36,6 +36,17 @@ Processing in Call of Duty: Advanced Warfare* (SIGGRAPH 2014: the 13-tap/Karis/t
 SideFX's pyro shading (emission from temperature through a blackbody ramp, absorption from
 density); Wyman, Sloan and Shirley 2013 (the CIE fit the Planck table already used).
 
+These photographs are the owners' (here and in the smoke pass below). What the five independent judgings compared
+against: the first was briefed to judge against photographs and film references; the record does not list which
+images it opened, and it scored the flame, flicker, blow, smoke, light and macro on its own size series, lit strips,
+macros and blow and smoke sheets. The second to the fifth judged their own frames through the real controller with
+their own scripts and stated their bars as numbers and physical descriptions — tip motion sd and dominant frequency,
+breathing, the top centre's lift in R / G / B, crisp lines per plume, the first puff's levels, the jet's IoU and
+FWHM at the ember, the back-right candle's saturation — and visual reads of their frames ("a balloon on a string",
+"like a spray nozzle"). None of them names a fixed photograph or film frame in the record. The judges'
+frames live in the orchestrating session's scratchpad, not in the repository; the polish rounds' evidence holds
+side-by-side strips of the judges' frames against the owners' (`*-judge-above-now-below.webp`, `*-judge-vs-now.webp`).
+
 ## The flame: a ray-marched volume (`src/render/flame.ts`)
 
 Kept from v1.5, exactly: the real size (13 mm, 5 mm wide, ±7 % per wick; `FLAME_REST`), the
@@ -1041,3 +1052,25 @@ frame (the branch point 0.56–0.63 in the same minutes).
 `3-back-right-candle-x2-176-288ms-judge-above-now-below.webp`, `accepted-540x2-4s-8s-reduced.webp`,
 `measurements.txt`, `frame-cost.txt`, `tools/` (`sat.py`, `core.py`, `var.py`, `fix2.sh`, `lapcmp.py`, `grpv.mjs`,
 `lab5.mjs`, `mkev.py`).
+
+## Known gaps (as merged)
+
+The fifth judging (after polish round 4, merged on `v1.6/integration`; the flame frames bit-identical to the fourth
+judging's; `docs/qualification.md` v1.6) **signed the flame at rest at every size, and the blow, the smoke 0.3–0.8 s,
+the smoke 1–4 s and the whole sequence from ignition through the smoke at 4 s at laptop, phone and 540: 7 / 7 / 7**
+(the flame at rest 7.5 / 7.5 / 7.5, the 192 thumbnail 6; flicker 6.5; the light 6.5). What stays open:
+
+- **The close-up tiers are withheld**, below any size a guest sees, and recorded as known gaps with no further round
+  (the orchestrator's decision): the 10× blow close-up (6.5), the 2× smoke detail and the 30× macro. Their tells: the
+  thread feeds a shapeless puff ("a balloon on a string": detail finer than 3 mm at 0.6–0.8 levels rms, the limit of
+  the 5 mm voxels), the stream a clean constant-brightness line with angular notches at 10× (+25–28 levels, no inner
+  structure), the 1–4 s smoke made only of 0.44–0.59 mm lines at 2× with zigzags at tight turns, the rising puff
+  combed into vertical streaks at 2–3×.
+- **Watch items:** the smoke after 1.5 s is fainter; the phone's puffs detach for one frame at 0.3 s; the first puff
+  is lighter than polish 3's at laptop size (thinner by design); candle 4's upper half touches saturation 0.100 at
+  208 ms for about two frames as the puff passes.
+- **The live smoke march is not bit-deterministic between consecutive stills**: two pixels by 1–7 levels inside the
+  smoke's region, on the merged and the pre-merge build alike, so `tests/browser/bloom.spec.ts › Birthday: the lit
+  candles bloom…` flakes in its last assertion (`docs/RESUME.md` has the fix in the test).
+- **The optional items untouched:** flame 3's lilac crescent, the wick occluder at 30×, the blue base and the rigid
+  lean; the halo at each candle's base was handed to the cake (`FLAME_POOL` skips its own candle).

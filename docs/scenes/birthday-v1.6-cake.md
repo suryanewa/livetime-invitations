@@ -47,6 +47,16 @@ Looked at side by side with the frames (not copied into the repository):
 - Deliot & Belcour, *Real-Time Rendering of Glinty Appearances using Distributed Binomial Laws on Anisotropic Grids*
   (HPG 2023): sparse facets on a grid, faded where the pixel covers many.
 
+The photographs above are the owner's. What the four VFX judgings compared against: the first was briefed to judge
+against photographs and film references; the record does not list which images it opened, and its five fixes are
+stated as numbers and physical descriptions (a coat σ ≥ 3–5/255 over 3 cm, rosettes ±12–18 %, bays ±2–3 mm, a
+1–2 mm contact crease). The second judged its own frames and set numeric bars (top σ ≥ 3, the
+flame light ≤ +10 R at the centre with a ~3 cm falloff, ≤ 2 visible loops at the silhouette); the third and the fourth
+measured those acceptance tests and their own (halo R by distance, hue against the side's, the candle shadows' hue and
+saturation, isolated highlights on the cocoa top) on their own frames. None of the later judgings names a fixed
+photograph. The judges' frames live in the orchestrating session's scratchpad, not in the repository; the third
+round's copy of the judge's `judge.mjs` is in `evidence/v1.6/cake-polish3/tools/`.
+
 ## Decisions
 
 ### Geometry: regenerated, not sculpted
@@ -448,3 +458,27 @@ should show them); the macro-only list (the concentric arcs at macro, the tail-t
 star kiss, pinhole specks, uniformly glossy cocoa piping) was not in this round. When the flames polish lands, the halo
 follows its per-candle intensities (breathing and fading) but not its colour; `FLAME_POOL.gain` and `broad` are the
 knobs if its intensities change.
+
+## Known gaps (as merged)
+
+The fourth judging (after polish round 3, merged on `v1.6/integration`; `docs/qualification.md` v1.6) **signed the cake
+at square 540, laptop and phone, vanilla and cocoa: 8 / 8, 7.5 / 7.5, 7.5 / 7.5**, every acceptance number passing on
+its own frames (halo +12–13 / +8–10 / +3–4 R at 0.5 / 1 / 2 cm, halos within 1.3° of the side, cocoa isolated
+highlights 50 → 9 at laptop, top σ 3.25). What stays open:
+
+- **The 30× macro stays at 5.5 / 5** (vanilla / cocoa), outside the signature and below any size a guest sees: crisper
+  star ridges, sugar grain, a window reflection on cocoa and irregular tassel beads (the second judging's macro list),
+  and the macro-only list above (the concentric arcs at macro, the tail-tip horn, toothpaste ropes, the regular star
+  kiss, pinhole specks, uniformly glossy cocoa piping).
+- **The coat's own σ** fell 3.81 → 3.25 with the arcs' prefiltering (2.81 with the flames' light on and the candle
+  shadows off): the fourth judge's watch item.
+- **The candles' key shadows** are analytic upright capsules on the top coat only (no flutes, no shadow from the
+  flame; soft smudges at macro): the shared 1024² shadow map cannot resolve an 8 mm candle.
+- **The flames' own specular** on the top coat keeps the flame's colour, and the halo follows the flames' per-candle
+  intensities but not their colour (`FLAME_POOL.gain` and `broad` are the knobs).
+- **The rig's frontal key** (the shared `neutral-room` key, frontal-left at ≈ 40°): the judges asked for a raking or
+  side key for the decorated face. A rig decision for every scene, not the cake's (`docs/RESUME.md`, decisions).
+- **The compressed export's determinism**: the piping generator is bit-deterministic (`tests/birthdayPiping.test.ts`)
+  and so is the compressed export of a test document (`tests/masters.test.ts`), but a second full `pnpm models
+  birthday` on the merged build has not been shown byte-identical to the committed GLB — open: to be run on a quiet
+  machine.

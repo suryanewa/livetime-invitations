@@ -149,6 +149,29 @@ the judging is in `docs/qualification.md` v1.6.
   band with motion-vector accumulation) for both the body and the gush, with polish 6 kept as the reference for the
   envelope, the cap, the timing, the clip and the cost.
 
+### Known gaps (v1.6)
+
+As merged (7ca077f); the full list per object is in `docs/qualification.md` v1.6 (known limitations) and each scene
+record's "Known gaps".
+
+- **Cake: signed at square 540, laptop and phone** (8 / 7.5 / 7.5, vanilla and cocoa). The 30× macro stays at 5.5 / 5,
+  below any size a guest sees: crisper star ridges, sugar grain, a window reflection on cocoa, irregular tassel beads,
+  the concentric arcs and the regular star kiss at macro. The coat's own σ is 3.25 (a watch item). The candles' key
+  shadows are analytic capsules on the top coat. The shared rig's frontal key wants a raking or side key for the
+  decorated face — a rig decision.
+- **Flames: signed as a whole sequence at laptop, phone and 540** (7 / 7 / 7). The 10× blow, the 2× smoke detail and
+  the 30× macro are withheld: detail finer than 3 mm is the 5 mm voxel smoke's limit ("a balloon on a string"), the
+  stream a clean line at 10×, the 2× smoke only 0.44–0.59 mm lines. The live smoke march is not bit-deterministic
+  between consecutive stills (two pixels by 1–7 levels; the `bloom.spec` flake).
+- **Steam: 7 / 7.5, not signed** (the seventh judge's re-check of polish 7 pending). Soft and combed edges at 2× (edge
+  0.56–0.99, crown anisotropy 1.13–1.41: the design limit of a half-resolution analytic march); no light direction in
+  the volume (own lit − shaded +2…+5: the key 44° off the camera lights the dome through its top and the own colour
+  sits on the tone curve's shoulder — a rig decision); the gush a structureless soft puff at 0.42–0.62 s (a limit of
+  the spill parcels; its size and brightness fixed in polish 7); the held dome's own stillness, 2.2–2.5 levels a frame
+  at 0.53–0.56 s; the laptop steam cost 3.9–5.2 ms at the real framing with no margin on the median at 0.45 s (two
+  clouds and the resumed reveal within the 6 ms budget). The next approach is in `docs/RESUME.md`.
+
+## v1.5 (2026-10-02): the perfection pass
 
 Surya's twelve edits on v1.4 (`docs/perfection-pass-brief.md`: *"For each of these, I won't settle for anything less than perfection. Feel free to do external research or get experimental if it helps."*). Seven owners built in parallel, three independent judges measured the integrated build (motion and physics; materials and look; the guest's real-time experience on laptop and phone), and every owner then fixed what the judges found. The per-scene records are `docs/scenes/<scene>-v1.5*.md`; spec revisions #37–#40. What each edit became:
 

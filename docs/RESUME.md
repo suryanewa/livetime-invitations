@@ -166,6 +166,36 @@ Still open at the time of writing (updated when the pass closes):
 - the judges' shared-rig note: the key is too frontal for the decorated cake face; a raking key or a soft top/back
   light would help every food shot — not done, it changes every scene.
 
+### Decisions for Surya (v1.6)
+
+Everything this push asks the owner to decide or confirm, in one place:
+
+1. **Ship the steam unsigned at 7 / 7.5** with its limits (soft and combed at 2×, no light direction in the volume, the
+   gush a structureless soft puff, the held dome's stillness; `docs/qualification.md` v1.6, known limitations). If
+   yes: v1.6 goes to `main` with the steam as merged at 7ca077f and those limits stand as known gaps until item 4.
+2. **The steam's 6 ms budget while steam shows** (budgets are waived for this pass, #21 and the Hollywood brief; the
+   3 ms and 6 ms ceilings were the orchestrator's). If yes: ≤ 6 ms becomes the Dinner reveal's recorded budget (the
+   laptop measures 3.9–5.2 ms at the real framing, the frame pacing at 16.7 ms) and a spec revision records it.
+3. **The rig: two asks, one decision** — a raking or side key for the decorated cake face, and a steam-specific rim or
+   back light against the cove so the volume carries a light direction. If yes: every scene's look and every poster,
+   thumbnail and backdrop change, and each scene is re-judged on the new rig.
+4. **The steam's next approach as a later version** (a 1–2 mm advected density, or an offline simulation baked into a
+   sparse 4D volume; above). If yes: a steam version of its own with its own budget decision, polish 6–7 kept as the
+   reference for the envelope, the cap, the timing, the clip and the cost.
+5. **The cake's 30× macro and the flames' close-up tiers (the 10× blow, the 2× smoke, the 30× macro) as known gaps**
+   below any size a guest sees (the orchestrator's decision: no further round). If yes: the two signatures stand as
+   recorded, at the showcase sizes only.
+6. **The Business reader's pictogram and the Party key wired to the bloom** (`markBloom`, one line each). If yes:
+   Business's posters change and a bloom pass runs on every lit Business frame (Party's to be measured the same way).
+7. **Master §9's 2.5 MP buffer ceiling** (the laptop renders at 1.65×). If confirmed: nothing changes; raising it to a
+   full 2× needs 3.7 MP, about 130 MiB with MSAA.
+8. **The v1.5 revisions still pending**: #37 (the record plays on; the deck order), #38 (the mini hoop system and the
+   physics tails), #39 (the decline pull-back), #40 (Normal at 2 device pixels) and the host beat's new length (#23:
+   2.47 s). If yes: they are marked approved in `docs/spec-revisions.md` and reconciled into the Master.
+9. **`docs/coverage.md` §8** still says "KHR_mesh_quantization with no decoder" (generated from `docs/coverage.json`,
+   which records the checkpoint 5 audit). If a re-audit is approved: the §8 row is updated for meshopt and the table
+   regenerated, with the other stale rows; docs only.
+
 ## Perfection pass (v1.5)
 
 Written 2026-10-02. Surya's twelve edits on v1.4 (`docs/perfection-pass-brief.md`, verbatim, with the owner of

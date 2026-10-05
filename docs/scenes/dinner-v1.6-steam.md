@@ -43,6 +43,18 @@ its change-of-mind rules, `STEAM_END`'s role and the accepted still's "no steam"
   [iStock: food smoke video](https://www.istockphoto.com/videos/food-smoke)), lifted pot lids and dry-ice cloche
   service. No reference image was downloaded into the repository (the review compared the frames with these references
   and with the physical description above).
+- **What the judges compared against.** The first judging was briefed to judge against photographs and film
+  references (the footage above is the kind); the record does not list which images it opened. From the second judging
+  on, the record names no fixed photograph or film frame: each judge rendered its own frames through the production
+  stage (`frames.ts`) and judged them against no-steam twins, the previous judge's frames, numeric criteria and the
+  physical description above — the second the plate's grey and the grain's levels; the third transmittance 0.3–0.5,
+  dense-body p5–p95 ≥ 40, a 20–30 level terminator, 2:1 sheets and a hole dip ≤ 5; the fourth the same plus felt, boil
+  and shell measures and its design-limit diagnosis; the fifth the box clip, the held dome's inside/outside ratio and
+  the rise and mass; the sixth condensate against smoke (mass after release, vapour against polish 1, the ring's centre
+  against its rims, thinning from the edges); the seventh the gush's share and the dome's IoU, against the brief's "a
+  frame that reads as photographed steam at delivery size". The judges' frames and outputs live in the orchestrating
+  session's scratchpad (`judge-steam2/` … `judge-steam7/`), not in the repository; copies of the judges' frame, bench
+  and pacing scripts are in `evidence/v1.6/steam-polish4/tools/` to `steam-polish7/tools/`.
 
 ## What was built
 
@@ -173,7 +185,7 @@ pass (`tests/browser/scene-depth.spec.ts`); the posters are unchanged (`tests/br
 - **The dome's drag stops at a cut** (`dragAt(min(τ, emitEnd))`): a cloud left behind is no longer drawn after a
   dome that is coming back down.
 
-## Numbers
+## Numbers (first build, superseded — current figures and frames: Polish round 7 and `evidence/v1.6/steam-polish7/`)
 
 - **Steps:** 28 (dense young cloud), 22 (thinning), 22 (veil only); Low tier 60 % of these (17/13/13) and no
   fine octave or billow-shade tap. 6 occupancy probes per ray. March resolution: half the drawing buffer a side,
@@ -985,19 +997,34 @@ within the box's, `shownGrow ≤ grow`); `tests/dinner.test.ts` 27, `tests/scene
 
 ## Known gaps
 
-(Of the version above. The polish round closes the soft edge, the missing temporal accumulation, the weak
-spill and, in part, the weak curl; what remains is listed under its tells.)
+As merged (7ca077f, polish 7), after the seventh judging (laptop 7, phone 7.5, **not signed**; its re-check of the
+gush, the phone pacing and the dome's stillness pending). The first build's own list (soft young edge, no temporal
+accumulation, luminance-only steam, a subtle spill, a weak curl) was closed by the polish rounds.
 
-- **Not re-reviewed after the round-1 fixes**, and the final frame cost not re-measured (machine load).
-- **The curled mushroom rim is weak on screen**; the cap reads as swelling and rounding more than curling.
-- **The young cloud's edge is still soft** (a feathered look at 1:1 in close-ups).
+- **Soft and combed edges at 2×**: edge 0.56–0.99, crown anisotropy 1.13–1.41, the march 0.70 / 0.65 / 0.58 px per CSS
+  px at 0.45 / 1.0 / 2.2 s. The design limit of a half-resolution analytic march; at CSS size the edges read.
+- **No light direction in the volume**: the own colour's lit − shaded +2…+5 at 0.61–0.74 s (polish 6; the seventh
+  judge +2…+11, the own colour within 4–18 levels). A rig decision, not a constant: the key, 44° off the camera, lights
+  the dome's right side through its top, and the own colour sits on the tone curve's shoulder (p95 250–251), so only
+  shade could make a lit side, and a ×20 self-shadow made the shaded steam darker than the wall (polish 6, item 3).
+- **The gush is a structureless soft puff** at 0.42–0.62 s: a limit of the spill parcels. Its size and brightness were
+  cut in polish 7 (22.1 % of the visible steam at 0.48 s, was 50.8 %; ≤ 67 k px), so at CSS size it reads as a small
+  spill from the gap.
+- **The held dome's own stillness**: 2.5 / 2.2 / 2.5 levels a frame at 0.53–0.56 s (the dome alone 2.7–2.9), a freeze by
+  polish 6's test, re-exposed once the large gush's motion no longer counted in.
+- **The laptop steam cost** is 3.9–5.2 ms at the app's real framing (`bench6.ts`, p10), with no margin on the median
+  at 0.45 s (the seventh judge saw p50 touch 6.0 ms in one run); the phone 3.6–4.5, both over 0.3–0.7 s. Two clouds (laptop 4.3–4.5, phone
+  3.7–4.1) and the resumed reveal (laptop 4.4–4.9, phone 4.1–4.2) are within the 6 ms budget (polish 6's bench; the
+  cloud is byte-identical since). The phone's pacing after polish 7 was not measured clean by the owner (load 11–20).
 - **No reflection of the steam in the silver** (as v1.5).
-- **No temporal accumulation:** the dither is fixed per pixel (deterministic captures); thin wisps show a soft
-  mottling at 1:1.
-- **Steam is luminance only** in the half-resolution target (white, tinted 1:1:1 in the composite).
-- **The spill is subtle**: thin, it reads mainly at the cloche's silhouette during 0.15–0.35 s.
+- **The next approach** (a density advected per frame at 1–2 mm or an offline simulation baked into a sparse 4D volume,
+  and the steam lit on purpose) is in `docs/RESUME.md`, a version of its own with its own budget.
 
 ## Tests
+
+(Of the first build. Each polish round's **Tests** line has its counts; as merged, `tests/dinner-steam.test.ts` 26,
+`tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27, `tests/browser/dinner.spec.ts` 6/6,
+`tests/browser/scene-depth.spec.ts` 5/5; the integrated suites are in `docs/qualification.md` v1.6.)
 
 - `tests/dinner-steam.test.ts` (20): the field is pure in τ; at the seat it is the dome's cavity (dense under the
   crown, nothing outside the cloche or on the porcelain); the dome's drag (1–5 cm up, stopping once the dome has
@@ -1024,7 +1051,11 @@ spill and, in part, the weak curl; what remains is listed under its tells.)
   that do not involve the steam: `idle.spec.ts` off-screen pause and `party.spec.ts` cobalt label); it is left to
   the integration run.
 
-## Evidence (not committed; `evidence/v1.6/steam/`)
+## Evidence (first build, superseded — current figures and frames: Polish round 7 and `evidence/v1.6/steam-polish7/`)
+
+The first build's and the first polish round's frames were not committed (the paths below were under
+`evidence/v1.6/steam/` in the owner's worktree); the earliest committed steam evidence is
+`evidence/v1.6/steam-polish2/`, and each later round has its own `evidence/v1.6/steam-polish<N>/`.
 
 - `final/reveal-62fps/` (376 frames, 720 px, 62.5 fps, 0–6 s) and `final/reveal-62fps.mp4`; `final/nosteam-62fps/`
   (the same frames without steam); `final/strip-0-1s.png`, `final/strip-1-6s.png`, `final/consecutive-0.40s.png`,
