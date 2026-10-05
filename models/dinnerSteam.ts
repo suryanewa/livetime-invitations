@@ -2346,6 +2346,7 @@ export class DinnerSteam {
       this.edgeScissor.set(Math.floor(fp.x * sE) - 4, Math.floor(fp.y * sE) - 4, Math.ceil(fp.z * sE) + 8, Math.ceil(fp.w * sE) + 8);
       this.edgeHalf.scissor.copy(this.edgeScissor);
       const warmE = this.edgeHistoryValid(we, he, dbg) ? 1 : ((globalThis as { __steamWarm?: number }).__steamWarm ?? STEAM_LOOK.warm);
+      if (st) st.push(`edge ${we}x${he} warm ${warmE} snap ${this.prevSnap ? `${this.prevSnap.l0} ${this.prevSnap.tau.toFixed(3)}` : '-'} prev ${this.edgePrev ? `${this.edgePrev.w}x${this.edgePrev.h} ${this.edgePrev.marched}` : '-'} marched ${this.marched} l0 ${this.l0}`);
       for (let k = 0; k < warmE; k++) {
         u.uFrame!.value = base + 17 * k + 7;
         renderer.setRenderTarget(this.edgeHalf);
