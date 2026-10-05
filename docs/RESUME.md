@@ -134,8 +134,8 @@ Still open at the time of writing (updated when the pass closes):
   ~80 s of CPU on this machine now, on v1.6 **and on v1.5 `main`** (timed alone, load average 5–9, 60 % memory free),
   so it is not a v1.6 regression; it passed inside its 180 s timeout during v1.5. Something in the test waits
   rather than computes (a real-time dependence in its stepping is the suspect). Run it with a long `--testTimeout`
-  until it is diagnosed.
-- the polish rounds and the second judging (see `docs/qualification.md` v1.6);
+  until it is diagnosed. (On 2026-10-05, with the machine quiet — load average 3.7, one judge reading — the whole unit
+  suite, this test included, ran in 85 s, so the wall time tracks the machine's load, which fits that suspect.)
 - a second full `pnpm models birthday` to confirm the compressed export is deterministic (the meshopt owner could
   not finish one under load; the uncompressed export reproduced the committed bytes and the codec is deterministic);
 - `docs/coverage.md` §8 still says "KHR_mesh_quantization with no decoder" (generated from `coverage.json`);
