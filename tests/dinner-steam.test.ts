@@ -389,7 +389,9 @@ describe('Dinner steam field (v1.6)', () => {
     const f = sampleSequence('accept', first, newFrame());
     expect(f.coverPos.y - COVER_SEATED.y).toBeLessThan(0.03);
     expect(spillSource(ACCEPT.tipPeak)).toBeGreaterThan(0.9);
-    expect(spillSource(0.31)).toBe(0);
+    // (v1.6 polish 6: its feed tails off over 0.2–0.36 s as the dome lifts clear, was 0.24–0.3.)
+    expect(spillSource(0.31)).toBeLessThan(0.3);
+    expect(spillSource(0.37)).toBe(0);
     expect(spillFade(SPILL.fade[1])).toBe(0);
   });
 

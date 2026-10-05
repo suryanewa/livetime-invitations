@@ -192,8 +192,12 @@ export const SPILL = {
   spread: 0.8,
   /** Its source: the raised rim's gap (su) at which it is full. */
   fullGap: 0.09,
-  /** It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). */
-  stop: [0.24, 0.3] as const,
+  /**
+   * It stops being fed once the dome lifts off, and is carried off and mixed in by (τ, s). (v1.6 polish 6: 0.24–0.3 →
+   * 0.2–0.36: carried on to 0.66 s, the end of its feed swept through the shader's parcels in four frames and took 43 % of
+   * the rising puff in one.)
+   */
+  stop: [0.2, 0.36] as const,
   /** (v1.6 polish 3: the gush rises on and mixes in after the lift-off, gone by 0.56 s; polish 5: by 0.5 s, its last tenth's
    * light, when it cost 2.7 ms of the judges' 1400² frame at the march's finer resolution; polish 6: over 0.42–0.66 s, the
    * sixth judge's "airbrushed blob that dissolves in place": its puff is carried up and out ≈ 4–6 cm on its parcels before it
