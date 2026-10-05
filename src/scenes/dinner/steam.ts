@@ -649,7 +649,7 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   // (v1.6 polish 2: from the lift-off the outer layer peels and billows; the bulk keeps the dome's shape.)
   out.billow = Math.max(0.028 + EDGE.billow * peel, 0.028 + 0.042 * smooth(0.25, 1.3, age));
   out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
-  out.core = 0.22 + (0.03 - 0.22) * smooth(0.15, 0.72, age);
+  out.core = 0.2 + (0.03 - 0.2) * smooth(0.15, 0.72, age);
   out.sheet = 1.5 - 0.75 * smooth(0.15, 0.5, age) - 0.6 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
   // (v1.6 polish 3) The cap's fog: the stem and base empty, the cap keeps its own (a filled mushroom, not a ring).
