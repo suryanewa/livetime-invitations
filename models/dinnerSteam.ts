@@ -1490,16 +1490,19 @@ void main() {
     // still under the lifting dome, none. In the room's channel: the cove's warm light behind the steam.
     // (Its volume's voxels are ≈ 1.5 cm: the outer centimetres it crosses to reach this sample are taken by three taps of
     // the steam's mean on the way, so only the outermost layer facing it, where it grazes the sheets, is lit.)
-    vec4 l2 = lightAtlas(uLight2, p + Bd * 0.06);
+    // (One read of the second light volume serves the back light and the window's spread: its voxels are ≈ 1.5 cm.)
+    vec4 l2 = lightAtlas(uLight2, p + (Bd + Wd) * 0.03);
     if ((uFlags & 268435456) == 0 && uTune[3].y > 0.0) {
-      float ow = uSigma * (uTune[3].z * lightAtlas(uLight2, p + Wd * 0.06).y + 0.07 * dens + localOd);
+      float ow = uSigma * (uTune[3].z * l2.y + 0.07 * dens + localOd);
       sKey += uTune[3].y * (4.0 * 3.14159265) * exp(-ow) * phW * (1.0 - cav);
     }
-    float ob = uSigma * (uTune[1].w * (l2.x
-      + (uTune[3].x > 0.0 ? 0.008 * steamMean(p + Bd * 0.004) + 0.016 * steamMean(p + Bd * 0.016) + 0.032 * steamMean(p + Bd * 0.04) : 0.0)) + 0.07 * dens);
-    if ((uFlags & 134217728) == 0) {
+    // (Where its volume already hides it, the back light's fine taps are skipped: most of the body.)
+    float ob = uSigma * (uTune[1].w * l2.x + 0.07 * dens);
+    float sB = 0.0;
+    if ((uFlags & 134217728) == 0 && ob < 7.0 && rising < dens) {
+      if (uTune[3].x > 0.0) ob += uSigma * uTune[1].w * (0.012 * steamMean(p + Bd * 0.006) + 0.03 * steamMean(p + Bd * 0.03));
       // (The cloud's own: the gush, the veil and the seating's puffs, thin and rising, would glow as a haze.)
-      float sB = uTune[1].z * (4.0 * 3.14159265) * (exp(-ob) * phB + uTune[2].y * exp(-0.6 * ob) * ph2) * (1.0 - cav) * (1.0 - clamp(rising / dens, 0.0, 1.0));
+      sB = uTune[1].z * (4.0 * 3.14159265) * (exp(-ob) * phB + uTune[2].y * exp(-0.6 * ob) * ph2) * (1.0 - cav) * (1.0 - clamp(rising / dens, 0.0, 1.0));
       if (uTune[2].w > 0.5) sRoom += sB; else sKey += sB;
       // (v1.6 polish 8: what the back light adds, carried to the composite in the key's old place: its rim is the light
       // the composite adds to the cove's.)
