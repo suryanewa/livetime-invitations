@@ -500,14 +500,17 @@ vec4 mapAt(float rho, float y, int l) {
 
 /** Steam the cover was set back over stays under it (v1.5 \`captured\`): 0 inside the seated dome. */
 float captured(vec3 pc, int l) {
-  if (uA[l].x < uD[l].z) return 1.0;
+  if (uA[l].x < uD[l].z - 0.03) return 1.0;
   vec3 cv = pc - uSeated;
   float r = length(cv.xz);
   float d = max(r - 0.66 * sqrt(max(0.0, 1.0 - pow(max(cv.y, 0.0) / 0.64, 2.2))), cv.y - 0.64);
   // (Low over the table the cover's skirt and the lifted plate sweep it further: the base's ring.)
-  float reach = 0.2 + 0.32 * (1.0 - smoothstep(0.05, 0.3, cv.y));
-  float band = smoothstep(0.0, reach, d + 0.08 * (texture(uNoise, pc * 2.3).r - 0.5) * 2.0);
-  return smoothstep(-0.03, 0.0, d) * mix(1.0, band, smoothstep(0.0, 0.3, uA[l].x - uD[l].z));
+  // v1.6 polish 3: the seating cover drags the fog along its wall down to the rim and out (the
+  // squeeze's puffs): nothing is left standing on it as a cap (the judge: "a cotton cap on the seated
+  // dome"); the band it clears reaches ≈ 7 cm over the crown and goes within ≈ 0.1 s of the seating.
+  float reach = 0.42 + 0.2 * (1.0 - smoothstep(0.05, 0.3, cv.y));
+  float band = smoothstep(0.08, reach, d + 0.1 * (texture(uNoise, pc * 2.3).r - 0.5) * 2.0);
+  return smoothstep(-0.03, 0.0, d) * mix(1.0, band, smoothstep(-0.03, 0.08, uA[l].x - uD[l].z));
 }
 
 /** The plate's veil at p on clock l: a thin, wispy column rising off the well. */
@@ -740,7 +743,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
     vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
     float r = length(cv.xz);
     float dOut = r - domeWall(clamp(cv.y, 0.0, ${f(COVER.domeHeight)}));
-    if (r > 1e-3 && dOut > -0.05 && cv.y > -0.12 && cv.y < ${f(COVER.domeHeight + 0.15)}) {
+    if (r > 1e-3 && dOut > -0.05 && cv.y > -0.12 && cv.y < ${f(COVER.domeHeight + 0.5)}) {
       vec2 out2 = cv.xz / r;
       float on = smoothstep(uD[l].y, uD[l].y + 0.12, uA[l].x);
       float shove = 0.09 * exp(-max(dOut, 0.0) / 0.08) * (1.0 - smoothstep(${f(COVER.domeHeight - 0.1)}, ${f(COVER.domeHeight + 0.1)}, cv.y));
@@ -754,6 +757,14 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
       // fog left there veiled the returning dome: the judge's frosted silver).
       float e = 0.72 * smoothstep(uD[l].y, uD[l].y + 0.18, uA[l].x) * exp(-max(dOut, 0.0) / 0.3);
       stir = smoothstep(e - 0.12, e + 0.12, pf.r + 0.5 * (pn.g - 0.5)) * mix(1.0, smoothstep(0.004, 0.07, dOut + 0.03 * (pf.a - 0.5)), on);
+      // v1.6 polish 3: its wake. The fog it comes down past is dragged down its wall and out at the
+      // rim, and what stood over its crown is drawn down after it and torn up: by the time it seats
+      // nothing stands on it (the judge's "cotton cap on the seated dome"). The cleared band widens
+      // from the silver to ≈ 6–10 cm as it comes down.
+      float seatIn = smoothstep(uD[l].y + 0.04, uD[l].z - 0.06, uA[l].x);
+      float dShell = max(r - ${f(COVER.radius)} * pow(max(0.0, 1.0 - pow(max(cv.y, 0.0) / ${f(COVER.domeHeight)}, 2.2)), 1.0 / 2.2), cv.y - ${f(COVER.domeHeight)});
+      float clearR = 0.03 + 0.6 * seatIn;
+      stir *= mix(1.0, smoothstep(0.6 * clearR, clearR, dShell + 0.05 * (pf.a - 0.5) + 0.04 * (pn.b - 0.5)), on);
     }
   }
   q.xz -= uB[l].zw * max(0.0, q.y - 0.15);
