@@ -143,7 +143,10 @@ bloom flake, 3/3 on re-run). A pre-push review (a workflow: three reviewers — 
 evidence files, a completeness critic against Surya's three asks — and two skeptics per finding; 30 of 36 findings
 confirmed) produced the record fixes in `v1.6/docs-review` and three steam fixes in `v1.6/steam-review-fixes`, of which
 the two that keep the accept byte-identical are merged (1796b77; `docs/scenes/dinner-v1.6-steam.md`, Review fixes). The
-final suites on that build are in `docs/qualification.md`, Verification on the integrated build.
+final suites on that build are in `docs/qualification.md`, Verification on the integrated build. **After the push** (main 4e815b7, 2026-10-05): a second structural steam round (polish 8, branch
+`v1.6/steam-polish8` from main, worktree `.claude/worktrees/v16-steam9`, port 5621) on the seventh judge's two prescriptions
+— a steam-only rim/back light with the own colour off the tone shoulder, and a full-resolution edge band or a per-frame
+advected density — at ≤ 9 ms while steam shows; polish 7 is the fallback; an eighth judging follows — in progress.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for
