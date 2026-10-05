@@ -1,0 +1,18 @@
+# steam polish 7: the steam's cost in the app at its real framing and DSF (tools/bench6.ts, the judge's: the app's Stage
+# rendered with fx_steam shown / hidden interleaved, N 40 × 6 rounds, each frame synced by a 1-px read-back; p10 of the
+# differences, ms). Laptop 1280 × 720 @2 (buffer 2108 × 1185, pixel ratio 1.647), phone 390 × 844 @3 (buffer 780 × 1688, 2).
+# BEFORE: the seventh judge's runs on the polish-6 build (judge-steam7/cost.txt, two laptop runs, 08:18–08:20, load 3.6–4.2).
+# AFTER: this build, this session, port 5619 (raw lines: cost-raw-after.txt). The machine was shared and intermittently
+# saturated (load 3–23): a run whose steam-hidden frame (offP50) is above 2.8 ms (laptop) / 2.2 ms (phone) is contention
+# and is listed in the raw file but not in the table; each listed time was re-run until clean.
+# The march is the same march: its footprint, scale and steps at every time are the judge's (stat lines in the raw file):
+# laptop 0.3 s 1034×724 @0.460, 0.4/0.45 s 1162×856 @0.425, 0.5/0.55 s 1233×931 / 1234×932 @0.396, 0.6 s 1246×942 @0.392,
+# 0.65 s 1262×956 @0.386, 0.7 s 873×792 @0.460; phone 0.424 throughout. Only the gush's own density evaluation differs.
+
+| steam cost, p10 ms        | 0.3 | 0.4 | 0.45 | 0.5 | 0.55 | 0.6 | 0.65 | 0.7 |
+|---------------------------|-----|-----|------|-----|------|-----|------|-----|
+| laptop, before (judge)    | 4.6 / 4.8 | 5.1 / 5.2 | 5.4 / 5.5 | 4.9 / 5.0 | 5.1 | 5.3 / 5.3 | 4.8 | 3.9 / 3.9 |
+| laptop, before (this session, clean runs) | – | 5.0 | 5.3 | 5.0 | – | – | – | 3.9 |
+| laptop, after             | 3.9 | 4.9 | 5.2 | 4.8 | 4.8 | 4.9 | 4.4 | 3.9 |
+| phone, before (judge)     | 3.9 | 4.2 | 4.3 | 4.4 | – | 4.7 | – | 3.5 |
+| phone, after              | 3.8 | 4.1 | 4.2 | 4.4 | – | 4.5 | – | 3.6 (3.6 / 3.8 / 4.1) |

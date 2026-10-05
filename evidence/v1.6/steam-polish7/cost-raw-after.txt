@@ -33,3 +33,39 @@ phone stage captured {"buf":"780x1688","pr":2}
 phone t 0.300 {"stat":"tau 0.288 buf 780x1688 fp 779x871 steam 779x812 scale 0.424 steps 34","shown":true,"p10":3.8,"p25":3.8,"p50":4,"onP50":5.9,"offP50":1.9}
 phone t 0.400 {"stat":"tau 0.384 buf 780x1688 fp 780x1022 steam 780x987 scale 0.424 steps 34","shown":true,"p10":5.6,"p25":6.2,"p50":8.3,"onP50":11.6,"offP50":3.3}
 phone t 0.450 {"stat":"tau 0.448 buf 780x1688 fp 780x1026 steam 780x987 scale 0.424 steps 34","shown":true,"p10":14.1,"p25":17.2,"p50":18.4,"onP50":34.9,"offP50":16.5}
+11:40  up 2 days, 17:10, 1 user, load averages: 7.03 8.95 7.33
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.400 {"stat":"tau 0.384 buf 780x1688 fp 780x1022 steam 780x987 scale 0.424 steps 34","shown":true,"p10":4.1,"p25":4.2,"p50":4.2,"onP50":6.1,"offP50":1.9}
+phone t 0.450 {"stat":"tau 0.448 buf 780x1688 fp 780x1026 steam 780x987 scale 0.424 steps 34","shown":true,"p10":4.8,"p25":5.1,"p50":5.7,"onP50":8.1,"offP50":2.4}
+11:41  up 2 days, 17:11, 1 user, load averages: 5.89 8.57 7.23
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.450 {"stat":"tau 0.448 buf 780x1688 fp 780x1026 steam 780x987 scale 0.424 steps 34","shown":true,"p10":4.5,"p25":4.6,"p50":5.3,"onP50":7.5,"offP50":2.2}
+phone t 0.500 {"stat":"tau 0.496 buf 780x1688 fp 780x1114 steam 780x1082 scale 0.424 steps 34","shown":true,"p10":10.6,"p25":17.5,"p50":33.8,"onP50":50,"offP50":16.2}
+11:42  up 2 days, 17:12, 1 user, load averages: 4.26 7.86 7.02
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.450 {"stat":"tau 0.448 buf 780x1688 fp 780x1026 steam 780x987 scale 0.424 steps 34","shown":true,"p10":4.2,"p25":4.3,"p50":4.4,"onP50":6.3,"offP50":1.9}
+phone t 0.500 {"stat":"tau 0.496 buf 780x1688 fp 780x1114 steam 780x1082 scale 0.424 steps 34","shown":true,"p10":4.4,"p25":4.4,"p50":4.4,"onP50":6.3,"offP50":1.9}
+11:45  up 2 days, 17:15, 1 user, load averages: 3.61 7.54 6.92
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.600 {"stat":"tau 0.592 buf 780x1688 fp 780x1133 steam 780x1098 scale 0.424 steps 34","shown":true,"p10":5.7,"p25":6,"p50":7.5,"onP50":10.4,"offP50":2.9}
+phone t 0.700 {"stat":"tau 0.688 buf 780x1688 fp 746x886 steam 746x753 scale 0.424 steps 34","shown":true,"p10":17,"p25":17.3,"p50":16.9,"onP50":34,"offP50":17.1}
+11:46  up 2 days, 17:16, 1 user, load averages: 3.07 6.98 6.74
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.600 {"stat":"tau 0.592 buf 780x1688 fp 780x1133 steam 780x1098 scale 0.424 steps 34","shown":true,"p10":4.5,"p25":4.5,"p50":4.6,"onP50":6.4,"offP50":1.8}
+phone t 0.700 {"stat":"tau 0.688 buf 780x1688 fp 746x886 steam 746x753 scale 0.424 steps 34","shown":true,"p10":3.8,"p25":3.9,"p50":4.2,"onP50":6.4,"offP50":2.2}
+11:46  up 2 days, 17:16, 1 user, load averages: 3.07 6.98 6.74
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.600  steam 780x1098 scale 0.424 steps 34 "shown":true,"p10":4.5,"p25":4.5,"p50":4.6,"onP50":6.4,"offP50":1.8}
+phone t 0.700  steam 746x753 scale 0.424 steps 34 "shown":true,"p10":3.8,"p25":3.9,"p50":4.2,"onP50":6.4,"offP50":2.2}
+
+[exited with code 0]
+11:49  up 2 days, 17:19, 1 user, load averages: 2.60 6.50 6.58
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.700 {"stat":"tau 0.688 buf 780x1688 fp 746x886 steam 746x753 scale 0.424 steps 34","shown":true,"p10":4.1,"p25":4.1,"p50":4.1,"onP50":6.2,"offP50":2.1}
+11:50  up 2 days, 17:19, 1 user, load averages: 2.58 6.19 6.46
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.700 {"stat":"tau 0.688 buf 780x1688 fp 746x886 steam 746x753 scale 0.424 steps 34","shown":true,"p10":3.6,"p25":3.8,"p50":4.1,"onP50":6.3,"offP50":2.2}
+phone t 1.000 {"stat":"tau 0.992 buf 780x1688 fp 780x1150 steam 780x974 scale 0.424 steps 28","shown":true,"p10":7.6,"p25":10.1,"p50":25.3,"onP50":40.7,"offP50":15.4}
+11:50  up 2 days, 17:20, 1 user, load averages: 2.11 5.73 6.29
+phone stage captured {"buf":"780x1688","pr":2}
+phone t 0.700 {"stat":"tau 0.688 buf 780x1688 fp 746x886 steam 746x753 scale 0.424 steps 34","shown":true,"p10":3.6,"p25":4.2,"p50":7.5,"onP50":10.8,"offP50":3.3}
