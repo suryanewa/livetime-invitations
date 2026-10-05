@@ -499,6 +499,132 @@ the seated dome — mostly gone (a thin veil 0.70–0.80 s); the reflection in t
 its path, its speed and its box), `tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts`
 6/6, `tests/browser/scene-depth.spec.ts` 5/5; `pnpm typecheck` clean.
 
+## Polish round 4: the structural round (`v1.6/steam-polish4`)
+
+The fourth judge scored polish 3 **5.5 at laptop size, 6 at phone size** and diagnosed a design limit: translucency,
+strong self-shadowing and crisp stretched sheets together need a thin, dense, intermittent field, and a half-resolution
+11–15-step single-scattered march through a noise-carved field at ≈ 1.3 ms cannot sample one without grain or boil;
+every polish round had moved along the same trade-off (opaque and flat ↔ translucent and grainy). **The budget
+decision (orchestrator, 2026-10-05, budgets waived by Surya): ≤ 3.0 ms while steam shows, at the laptop and phone
+sizes, the Dinner frame still pacing at 60 fps (p95 ≤ 16.8 ms); zero with no steam.** This round rebuilt the field, the
+sampling and the light on the judge's prescription, in six steps, each its own commit measured with the judge's own
+`frames.ts` and scripts (laptop 1240² clip of 1280 × 720 @2, WARM 2000; the judge's no-steam twins, byte-identical to
+this build's): `evidence/v1.6/steam-polish4/measurements.txt` (the new scripts in `tools/`), `cost.txt`.
+
+Sources for the design: temporal integration with reprojection and per-step energy-conserving integration (Hillaire,
+*Physically Based and Unified Volumetric Rendering in Frostbite*, SIGGRAPH 2015; *Physically Based Sky, Atmosphere and
+Cloud Rendering in Frostbite*, 2016); remapped, eroded density and a history reprojected and clamped (Schneider & Vos,
+*The Real-Time Volumetric Cloudscapes of Horizon Zero Dawn*, SIGGRAPH 2015: their 1/16-of-the-image-per-frame is for
+distant, slow clouds; this steam is close and fast, so every pixel is marched every frame and the history smooths, it
+does not reconstruct); multiple-scattering octaves (Wrenninge, *Art-Directable Multiple Volumetric Scattering*,
+SIGGRAPH 2015), here only on the lit side; Bauer, *Creating the Atmospheric World of Red Dead Redemption 2* (SIGGRAPH
+2019: froxel-free raymarched clouds with temporal accumulation and a light-direction secondary tap); Houdini pyro's
+disturbance and shredding (sheets drawn out along the velocity, torn where the noise is low). The step-exact integration
+of a thin feature (a feature's antiderivative over a step with the field taken as linear along it) is this round's own.
+
+**What the design is now, and why.**
+
+1. **The field: thin dense sheets with clear air between** (`cloud()`, `cloudLook.fold`, `.foldWidth`, `.haze`). The
+   body is no longer a fog carved by noise: it is the zero set of a smooth two-octave sheet field (the noise texture's
+   green channel is now two octaves, so a sheet is a surface folded at its cell's scale, not felt), read in its own
+   frame (cells ≈ 3.7 cm across, 2× that along the rise, folded by the large field, carried, stretched and rolled with
+   the air by the flow map), a Gaussian sheet ≈ 3–5 mm thick, `fold` (10×) the core's density inside it, a haze of half
+   the core between; the sheets gather where the large field is high (intermittent, clear air between) and are torn
+   where the billow field is low (veils and strands, not curtains). The mixing skin is light (0.6 → 0.3 young: the dense
+   skin round a thin body was the judge's limb-dense "bubble"). The envelope is softer (≈ 6 mm young, was 2.5 mm): the
+   sheets that cross it carry the outline. The crown is drawn up into the lifting dome's wake: its boundary frays into
+   upward tongues ≈ 5 mm across and up to 1.3 cm tall (fast across the flow, slow along it), its top band 1.2 cm, fading
+   by ≈ 0.5 s of the thermal. The peeling layer keeps only its torn sheets outside the boundary (its ±5 mm isotropic
+   lobes went, and its cost).
+2. **The sampling: integrated, not point-sampled.** What made the grain and the boil was the march jittering in and out
+   of sharp features: a 2.5 mm boundary, a 3 mm sheet, a torn wisp, each crossed by a 3–8 mm step. Each is now averaged
+   over the step exactly, the field taken as linear along it (`stepMean`, `gaussMean`: the antiderivatives of the
+   smoothstep and of the Gaussian, Winitzki's erf; the ray keeps each clock's last value of the sheet field, the
+   boundary's signed distance and the torn-sheet field): a sheet seen face-on by a long step contributes its exact
+   optical depth, edge-on it is a bright fold line, and nothing is aliased whatever the step. Every pixel is marched
+   every frame (the checkerboard only on the Low tier), 28 / 22 / 16 steps (dense / thin / veil; no step under 2 mm),
+   budgeted by the steam's **footprint on screen** (its box's projection), ≤ 120 k march pixels and ≤ 0.31 per CSS
+   pixel of it (a 3× phone's buffer packs four times the laptop's pixels into a CSS pixel: both march the same detail
+   per CSS pixel and cost the same). The temporal resolve keeps the reprojection through the flow (the dominant
+   clock's material coordinates, the previous frame's forward map and camera), blends 0.1, takes half of the new
+   frame from its same-surface neighbourhood (a light denoise before the blend), clips the history to the
+   neighbourhood's mean ± 1.25 σ, and is scissored to the footprint. Where it has no history (the first steam frame, a
+   change of mind, a capture at another size, a jump of the clock) it builds one at once from four marches with their
+   own jitter (a running mean), so a still is never one noisy frame; the jitter is seeded by the steam clock, so a
+   capture at a given τ is byte-identical across runs (checked). (A Catmull-Rom upsample in the composite was tried:
+   sharper, but it raised the temporal grain to 0.96: not kept.)
+3. **The light: a terminator, and sheets that shade each other.** The multiple-scattering octaves now light the bright
+   side only (their extinction 0.9 and 0.7 of the key's, was 0.35 and 0.2: with the key's shadow they were what made the
+   body flat: without them lit − shaded was +39 against +16); the room's fill is occluded by the cloud towards the
+   window (its shaded flank keeps ~15–20 levels over the cove instead of vanishing into it); the key is brighter (1.55
+   → 2.0) and falls 3.8× the light volume's depth (was 2.5×); the light volume is finer (32³, was 28³); and each sample
+   integrates the sheet field 1.5 cm towards the key (one fetch, the same Gaussian integral), so a sheet shadows the air
+   behind it, which the 1.5 cm voxels cannot see. The white plate's bounce on the fog just over it is stronger (0.9 →
+   2.0, still the cube of its share of the sky: the plate stays white, centre +0…+4). `__steamDebug 15` shows the key's
+   transmittance.
+4. **The cap and its stem.** The cap's own fog reaches down a stem as wide as the well until the cap has formed (fading
+   over 0.7–0.95 s of the thermal), the base follows a fifth of the rise (`CLOUD.base` 0 → 0.2) and the stem narrows half
+   as much (0.3 → 0.15): the cap stays joined to the plate. The plate's veil is a full column while its first rush is
+   strong (emitted before 0.6–0.9 s), ribbons after; its gain 0.5 → 0.35 and the late cap thinner keep the vapour. A
+   denser rolled ring tube was tried for a visible roll: it read as a band and deepened the dips: not kept. The roll is
+   carried by the sheets folded round the ring's core.
+5. **The return.** What the judge saw as an arc over the crown at 0.70–0.80 s was fog *behind* the returning dome, which
+   this elevated camera sees over its crown: the seating's puffs at the back rim rising 4.5 cm, and the cloud's far
+   side. The puffs now stay low (≤ 1.5 cm) and none leave behind the dome as the camera sees it (those in front, at the
+   rim, stay); the dome's wake clears up to 1.9× further behind it; and a final sweep from 70 ms before the seating
+   carries off what is left over its crown and shoulders out to ≈ 15 cm (behind it from the plate up).
+6. **The cost.** The march is bound by each ray's serial work more than by its pixel count (10 k march pixels cost
+   ≈ 0.8 ms of the 1.3–1.8 at 120 k), so the steps are what is paid for: 28 / 22 / 16 (the integration keeps the quality:
+   grain and anisotropy are the same at 28 as at 32), 3 occupancy probes and 2 + 2 bisections (was 5 and 3 + 3:
+   ≈ 0.4 ms), and with two clouds (a change of mind: every sample evaluates both) two thirds of the steps and 0.4 of the
+   pixels.
+
+**Numbers** (the judge's scripts on the final build; polish 3 in brackets; `measurements.txt`):
+
+- (1) Body grain (tn2) at 0.58 / 0.67 s: temporal **0.84 / 0.74** (1.70 / 1.47); spatial 1.01 / 1.09 (1.42 / 1.23),
+  of which the steam over the cove (rows above the plate's far rim, 12 k / 7 k px) **0.74 / 0.65** and the plate's far
+  rim seen through the fog (4.6 k / 5.5 k px) 1.51 / 1.47: the rim's own lines (2.25 in the clean frame) at the
+  transmittance asked for. Far-rim transmittance **0.31–0.39** at 0.48–0.74 s.
+- (2) Own colour (DEBUG 14) lit − shaded **+27 / +23 / +22** at 0.61 / 0.67 / 0.74 s (+12 / +8), a coherent gradient
+  left to right (`own-colour-0.61-0.74-levels180-255.png`, `key-transmittance-0.61-0.74.png`); eroded interior (s8)
+  p5–p95 **57 / 55 / 46** (52 / 27).
+- (3) Coverage by depth from the outline (`tools/cov.py`, DEBUG 1): 4–16 px 0.15–0.21, 16–32 px 0.29–0.40, 32–64 px
+  0.52–0.65, 64–128 px 0.71–0.75; core / 1–2 cm ring **1.25–1.54** (0.81–0.82): coverage rises to the core, no shell.
+- (4) Edge anisotropy (DoG 2/8) at 0.54–0.74 s: right wall 1.62–2.11, crown 1.33–1.81, left wall 1.90–2.23
+  (1.41–2.06 / 1.30–1.52 / 1.35–1.43). **Not met on the crown**: its band (8–40 px under the top outline) holds the
+  wake's tongues and the vertical sheets (gx² > gy²) but also the tops of the tongues and the folds over the crown;
+  a sharper crown band, finer tongues and striations along the rise were tried (1.24–2.0, and the grain rose).
+- (5) The dip through the cap, 0.93–1.25 s: **4 / 9 / 8 / 5 / 5 / 5 / 0 / 3 / 3 / 0** (10 / 10 / 13 / 13 / 10 / 9 / 4 / 6 / 3
+  / 0). The two left over 5, at 0.96 and 0.99 s, are the lifted cloche's shadow across the cloud's lower left (luma
+  202–210 at rows 660–737, x 560–640; `tools/dipwhere.py`), not a hole: the cap is joined to the plate.
+- (6) The return (decline at 0.5 s), over the crown and shoulders: **0 / 0 / 0 / 0 / 0 / 0 px** over 8 levels at
+  0.67–0.83 s (43 / 1512 / 3221 / 4729 / 2747 / 0); the puffs at the front rim remain (`return-0.64-0.83.png`).
+- (7) Cost (`cost.txt`): laptop 1280 × 720 @2 **0.8–2.0 ms**, two clouds 2.3; phone 390 × 844 @3 (its buffer at the app's
+  dpr cap 2) **0.7–2.6**, two clouds 2.4; the judges' squares 1400² 1.9–2.9, 2000² 2.0–3.0. The whole Dinner frame with
+  steam 3.2–4.9 ms (without 1.8–2.4). Real-time pacing of the whole accept (`tools/pace.ts`, three accepts each):
+  **p95 16.7–16.8 ms, max 16.8, no frame over 20 ms**, laptop and phone. Zero with no steam (unchanged).
+- (8) The roll: the cap is folded sheets now, not a featureless blob, but no distinct rolled lip (`cap-roll-0.93-1.25.png`).
+- Kept: the gush 74–126 k px outside the silhouette at 0.29–0.37 s, p95 64–78, the flank unwashed (0); vapour 0.87–1.14×
+  polish 1 (1.21 at 0.48 s with the gush; polish 3 1.27); plate centre +0…+4, its right −2…−9; no waterline (median step
+  1.3–1.6); warm colour (R − B +5.3…+6.7); the dome's shape (IoU with the seated dome 0.45 / 0.55 / 0.48 / 0.45 / 0.42 at
+  0.48–0.74 s, polish 3 0.46 / 0.53 / 0.47 / 0.44 / 0.40); the end (5.95 s within 2 levels of clean); determinism; the
+  clocks; `STEAM_END`; reduced motion; the Low tier (checkerboard, 60 % of the steps).
+- Also gone: the salt-and-pepper over the cloche's dark reflections at 0.43–0.48 s and the gap's grey mottle at 0.32–0.35
+  s (`speckle-1to1-0.43-0.48-p3left-p4right.png`, `gap-1to1-0.32-0.35-p3left-p4right.png`). Not changed: bright steam
+  (> 40 over the cove) 9–27 k px at luma 222–226 (polish 3 6–31 k at 218–228): translucent white steam over a 192-level
+  cove composites to ≈ 225 at most; only an opaque body (polish 2) reaches 230+.
+
+**What a fifth judge would still see** (the owner's view): the steam reads as layered translucent veils with fold lines
+rising from the plate (`c38-1to1-p3-p4.png`, `laptop-real-0.608.png`), no felt, no boil; but at 2× it is **soft** (the
+march is ≈ 0.55 march pixels per CSS pixel, and sharpening it brought the grain back), the crown's edge is not yet
+2:1, the dome's shape at 0.55–0.75 s reads as a mound with a frayed top more than as the cloche's outline, the cap has
+no distinct rolled lip, and the lifted cloche's shadow leaves a grey band across the cloud's lower left at 0.96–0.99 s.
+
+**Tests.** `tests/dinner-steam.test.ts` 25 (changed: the young band under 7 mm widening 2×, was under 3 mm widening
+2.5×; the body's sheets denser than the haze between them and than the skin, was the skin 4× the core);
+`tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6,
+`tests/browser/scene-depth.spec.ts` 5/5; `pnpm typecheck` clean.
+
 ## Decisions
 
 - **A material field, not particles.** Every sample asks where its air came from (the analytic flow's inverse), so
@@ -506,7 +632,8 @@ its path, its speed and its box), `tests/scene-depth.test.ts` 6, `tests/dinner.t
 - **The flow's inverse is tabulated per frame** (a flow map of the axisymmetric part, by nested bisections): exact
   to the bisection tolerance, at one texture fetch per sample.
 - **Half-resolution march, depth-aware composite.** A full-resolution march cost 2–5 ms; the half-resolution one
-  with probes and a light volume fits ≈ 1.5 ms with better lighting.
+  with probes and a light volume fits ≈ 1.5 ms with better lighting. (Polish 4: the march is budgeted by the steam's
+  footprint and the CSS pixel, and its sharp features are integrated over each step rather than sampled: ≤ 3.0 ms.)
 - **Visible-steam physics over brightness.** In this front light, steam over the white plate is nearly invisible;
   the cloud reads against the cove, over the silver and over the table, and by its shade over the plate.
 - **The scene depth is generic** and off unless a client asks: the other scenes' frames are byte-identical.
