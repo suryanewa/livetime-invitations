@@ -769,7 +769,8 @@ within 1.15× the plate's radius by 1.3 s, was the plate's; the cap keeping its 
   to the bisection tolerance, at one texture fetch per sample.
 - **Half-resolution march, depth-aware composite.** A full-resolution march cost 2–5 ms; the half-resolution one
   with probes and a light volume fits ≈ 1.5 ms with better lighting. (Polish 4: the march is budgeted by the steam's
-  footprint and the CSS pixel, and its sharp features are integrated over each step rather than sampled: ≤ 3.0 ms.)
+  footprint and the CSS pixel, and its sharp features are integrated over each step rather than sampled: ≤ 3.0 ms.
+  Polish 5: 0.5 of the buffer a side, 0.82–0.85 march pixels per CSS pixel, 34 / 28 / 20 steps: ≤ 6.0 ms.)
 - **Visible-steam physics over brightness.** In this front light, steam over the white plate is nearly invisible;
   the cloud reads against the cove, over the silver and over the table, and by its shade over the plate.
 - **The scene depth is generic** and off unless a client asks: the other scenes' frames are byte-identical.
