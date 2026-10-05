@@ -1,0 +1,9 @@
+12:05  up 2 days, 17:35, 1 user, load averages: 5.15 6.15 6.42
+laptop run 0: frames 115 | all p50 16.70 p95 16.80 max 349.9 | steam window p95 16.80 >20ms 1
+laptop run 1: frames 419 | all p50 16.70 p95 33.40 max 33.4 | steam window p95 33.30 >20ms 59
+12:39  up 2 days, 18:09, 1 user, load averages: 20.12 10.77 8.18
+laptop run 0: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+12:39  up 2 days, 18:09, 1 user, load averages: 14.90 10.44 8.16
+phone run 0: frames 362 | all p50 16.70 p95 33.40 max 150.0 | steam window p95 33.40 >20ms 59
+12:40  up 2 days, 18:09, 1 user, load averages: 11.52 9.96 8.04
+phone run 0: frames 402 | all p50 16.70 p95 33.30 max 83.3 | steam window p95 33.30 >20ms 37

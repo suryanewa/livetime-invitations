@@ -1,0 +1,219 @@
+# steam polish 7 (v1.6/steam-polish7): the gush's size and brightness. Laptop 1240² clip (CLIP=180,100,620,620 of 1280x720 @2), WARM 2000,
+# the judge's frames.ts on port 5619 (tools/rg.sh, tools/run.sh). BEFORE = the seventh judge's lap/ frames (polish 6, v1.6/integration 1c61c25/84a3473),
+# which this session's before renders match byte for byte (f0026, f0030); g0/ = the judge's gush-off twin (__steamFlags 67108864), nos/ = the no-steam twin.
+# AFTER = GUSH.density 1.72 (was 5.2), GUSH.shownGrow 0.26 (new; the box keeps grow 0.45), SPILL.fade [0.4, 0.66] (was [0.42, 0.66]).
+# gush7.py: D = frame − gush-off twin; area/mass/p90 over D > 4; share = mass / S+ (Σ max(frame − clean, 0)); legible = D > 8 outside the seated
+# outline (ref/seated-outline.npy, dilated 3 px) right of its centre column; centroid travel at ≈ 27 px/cm.
+
+## gush7 BEFORE (the judge's lap/ frames, byte-identical to this session's before renders at 26/30; g0/ the gush-off twin)
+0.416s area  115.5 k (1.00) mass  2.95 M p90  64.8 | S+  4.70 M share 62.7 % | legible D>8  67.9 k p90  72.7 (B>8  63.0 k p90  73.7) | up +0.00 cm out +0.00 cm
+0.432s area  112.3 k (0.97) mass  2.35 M p90  51.8 | S+  4.57 M share 51.5 % | legible D>8  63.9 k p90  59.0 (B>8  58.8 k p90  59.8) | up +1.26 cm out -0.08 cm
+0.448s area  120.4 k (1.04) mass  2.91 M p90  52.0 | S+  5.70 M share 51.1 % | legible D>8  79.4 k p90  56.0 (B>8  74.7 k p90  56.7) | up +2.68 cm out +0.58 cm
+0.464s area  133.7 k (1.16) mass  3.51 M p90  50.9 | S+  6.72 M share 52.2 % | legible D>8  92.0 k p90  54.6 (B>8  87.3 k p90  54.9) | up +2.64 cm out +0.80 cm
+0.480s area  140.3 k (1.22) mass  3.65 M p90  48.5 | S+  7.18 M share 50.8 % | legible D>8  96.6 k p90  52.8 (B>8  92.1 k p90  53.7) | up +1.95 cm out +0.62 cm
+0.496s area  127.8 k (1.11) mass  2.74 M p90  42.8 | S+  6.48 M share 42.3 % | legible D>8  79.3 k p90  46.6 (B>8  75.5 k p90  46.9) | up +1.94 cm out +0.15 cm
+0.512s area  123.4 k (1.07) mass  2.34 M p90  38.0 | S+  6.22 M share 37.6 % | legible D>8  80.7 k p90  39.5 (B>8  78.0 k p90  39.8) | up +3.86 cm out +0.35 cm
+0.528s area  141.4 k (1.22) mass  2.95 M p90  37.7 | S+  6.89 M share 42.8 % | legible D>8 102.9 k p90  38.5 (B>8 101.1 k p90  38.8) | up +4.74 cm out +0.94 cm
+0.544s area  155.6 k (1.35) mass  3.24 M p90  35.0 | S+  7.22 M share 44.8 % | legible D>8 116.7 k p90  36.0 (B>8 115.1 k p90  36.8) | up +4.45 cm out +1.06 cm
+0.560s area  144.6 k (1.25) mass  2.71 M p90  30.9 | S+  6.78 M share 39.9 % | legible D>8 104.4 k p90  32.0 (B>8 103.5 k p90  32.9) | up +3.80 cm out +0.69 cm
+0.576s area  113.9 k (0.99) mass  1.62 M p90  22.9 | S+  5.82 M share 27.8 % | legible D>8  73.1 k p90  23.9 (B>8  74.0 k p90  24.9) | up +4.19 cm out +0.03 cm
+0.592s area  117.3 k (1.02) mass  1.40 M p90  18.8 | S+  5.79 M share 24.1 % | legible D>8  76.0 k p90  18.9 (B>8  79.5 k p90  19.9) | up +5.88 cm out +0.43 cm
+0.608s area  130.1 k (1.13) mass  1.37 M p90  15.1 | S+  6.02 M share 22.7 % | legible D>8  85.5 k p90  15.9 (B>8  90.4 k p90  17.1) | up +6.36 cm out +0.86 cm
+0.624s area  124.9 k (1.08) mass  1.00 M p90  10.1 | S+  5.92 M share 16.8 % | legible D>8  59.3 k p90  11.1 (B>8  66.2 k p90  20.9) | up +6.11 cm out +0.69 cm
+0.640s area   61.4 k (0.53) mass  0.33 M p90   7.2 | S+  5.58 M share  6.0 % | legible D>8   3.7 k p90  14.0 (B>8  14.7 k p90  55.9) | up +5.18 cm out -0.82 cm
+0.656s area    9.7 k (0.08) mass  0.06 M p90   9.1 | S+  5.43 M share  1.1 % | legible D>8   1.2 k p90  13.4 (B>8  14.7 k p90  55.0) | up +3.92 cm out -3.64 cm
+0.672s area    5.2 k (0.04) mass  0.03 M p90   8.8 | S+  5.47 M share  0.6 % | legible D>8   0.4 k p90  11.8 (B>8  16.3 k p90  47.9) | up +4.36 cm out -3.71 cm
+0.688s area    2.5 k (0.02) mass  0.01 M p90   7.9 | S+  5.58 M share  0.3 % | legible D>8   0.1 k p90  13.9 (B>8  18.5 k p90  42.7) | up +4.23 cm out -3.49 cm
+0.704s area    1.2 k (0.01) mass  0.01 M p90   8.0 | S+  5.66 M share  0.1 % | legible D>8   0.0 k p90  13.7 (B>8  20.8 k p90  39.9) | up +4.07 cm out -3.33 cm
+0.720s area    0.5 k (0.00) mass  0.00 M p90   9.0 | S+  5.61 M share  0.1 % | legible D>8   0.0 k p90  11.4 (B>8  23.0 k p90  38.9) | up +3.69 cm out -3.30 cm
+0.736s area    0.0 k (0.00) mass  0.00 M p90   4.9 | S+  5.46 M share  0.0 % | legible D>8   0.0 k p90   0.0 (B>8  24.5 k p90  38.7) | up +5.39 cm out -3.70 cm
+mass change/frame (M): 0.432 0.60 0.448 0.56 0.464 0.60 0.480 0.14 0.496 0.91 0.512 0.40 0.528 0.61 0.544 0.29 0.560 0.53 0.576 1.09 0.592 0.22 0.608 0.03 0.624 0.37 0.640 0.66 0.656 0.27 0.672 0.03 0.688 0.02 0.704 0.01 0.720 0.00 0.736 0.00
+pops ['0.496 (0.91 M vs median 0.50)', '0.576 (1.09 M vs median 0.25)', '0.640 (0.66 M vs median 0.15)']
+## gush7 AFTER
+0.416s area   50.0 k (1.00) mass  0.87 M p90  38.9 | S+  2.57 M share 33.7 % | legible D>8  29.8 k p90  42.7 (B>8  27.2 k p90  42.9) | up +0.00 cm out +0.00 cm
+0.432s area   46.6 k (0.93) mass  0.66 M p90  28.6 | S+  2.76 M share 23.8 % | legible D>8  26.1 k p90  30.9 (B>8  24.5 k p90  31.0) | up +0.95 cm out -0.04 cm
+0.448s area   52.7 k (1.05) mass  0.78 M p90  26.9 | S+  3.47 M share 22.6 % | legible D>8  34.0 k p90  27.9 (B>8  31.7 k p90  28.0) | up +1.60 cm out +0.13 cm
+0.464s area   61.0 k (1.22) mass  0.94 M p90  26.9 | S+  4.09 M share 22.9 % | legible D>8  41.6 k p90  27.9 (B>8  38.4 k p90  27.9) | up +1.64 cm out +0.15 cm
+0.480s area   66.7 k (1.33) mass  0.98 M p90  25.2 | S+  4.46 M share 22.1 % | legible D>8  43.3 k p90  26.0 (B>8  40.1 k p90  26.7) | up +1.47 cm out +0.01 cm
+0.496s area   57.4 k (1.15) mass  0.74 M p90  20.9 | S+  4.40 M share 16.9 % | legible D>8  35.2 k p90  21.9 (B>8  32.7 k p90  21.9) | up +1.39 cm out -0.24 cm
+0.512s area   52.9 k (1.06) mass  0.58 M p90  17.9 | S+  4.37 M share 13.2 % | legible D>8  31.2 k p90  18.9 (B>8  30.7 k p90  19.8) | up +2.73 cm out -0.08 cm
+0.528s area   60.7 k (1.21) mass  0.67 M p90  17.1 | S+  4.55 M share 14.7 % | legible D>8  38.9 k p90  17.9 (B>8  39.3 k p90  18.9) | up +3.38 cm out +0.16 cm
+0.544s area   67.4 k (1.35) mass  0.71 M p90  15.9 | S+  4.67 M share 15.2 % | legible D>8  42.3 k p90  15.9 (B>8  43.7 k p90  16.1) | up +3.50 cm out +0.18 cm
+0.560s area   62.3 k (1.25) mass  0.59 M p90  12.9 | S+  4.65 M share 12.8 % | legible D>8  37.9 k p90  13.1 (B>8  40.6 k p90  15.1) | up +3.27 cm out -0.08 cm
+0.576s area   47.1 k (0.94) mass  0.35 M p90   9.8 | S+  4.53 M share  7.6 % | legible D>8  14.0 k p90  11.1 (B>8  18.7 k p90  25.9) | up +3.39 cm out -0.61 cm
+0.592s area   38.8 k (0.78) mass  0.25 M p90   8.1 | S+  4.63 M share  5.4 % | legible D>8   3.3 k p90  14.6 (B>8  10.4 k p90  44.9) | up +4.39 cm out -0.44 cm
+0.608s area   36.0 k (0.72) mass  0.20 M p90   7.0 | S+  4.86 M share  4.1 % | legible D>8   1.3 k p90  15.1 (B>8  10.1 k p90  56.0) | up +4.72 cm out -0.46 cm
+0.624s area    8.6 k (0.17) mass  0.05 M p90   9.0 | S+  5.03 M share  1.1 % | legible D>8   0.9 k p90  13.9 (B>8  11.2 k p90  59.9) | up +2.25 cm out -3.28 cm
+0.640s area    5.3 k (0.11) mass  0.03 M p90   8.8 | S+  5.16 M share  0.6 % | legible D>8   0.5 k p90  12.8 (B>8  12.3 k p90  60.0) | up +2.58 cm out -3.39 cm
+0.656s area    2.9 k (0.06) mass  0.02 M p90   9.1 | S+  5.27 M share  0.3 % | legible D>8   0.3 k p90  11.9 (B>8  13.6 k p90  55.9) | up +2.60 cm out -3.34 cm
+0.672s area    1.8 k (0.04) mass  0.01 M p90   8.0 | S+  5.42 M share  0.2 % | legible D>8   0.1 k p90  12.9 (B>8  15.5 k p90  48.0) | up +2.59 cm out -3.33 cm
+0.688s area    0.8 k (0.02) mass  0.00 M p90   7.7 | S+  5.55 M share  0.1 % | legible D>8   0.0 k p90  11.5 (B>8  18.0 k p90  42.8) | up +2.37 cm out -3.33 cm
+0.704s area    0.3 k (0.01) mass  0.00 M p90   9.7 | S+  5.64 M share  0.0 % | legible D>8   0.0 k p90  10.7 (B>8  20.4 k p90  40.0) | up +1.91 cm out -3.42 cm
+0.720s area    0.2 k (0.00) mass  0.00 M p90  10.1 | S+  5.59 M share  0.0 % | legible D>8   0.0 k p90   9.5 (B>8  22.8 k p90  38.9) | up +1.87 cm out -3.49 cm
+0.736s gush gone  S+  5.45 M
+mass change/frame (M): 0.432 0.21 0.448 0.12 0.464 0.15 0.480 0.05 0.496 0.24 0.512 0.17 0.528 0.09 0.544 0.04 0.560 0.12 0.576 0.25 0.592 0.10 0.608 0.05 0.624 0.15 0.640 0.02 0.656 0.01 0.672 0.01 0.688 0.01 0.704 0.00 0.720 0.00 0.736 0.00
+pops ['0.496 (0.24 M vs median 0.12)', '0.512 (0.17 M vs median 0.07)', '0.576 (0.25 M vs median 0.07)', '0.624 (0.15 M vs median 0.03)']
+## iou.py whole frame BEFORE (0.48 / 0.544 / 0.608 / 0.672 / 0.736)
+0.480s IoU 0.53  steam top row 603  dome top row 562
+0.544s IoU 0.40  steam top row 544  dome top row 562
+0.608s IoU 0.43  steam top row 557  dome top row 562
+0.672s IoU 0.56  steam top row 540  dome top row 562
+0.736s IoU 0.48  steam top row 504  dome top row 562
+## iou.py whole frame AFTER
+0.480s IoU 0.71  steam top row 603  dome top row 562
+0.544s IoU 0.64  steam top row 585  dome top row 562
+0.608s IoU 0.67  steam top row 564  dome top row 562
+0.672s IoU 0.57  steam top row 540  dome top row 562
+0.736s IoU 0.48  steam top row 504  dome top row 562
+## iou.py the dome alone (the gush-off twin; unchanged, byte-identical before/after at 26-46)
+0.480s IoU 0.84  steam top row 603  dome top row 562
+0.544s IoU 0.78  steam top row 585  dome top row 562
+0.608s IoU 0.68  steam top row 564  dome top row 562
+## domefill.py BEFORE (whole frame)
+0.448s inside mean  46.6 >15 0.89 (3159) | crown half   0.0 >15 0.00 | lower half  48.8 >15 0.93 | outside band mean   1.8 >15 0.00 (6020) | in/out 26.0
+0.480s inside mean  55.9 >15 0.99 (8816) | crown half  29.9 >15 0.82 | lower half  56.1 >15 1.00 | outside band mean   4.4 >15 0.01 (5531) | in/out 12.7
+0.512s inside mean  57.3 >15 0.94 (18315) | crown half  24.4 >15 0.55 | lower half  62.4 >15 1.00 | outside band mean   9.1 >15 0.19 (7526) | in/out 6.3
+0.544s inside mean  55.2 >15 0.90 (22544) | crown half  27.9 >15 0.59 | lower half  63.4 >15 1.00 | outside band mean  17.3 >15 0.44 (10416) | in/out 3.2
+0.576s inside mean  56.8 >15 0.92 (23432) | crown half  35.0 >15 0.70 | lower half  64.6 >15 1.00 | outside band mean  23.8 >15 0.56 (12314) | in/out 2.4
+0.608s inside mean  61.4 >15 0.96 (23525) | crown half  45.8 >15 0.84 | lower half  67.0 >15 1.00 | outside band mean  30.9 >15 0.62 (12652) | in/out 2.0
+0.640s inside mean  57.0 >15 0.98 (19004) | crown half  55.2 >15 0.95 | lower half  57.9 >15 1.00 | outside band mean  25.3 >15 0.62 (10258) | in/out 2.3
+0.672s inside mean  55.1 >15 1.00 (19630) | crown half  60.4 >15 1.00 | lower half  52.6 >15 1.00 | outside band mean  27.7 >15 0.73 (10483) | in/out 2.0
+## domefill.py AFTER (whole frame)
+0.448s inside mean  45.7 >15 0.86 (3159) | crown half   0.0 >15 0.00 | lower half  47.8 >15 0.90 | outside band mean   0.3 >15 0.00 (6020) | in/out 91.3
+0.480s inside mean  55.5 >15 0.98 (8816) | crown half  29.9 >15 0.82 | lower half  55.7 >15 0.99 | outside band mean   2.2 >15 0.01 (5531) | in/out 25.1
+0.512s inside mean  57.1 >15 0.94 (18315) | crown half  24.4 >15 0.55 | lower half  62.2 >15 1.00 | outside band mean   7.3 >15 0.15 (7526) | in/out 7.9
+0.544s inside mean  55.0 >15 0.90 (22544) | crown half  27.9 >15 0.59 | lower half  63.3 >15 1.00 | outside band mean  15.9 >15 0.38 (10416) | in/out 3.5
+0.576s inside mean  56.6 >15 0.92 (23432) | crown half  35.0 >15 0.70 | lower half  64.3 >15 1.00 | outside band mean  22.8 >15 0.51 (12314) | in/out 2.5
+0.608s inside mean  61.2 >15 0.96 (23525) | crown half  45.8 >15 0.84 | lower half  66.8 >15 1.00 | outside band mean  30.3 >15 0.58 (12652) | in/out 2.0
+0.640s inside mean  56.9 >15 0.98 (19004) | crown half  55.2 >15 0.95 | lower half  57.7 >15 1.00 | outside band mean  24.8 >15 0.60 (10258) | in/out 2.3
+0.672s inside mean  55.0 >15 1.00 (19630) | crown half  60.4 >15 1.00 | lower half  52.5 >15 1.00 | outside band mean  27.5 >15 0.73 (10483) | in/out 2.0
+## domefill.py the dome alone (gush-off twin)
+0.448s inside mean  45.5 >15 0.86 (3159) | crown half   0.0 >15 0.00 | lower half  47.7 >15 0.90 | outside band mean   0.2 >15 0.00 (6020) | in/out 91.1
+0.480s inside mean  55.5 >15 0.98 (8816) | crown half  29.9 >15 0.82 | lower half  55.7 >15 0.98 | outside band mean   2.0 >15 0.01 (5531) | in/out 27.6
+0.512s inside mean  57.0 >15 0.94 (18315) | crown half  24.4 >15 0.55 | lower half  62.2 >15 1.00 | outside band mean   7.1 >15 0.15 (7526) | in/out 8.1
+0.544s inside mean  55.0 >15 0.90 (22544) | crown half  27.9 >15 0.59 | lower half  63.3 >15 1.00 | outside band mean  15.8 >15 0.38 (10416) | in/out 3.5
+0.576s inside mean  56.6 >15 0.92 (23432) | crown half  35.0 >15 0.70 | lower half  64.3 >15 1.00 | outside band mean  22.7 >15 0.50 (12314) | in/out 2.5
+0.608s inside mean  61.2 >15 0.96 (23525) | crown half  45.8 >15 0.84 | lower half  66.7 >15 1.00 | outside band mean  30.2 >15 0.58 (12652) | in/out 2.0
+0.640s inside mean  56.9 >15 0.98 (19004) | crown half  55.2 >15 0.95 | lower half  57.7 >15 1.00 | outside band mean  24.7 >15 0.60 (10258) | in/out 2.3
+0.672s inside mean  55.0 >15 1.00 (19630) | crown half  60.4 >15 1.00 | lower half  52.5 >15 1.00 | outside band mean  27.5 >15 0.73 (10483) | in/out 2.0
+## envmine.py BEFORE (S+ = the frame's visible steam)
+0.416s S+  4.70 | S4  4.53 A4 221.6 | S16  3.39 A16  90.1 | S32  2.37 A32  41.0 | dark -0.00 ( 0.3k) | cen ( 848, 862) 90%box x 456-1059 (603) y 720-1053 (333)
+0.480s S+  7.18 | S4  7.00 A4 280.0 | S16  5.90 A16 131.9 | S32  4.99 A32  91.7 | dark -0.03 ( 5.9k) | cen ( 797, 781) 90%box x 438-1094 (656) y 649-989 (340)
+0.544s S+  7.22 | S4  6.98 A4 280.7 | S16  6.04 A16 148.0 | S32  4.43 A32  82.4 | dark -0.06 ( 9.5k) | cen ( 777, 733) 90%box x 431-1119 (688) y 608-919 (311)
+0.608s S+  6.02 | S4  5.77 A4 254.8 | S16  4.22 A16  75.3 | S32  3.86 A32  59.8 | dark -0.13 (18.3k) | cen ( 686, 702) 90%box x 410-1087 (677) y 586-874 (288)
+0.672s S+  5.47 | S4  5.35 A4 152.3 | S16  4.95 A16  86.2 | S32  4.51 A32  68.0 | dark -0.23 (27.1k) | cen ( 573, 691) 90%box x 389-821 (432) y 587-855 (268)
+0.736s S+  5.46 | S4  5.35 A4 154.0 | S16  5.00 A16  97.8 | S32  4.26 A32  68.7 | dark -0.26 (30.1k) | cen ( 564, 674) 90%box x 380-817 (437) y 560-804 (244)
+## envmine.py AFTER
+0.416s S+  2.57 | S4  2.38 A4 156.4 | S16  1.55 A16  56.9 | S32  0.67 A32  15.1 | dark -0.01 ( 1.2k) | cen ( 759, 843) 90%box x 420-1031 (611) y 721-987 (266)
+0.480s S+  4.46 | S4  4.25 A4 190.0 | S16  3.38 A16  79.1 | S32  2.55 A32  41.2 | dark -0.05 ( 8.0k) | cen ( 684, 754) 90%box x 419-1034 (615) y 647-927 (280)
+0.544s S+  4.67 | S4  4.46 A4 189.1 | S16  3.44 A16  63.5 | S32  3.17 A32  50.9 | dark -0.11 (16.2k) | cen ( 657, 724) 90%box x 414-1029 (615) y 624-898 (274)
+0.608s S+  4.86 | S4  4.60 A4 167.3 | S16  4.04 A16  70.1 | S32  3.73 A32  57.3 | dark -0.18 (23.6k) | cen ( 614, 706) 90%box x 403-913 (510) y 605-880 (275)
+0.672s S+  5.42 | S4  5.29 A4 149.8 | S16  4.91 A16  85.2 | S32  4.48 A32  67.6 | dark -0.23 (27.5k) | cen ( 572, 691) 90%box x 389-816 (427) y 587-854 (267)
+0.736s S+  5.45 | S4  5.34 A4 153.7 | S16  4.99 A16  97.5 | S32  4.26 A32  68.7 | dark -0.26 (30.1k) | cen ( 564, 674) 90%box x 380-816 (436) y 560-803 (243)
+## env.py whole-frame visible mass (Σ B over B > 8) BEFORE | AFTER
+0.416s mass 4.12 M (1.00 of peak) area 152.9 k edge 20.8 |0.416s mass 2.09 M (1.00 of peak) area 103.0 k edge 17.6 
+0.480s mass 6.42 M (1.00 of peak) area 176.9 k edge 27.8 |0.480s mass 3.89 M (1.00 of peak) area 122.2 k edge 24.6 
+0.544s mass 6.49 M (1.00 of peak) area 186.8 k edge 23.7 |0.544s mass 4.06 M (1.00 of peak) area 114.6 k edge 21.8 
+0.608s mass 5.27 M (0.81 of peak) area 162.3 k edge 27.1 |0.608s mass 4.17 M (1.00 of peak) area 81.6 k edge 33.8 
+0.672s mass 5.06 M (0.78 of peak) area 95.0 k edge 48.5 |0.672s mass 5.01 M (1.00 of peak) area 94.1 k edge 48.5 
+0.736s mass 5.12 M (0.79 of peak) area 108.5 k edge 44.9 |0.736s mass 5.12 M (1.00 of peak) area 108.4 k edge 44.9 
+0.800s mass 4.66 M (0.72 of peak) area 115.5 k edge 35.2 |0.800s mass 4.66 M (0.91 of peak) area 115.5 k edge 35.2 
+0.864s mass 4.53 M (0.70 of peak) area 124.6 k edge 32.5 |0.864s mass 4.53 M (0.89 of peak) area 124.6 k edge 32.5 
+0.928s mass 4.17 M (0.64 of peak) area 128.7 k edge 27.6 |0.928s mass 4.17 M (0.81 of peak) area 128.7 k edge 27.6 
+0.992s mass 4.08 M (0.63 of peak) area 136.7 k edge 22.5 |0.992s mass 4.08 M (0.80 of peak) area 136.7 k edge 22.5 
+1.056s mass 3.91 M (0.60 of peak) area 142.0 k edge 18.6 |1.056s mass 3.91 M (0.76 of peak) area 142.0 k edge 18.6 
+1.120s mass 3.63 M (0.56 of peak) area 148.1 k edge 16.9 |1.120s mass 3.63 M (0.71 of peak) area 148.1 k edge 16.9 
+1.184s mass 3.25 M (0.50 of peak) area 153.0 k edge 15.7 |1.184s mass 3.25 M (0.63 of peak) area 153.0 k edge 15.7 
+1.248s mass 2.85 M (0.44 of peak) area 157.6 k edge 13.8 |1.248s mass 2.85 M (0.56 of peak) area 157.6 k edge 13.8 
+1.312s mass 2.48 M (0.38 of peak) area 157.3 k edge 12.2 |1.312s mass 2.48 M (0.48 of peak) area 157.3 k edge 12.2 
+1.376s mass 2.14 M (0.33 of peak) area 153.6 k edge 11.6 |1.376s mass 2.14 M (0.42 of peak) area 153.6 k edge 11.6 
+1.440s mass 1.86 M (0.29 of peak) area 141.9 k edge 12.1 |1.440s mass 1.86 M (0.36 of peak) area 141.9 k edge 12.1 
+1.504s mass 1.72 M (0.26 of peak) area 134.3 k edge 12.2 |1.504s mass 1.72 M (0.34 of peak) area 134.3 k edge 12.2 
+1.568s mass 1.52 M (0.23 of peak) area 114.4 k edge 11.5 |1.568s mass 1.52 M (0.30 of peak) area 114.4 k edge 11.5 
+1.664s mass 1.22 M (0.19 of peak) area 78.1 k edge 12.4 |1.664s mass 1.22 M (0.24 of peak) area 78.1 k edge 12.4 
+1.728s mass 1.12 M (0.17 of peak) area 68.8 k edge 12.7 |1.728s mass 1.12 M (0.22 of peak) area 68.8 k edge 12.7 
+1.792s mass 1.05 M (0.16 of peak) area 65.0 k edge 12.5 |1.792s mass 1.05 M (0.21 of peak) area 65.0 k edge 12.5 
+1.856s mass 0.98 M (0.15 of peak) area 63.7 k edge 12.2 |1.856s mass 0.98 M (0.19 of peak) area 63.7 k edge 12.2 
+1.920s mass 0.87 M (0.13 of peak) area 59.1 k edge 11.9 |1.920s mass 0.87 M (0.17 of peak) area 59.1 k edge 11.9 
+1.984s mass 0.76 M (0.12 of peak) area 57.1 k edge 11.0 |1.984s mass 0.76 M (0.15 of peak) area 57.1 k edge 11.0 
+2.048s mass 0.63 M (0.10 of peak) area 51.0 k edge 10.7 |2.048s mass 0.63 M (0.12 of peak) area 51.0 k edge 10.7 
+2.112s mass 0.56 M (0.09 of peak) area 46.9 k edge 11.2 |2.112s mass 0.56 M (0.11 of peak) area 46.9 k edge 11.2 
+2.176s mass 0.52 M (0.08 of peak) area 44.4 k edge 11.2 |2.176s mass 0.52 M (0.10 of peak) area 44.4 k edge 11.2 
+2.240s mass 0.44 M (0.07 of peak) area 37.4 k edge 10.8 |2.240s mass 0.44 M (0.09 of peak) area 37.4 k edge 10.8 
+## motion.py BEFORE
+0.288 7.7 | 0.304 8.4 | 0.320 6.3 | 0.336 5.0 | 0.352 6.3 | 0.368 8.1 | 0.384 6.6 | 0.400 6.1 | 0.416 6.6 | 0.432 9.9 | 0.448 10.4 | 0.464 7.8 | 0.480 5.6 | 0.496 7.4 | 0.512 6.6 | 0.528 4.7 | 0.544 2.8 | 0.560 3.9 | 0.576 6.6 | 0.592 3.9 | 0.608 3.5 | 0.624 4.6 | 0.640 5.5 | 0.656 6.3 | 0.672 7.2 | 0.688 7.9 | 0.704 7.5 | 0.720 7.2 | 0.736 7.2 | 0.752 7.0 | 0.768 6.7 | 0.784 6.3 | 0.800 5.6 | 0.816 4.8 | 0.832 4.3 | 0.848 4.2 | 0.864 4.1 | 0.880 4.6 | 0.896 3.4 | 0.912 3.2 | 0.928 3.0 | 0.944 2.9 | 0.960 2.8
+freeze runs end at ['0.960']
+pops []
+## motion.py AFTER
+0.288 5.1 | 0.304 6.1 | 0.320 4.7 | 0.336 3.9 | 0.352 4.4 | 0.368 4.4 | 0.384 4.3 | 0.400 4.5 | 0.416 5.6 | 0.432 8.4 | 0.448 8.7 | 0.464 6.9 | 0.480 5.5 | 0.496 4.9 | 0.512 4.0 | 0.528 2.5 | 0.544 2.2 | 0.560 2.5 | 0.576 3.2 | 0.592 3.3 | 0.608 4.6 | 0.624 5.0 | 0.640 5.5 | 0.656 6.3 | 0.672 7.2 | 0.688 8.0 | 0.704 7.5 | 0.720 7.2 | 0.736 7.2 | 0.752 7.0 | 0.768 6.7 | 0.784 6.3 | 0.800 5.6 | 0.816 4.8 | 0.832 4.3 | 0.848 4.2 | 0.864 4.1 | 0.880 4.6 | 0.896 3.4 | 0.912 3.2 | 0.928 3.0 | 0.944 2.9 | 0.960 2.8
+freeze runs end at ['0.560', '0.960']
+pops []
+## motion.py the dome alone (gush-off twin)
+0.288 7.0 | 0.304 6.5 | 0.320 6.4 | 0.336 5.4 | 0.352 4.3 | 0.368 3.6 | 0.384 3.5 | 0.400 4.9 | 0.416 6.1 | 0.432 8.3 | 0.448 10.3 | 0.464 8.5 | 0.480 7.0 | 0.496 4.9 | 0.512 3.6 | 0.528 2.8 | 0.544 2.7 | 0.560 2.7 | 0.576 2.9 | 0.592 3.4 | 0.608 4.7 | 0.624 5.1 | 0.640 5.6 | 0.656 6.4 | 0.672 7.3 | 0.688 8.0 | 0.704 7.5 | 0.720 7.2 | 0.736 7.2 | 0.752 7.0 | 0.768 6.7 | 0.784 6.3 | 0.800 5.6 | 0.816 4.8 | 0.832 4.3 | 0.848 4.2 | 0.864 4.1 | 0.880 4.6 | 0.896 3.4 | 0.912 3.2 | 0.928 3.0 | 0.944 2.9 | 0.960 2.8
+freeze runs end at ['0.560', '0.576', '0.960']
+pops []
+## after vs before, frame by frame past the gush (the temporal history's residue): differing px / > 1 level / max
+0.640s  255657 px  >1 level 136411  max  18
+0.672s   74252 px  >1 level  11655  max  13
+0.704s   38376 px  >1 level   4728  max  12
+0.736s   16910 px  >1 level   1334  max   4
+0.768s    5390 px  >1 level    110  max   2
+0.800s    2103 px  >1 level      0  max   1
+0.864s     620 px  >1 level      2  max   2
+0.960s     102 px  >1 level      0  max   1
+1.120s      17 px  >1 level      0  max   1
+1.280s       3 px  >1 level      0  max   1
+1.440s      16 px  >1 level      0  max   1
+1.600s       3 px  >1 level      0  max   1
+1.792s       4 px  >1 level      0  max   1
+1.984s       2 px  >1 level      0  max   1
+2.048s       0 px  >1 level      0  max   0  byte-identical
+2.112s       0 px  >1 level      0  max   0  byte-identical
+2.176s       0 px  >1 level      0  max   0  byte-identical
+2.240s       0 px  >1 level      0  max   0  byte-identical
+## the cloud-only twin (__steamFlags 67174400: no gush, no veil), before vs after: 41 frames (0.352-0.736 every frame, 0.8-2.24 every 6th)
+41 frames compared, 0 differ: byte-identical
+## the gush-off twin (__steamFlags 67108864) after vs the judge's g0/ at 26/30/34/38/42/46: 
+26 identical; 30 identical; 34 identical; 38 identical; 42 identical; 46 identical; 
+
+## full frames (gushfull.py; the gush-off twins rendered this session, the same before/after; BEFORE = the judge's full/ and phone/)
+# full laptop 2560x1440 (ROI x<1800)
+0.416s area  115.5 →   50.0 k  mass  2.95 →  0.87 M  p90  64.8 →  38.9  share 62.7 → 33.7 %
+0.480s area  140.3 →   66.7 k  mass  3.65 →  0.98 M  p90  48.5 →  25.2  share 50.8 → 22.1 %
+0.544s area  155.6 →   67.4 k  mass  3.24 →  0.71 M  p90  35.0 →  15.9  share 44.8 → 15.2 %
+0.608s area  130.1 →   36.0 k  mass  1.37 →  0.20 M  p90  15.1 →   7.0  share 22.7 →  4.1 %
+0.672s area    5.2 →    1.8 k  mass  0.03 →  0.01 M  p90   8.8 →   8.0  share  0.6 →  0.2 %
+# phone 1170x2532 (ROI y<1700)
+0.416s area  127.8 →   60.3 k  mass  3.39 →  1.06 M  p90  66.2 →  39.0  share 61.6 → 33.8 %
+0.480s area  135.7 →   73.0 k  mass  3.67 →  1.12 M  p90  51.1 →  25.9  share 46.1 → 20.8 %
+0.544s area  133.0 →   68.7 k  mass  2.94 →  0.76 M  p90  36.8 →  15.9  share 37.7 → 13.5 %
+0.608s area  111.0 →   40.2 k  mass  1.25 →  0.23 M  p90  15.9 →   7.0  share 18.1 →  3.9 %
+0.672s area    6.8 →    2.2 k  mass  0.04 →  0.01 M  p90   8.1 →   8.0  share  0.6 →  0.2 %
+
+## the search (summ.py: max area 0.416–0.624 / max p90 / share at 0.48 / legible min at 0.416–0.496 and its p90 min / area ratio min to 0.56 / IoU 0.48/0.544/0.608)
+# d20: density 2.0 (density alone)
+d20: max area 120 k  max p90 38  share@.48 33.6 %  legible min 44 k p90 min 25  ratio min 0.91  IoU 0.61/0.51/0.66
+# v60d30: whole radius ×0.6, density 3.0
+v60d30: max area 77 k  max p90 55  share@.48 29.7 %  legible min 31 k p90 min 36  ratio min 0.95  IoU 0.68/0.56/0.67
+# tA: ×0.6, 2.2
+tA: max area 69 k  max p90 47  share@.48 25.0 %  legible min 27 k p90 min 29  ratio min 0.98  IoU 0.70/0.59/0.67
+# tD: ×0.7, 1.8, fade from 0.36
+tD: max area 68 k  max p90 39  share@.48 21.0 %  legible min 26 k p90 min 20  ratio min 0.94  IoU 0.71/0.67/0.67
+# tE: ×0.7, 1.75
+tE: max area 77 k  max p90 39  share@.48 24.0 %  legible min 27 k p90 min 24  ratio min 0.95  IoU 0.69/0.60/0.67
+# tK: shownGrow 0.25, 1.9, fade 0.36
+tK: max area 64 k  max p90 41  share@.48 20.9 %  legible min 26 k p90 min 21  ratio min 0.91  IoU 0.72/0.66/0.67
+# tL: shownGrow 0.2, 1.75, fade 0.36
+tL: max area 54 k  max p90 40  share@.48 17.7 %  legible min 23 k p90 min 20  ratio min 0.92  IoU 0.75/0.68/0.67
+# tN: shownGrow 0.28, 1.7, fade 0.40
+tN: max area 71 k  max p90 38  share@.48 22.7 %  legible min 27 k p90 min 21  ratio min 0.92  IoU 0.71/0.64/0.67
+# tP: shownGrow 0.26, 1.75, fade 0.39
+tP: max area 66 k  max p90 40  share@.48 21.8 %  legible min 26 k p90 min 21  ratio min 0.93  IoU 0.71/0.65/0.67
+# tR: shownGrow 0.27, 1.7, fade 0.40
+tR: max area 69 k  max p90 39  share@.48 22.3 %  legible min 26 k p90 min 21  ratio min 0.93  IoU 0.71/0.64/0.67
+# tV: shownGrow 0.25, 1.7 (fade unchanged)
+tV: max area 68 k  max p90 39  share@.48 22.5 %  legible min 25 k p90 min 23  ratio min 0.94  IoU 0.71/0.62/0.67
+# tW: shownGrow 0.23, 1.75 (fade unchanged)
+tW: max area 64 k  max p90 40  share@.48 22.2 %  legible min 25 k p90 min 24  ratio min 0.93  IoU 0.72/0.63/0.67
+# tT: shownGrow 0.26, 1.72, fade 0.40 (chosen)
+tT: max area 67 k  max p90 39  share@.48 22.1 %  legible min 26 k p90 min 22  ratio min 0.93  IoU 0.71/0.64/0.67

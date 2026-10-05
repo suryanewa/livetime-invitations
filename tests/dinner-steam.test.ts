@@ -9,7 +9,7 @@ import { DinnerScene } from '../src/scenes/dinner/index.ts';
 import { STEAM_LOOK } from '../models/dinnerSteam.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
-  axisForward, axisInverse, CLOUD, cloudDensity, recedeWeight, cloudLook, cloudSeat, cloudState, crownFray, dragAt, dragCentre, EDGE, heldDrag, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
+  axisForward, axisInverse, CLOUD, cloudDensity, recedeWeight, cloudLook, cloudSeat, cloudState, crownFray, dragAt, dragCentre, EDGE, GUSH, heldDrag, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
   spillSource, SQUEEZE, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
 } from '../src/scenes/dinner/steam.ts';
 
@@ -281,9 +281,12 @@ describe('Dinner steam field (v1.6)', () => {
     }
     expect(gushRise(0.3) * SU_CM).toBeGreaterThan(3);
     // (v1.6 polish 5: it fades over 0.34–0.5 s, was 0.36–0.56; polish 6: over 0.42–0.66 s, carried up and out as it goes:
-    // its oldest parcels have risen ≥ 8 cm by the time it has half gone.)
-    expect(spillFade(0.42)).toBe(1);
-    expect(spillFade(0.43)).toBeGreaterThan(0.98);
+    // its oldest parcels have risen ≥ 8 cm by the time it has half gone. Polish 7: from 0.4 s, the seventh judge's "airbrushed
+    // ball": its carried puff under 70 k px of the laptop's frame; the end, which sets its box, unchanged. The drawn tube widens
+    // by `shownGrow` of the parcels' travel, the box by `grow`: the box still holds what is drawn.)
+    expect(spillFade(0.4)).toBe(1);
+    expect(spillFade(0.41)).toBeGreaterThan(0.98);
+    expect(GUSH.shownGrow).toBeLessThanOrEqual(GUSH.grow);
     expect(spillFade(0.66)).toBe(0);
     expect(gushRise(0.54 - 0.3) * SU_CM).toBeGreaterThan(5);
     expect(gushRise(0.54 - 0.15) * SU_CM).toBeGreaterThan(8);

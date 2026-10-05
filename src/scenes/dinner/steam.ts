@@ -201,8 +201,10 @@ export const SPILL = {
   /** (v1.6 polish 3: the gush rises on and mixes in after the lift-off, gone by 0.56 s; polish 5: by 0.5 s, its last tenth's
    * light, when it cost 2.7 ms of the judges' 1400² frame at the march's finer resolution; polish 6: over 0.42–0.66 s, the
    * sixth judge's "airbrushed blob that dissolves in place": its puff is carried up and out ≈ 4–6 cm on its parcels before it
-   * fades, the cost found in the march's budget.) */
-  fade: [0.42, 0.66] as const,
+   * fades, the cost found in the march's budget; polish 7: from 0.4 s, was 0.42, with the gush's smaller, dimmer puff (GUSH):
+   * the seventh judge's "airbrushed ball" beside the dome, its carried puff held under 70 k px of the laptop's frame. The end
+   * stays 0.66 s: it sets the gush's box, and the box the march's footprint and spans, so the cloud is drawn as before.) */
+  fade: [0.4, 0.66] as const,
   /** The shader samples its source at this many past times, this far apart (s). */
   samples: 8,
   dt: 0.075,
@@ -246,8 +248,12 @@ export function raisedGap(t: number): number {
  * as it slows and mixes in. A parcel `a` seconds after it left the gap has gone `gushOut(a)` out
  * from the lip and risen `gushRise(a)` (su): out to ≈ 3.7 cm, rising at up to ≈ 33 cm/s (the hot dome's
  * boundary layer and the lifting dome draw it up).
+ * (v1.6 polish 7, the seventh judge: "an airbrushed ball … about half the frame's visible steam at 0.48 s". `density` 5.2 →
+ * 1.72; `shownGrow` 0.26: the drawn tube widens by that much of the parcels' travel, where the box (`steamBounds`) keeps
+ * `grow`'s 0.45 as their reach. The box is the march's footprint and its rays' spans: a smaller one would change the march's
+ * resolution and samples and redraw the cloud; this way the cloud alone is byte-identical and the gush is a smaller puff.)
  */
-export const GUSH = { out: 0.22, outTime: 0.1, rise: 2.0, riseTime: 0.1, radius: 0.035, grow: 0.45, density: 5.2, spread: 1.1, centre: 0.5 } as const;
+export const GUSH = { out: 0.22, outTime: 0.1, rise: 2.0, riseTime: 0.1, radius: 0.035, grow: 0.45, density: 1.72, spread: 1.1, centre: 0.5, shownGrow: 0.26 } as const;
 export const gushOut = (a: number) => GUSH.out * (1 - Math.exp(-Math.max(a, 0) / GUSH.outTime));
 export const gushRise = (a: number) => (a <= 0 ? 0 : GUSH.rise * (a - GUSH.riseTime * (1 - Math.exp(-a / GUSH.riseTime))));
 

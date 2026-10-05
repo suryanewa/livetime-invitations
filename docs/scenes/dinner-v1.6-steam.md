@@ -877,6 +877,92 @@ plate's radius at 1.3 s, the erosion and the recession by 1.2 s, the roll over 2
 constants); `tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6,
 `tests/browser/scene-depth.spec.ts` 5/5 (fresh server each); `pnpm typecheck` clean.
 
+## Polish round 7: the gush's size and brightness (`v1.6/steam-polish7`)
+
+The seventh judge scored polish 6 **7 at laptop size, 7.5 at phone size** and withheld; its top tell, the one a guest sees
+at CSS size: the gush, from 0.42 to 0.62 s, is "an airbrushed ball", a round, radially soft, featureless puff beside the
+plate's right rim, 112–156 k px of the laptop clip with p90 35–65 levels, about half the frame's visible steam at 0.48 s
+(3.65 of 7.18 M), a cotton ball parked by the plate while the dome holds, and it pulls the whole frame's dome IoU down to
+0.53 / 0.40 / 0.43 at 0.48 / 0.54 / 0.61 s. Its kind: size and brightness are constants; its lack of structure is the design
+limit and is not touched here. A constants-only round. Every number is in `evidence/v1.6/steam-polish7/measurements.txt`
+(laptop 1240² clip of 1280 × 720 @2, WARM 2000, the judge's `frames.ts`; "before" is the judge's own polish-6 frames, which
+this session's re-renders match byte for byte), the cost in `cost.txt`; the scripts in `evidence/v1.6/steam-polish7/tools/`
+(the judge's `frames.ts`, `bench6.ts`, `pace.ts`, `envmine.py`, `iou.py`, `domefill.py`, polish 6's `gushc.py`, `env.py`,
+`motion.py`, and `gush7.py`, `gushfull.py`, `sheet.py` new), all on port 5619.
+
+**What changed** (`GUSH.density` 5.2 → **1.72**; `GUSH.shownGrow` **0.26**, new; `SPILL.fade` 0.42–0.66 → **0.4–0.66**). The
+drawn tube now widens by 0.26 of each parcel's travel out and up where the box (`steamBounds`) keeps `grow`'s 0.45 as their
+reach, the puff is a third as dense, and its fade starts 20 ms earlier. **Why not a smaller `radius` / `grow`, a later
+`stop`, an earlier fade's end or fewer parcels:** each of those moves the gush's box, and the box is part of the march's
+footprint (the laptop's march is budget-bound at 0.40–0.46 of the buffer a side over 0.3–0.7 s: a smaller footprint is a finer
+march) and of every ray's span through the boxes (the steps' positions): any of them redraws the cloud, and the cloud-only twin
+must stay byte-identical. Density, the drawn growth and the fade's start do not touch the box, the probes' occupancy or the
+on/off of the spill (`uSpillOn`), so the march is the same march: its footprint and scale at every benched time are the
+judge's (`steam 1034×724 scale 0.460` at 0.3 s, `1162×856 0.425` at 0.4–0.45 s, `1233×931 0.396` at 0.5 s, …).
+
+Gush alone = the frame less its gush-off twin (`__steamFlags` 67108864; `gush7.py`, `gushc.py`'s D); its share is its mass
+(Σ D over D > 4) over the frame's visible steam (`envmine.py`'s S+ = Σ max(frame − clean, 0)).
+
+| laptop clip | before | after | target |
+|---|---|---|---|
+| gush's share of the frame's visible steam at 0.48 s | 50.8 % (3.65 of 7.18 M) | **22.1 %** (0.98 of 4.46 M) | ≤ 25 % |
+| its area (D > 4) at 0.416–0.624 s | 112–156 k | **≤ 67.4 k** (0.416–0.56: 50.0 / 46.6 / 52.7 / 61.0 / 66.7 / 57.4 / 52.9 / 60.7 / 67.4 / 62.3; then 47.1 / 38.8 / 36.0 / 8.6) | ≤ 70 k |
+| its p90 at 0.416–0.624 s | 10–65 (64.8 / 51.8 / 52.0 … 35.0 at 0.416–0.544) | **7–38.9** (38.9 / 28.6 / 26.9 / 26.9 / 25.2 / 20.9 / 17.9 / 17.1 / 15.9 at 0.416–0.544) | ≤ 40 |
+| legible spill: D > 8 outside the seated outline, right of its centre, 0.416–0.496 s | 64–97 k, p90 47–73 | **26.1–43.3 k** (29.8 / 26.1 / 34.0 / 41.6 / 43.3 / 35.2), **p90 21.9–42.7** | ≥ 25 k, p90 ≥ 20 |
+| centroid up over 0.43–0.56 s | +1.26 → +3.80 cm (+2.5) | **+0.95 → +3.27 cm (+2.3)**; +4.7 cm by 0.61 s | ≥ 1 cm |
+| area as a share of its 0.416 s area, each frame to 0.56 s | 0.97–1.35 | **0.93–1.35** | ≥ 0.6 |
+| gone | 5.2 k at 0.672, 1.2 k at 0.704 | **1.8 k at 0.672, 0.3 k at 0.704, none at 0.736** | by ≈ 0.67 s |
+| whole-frame dome IoU 0.48 / 0.544 / 0.608 s | 0.53 / 0.40 / 0.43 | **0.71 / 0.64 / 0.67** | ≥ 0.65 / 0.6 |
+| the dome alone (gush-off twin) IoU | 0.84 / 0.78 / 0.68 | 0.84 / 0.78 / 0.68 (byte-identical twin) | unchanged |
+| inside / outside the seated outline 0.448–0.672 s, whole frame | 26.0 / 12.7 / 6.3 / 3.2 / 2.4 / 2.0 / 2.3 / 2.0 | **91.3 / 25.1 / 7.9 / 3.5 / 2.5 / 2.0 / 2.3 / 2.0** (the dome alone 91.1 / 27.6 / 8.1 / 3.5 / 2.5 / 2.0 / 2.3 / 2.0) | ≥ 1.6 to 0.61 s |
+| the frame's visible mass (Σ B over B > 8), peak | 6.49 M at 0.544 s (the gush's) | **5.12 M at 0.736 s** (the condensate's own, its gush-off twin's peak) | earlier / lower |
+
+**Exit and motion.** No pop: `motion.py` on the whole frame finds none (before none); the gush's own change per frame
+(Σ |ΔD|) is 0.10 / 0.11 / 0.14 / 0.10 / 0.06 M at 0.608–0.672 s, smooth into nothing (before 0.37 / 0.47 / 0.64 / 0.40 /
+0.19). Its D > 4 area falls 36.0 → 8.6 k at 0.608 → 0.624 s, but that is a haze of p90 7 levels (mass 0.20 → 0.05 M; before
+the same exit was 125 → 61 → 9.7 k at 0.624–0.656 s at p90 10 → 7). A stricter test on the gush's thresholded mass (Σ D over D > 4)
+flags its puffs' pulses mid-flight at 0.496 / 0.512 / 0.576 s and the haze's crossing of the 4-level cut at 0.624 s (before
+0.496 / 0.576 / 0.640 s), each a change of ≤ 0.25 M (before ≤ 1.09 M); the unthresholded Σ |ΔD| has no exit step.
+**The held dome's stillness shows** (`motion.py`'s freeze, polish 6's item 5): 2.5 / 2.2 / 2.5 levels at 0.528–0.56 s (before
+4.7 / 2.8 / 3.9, the big carried gush's motion counted in); the dome alone (its gush-off twin, unchanged) is 2.8 / 2.7 / 2.7 /
+2.9 at 0.528–0.576 s, a freeze by the same test. Polish 6 met item 5 through the gush's motion; with a puff this size the
+dome's own hold is what the test sees, and the dome is not this round's to move.
+
+**Byte-identical / within noise.** The cloud-only twin (`__steamFlags` 67174400: no gush, no veil) **before vs after: 41 of
+41 frames byte-identical** (0.352–0.736 s every frame, 0.8–2.24 s every sixth); the gush-off twin byte-identical (0.416–0.736
+s). The whole frame after the gush: the temporal history's residue of the larger before-gush is ≤ 4 levels at 0.736 s,
+≤ 2 from 0.768 s, ≤ 1 level on ≤ 2.1 k px from 0.8 s, 2–17 px from 1.1 s, byte-identical from 2.05 s; **the frame's visible
+mass falls at every listed frame after 0.736 s** (5.12 → 4.66 → 4.53 → … → 0.44 M at 2.24 s, the same as before).
+**Full frames**: the laptop's 2560 × 1440 is the clip's numbers (the gush lies inside it); the phone (1170 × 2532, the canvas
+above the page's buttons) **share at 0.48 s 46.1 → 20.8 %**, area 128 / 136 / 133 → 60 / 73 / 69 k px at 0.416 / 0.48 /
+0.544 s, p90 66 / 51 / 37 → 39 / 26 / 16. Crops: `gush-1to1-0.42-0.48-0.54-0.61.png` (before / after / the gush-off twin at
+1:1), `gush-css-laptop-…png` and `gush-css-phone-…png` (the full frames at CSS size): at the guest's size the puff by the rim
+reads as a small, faint spill from the gap at 0.42–0.48 s and has thinned to a breath beside the dome by 0.54 s; the dome is
+the shape; the gilt rim, which the before's puff washed out at 0.42–0.48 s, stays gold. Still a soft puff at 1:1 (the design
+limit), now a small one.
+
+**Cost** (`bench6.ts` at the real framing and DSF, p10 ms; before = the judge's two runs on the polish-6 build; after = this
+build, each time re-run until its steam-hidden frame was clean, the machine being shared at load 3–23; `cost.txt`,
+`cost-raw-after.txt`). The march is the same march (footprint, scale and steps at every time are the judge's), so only the
+gush's own density evaluation differs; with the narrower drawn tube more of its box returns early.
+
+| steam cost, p10 ms | 0.3 | 0.4 | 0.45 | 0.5 | 0.55 | 0.6 | 0.65 | 0.7 |
+|---|---|---|---|---|---|---|---|---|
+| laptop, before | 4.6 / 4.8 | 5.1 / 5.2 | 5.4 / 5.5 | 4.9 / 5.0 | 5.1 | 5.3 / 5.3 | 4.8 | 3.9 / 3.9 |
+| **laptop, after** | **3.9** | **4.9** | **5.2** | **4.8** | **4.8** | **4.9** | **4.4** | **3.9** |
+| phone, before | 3.9 | 4.2 | 4.3 | 4.4 | – | 4.7 | – | 3.5 |
+| **phone, after** | **3.8** | **4.1** | **4.2** | **4.4** | – | **4.5** | – | **3.6** |
+
+The phone at 0.7 s (3.6, runs 3.6 / 3.8 / 4.1, its steam-hidden frame 2.1–2.2 ms against the judge's 1.8) is after the gush
+(τ 0.688, past the fade's end at 0.66: no spill box, `uSpillOn` 0, the before's code path exactly): machine noise, not the
+change. **Pacing** (`pace.ts`): laptop p50 16.70, **p95 16.70**, max 16.8, steam window p95 16.70, no frame over 20 ms (the
+judge's polish 6: the same). The phone's pacing could not be measured clean in this session (load 11–20: p95 33.3 with the
+page's own frames slow, `pacing-raw-after.txt`); its steam cost is at or under the before at every benched time.
+
+**Tests.** `tests/dinner-steam.test.ts` 26 (changed: the gush's fade is full to 0.4 s, was 0.42, and its drawn growth is
+within the box's, `shownGrow ≤ grow`); `tests/dinner.test.ts` 27, `tests/scene-depth.test.ts` 6;
+`tests/browser/dinner.spec.ts` 6/6 (fresh server); `pnpm typecheck` clean.
+
 ## Decisions
 
 - **A material field, not particles.** Every sample asks where its air came from (the analytic flow's inverse), so
