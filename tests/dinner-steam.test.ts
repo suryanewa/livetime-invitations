@@ -263,7 +263,7 @@ describe('Dinner steam field (v1.6)', () => {
     expect(STEAM_LOOK.keyFall).toBeGreaterThan(2);
     expect(STEAM_LOOK.room).toBeLessThan(STEAM_LOOK.key / 10);
     // (v1.6 polish 6: a terminator: the key's self-shadow steeper, its floor the deep shade's diffuse light, under a fifth.)
-    expect(STEAM_LOOK.keyFall).toBeGreaterThan(8);
+    expect(STEAM_LOOK.keyFall).toBeGreaterThan(5);
     expect(STEAM_LOOK.keyFloor).toBeLessThan(0.2);
   });
 

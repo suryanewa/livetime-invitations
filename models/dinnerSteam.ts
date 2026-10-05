@@ -76,13 +76,14 @@ export const STEAM_LOOK = {
    * own colour sits above the plate's white (≈ 249 against 241 after the neutral tone mapping), and the plate's bounce on
    * the fog just over it 2.0 → 1.5, so the fog over the plate's middle keeps it within +4.)
    * (v1.6 polish 6; the sixth judge: the own colour was 249–251 everywhere, lit − shaded +1: the key's direction was no
-   * longer legible in the volume, both sides at the tone curve's shoulder. The key 3.2 → 2.4 with a steeper self-shadow
-   * (`keyFall`), so the lit side sits under the shoulder and the shaded side falls off it; the fifth judge's brighter lit
-   * side is withdrawn. A steeper shadow still (×20, the key 2.0) gave the terminator the judge asked for, +10–19, but it
-   * shaded the dense body under the rising cap below the cove behind it: the visible mass dipped at 0.86–1.0 s and rose
-   * again, and the shade read as smoke; the condensate's envelope is the judge's first item.)
+   * longer legible in the volume, both sides at the tone curve's shoulder. The key 3.2 → 2.8 with a steeper self-shadow
+   * (`keyFall` 3.8 → 6), so the shaded side falls off the shoulder a little; the fifth judge's brighter lit side is
+   * withdrawn. A steeper shadow still (×20, the key 2.0) gave the terminator the judge asked for, +10–19 at 0.61–0.74 s,
+   * but on this view the shaded side is the cloud's right, where the cap's rolled lip is read: it took the lip to +4
+   * levels over its notch; and it shaded the dense body under the rising cap below the cove behind it, so the visible mass
+   * dipped at 0.86–1.0 s and rose again and the shade read as smoke. The envelope and the lip are kept.)
    */
-  key: 2.4,
+  key: 2.8,
   room: 0.15,
   /**
    * Their colours (v1.6 polish 2: the judge saw "cold steam in a warm room"): the key is the
@@ -98,8 +99,8 @@ export const STEAM_LOOK = {
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
   gBack: -0.3,
   back: 0.35,
-  /** The key's optical depth through the cloud is the light volume's times this (steeper: self-shadowing away from the key; polish 3: 1.25 → 2.5; polish 6: 3.8 → 10, the terminator). */
-  keyFall: 10,
+  /** The key's optical depth through the cloud is the light volume's times this (steeper: self-shadowing away from the key; polish 3: 1.25 → 2.5; polish 6: 3.8 → 6, a terminator). */
+  keyFall: 6,
   /**
    * (v1.6 polish 6) The key's transmittance into the steam never falls below this: in fog a few optical depths thick the
    * multiply scattered light diffuses into the deepest shade (without it, at the steeper `keyFall`, the shaded fog went
@@ -107,7 +108,7 @@ export const STEAM_LOOK = {
    * (it shades its own underside analytically: at the full mean, × `keyFall`, it left dark blots on the cap).
    */
   keyFloor: 0.15,
-  ringShadow: 0.3,
+  ringShadow: 0.1,
   /** A change of mind: how far (su) the seating cover squeezes the air under it out along the plate (≈ 5 cm). */
   squeeze: 0.3,
   squeezeFog: 5.0,
@@ -116,10 +117,11 @@ export const STEAM_LOOK = {
    * keeps its own fog, `capCore`; polish 5: a narrower tube, ≈ 1.5 cm, 0.55 → 0.42, that stays whole through the roll:
    * the rolled lip the fifth judge asked for at 1.06–1.22 s; polish 6: 0.42 → 0.36 and 1.25 → 0.8, its core moved up into the
    * cap's body (steam.ts `ringAt`) and in with the receding edge: the lip stays legible, +15–20 levels over the notch inside
-   * it, while the cap's centre fills to 0.7–0.9 of its rims, a filled cap rather than the sixth judge's smoke ring).
+   * it, while the cap's centre fills to 0.7–0.9 of its rims, a filled cap rather than the sixth judge's smoke ring; then 1.2,
+   * under the dimmer key, for the lip on the cloud's shaded side).
    */
   ringCore: 0.36,
-  ringFog: 0.8,
+  ringFog: 1.2,
   /** The underside's band (su: the undercut's foot, the stem and the cap's underside as it rises; the walls' is 2.5 mm young). */
   underBand: 0.1,
   /** Wrenninge's multiple-scattering octaves (their share of the key; polish 2 raised them to 0.45 / 0.18, which flattened the body; polish 3 pulls them back). */
