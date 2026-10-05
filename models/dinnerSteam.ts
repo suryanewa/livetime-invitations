@@ -705,7 +705,7 @@ float domeCavity(vec3 p) {
  * side. Its air left the gap k·dt ago (k = 0…7, uSp0/uSp1 its source then, uGp0/uGp1 the gap then):
  * out over the plate's rim and up, a tube in the meridional plane through those parcels, thicker
  * where the gap was wider (a tilt about the far rim opens the gap as (1 + cos) / 2 round it) and
- * as it mixes in (v1.6 polish 7: the drawn tube by `shownGrow`, its box by `grow`). Whether it could be at p (the probes' test):
+ * as it mixes in (v1.6 polish 7: the drawn tube by GUSH.shownGrow, its box by GUSH.grow). Whether it could be at p (the probes' test):
  */
 const float GUSH_LIP = ${f(COVER.lipRadius)};
 const float GUSH_OUT[${SPILL.samples}] = float[${SPILL.samples}](${GUSH_OUT_K.map(f).join(', ')});
