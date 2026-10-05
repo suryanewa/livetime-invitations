@@ -130,9 +130,12 @@ judge: "a supervisor would sign off the beat, the timing and the technique", **n
 ball (size and brightness constants; structure a limit of the spill parcels), no light direction in the volume (a rig
 decision: the key is 44° off the camera and the own colour sits on the tone curve's shoulder), soft and combed at 2×
 (the design limit of a half-resolution analytic march). A last constants-only round on the gush's size and brightness
-(polish 7, `v1.6/steam-polish7`, worktree `.claude/worktrees/v16-steam8`, port 5619) is in progress, to be re-checked by
-the seventh judge on that tell; then the pass closes with the steam's limits recorded and the next approach below.
-Final verification on 1c61c25 (polish 6 merged): typecheck clean, unit 461/461, browser 117/117 on a fresh server.
+(polish 7, merged 7ca077f: density 5.2 → 1.72, a drawn growth under the box's so the cloud stays byte-identical; the
+gush's share of the visible steam 51 → 22 %, the whole-frame dome IoU 0.53 → 0.71) closed the steam work; the seventh
+judge's re-check of that tell, the phone pacing and the held dome's stillness (2.2–2.5 levels a frame at 0.53–0.56 s,
+re-exposed by the smaller gush) is the last entry of the record. The pass closes with the steam's limits recorded and the
+next approach below. Final verification: 1c61c25 (polish 6) typecheck clean, unit 461/461, browser 117/117 on a fresh
+server; 7ca077f (polish 7) the Dinner, scene-depth and posters specs 16/16, the full suites re-run at the close.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for

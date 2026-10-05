@@ -141,7 +141,10 @@ the judging is in `docs/qualification.md` v1.6.
   curve's shoulder, so this is a **rig decision** (a steam-specific rim or back light against the cove), not a steam
   constant; and at 2× the edges are soft and combed (edge 0.56–0.99, crown anisotropy 1.1–1.4) — the design limit of a
   half-resolution analytic march. What a guest sees at CSS size is a convincing steam beat; the one thing they may notice
-  is the soft white ball beside the plate at about 0.45 s. What a later version needs to be signed is in
+  was the soft white ball beside the plate at about 0.45 s, so a seventh, constants-only round cut the gush's density
+  (5.2 → 1.72) and its drawn growth: its share of the visible steam at 0.48 s fell from 51 to 22 %, the cloche's shape
+  reads again in the whole frame (IoU 0.53 → 0.71 at 0.48 s), the cloud itself byte-identical. What a later version
+  needs to be signed is in
   `docs/RESUME.md`: light the steam on purpose, and a density advected per frame at 1–2 mm (or a full-resolution edge
   band with motion-vector accumulation) for both the body and the gush, with polish 6 kept as the reference for the
   envelope, the cap, the timing, the clip and the cost.
