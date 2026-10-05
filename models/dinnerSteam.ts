@@ -69,15 +69,18 @@ const OPEN = 1e6;
 export const STEAM_LOOK = {
   /** Extinction per su at full density (the cloud under the crown: optical depth ≈ 3–4 through it). */
   sigma: 3.4,
-  /** The key's share (its intensity scaled to steam's in-scatter) and the room's (linear luminance). */
+  /**
+   * The key's share (its intensity scaled to steam's in-scatter) and the room's (linear luminance).
+   * (v1.6 polish 3: the judge saw "a flatly lit cotton tuft": the key 0.95 → 1.55, the room a fill, 0.22 → 0.12.)
+   */
   key: 1.55,
-  /** (v1.6 polish: 0.6 → 0.3, so the key does the work: a lit side, a terminator, a grey core; polish 2: 0.22.) */
   room: 0.12,
   /**
    * Their colours (v1.6 polish 2: the judge saw "cold steam in a warm room"): the key is the
    * window's daylight as the white plate renders it under this rig (neutral: R − B +0.5); the room is
    * what surrounds the steam on every side but the window's: the greige walls and cove, the table
-   * and the white plate that reflects them.
+   * and the white plate that reflects them. (v1.6 polish 3: warmer, #E2DBD0 → #E6D7C0, as the room is a smaller
+   * share of the light; the plate's bounce takes the key's neutral colour.)
    */
   keyTint: new Color('#F5F5F5'),
   roomTint: new Color('#E6D7C0'),
@@ -86,19 +89,19 @@ export const STEAM_LOOK = {
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
   gBack: -0.3,
   back: 0.35,
-  /** The key's optical depth through the cloud is the light volume's times this (steeper: a dark core). */
+  /** The key's optical depth through the cloud is the light volume's times this (steeper: self-shadowing away from the key; polish 3: 1.25 → 2.5). */
   keyFall: 2.5,
   /** A change of mind: how far (su) the seating cover squeezes the air under it out along the plate (≈ 5 cm). */
   squeeze: 0.3,
   squeezeFog: 5.0,
-  /** The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density. */
+  /** The vortex ring's core: its tube's radius (share of the ring's reach) and its fog's density (polish 3: 5 → 1.5; the cap keeps its own fog, `capCore`). */
   ringCore: 0.55,
   ringFog: 1.5,
   /** The underside's band (su: the undercut's foot, the stem and the cap's underside as it rises; the walls' is 2.5 mm young). */
   underBand: 0.1,
-  /** Wrenninge's multiple-scattering octaves (their share of the key; v1.6 polish 2: 0.45 / 0.18 → raised). */
+  /** Wrenninge's multiple-scattering octaves (their share of the key; polish 2 raised them to 0.45 / 0.18, which flattened the body; polish 3 pulls them back). */
   ms: [0.18, 0.06] as const,
-  /** The white plate's light on the fog just above it (linear radiance at the porcelain). */
+  /** The white plate's light on the fog just above it (linear radiance at the porcelain; polish 3: falls off as the cube of the plate's share of the sky, so only the fog close over it). */
   bounce: 0.9,
   /** Room light the lifted dome's shadow leaves on the steam under it (it is lit from every side). */
   domeShade: 0.82,

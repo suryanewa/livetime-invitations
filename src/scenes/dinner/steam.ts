@@ -201,7 +201,8 @@ export function raisedGap(t: number): number {
  * doorway for the saturated air: it leaves the top of the gap with the exchange flow's speed
  * (u ≈ √(g′h) ≈ 13 cm/s for a 1.5 cm gap), rolls out over the plate's rim and, buoyant, rises
  * as it slows and mixes in. A parcel `a` seconds after it left the gap has gone `gushOut(a)` out
- * from the lip and risen `gushRise(a)` (su): out to ≈ 3.7 cm, rising at up to ≈ 27 cm/s.
+ * from the lip and risen `gushRise(a)` (su): out to ≈ 3.7 cm, rising at up to ≈ 33 cm/s (the hot dome's
+ * boundary layer and the lifting dome draw it up).
  */
 export const GUSH = { out: 0.22, outTime: 0.1, rise: 2.0, riseTime: 0.1, radius: 0.035, grow: 0.45, density: 6.0, spread: 1.1, centre: 0.5 } as const;
 export const gushOut = (a: number) => GUSH.out * (1 - Math.exp(-Math.max(a, 0) / GUSH.outTime));
