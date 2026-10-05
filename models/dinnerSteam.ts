@@ -969,7 +969,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // (v1.6 polish 3) The cap keeps its own fog as the stem and base empty: the crown closes over the
   // ring (the judge's hollow doughnut), the warm core that feeds the cap still rising through it.
   // (v1.6 polish 4: the stem that feeds it is as wide as the plate's well, so the cap is joined to the plate.)
-  float core = mix(F.x, max(F.x, uK[l].x), max(smoothstep(0.32, 0.55, m.g), (1.0 - smoothstep(0.3, 0.55, m.r)) * (1.0 - smoothstep(0.6, 0.85, uC[l].z))));
+  float core = mix(F.x, max(F.x, uK[l].x), max(smoothstep(0.32, 0.55, m.g), (1.0 - smoothstep(0.3, 0.55, m.r)) * (1.0 - smoothstep(0.7, 0.95, uC[l].z))));
   float d = (core * (M.z + M.x * folds) + F.y * skinMean * (0.3 + 1.4 * strips)) * edge + wisp;
   d *= m.b * seatGrade(m.g) * smoothstep(0.0, F.w, m.g - plateTop(min(m.r, 0.8)));
   // Evaporation takes the thin parts first: holes open where the large field is low, and the
