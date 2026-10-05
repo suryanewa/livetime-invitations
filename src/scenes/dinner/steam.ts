@@ -42,8 +42,6 @@ import { newFrame, REVEAL_DIR, sampleSequence } from './sequences.ts';
  */
 
 const frame = newFrame();
-/** (Tuning, temporary.) */
-export const TUNE = (globalThis as { __steamTune?: Record<string, number> }).__steamTune ?? {};
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -149,10 +147,10 @@ export const CLOUD = {
    * (v1.6 polish 6; the sixth judge: "past one second the cloud behaves like smoke, not condensate") The condensate's
    * edge evaporates from the moment it meets the room's dry air: the visible boundary recedes into the cloud (su of
    * material, at the seat) by up to `recede`, from `recedeTime[0]` of the thermal clock with time constant
-   * `recedeTime[1]` (≈ 2.4 cm by 1.0 s, 3.3 cm by 1.4 s), so the cloud thins from its edges in.
+   * `recedeTime[1]` (≈ 1.7 cm by 1.0 s, 3.3 cm by 1.4 s), so the cloud thins from its edges in.
    */
-  recede: 0.2,
-  recedeTime: [0.3, 0.3] as const,
+  recede: 0.24,
+  recedeTime: [0.3, 0.4] as const,
   /** The crown (the thermal's leading face, which pushes the room's air aside) recedes by this share less than its sides and base. */
   recedeCrown: 0.7,
 } as const;
@@ -736,9 +734,9 @@ export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, ba
   // empties, 0.25 by 0.75 s of the thermal, and keeps it as it rises away, to ≈ 1.4 s.)
   // (v1.6 polish 6; the sixth judge: the cap gained mass after its release, 7.5 → 8.9 M, then cross-dissolved: real
   // condensate never gains mass once it meets the room's air. It no longer gathers the dome's fog: from 0.45 s of the
-  // thermal it loses 30 % of its fog over ≈ 0.3 s as the room's dry air first mixes in, then keeps the rest, thinning only
+  // thermal it loses 45 % of its fog over ≈ 0.5 s as the room's dry air first mixes in, then keeps the rest, thinning only
   // with its receding edge and its spread, until it fades over 1.6–2.6 s.)
-  out.capCore = 0.17 * (0.3 * Math.exp(-Math.max(0, age - 0.45) / 0.3) + 0.7) * (1 - smooth(1.6, 2.6, age));
+  out.capCore = 0.17 * (0.45 * Math.exp(-Math.max(0, age - 0.45) / 0.45) + 0.55) * (1 - smooth(1.6, 2.6, age));
   // (v1.6 polish 4: the structural round) The body is thin, dense sheets with clear air between: the zero set of
   // the sheet field (drawn out along the rise, folded with the air), `fold` times the core's density inside a
   // sheet, `foldWidth` its half-width in the field's units (≈ 2 mm), `haze` the share of the core between them.

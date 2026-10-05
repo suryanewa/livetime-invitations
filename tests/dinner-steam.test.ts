@@ -261,11 +261,9 @@ describe('Dinner steam field (v1.6)', () => {
     expect(STEAM_LOOK.ms[0]).toBeLessThan(0.3);
     expect(STEAM_LOOK.ms[1]).toBeLessThan(0.1);
     expect(STEAM_LOOK.keyFall).toBeGreaterThan(2);
-    // (v1.6 polish 6: the room's fill rises with height, a sixth of the key's share low over the table, a fifth higher.)
-    expect(STEAM_LOOK.room * STEAM_LOOK.roomLow).toBeLessThan(STEAM_LOOK.key / 10);
-    expect(STEAM_LOOK.room).toBeLessThanOrEqual(STEAM_LOOK.key / 5);
-    // (And a legible terminator: the key's self-shadow steep, its floor the deep shade's diffuse light, under a fifth.)
-    expect(STEAM_LOOK.keyFall).toBeGreaterThan(10);
+    expect(STEAM_LOOK.room).toBeLessThan(STEAM_LOOK.key / 10);
+    // (v1.6 polish 6: a terminator: the key's self-shadow steeper, its floor the deep shade's diffuse light, under a fifth.)
+    expect(STEAM_LOOK.keyFall).toBeGreaterThan(8);
     expect(STEAM_LOOK.keyFloor).toBeLessThan(0.2);
   });
 
