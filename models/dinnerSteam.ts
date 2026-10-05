@@ -72,7 +72,7 @@ export const STEAM_LOOK = {
   /** The key's share (its intensity scaled to steam's in-scatter) and the room's (linear luminance). */
   key: 1.55,
   /** (v1.6 polish: 0.6 → 0.3, so the key does the work: a lit side, a terminator, a grey core; polish 2: 0.22.) */
-  room: 0.09,
+  room: 0.12,
   /**
    * Their colours (v1.6 polish 2: the judge saw "cold steam in a warm room"): the key is the
    * window's daylight as the white plate renders it under this rig (neutral: R − B +0.5); the room is
@@ -80,7 +80,7 @@ export const STEAM_LOOK = {
    * and the white plate that reflects them.
    */
   keyTint: new Color('#F5F5F5'),
-  roomTint: new Color('#E2DBD0'),
+  roomTint: new Color('#E3D9C9'),
   /** Henyey-Greenstein asymmetry (water droplets scatter forward). */
   g: 0.7,
   /** The phase's second, backward lobe (asymmetry, weight): front-lit droplets still return some light. */
@@ -1179,11 +1179,11 @@ void main() {
     if ((uFlags & 8) != 0) bounce = 0.0;
     // (v1.6 polish 2: in luminance, by source: the key's, and the room's with the plate's bounce; the
     // composite gives each its colour.)
-    float sKey = ${f(STEAM_LOOK.key)} * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav);
+    // (v1.6 polish 3: the white plate's bounce is the key's light off neutral porcelain: neutral, with the key.)
+    float sKey = ${f(STEAM_LOOK.key)} * (4.0 * 3.14159265) * key * lv.z * (1.0 - cav) + bounce * (1.0 - 0.6 * cav);
     // (v1.6 polish 3: the room's light is brightest from the window's side, so the cloud's own cover
     // towards the key shades it too: the side away from the window is greyer.)
-    float sRoom = ((uFlags & 4) != 0 ? 0.0 : ${f(STEAM_LOOK.room)} * (0.2 + 0.8 * exp(-uSigma * mix(lv.y, lv.x, 0.6) * 0.9)) * lit * (1.0 - 0.85 * cav))
-      + bounce * (1.0 - 0.6 * cav);
+    float sRoom = (uFlags & 4) != 0 ? 0.0 : ${f(STEAM_LOOK.room)} * (0.2 + 0.8 * exp(-uSigma * mix(lv.y, lv.x, 0.6) * 0.9)) * lit * (1.0 - 0.85 * cav);
     float Ts = exp(-sig * seg);
     C += T * (1.0 - Ts) * vec2(sKey, sRoom);
     // (The steam's depth along the ray, weighted by what it shows: where the resolve reprojects from.)
