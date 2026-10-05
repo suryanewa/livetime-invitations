@@ -30,7 +30,7 @@ import {
 } from 'three';
 import { COVER, PLATE_PROFILE, plateTop } from './dinnerContract.ts';
 import {
-  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, EDGE, GUSH, gushOut, gushRise, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
+  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, EDGE, GUSH, gushOut, gushRise, leftSteamFade, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, SQUEEZE, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
 } from '../src/scenes/dinner/steam.ts';
 import { requestSceneDepth, type SceneDepthFrame } from '../src/render/sceneDepth.ts';
 
@@ -148,8 +148,10 @@ export const STEAM_LOOK = {
 /** The flow map's domain and resolution (per clock): ρ ∈ [0, RHO_MAX], y ∈ [0, Y_MAX] (su). */
 const RHO_MAX = 1.5, BOX_MAX = 2.6, Y_MAX = CLOUD_Y_MAX, MAP_W = 96, MAP_H = 160;
 const NOISE_SIZE = 64;
-/** The seating's squeeze (s): its puffs start this long before the capture and have gone this long after it. */
-const SQUEEZE_LEAD = 0.1, SQUEEZE_LIFE = 0.45;
+/** The seating's squeeze (s; steam.ts SQUEEZE): its puffs start this long before the capture and have gone this long after it. */
+const SQUEEZE_LEAD = SQUEEZE.lead, SQUEEZE_LIFE = SQUEEZE.life;
+/** (v1.6 polish 5) How far (su, ≈ 4 cm at most) the dish lifted out of the seating's puffs draws them up after it. */
+const SQUEEZE_WAKE = 0.25;
 /** (v1.6 polish 3) The gush's parcels: how far out and up each has gone, k·dt after it left the gap (steam.ts GUSH). */
 const GUSH_OUT_K = Array.from({ length: SPILL.samples }, (_, k) => gushOut(k * SPILL.dt));
 const GUSH_RISE_K = Array.from({ length: SPILL.samples }, (_, k) => gushRise(k * SPILL.dt));
@@ -721,17 +723,32 @@ float spill(vec3 p, int l, float detail) {
  * along the porcelain in puffs (≈ 5 cm, slowing, rising as they slow), a few round the rim, and mixes
  * in within ≈ 0.3 s. \`ts\`: time since the seating (uD.z, the capture).
  */
+/**
+ * (v1.6 polish 5) Where the seating's puffs are: round the seated cover, in the room's air. The decline lifts the dish
+ * at once (≈ 46 cm in 0.3 s): the puffs over the porcelain ride up on it, those beyond its rim are left in the air,
+ * the shear between them a skirt drawn up after the rim. (They were in the cover's frame, and left their box at the
+ * seat as the dish rose: the judge's 30 k px of puffs gone in one frame at 0.832 s.) Before the capture they ride the
+ * descending cover, as they did. \`ts\`: time since the capture.
+ */
+vec3 squeezeFrame(vec3 p, float ts) {
+  vec3 cv = p - uSeated;
+  // (From the capture the dish is lifted out of them (the decline lifts it at once, ≈ 46 cm in 0.3 s): they stay in
+  // the room's air where they were squeezed out, drawn up a few centimetres in its wake, those over the porcelain most.)
+  float drawn = ${f(SQUEEZE_WAKE)} * (1.0 - exp(-uLift / ${f(SQUEEZE_WAKE)})) * (1.0 - 0.6 * smoothstep(0.72, 0.95, length(cv.xz)));
+  cv.y -= mix(uLift, drawn, smoothstep(0.0, 0.03, ts));
+  return cv;
+}
 bool squeezeOccupies(vec3 p, int l) {
   float ts = uA[l].x - uD[l].z;
   if (uA[l].w <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return false;
-  vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
+  vec3 cv = squeezeFrame(p, ts);
   float x = length(cv.xz) - ${f(COVER.radius)};
   return x > -0.03 && x < 0.5 && cv.y > -0.08 && cv.y < 0.32;
 }
 float squeeze(vec3 p, int l) {
   float ts = uA[l].x - uD[l].z;
   if (uA[l].w <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return 0.0;
-  vec3 cv = (uCoverInv * vec4(p, 1.0)).xyz;
+  vec3 cv = squeezeFrame(p, ts);
   float r = length(cv.xz);
   float x = r - ${f(COVER.radius)};
   if (x < -0.03 || x > 0.5 || cv.y < -0.08 || cv.y > 0.32) return 0.0;
@@ -751,8 +768,10 @@ float squeeze(vec3 p, int l) {
   vec2 out2 = cv.xz / max(r, 1e-4);
   vec4 nf = texture(uNoise, vec3(cv.x, cv.y * 1.3, cv.z) * 2.4 - vec3(out2.x, 0.0, out2.y) * front * 1.6 + vec3(0.17, -0.5 * age, 0.29));
   float lumps = smoothstep(0.38, 0.68, nf.b + 0.9 * (big - 0.5));
-  float fade = smoothstep(0.0, 0.03, age) * exp(-max(age - 0.14, 0.0) / 0.13);
-  vec2 toCam = normalize((uCoverInv * vec4(uCamLocal, 1.0)).xz);
+  // (v1.6 polish 5: their own slow fade (≈ 10 % a frame), to nothing by the end of their life; their strength the fog's
+  // at the seating (uK.z), no longer the clock's wake fade on top: they were gone in four frames.)
+  float fade = smoothstep(0.0, 0.03, age) * exp(-max(age - 0.16, 0.0) / 0.15) * (1.0 - smoothstep(${f(SQUEEZE_LIFE - 0.14)}, ${f(SQUEEZE_LIFE)}, ts));
+  vec2 toCam = normalize(uCamLocal.xz - uSeated.xz);
   float behind = smoothstep(0.1, -0.5, dot(out2, toCam));
   return ${f(STEAM_LOOK.squeezeFog)} * fade * body * lumps * (1.0 - behind);
 }
@@ -1147,7 +1166,7 @@ float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising
     if (inCloud && uDebug != 3 && uDebug != 5 && (uFlags & 131072) == 0) dc = cloud(p, l, detail, L, so); else { gSheetPrev[l] = 9.0; gEdgePrev[l] = 99.0; gWispPrev[l] = 99.0; }
     float dr = (inSpill ? spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 && (uFlags & 65536) == 0 ? veil(p, l, detail) : 0.0);
     // (The seating's puffs leave the cover: what it closes over does not hold them.)
-    float dq = inSpill && (uFlags & 33554432) == 0 ? squeeze(p, l) * uA[l].z : 0.0;
+    float dq = inSpill && (uFlags & 33554432) == 0 ? squeeze(p, l) * uK[l].z : 0.0;
     dens += dq;
     rising += dq;
     if (dc + dr <= 0.0) continue;
@@ -2051,7 +2070,9 @@ export class DinnerSteam {
       // (The fine curls belong to the young edge: as the band widens they would read as a felt over the aging cap.)
       Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.25) / 0.2)), s.peel, s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
-      K[l]!.set(look.capCore, Math.min(0.075, 0.5 * s.dragUp) * (1 - smoothstep01((s.age - 0.15) / 0.35)), 0, 0);
+      // (v1.6 polish 5: and the seating's puffs' strength: the clock's light at the capture, the fog it squeezed out.)
+      K[l]!.set(look.capCore, Math.min(0.075, 0.5 * s.dragUp) * (1 - smoothstep01((s.age - 0.15) / 0.35)),
+        Number.isFinite(c.capture) && Number.isFinite(c.emitEnd) ? leftSteamFade(c.capture, c.emitEnd, c.capture) : 0, 0);
       // (The body's mean density over the core's, for the light volume: the haze, the sheets' share of the volume
       // (≈ 1.6 × their half-width: the field's density at zero) less the holes torn in them, and the skin.)
       M[l]!.set(look.fold, look.foldWidth, look.haze, look.core * (look.haze + look.fold * look.foldWidth * 1.6 * 0.7) + 0.35 * look.sheet);
@@ -2079,9 +2100,10 @@ export class DinnerSteam {
       steamBounds(s, { tau, emitStart: c.emitStart, emitEnd: c.emitEnd }, cMin[l]!, cMax[l]!, vMin[l]!, vMax[l]!, sMin[l]!, sMax[l]!);
       // (The seating's squeeze: round the seated cover, from just before the capture.)
       if (present && Number.isFinite(c.capture) && tau >= c.capture - SQUEEZE_LEAD && tau <= c.capture + SQUEEZE_LIFE) {
+        // (v1.6 polish 5: up to the descending cover they ride before the capture, and as far as the lifted dish draws them after it.)
         const at = this.uniforms.uSeated!.value as Vector3, rq = COVER.radius + 0.55;
         sMin[l]!.min(TMP_E.set(at.x - rq, Math.max(0, at.y - 0.1), at.z - rq));
-        sMax[l]!.max(TMP_E.set(at.x + rq, at.y + 0.35, at.z + rq));
+        sMax[l]!.max(TMP_E.set(at.x + rq, at.y + 0.35 + Math.min(this.uniforms.uLift!.value as number, tau < c.capture + 0.03 ? Infinity : SQUEEZE_WAKE), at.z + rq));
       }
       for (const [lo, hi, lit] of [[cMin[l]!, cMax[l]!, true], [vMin[l]!, vMax[l]!, true], [sMin[l]!, sMax[l]!, false]] as const) {
         lo.max(limMin);

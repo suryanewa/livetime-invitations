@@ -624,12 +624,21 @@ export function wakeFade(sinceCapture: number): number {
 export function leftSteamFade(tau: number, cut: number, capture = Infinity): number {
   return stirFade(tau - cut) * wakeFade(tau - capture);
 }
-/** When steam left behind at `cut` has gone: its own life, or below 1 % of its light (≤ STEAM_END). */
+/**
+ * The seating's squeeze (a change of mind that sets the cover back over fog; the shader's `squeeze`): its puffs
+ * start `lead` s before the capture and have gone `life` s after it; from the capture they keep the strength the fog
+ * had then and fade on their own clock (v1.6 polish 5: they had faded with the clock's wake fade as well, and were
+ * cut off with their box as the decline lifted the dish).
+ */
+export const SQUEEZE = { lead: 0.1, life: 0.62 } as const;
+
+/** When steam left behind at `cut` has gone: its own life, or below 1 % of its light (≤ STEAM_END); never before its squeeze's puffs. */
 export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infinity): number {
   let until = steamEndAfter(cut, emitStart);
   for (let t = cut; t < until; t += 0.02) {
     if (leftSteamFade(t, cut, capture) < 0.01) { until = Math.min(until, Math.ceil(t * 100) / 100); break; }
   }
+  if (Number.isFinite(capture) && emitStart < 0.05) until = Math.max(until, Math.min(STEAM_END, Math.ceil((capture + SQUEEZE.life) * 100) / 100));
   return until;
 }
 

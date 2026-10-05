@@ -10,7 +10,7 @@ import { STEAM_LOOK } from '../models/dinnerSteam.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
   axisForward, axisInverse, CLOUD, cloudDensity, cloudLook, cloudSeat, cloudState, dragAt, EDGE, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
-  spillSource, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
+  spillSource, SQUEEZE, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
 } from '../src/scenes/dinner/steam.ts';
 
 /**
@@ -496,6 +496,10 @@ describe('Dinner steam on stage (v1.5 clocks, v1.6 field)', () => {
     // the decline's end (its pose) notwithstanding.
     const until = after.left[0]!.until;
     expect(until - cut).toBeGreaterThan(0.6);
+    // (v1.6 polish 5) The seating's puffs live out their own life in the room's air as the dish is lifted away: the
+    // clock that carries them outlives them (they were cut off with it, and with their box, in one frame).
+    expect(until).toBeGreaterThanOrEqual(capture + SQUEEZE.life - 0.01);
+    expect(SQUEEZE.life).toBeGreaterThan(0.5);
     let prev = cut, frames = 0, closed = false;
     s.run(until - cut + 0.1, () => {
       const l = s.scene.steamState.left;
