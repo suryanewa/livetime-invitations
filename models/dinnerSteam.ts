@@ -207,8 +207,12 @@ export const STEAM_LOOK = {
    * the dense body, which it cannot cross (`fall`, as the key's), stays in shade. `light` its in-scatter (linear, as the
    * key's), `ms` a flatter multiply scattered share; neutral, with the key. It is behind and above more than to the right
    * (0.8, 0.25, 0.55): further right it lit the shaded side's body (own colour +4 where +15 was the aim), not its edge.
+   * Only the cloud's outer layer takes it (`rim`, su: the boundary's signed distance before the edge band's tears, smooth
+   * over centimetres): its light volume alone lit the shaded side's body, and a sharper rim (two taps of the steam's mean
+   * through the outer centimetres, `taps`, at a fall of 200) was a sharp light point-sampled by the march: temporal grain
+   * 1.5–1.7 against 0.9.
    */
-  backLight: { light: 2.0, g: 0.6, fall: 200, ms: 0, dir: [0.8, 0.25, 0.55] as const },
+  backLight: { light: 2.5, g: 0.6, fall: 60, ms: 0, dir: [0.8, 0.25, 0.55] as const, rim: 0.08, taps: 0 },
   /**
    * (v1.6 polish 8) The window's spread, as the steam sees it: the rig's key is the window's centre, high and in front;
    * the window is wide and its lower part lights the steam from its side, low (towards the camera, left, up: 0.4, 0.85,
@@ -230,7 +234,19 @@ export const STEAM_LOOK = {
    * its coverage of a white colour, as light is (the over-composite caps a wisp of coverage 0.2 at 203 over a cove of 191;
    * light adds to 245). The body keeps the over-composite.
    */
-  radiance: { share: 1, lo: 0.4, hi: 1.6, near: 9, cove: [0.55, 0.53, 0.5] as const },
+  radiance: { share: 1, lo: 0.6, hi: 2.4, near: 9, cove: [0.55, 0.53, 0.5] as const },
+  /**
+   * (v1.6 polish 8) The edge band (the shader's `uEdge`): the boundary's band (share), the tears (amplitude su, frequency
+   * per su, length over width), the band's sheets (haze, width, density, frequency: shares), its depth (su) and the
+   * crown's extra length. Off (`tear` 0) it is the polish-7 field.
+   */
+  edgeBand: { boundary: 0.5, tear: 0.015, tearFreq: 19, tearLength: 5, haze: 1, width: 1, fold: 1, freq: 1, depth: 0.06, crown: 2 },
+  /**
+   * (v1.6 polish 8) The full-resolution edge pass: march pixels per CSS pixel over the silhouette's band (`css`), at most
+   * this share of the drawing buffer a side (`maxScale`), the band's ring radius (CSS px, ≈ 0.75 cm at the laptop) and the
+   * coverage under which the ring counts as outside the steam (`inner`).
+   */
+  edge: { css: 1.0, maxScale: 0.75, ring: 10, inner: 0.05 },
   /**
    * (v1.6 polish 8) The key's share of the steam's colour (its tint #F5F5F5, the room's the rest): fixed, as the march's
    * fourth value now carries the back light's share for the composite's rim.
@@ -593,6 +609,21 @@ uniform sampler2D uLight2;
 uniform int uLightPass;
 /** (Tuning, polish 8: key, room, octaves, keyFall | keyFloor, bounce, back light, its fall | its g, its ms, -, its channel.) */
 uniform vec4 uTune[4];
+/**
+ * (v1.6 polish 8) The edge band (the outer centimetre or two of the cloud, where its sheets tear): the boundary's band
+ * share, the tears' amplitude (su), their frequency (per su) and their length over their width (taller at the crown by
+ * [2].y) | the band's sheets: the haze's share, their width's, their density's, the field's frequency | the band's depth
+ * (su), the crown's extra length, -, -.
+ */
+uniform vec4 uEdge[3];
+/**
+ * (v1.6 polish 8) The full-resolution edge pass: whether this is it (the march and the resolve), the half-resolution
+ * resolved steam it refines (\`uLowTex\`) and the ring's radius (uv) within which a lower coverage marks the silhouette's
+ * band, and the coverage under which the ring counts as outside.
+ */
+uniform bool uEdgePass;
+uniform sampler2D uLowTex;
+uniform vec2 uEdgeRing;
 /** Per clock: τ, drawn (0/1), fade, carries the cloud (0/1). */
 uniform vec4 uA[${STEAM_LAYERS}];
 /** Per clock: side drag (x, z), the draught's lean (x, z). */
@@ -618,6 +649,12 @@ uniform vec4 uM[${STEAM_LAYERS}];
  * sample (9: none): a sheet the step jumped is integrated analytically where the field changes sign.
  */
 float gStep = 0.0;
+/**
+ * (v1.6 polish 8) The back light's rim: how near this sample of the cloud is to its boundary (1 at it and outside, 0 deeper
+ * than the rim's depth), from the boundary's signed distance before the edge band's tears (smooth over centimetres, so the
+ * rim is integrated along the ray without the grain of a sharp light). Set by \`cloud\`.
+ */
+float gRim = 0.0;
 float gSheetPrev[${STEAM_LAYERS}];
 /** (The same for the boundary's signed distance and the torn sheets' field; 99: none.) */
 float gEdgePrev[${STEAM_LAYERS}];
@@ -1059,6 +1096,18 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   } else gWispPrev[l] = 99.0;
   float dShade = dEff;
   dEff += fineD;
+  // (v1.6 polish 8; the seventh judge: "soft and combed at 2×".) The edge band: the outer centimetre or two of the cloud,
+  // where the saturated air meets the room's, tears into millimetre strands drawn out along the flow (taller where the
+  // crown is drawn up into the dome's wake): the boundary is displaced by a fine field read in the cloud's own frame,
+  // carried with its air, fading in from the band's depth. The full-resolution edge pass resolves them.
+  if (detail > 0.0 && uEdge[0].y > 0.0 && dEff < uEdge[2].x && dEff > -0.06) {
+    float eb = 1.0 - smoothstep(0.0, uEdge[2].x, dEff);
+    // (Taller at the crown, where the lifting dome draws its air up, from the lift-off: its top band, as the wake's.)
+    float crownW = smoothstep(${f(CLOUD.rim + 0.25)}, ${f(CLOUD.rim + 0.55)}, m.g) * (1.0 - 0.6 * min(1.0, m.r * m.r / ${f(CLOUD.radius * CLOUD.radius)}));
+    float an = uEdge[0].w * (1.0 + uEdge[2].y * max(wakeTop, crownW));
+    vec3 Xt = X * vec3(uEdge[0].z, uEdge[0].z / an, uEdge[0].z) + (nb.rgb - 0.5) * 0.12 + vec3(0.37, 0.11 + 0.02 * tau, 0.83);
+    dEff += uEdge[0].y * (texture(uNoise, Xt).g - 0.5) * 2.0 * eb;
+  }
   if (dEff < -0.06 && wisp <= 0.0) { gSheetPrev[l] = 9.0; gEdgePrev[l] = 99.0; gWispPrev[l] = 99.0; return 0.0; }
   // v1.6 polish 2: the underside is no crisp line. The undercut's head mixes the room's air into the
   // fog's foot, and as the thermal rises its stem and the wall material that rolls under the cap
@@ -1068,7 +1117,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   float band = mix(E.y, ${f(STEAM_LOOK.underBand)}, max(low, under));
   // (v1.6 polish 4) The crown's top, drawn up into the dome's wake, is no lid: it frays upward over ≈ 1.5 cm in the
   // wake's tongues (its band as wide as they are tall).
-  band = mix(band, 0.07, wakeTop);
+  band = mix(band, 0.07, wakeTop) * uEdge[0].x;
   // (v1.6 polish 4: the boundary and the skin are integrated over the step: a 2.5 mm boundary crossed by a 3 mm
   // step was a coin toss each frame.)
   float dPrev = gEdgePrev[l];
@@ -1090,10 +1139,16 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
   // resolves the sheet (the field changed by less than its width) it is point-sampled. Edge-on, the field hardly
   // changes along the ray: the sheet is sampled at full density all along it (a bright fold line).
   vec4 M = uM[l];
+  // (v1.6 polish 8) In the edge band the sheets are thinner, denser and finer, the haze between them less: torn veils.
+  float ebs = uEdge[0].y > 0.0 ? 1.0 - smoothstep(0.0, uEdge[2].x, dShade) : 0.0;
+  if (uEdge[2].z > 0.0) { M.x *= uEdge[2].z; M.z *= uEdge[2].w; }
+  M.z *= mix(1.0, uEdge[1].x, ebs);
+  M.y *= mix(1.0, uEdge[1].y, ebs);
+  M.x *= mix(1.0, uEdge[1].z, ebs);
   // (The sheet field's own frame: cells ≈ 3.7 cm across and 2.7× that along the rise, so a ray through the body
   // crosses a few sheets, not a fur of them; folded by the large field.)
   // (At the crown, drawn up into the dome's wake: twice as long along the rise.)
-  vec3 Xh = X * vec3(1.15, 0.55 * (1.0 - 0.5 * wakeTop), 1.15) + (n1.rgb - 0.5) * (0.6 * E.w) + vec3(0.13, 0.17 + 0.03 * tau, 0.71);
+  vec3 Xh = X * vec3(1.15, 0.55 * (1.0 - 0.5 * wakeTop), 1.15) * mix(1.0, uEdge[1].w, ebs) + (n1.rgb - 0.5) * (0.6 * E.w) + vec3(0.13, 0.17 + 0.03 * tau, 0.71);
   float sb = 2.0 * texture(uNoise, Xh).g - 1.0, bp = gSheetPrev[l];
   gSheetPrev[l] = sb;
   // (A Gaussian profile of width M.y (∫ = M.y), integrated exactly over the step with the field taken as linear
@@ -1152,6 +1207,7 @@ float cloud(vec3 p, int l, float detail, vec3 L, out float shadeOd) {
     shadeOd = core * M.x * sheetMask * gaussMean(sb, sl, M.y * 0.56419) * 0.09 * edge * m.b * seatGrade(m.g) * stir;
   }
   shadeOd += ringShade;
+  gRim = 1.0 - smoothstep(0.0, uTune[3].w, dShade);
   return d;
 }
 
@@ -1306,10 +1362,11 @@ float steamMean(vec3 p) {
 }
 
 /** Every live clock's steam at p (the cloud, the spill, the veil), and the billows' own shade. */
-float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising) {
+float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising, out float rim) {
   float dens = 0.0;
   localOd = 0.0;
   rising = 0.0;
+  rim = 0.0;
   for (int l = 0; l < ${STEAM_LAYERS}; l++) {
     if (uA[l].y <= 0.0) continue;
     float so = 0.0;
@@ -1317,6 +1374,7 @@ float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising
     bool inVeil = all(greaterThanEqual(p, uVeilMin[l])) && all(lessThanEqual(p, uVeilMax[l]));
     bool inSpill = all(greaterThanEqual(p, uSpillMin[l])) && all(lessThanEqual(p, uSpillMax[l]));
     float dc = 0.0;
+    gRim = 0.0;
     if (inCloud && uDebug != 3 && uDebug != 5 && (uFlags & 131072) == 0) dc = cloud(p, l, detail, L, so); else { gSheetPrev[l] = 9.0; gEdgePrev[l] = 99.0; gWispPrev[l] = 99.0; }
     float dr = (inSpill && (uFlags & 67108864) == 0 ? spill(p, l, detail) : 0.0) + (inVeil && uDebug != 4 && (uFlags & 65536) == 0 ? veil(p, l, detail) : 0.0);
     // (The seating's puffs leave the cover: what it closes over does not hold them.)
@@ -1328,7 +1386,9 @@ float sampleAt(vec3 p, vec3 L, float detail, out float localOd, out float rising
     dens += (dc + dr) * k;
     rising += dr * k;
     localOd += so * k;
+    rim += dc * k * gRim;
   }
+  rim = dens > 0.0 ? rim / dens : 0.0;
   return dens;
 }
 
@@ -1367,6 +1427,20 @@ void main() {
   // The opaque scene (plate, cloche, bin) along this ray: the farthest of the four full-resolution
   // pixels this one covers (the upsample keeps the nearer ones off it by depth).
   float used = sceneUsed(floor(fc - 0.5));
+  // (v1.6 polish 8) The edge pass marches only the silhouette's band, where the half-resolution steam's coverage falls
+  // within the ring's radius (≈ 1 cm) of this pixel (its outline, its holes, its torn ends); elsewhere the resolve takes
+  // the half-resolution steam (-2: inside) or nothing (outside).
+  if (uEdgePass) {
+    vec2 uv = fc / uMarchSize;
+    float a0 = texture(uLowTex, uv).y, amin = a0, amax = a0;
+    for (int k = 0; k < 8; k++) {
+      float an = float(k) * 0.785398;
+      float ak = texture(uLowTex, uv + uEdgeRing.x * vec2(cos(an), sin(an) * uMarchSize.x / uMarchSize.y)).y;
+      amin = min(amin, ak); amax = max(amax, ak);
+    }
+    if (amax < 0.004) { gl_FragColor = vec4(0.0, 0.0, used, 1.0); return; }
+    if (amin > uEdgeRing.y) { gl_FragColor = vec4(0.0, 0.0, used, -2.0); return; }
+  }
   vec4 v0 = uModelView * vec4(ro, 1.0);
   vec4 v1 = uModelView * vec4(rd, 0.0);
   if (used < 9000.0 && v1.z < 0.0) { float ts = (-used - v0.z) / v1.z; tSurf = min(tSurf, ts); t1 = min(t1, ts); }
@@ -1439,8 +1513,8 @@ void main() {
     if (i >= 2 * steps || t > a1 || T < ((uFlags & 32768) != 0 ? 0.05 : 0.02)) break;
     vec3 p = ro + rd * t;
     gStep = h;
-    float localOd, rising;
-    float dens = sampleAt(p, L, detail, localOd, rising);
+    float localOd, rising, rimW;
+    float dens = sampleAt(p, L, detail, localOd, rising, rimW);
     float seg = h;
     clear = dens <= 1e-4;
     float tp = t;
@@ -1501,8 +1575,10 @@ void main() {
     float sB = 0.0;
     if ((uFlags & 134217728) == 0 && ob < 7.0 && rising < dens) {
       if (uTune[3].x > 0.0) ob += uSigma * uTune[1].w * (0.012 * steamMean(p + Bd * 0.006) + 0.03 * steamMean(p + Bd * 0.03));
+      // (v1.6 polish 8) The rim: only the cloud's outer layer, smoothly (\`gRim\`).
+      float rimK = uTune[3].w > 0.0 ? rimW : 1.0;
       // (The cloud's own: the gush, the veil and the seating's puffs, thin and rising, would glow as a haze.)
-      sB = uTune[1].z * (4.0 * 3.14159265) * (exp(-ob) * phB + uTune[2].y * exp(-0.6 * ob) * ph2) * (1.0 - cav) * (1.0 - clamp(rising / dens, 0.0, 1.0));
+      sB = uTune[1].z * (4.0 * 3.14159265) * (exp(-ob) * phB + uTune[2].y * exp(-0.6 * ob) * ph2) * (1.0 - cav) * (1.0 - clamp(rising / dens, 0.0, 1.0)) * rimK;
       if (uTune[2].w > 0.5) sRoom += sB; else sKey += sB;
       // (v1.6 polish 8: what the back light adds, carried to the composite in the key's old place: its rim is the light
       // the composite adds to the cove's.)
@@ -1606,6 +1682,12 @@ void main() {
   ivec2 lim = ivec2(uMarchSize) - 1;
   // (Not marched this frame: no value yet, its scene depth from the depth texture.)
   vec4 c = checkerMarched(px) ? texelFetch(uCur, checkerTexel(px), 0) : vec4(0.0, 0.0, sceneUsed(vec2(px)), -1.0);
+  // (v1.6 polish 8) The edge pass: inside the silhouette's band the half-resolution steam, resolved, as it is.
+  if (uEdgePass && c.w < -1.5) {
+    vec4 lo = texture(uLowTex, (vec2(px) + 0.5) / uMarchSize);
+    gl_FragColor = vec4(lo.xy, c.z, lo.w);
+    return;
+  }
   // (v1.6 polish 2) Luminance, coverage and the key's luminance (its share of the light, for the
   // colour). The checkerboard: a pixel not marched this frame (.w < 0) takes its marched edge
   // neighbours' mean as its new value and leans on its history.
@@ -1617,6 +1699,7 @@ void main() {
     ivec2 q = clamp(px + o, ivec2(0), lim);
     if (!checkerMarched(q)) continue;
     vec4 v = texelFetch(uCur, checkerTexel(q), 0);
+    if (uEdgePass && v.w < -1.5) continue;
     vec3 x = vec3(v.xy, unpackKey(v.w) * v.x);
     m1 += x;
     m2 += x * x;
@@ -1884,6 +1967,17 @@ export class DinnerSteam {
   /** The temporal resolve's history (ping-pong, half resolution): luminance, coverage, the depth used, the shadow. */
   private readonly hist: [WebGLRenderTarget, WebGLRenderTarget];
   private histIndex = 0;
+  /**
+   * (v1.6 polish 8) The full-resolution edge pass: its march (the silhouette's band only), its history (ping-pong) and
+   * scissor, what it last resolved (size, frame), and the previous frame's flow and camera as they were before this
+   * frame's half-resolution resolve replaced them (its reprojection).
+   */
+  private readonly edgeHalf: WebGLRenderTarget;
+  private readonly edgeHist: [WebGLRenderTarget, WebGLRenderTarget];
+  private edgeHistIndex = 0;
+  private readonly edgeScissor = new Vector4();
+  private edgePrev: { w: number; h: number; marched: number } | null = null;
+  private prevSnap: { vp: Matrix4; tau: number; l0: number; s0: Vector4; s1: Vector4; s2: Vector4; b: Vector4; w: number; h: number; cloud: boolean; frame: number } | null = null;
   private readonly resolveMaterial: ShaderMaterial;
   private readonly resolveUniforms: Record<string, { value: unknown }>;
   /** The previous frame's camera, clock and dominant clock's flow (for the reprojection), or null. */
@@ -1942,6 +2036,11 @@ export class DinnerSteam {
       return rt;
     };
     this.hist = [histTarget(0), histTarget(1)];
+    this.edgeHalf = new WebGLRenderTarget(1, 1, {
+      type: FloatType, format: RGBAFormat, depthBuffer: false, minFilter: NearestFilter, magFilter: NearestFilter, generateMipmaps: false,
+    });
+    this.edgeHalf.texture.name = 'fx_steam_edge';
+    this.edgeHist = [histTarget(2), histTarget(3)];
     this.light = new WebGLRenderTarget(LIGHT_N * LIGHT_COLS, LIGHT_N * LIGHT_ROWS, {
       type: HalfFloatType, format: RGBAFormat, depthBuffer: false, minFilter: LinearFilter, magFilter: LinearFilter, generateMipmaps: false,
     });
@@ -1993,7 +2092,9 @@ export class DinnerSteam {
       uBackDir: { value: new Vector3(0, 0, -1) },
       uWinDir: { value: new Vector3(-1, 0, 0) },
       uLightPass: { value: 0 },
+      uEdgePass: { value: false }, uLowTex: { value: null }, uEdgeRing: { value: new Vector2(0.01, 0.05) },
       uTune: { value: [new Vector4(), new Vector4(), new Vector4(), new Vector4()] },
+      uEdge: { value: [new Vector4(1, 0, 19, 4), new Vector4(1, 1, 1, 1), new Vector4(0.09, 1, 0, 0)] },
       uR: { value: v4() }, uH: { value: v4() }, uK: { value: v4() }, uM: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uGp0: { value: v4() }, uGp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] }, uWake: { value: [0, 0, 0] },
     };
     this.lightMaterial = new ShaderMaterial({
@@ -2104,7 +2205,11 @@ export class DinnerSteam {
       t0!.set(t.key ?? STEAM_LOOK.key, t.room ?? STEAM_LOOK.room, t.ms ?? 1, t.keyFall ?? STEAM_LOOK.keyFall);
       t1!.set(t.keyFloor ?? STEAM_LOOK.keyFloor, t.bounce ?? STEAM_LOOK.bounce, t.back ?? b.light, t.backFall ?? b.fall);
       t2!.set(t.backG ?? b.g, t.backMs ?? b.ms, t.roomFloor ?? STEAM_LOOK.roomFloor, t.backRoom ?? 0);
-      t3!.set(t.backLocal ?? 1, t.win ?? ww.light, t.winFall ?? ww.fall, 0);
+      t3!.set(t.backLocal ?? b.taps, t.win ?? ww.light, t.winFall ?? ww.fall, t.rimDepth ?? b.rim);
+      const eg = (globalThis as { __steamEdge?: number[] }).__steamEdge, E0 = STEAM_LOOK.edgeBand;
+      const [e0, e1, e2] = u.uEdge!.value as Vector4[];
+      const ev = eg ?? [E0.boundary, E0.tear, E0.tearFreq, E0.tearLength, E0.haze, E0.width, E0.fold, E0.freq, E0.depth, E0.crown];
+      e0!.set(ev[0]!, ev[1]!, ev[2]!, ev[3]!); e1!.set(ev[4]!, ev[5]!, ev[6]!, ev[7]!); e2!.set(ev[8]!, ev[9]!, ev[10] ?? 0, ev[11] ?? 1);
       this.compositeUniforms.uExposure!.value = t.exposure ?? STEAM_LOOK.exposure;
       this.compositeUniforms.uShoulder!.value = t.shoulder ?? STEAM_LOOK.shoulder;
       this.compositeUniforms.uShoulderShape!.value = t.shape ?? 1;
@@ -2177,6 +2282,13 @@ export class DinnerSteam {
     // (The jitter's frame from the steam clock: a capture at a given τ is the same every time. Where the resolve
     // has no history it builds one at once from `warm` marches, each with its own jitter, a running mean.)
     const base = Math.round(this.tau0 * 60);
+    // (v1.6 polish 8) The previous frame's flow and camera, for the edge pass's reprojection after this resolve.
+    if (this.prev) {
+      const q = this.prevSnap ?? { vp: new Matrix4(), tau: 0, l0: -1, s0: new Vector4(), s1: new Vector4(), s2: new Vector4(), b: new Vector4(), w: 0, h: 0, cloud: false, frame: 0 };
+      q.vp.copy(this.prev.vp); q.s0.copy(this.prev.s0); q.s1.copy(this.prev.s1); q.s2.copy(this.prev.s2); q.b.copy(this.prev.b);
+      Object.assign(q, { tau: this.prev.tau, l0: this.prev.l0, w: this.prev.w, h: this.prev.h, cloud: this.prev.cloud, frame: this.prev.frame });
+      this.prevSnap = q;
+    } else this.prevSnap = null;
     const warm = this.historyValid(camera, w, h, dbg) || checker ? 1 : ((globalThis as { __steamWarm?: number }).__steamWarm ?? STEAM_LOOK.warm);
     renderer.setClearColor(TMP_D.setRGB(0, 0, 1e4), 1);
     for (let k = 0; k < warm; k++) {
@@ -2187,6 +2299,38 @@ export class DinnerSteam {
       if (dbg.__steamSkip?.includes('resolve')) this.compositeUniforms.uVolume!.value = this.half.texture;
       else this.resolve(renderer, camera, w, h, dbg, k > 0 ? 1 / (k + 1) : undefined);
       if (k + 1 < warm) this.marched++;
+    }
+    // (v1.6 polish 8; the seventh judge: "soft and combed at 2×") The full-resolution edge pass: the silhouette's band
+    // (the outer centimetre, where the sheets tear) marched again at `edge.css` march pixels per CSS pixel, the rest taken
+    // from the half-resolution steam just resolved, with a history of its own (reprojected through the flow, clipped to
+    // its neighbourhood). The composite reads it.
+    const E = STEAM_LOOK.edge, eq = globalThis as { __steamEdgeCss?: number; __steamNoEdge?: boolean };
+    const sE = Math.min(E.maxScale, (eq.__steamEdgeCss ?? E.css) / dpr);
+    if (!checker && !eq.__steamNoEdge && !dbg.__steamSkip?.includes('resolve') && sE > scale * 1.05) {
+      const we = Math.max(1, Math.ceil(frame.size.x * sE)), he = Math.max(1, Math.ceil(frame.size.y * sE));
+      (u.uScale!.value as Vector2).set(we / frame.size.x, he / frame.size.y);
+      (u.uMarchSize!.value as Vector2).set(we, he);
+      u.uEdgePass!.value = true;
+      u.uLowTex!.value = this.compositeUniforms.uVolume!.value;
+      (u.uEdgeRing!.value as Vector2).set((E.ring * dpr) / frame.size.x, E.inner);
+      if (this.edgeHalf.width !== we || this.edgeHalf.height !== he) this.edgeHalf.setSize(we, he);
+      this.edgeScissor.set(Math.floor(fp.x * sE) - 4, Math.floor(fp.y * sE) - 4, Math.ceil(fp.z * sE) + 8, Math.ceil(fp.w * sE) + 8);
+      this.edgeHalf.scissor.copy(this.edgeScissor);
+      const warmE = this.edgeHistoryValid(we, he, dbg) ? 1 : ((globalThis as { __steamWarm?: number }).__steamWarm ?? STEAM_LOOK.warm);
+      for (let k = 0; k < warmE; k++) {
+        u.uFrame!.value = base + 17 * k + 7;
+        renderer.setRenderTarget(this.edgeHalf);
+        renderer.clear(true, false, false);
+        this.edgeHalf.scissorTest = true;
+        renderer.setRenderTarget(this.edgeHalf);
+        if (!dbg.__steamSkip?.includes('march')) renderer.render(this.marchScene, camera);
+        this.edgeHalf.scissorTest = false;
+        this.resolve(renderer, camera, we, he, dbg, k > 0 ? 1 / (k + 1) : undefined, true);
+      }
+      u.uEdgePass!.value = false;
+      // (Unbound again: the half-resolution resolve next frame writes the texture it holds; a bound sampler on its target,
+      // read or not, is a feedback loop.)
+      u.uLowTex!.value = null;
     }
     renderer.setRenderTarget(prev);
     renderer.setClearColor(TMP_C, alpha);
@@ -2232,14 +2376,29 @@ export class DinnerSteam {
     return !!p && sized && p.l0 === this.l0 && this.tau0 >= p.tau && this.tau0 - p.tau <= 0.1 && p.frame === this.marched - 1 && !dbg.__steamNoTaa;
   }
 
-  private resolve(renderer: WebGLRenderer, camera: PerspectiveCamera | OrthographicCamera, w: number, h: number, dbg: { __steamNoTaa?: boolean }, warmBlend?: number): void {
+  /** (v1.6 polish 8) Whether the edge pass's history can be carried into this frame (as `historyValid`). */
+  private edgeHistoryValid(w: number, h: number, dbg: { __steamNoTaa?: boolean }): boolean {
+    const p = this.prevSnap, e = this.edgePrev;
+    return !!p && !!e && e.w === w && e.h === h && this.edgeHist[this.edgeHistIndex]!.width > 1 && p.l0 === this.l0 && this.tau0 >= p.tau
+      && this.tau0 - p.tau <= 0.1 && e.marched === this.marched - 1 && !dbg.__steamNoTaa;
+  }
+
+  private resolve(renderer: WebGLRenderer, camera: PerspectiveCamera | OrthographicCamera, w: number, h: number, dbg: { __steamNoTaa?: boolean }, warmBlend?: number, edge = false): void {
     const ru = this.resolveUniforms;
     const vp = TMP_VP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    const p = this.prev, tau = this.tau0, l0 = this.l0;
-    const src = this.hist[this.histIndex]!, dst = this.hist[1 - this.histIndex]!;
+    // (The edge pass reprojects from the previous frame's flow and camera as they were before this frame's resolve; its
+    // warm-up, a running mean of this frame's own marches, does not reproject at all.)
+    const p = edge ? (warmBlend !== undefined ? null : this.prevSnap) : this.prev, tau = this.tau0, l0 = this.l0;
+    const hist = edge ? this.edgeHist : this.hist, index = edge ? this.edgeHistIndex : this.histIndex;
+    const src = hist[index]!, dst = hist[1 - index]!;
     if (dst.width !== w || dst.height !== h) dst.setSize(w, h);
-    const valid = this.historyValid(camera, w, h, dbg);
+    const valid = edge ? (warmBlend !== undefined || this.edgeHistoryValid(w, h, dbg)) : this.historyValid(camera, w, h, dbg);
     ru.uHistValid!.value = valid;
+    ru.uCur!.value = edge ? this.edgeHalf.texture : this.half.texture;
+    if (edge && warmBlend !== undefined) {
+      (ru.uPrevVPL!.value as Matrix4).multiplyMatrices(vp, this.volume.matrixWorld);
+      ru.uVeilShift!.value = 0;
+    }
     const tq = globalThis as { __steamBlend?: number; __steamClampK?: number; __steamDenoise?: number };
     // (Building a history at once (warmBlend: 1/(k + 1)): a running mean of the warm-up's marches, unclipped.)
     ru.uBlend!.value = warmBlend ?? tq.__steamBlend ?? STEAM_LOOK.history;
@@ -2258,7 +2417,7 @@ export class DinnerSteam {
     ru.uHist!.value = src.texture;
     this.pass.mesh.material = this.resolveMaterial;
     // (Only over the steam's footprint: the rest of the history is never read.)
-    dst.scissor.copy(this.scissor);
+    dst.scissor.copy(edge ? this.edgeScissor : this.scissor);
     dst.scissorTest = true;
     renderer.setRenderTarget(dst);
     renderer.render(this.pass.scene, this.pass.camera);
@@ -2266,6 +2425,7 @@ export class DinnerSteam {
     renderer.setRenderTarget(null);
     this.pass.mesh.material = this.mapMaterial;
     this.compositeUniforms.uVolume!.value = dst.texture;
+    if (edge) { this.edgeHistIndex = 1 - index; this.edgePrev = { w, h, marched: this.marched }; return; }
     this.histIndex = 1 - this.histIndex;
     // This frame, for the next one.
     const S0 = this.mapUniforms.uS0!.value as Vector4[], S1 = this.mapUniforms.uS1!.value as Vector4[], S2 = this.mapUniforms.uS2!.value as Vector4[];
@@ -2460,6 +2620,8 @@ export class DinnerSteam {
       // (No steam: the half-resolution march and its history give their memory back, and the next
       // steam starts a fresh history.)
       if (this.half.width > 1) for (const rt of [this.half, ...this.hist]) rt.setSize(1, 1);
+      if (this.edgeHalf.width > 1) for (const rt of [this.edgeHalf, ...this.edgeHist]) rt.setSize(1, 1);
+      this.edgePrev = null;
       this.prev = null;
     }
     if (lightMin.x > lightMax.x) { lightMin.copy(min); lightMax.copy(max); }
@@ -2504,6 +2666,9 @@ export class DinnerSteam {
     this.resolveMaterial.dispose();
     this.hist[0].dispose();
     this.hist[1].dispose();
+    this.edgeHalf.dispose();
+    this.edgeHist[0].dispose();
+    this.edgeHist[1].dispose();
     this.pass.mesh.geometry.dispose();
     this.map.dispose();
     this.half.dispose();
