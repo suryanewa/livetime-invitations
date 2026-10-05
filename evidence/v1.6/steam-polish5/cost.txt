@@ -1,0 +1,37 @@
+# v1.6 steam polish 5 (constants and resolution): cost and pacing, final code (v1.6/steam-polish5)
+# Budget (orchestrator, 2026-10-05, the last steam round): <= 6.0 ms while steam shows, at laptop 1280x720 @2 and phone
+# 390x844 @3, the Dinner frame pacing at 60 fps (p95 <= 16.8 ms); zero with no steam.
+#
+# bench: tools/bench.ts + tools/gpu-bench.ts (scripts/_scratch/gpu-bench.ts, not committed): the real Dinner scene on the
+# production stage, steam on and off interleaved frame by frame, each frame synced by a 1-pixel read-back. Each number is
+# p10(frame with steam) - p10(frame without), ms; "frame-on p50" the whole Dinner frame with steam. N 60 x 6 rounds.
+# laptop / phone: the bench page at deviceScaleFactor 2 / 3 (DSF), so the stage sizes its buffer as the app does (laptop
+# 2108x1185 under the 2.5 M-pixel cap, dpr 1.65; phone 780x1688, dpr capped at 2). NB: the fifth judge's bench.ts opened
+# its page at deviceScaleFactor 1, so its "1280x720@2" ran a 1280x720 buffer; tools/bench.ts takes DSF.
+# 1400 / 2000: the judges' squares (dpr 1; 2000^2 capped to 1581^2). tau >= 1.5: the free steam after the reveal.
+# M2 Pro, Chrome/ANGLE Metal headless; load averages as printed (other owners rendering).
+## laptop
+ 5:10  up 2 days, 10:40, 1 user, load averages: 2.88 3.27 3.57
+1280x720@2 tau 0.3:2.8 tau 0.4:3.7 tau 0.45:4 tau 0.5:2 tau 0.6:2 tau 0.7:2.5 tau 1:2.9 tau 1.2:3.9 tau 1.5:4.2 tau 2.2:3.4 tau 3:1.1 overlap 1.0+1.0:3.1 | frame-on p50 5.3 6 6.3 4.3 4.3 4.8 5.2 6.9 7 5.9 3.4 5.5
+## phone
+ 5:11  up 2 days, 10:40, 1 user, load averages: 2.94 3.23 3.54
+390x844@3 tau 0.3:4 tau 0.4:4.6 tau 0.45:5.1 tau 0.5:3.4 tau 0.6:3.5 tau 0.7:3.7 tau 1:4.1 tau 1.2:4.1 tau 1.5:4.6 tau 2.2:5.1 tau 3:1.3 overlap 1.0+1.0:2.8 | frame-on p50 6.5 7.3 7.8 5.9 6 6.2 7 6.7 7.4 7.8 3.8 5.4
+## squares
+ 5:11  up 2 days, 10:41, 1 user, load averages: 3.18 3.28 3.55
+1400 tau 0.3:3.6 tau 0.4:5 tau 0.45:5.2 tau 0.5:3 tau 0.6:3.3 tau 0.7:3.6 tau 1:3.2 tau 1.2:4.3 overlap 1.0+1.0:3.1 | frame-on p50 5.8 7.5 7.9 5.2 5.6 6 5.8 6.6 5.2
+2000 tau 0.3:4.3 tau 0.4:5.1 tau 0.45:5.5 tau 0.5:3.1 tau 0.6:3.4 tau 0.7:3.7 tau 1:3.4 tau 1.2:4.3 overlap 1.0+1.0:3.3 | frame-on p50 6.8 8 8.8 5.5 5.9 6.4 6.4 7.1 5.8
+# polish 4 for reference (same method, its cost.txt): laptop 0.8-2.0 ms, two clouds 2.3; phone 0.7-2.6, two clouds 2.4;
+# 1400^2 1.9-2.9, 2000^2 2.0-3.0. Where polish 5's cost goes: the march at 0.5 a side of the buffer (was 0.338 at the
+# laptop, 0.278 at the phone) and 34 / 28 / 20 steps (were 28 / 22 / 16); at the held dome a one-march-pixel-per-CSS-pixel
+# march (0.607 at the laptop) cost 6.5 ms, and at the phone (scale 0.5, cssDensity 1.0) 7.0 ms: cssDensity 0.72.
+# The gush cost 2.7 ms of the 1400^2 frame at 0.5 s (its last tenth of light): it now fades by 0.5 s.
+
+## real-time pacing of the whole accept (tools/pace.ts: rAF intervals, no virtual clock, three accepts each)
+ 5:13  up 2 days, 10:42, 1 user, load averages: 2.75 3.11 3.46
+laptop run 0: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+laptop run 1: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+laptop run 2: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+ 5:13  up 2 days, 10:43, 1 user, load averages: 3.42 3.23 3.49
+phone run 0: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+phone run 1: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+phone run 2: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.70 >20ms 0

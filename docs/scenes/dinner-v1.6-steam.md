@@ -626,6 +626,141 @@ no distinct rolled lip, and the lifted cloche's shadow leaves a grey band across
 `tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6,
 `tests/browser/scene-depth.spec.ts` 5/5; `pnpm typecheck` clean.
 
+## Polish round 5: constants and resolution (`v1.6/steam-polish5`)
+
+The fifth judge scored the structural round **6 at laptop size, 6.5 at phone size** and listed six items, mostly
+constants, the sixth the softness at 2× that the 3 ms march could not resolve. **The budget decision (orchestrator,
+2026-10-05, the last steam round): ≤ 6.0 ms while steam shows, at laptop 1280 × 720 @2 and phone 390 × 844 @3, the
+Dinner frame still pacing at 60 fps (p95 ≤ 16.8 ms); zero with no steam.** Each item is its own commit, measured with
+the judge's `frames.ts` (laptop 1240² clip of 1280 × 720 @2, WARM 2000) and its scripts, its no-steam twins
+byte-identical on this build; the scripts this round added are in `evidence/v1.6/steam-polish5/tools/` (`rise.py`
+recovers the judge's centroid and mass: on its own frames it gives its 672 → 616 rows and 6.56 / 2.02 M exactly).
+Every number below is in `evidence/v1.6/steam-polish5/measurements.txt` (final code; polish 4, 3 and 2 on the same
+scripts for reference) and `cost.txt`.
+
+**1. The bounding-box clip** (`models/dinnerSteam.ts` `sync`, the march's probes). The straight cut down the cloud's
+right flank was not the field leaving `steamBounds`' box (its margin holds the field: with a box 0.3 su wider the
+frames differ there only by the sampling's noise). The per-clock march boxes carried the steam's *shadow's* reach (to x 2.2, z −2.4 su), so a ray's span
+through them was 2–3× the steam's, and the march's three occupancy probes, that far apart, stepped over the flank where
+the ray grazes the cloud: the cut sat where the front box face's probe spacing outran the flank's chord. The march's
+boxes now stay on the steam (the shadow's reach is the composite's and the light volume's only), and the probes are at
+most 0.3 su apart (3–12). **vcut 0 px in every frame 0.83–1.31 s** (was 37 px at 1.024 s, a median step of 7 levels);
+`vcut2`'s runs are 11–43 px, the cap's rounded right flank at ≤ 2 levels a pixel (the box face was 44–64 px, 13–17
+levels across 3 px); the phone's cut is gone too (`boxcut-1to1-1.024-1.184-p4top-p5bottom.png`,
+`boxcut-laptop-css-1.024.png`).
+
+**2. The decline's rim puffs** (`squeeze`, `SQUEEZE` in `steam.ts`). The 30 k px that went in one frame at 0.832 s
+were the seating's puffs in the *cover's* frame: the decline lifts the dish 46 cm in 0.3 s and they left their box at
+the seat with it. They are now in the room's air where they were squeezed out (riding the descending cover before the
+capture, as before), drawn up a few centimetres in the dish's wake (≤ 4 cm, those over the porcelain most), with the
+strength the fog had at the seating and their own fade (≈ 10 % a frame) to nothing by `SQUEEZE.life` (0.62 s); the
+clock that carries them outlives them (`leftSteamEnd`). **Area over 8 levels 45.8 k at 0.816 s, 49.5 k at 0.832 s,
+then −7…−26 % a frame down to 2.5 k at 1.136 s (max 13 levels)**; the last 2.5 k px of the faint tail (≤ 12 levels)
+lose 36–49 % a frame and are gone by 1.22 s. The target (no frame losing over 30 % of the puffs' area) holds while
+they show at 13 levels or more. Over the seated dome's crown still 0 px (`decline-puffs-0.784-1.120.png`).
+
+**3. A held dome, then the crown frays** (`CLOUD.hold`, `dragHeld`, `heldDrag`, `crownFray`). What spread the
+trapped steam past the seated outline at 0.45–0.65 s was the dome's drag (the crown drawn up 2.5–3.6 cm and 7 mm along
+its path at once, from the lift-off) with the wake's tongues on it. The crown's air now takes up only 20 % of the
+drag while the fog holds the dome's shape (≈ 0.8 cm on the axis: the air's inertia; the wake's suction has not yet set
+it moving), the rest catching up over 0.6–1.03 s; the wake's tongues come with the catch-up (`crownFray`, 0.6–0.78 s)
+and go as the cap rolls. **Inside / outside the seated outline 50 / 19 / 7.5 / 3.2 / 2.3 / 1.9 / 2.1 / 1.9 at
+0.45–0.67 s** (polish 4 1.0–1.3), then 1.5 / 1.2 / 1.0 at 0.70 / 0.74 / 0.80 s as the crown frays: ≥ 1.6 for 0.22 s
+after the rim clears the cloud's side (the release, 0.40–0.45 s). Inside brightening 47–63 (31–50). IoU with the
+seated dome **0.83 / 0.78 / 0.66 / 0.55 / 0.45** at 0.48–0.74 s (0.46 / 0.55 / 0.48 / 0.45 / 0.42). The envelope's
+gradient at the outline (`soft.py` oedge, a proxy: the judge's script was not kept) 1.06 / 1.07 / 1.20 at 0.54 / 0.58 /
+0.61 s (polish 4 0.82 / 1.09 / 1.03): ≥ 1.2 only from 0.61 s (`dome-0.48-0.80-brightening-outline.png`, the seated
+outline in red, the outside band blue).
+
+**4. It rises away; a rolled lip** (`CLOUD.riseW/riseStart/riseMix`, `centre`, `erode`, `evapFrom/evaporate`,
+`stemFade`, `STEM_HEAT`, `capCore`, the ring). The thermal peaked at 16 cm/s (not the 22 the record said) and its cap
+evaporated where it stood. Now a stronger buoyant thermal under the 25 cm/s ceiling (23.9 cm/s peak, 1.4 cm in its first
+0.2 s, 14 cm by 0.8 s), its edge lagging less (centre 0.25, was 0.38), slower erosion (0.3–1.8 s of the thermal, was
+0.2–1.3) and evaporation from 25 cm over 25 cm (was 15 / 15); the stem's share of the fog goes sooner (0.45–0.7 s of
+the thermal) and the base evaporates over the hot plate only while it is still low over it. The cap gathers the dome's
+fog as the core empties (0.17 → 0.25) and keeps it to ≈ 1.4 s, and the air the thermal carries up from the dome's
+lower half into the cap is the cap's, with its fog (without that the cap was a smoke ring, a thin lid over a hollow:
+the ring's centre 0.11–0.24 of its rims). The ring's tube is narrower (0.42 of its reach, was 0.55) and stays whole
+while it rolls (tears from 0.75 s of the thermal, was 0.45). **Centroid (B > 10 above row 760) 704 → 521 rows by
+1.2 s: 6.8 cm** at 27 px/cm (polish 4: 672 → 620, 1.9 cm); top 604 → 245 rows; **the cap's mass at 1.38 s 104 % of
+its 0.99 s** (7.81 / 7.53 M; polish 4 31 %). **The lip** (`lip.py`: the ring's core projected, at the cap's right side):
+the tube +21.6…+22.0 levels over the notch inside it at 1.06–1.22 s (target ≥ 15), +6…+8 over the notch under it; the
+ring's centre 0.35–0.45 of its rims (a filled cap). The dip through the cap (`o_ringprof.py`) median 0–6, best 9–26
+levels: the notch under the lip. Vapour 0.79–0.91× polish 1 to 0.74 s, 1.20× at 0.99 s and **2.0–2.3× at 1.2–1.3 s**
+(the cap rising away where polish 1's had thinned: the judge allowed it) (`cap-css-1.056-1.120-1.216.png`,
+`lip-1to1-1.056-1.120-1.216.png`, `guest-css-0.45-1.38-p4top-p5bottom.png`).
+
+**5. A brighter lit side** (`STEAM_LOOK.key` 2.0 → 3.2, `bounce` 2.0 → 1.5). The lit steam's own colour sits above the
+plate's white now (≈ 249–250 against 241 after the neutral tone mapping); the plate's bounce on the fog just over it is
+smaller so the plate's middle stays within +4. **Bright steam (B > 40, luma > 215) 23 / 35 / 41 / 41 / 28 k px at a
+mean of 226–228** at 0.48–0.74 s (polish 4 7–27 k at 225–226; polish 2 53–100 k at 230–237); **at luma ≥ 232 7–12 k px**
+(polish 4 1–5 k; polish 2 25–91 k). **Not met** (≥ 232 over ≥ 40 k px). With the denser held dome alone the key gave
+40–53 k at 230–231 (19–26 k at ≥ 232); item 6's density cut, for the far rim's transmittance, took half of that back.
+The limit is the translucency: the visible steam's coverage is 0.6–0.93 (median 0.8) over a 155-level backdrop, so a
+composite of 232 needs an own colour ≥ 251, at the tone curve's shoulder (a key of 4.5 brought the own colour to 252 and
+the bright set only to 26–44 k at 228–229, and flattened the body). Plate centre +3…+4, right 0…−10.
+
+**6. The march's resolution, the steps, the history, the crown** (`cssDensity`, `maxScale`, `marchPixels`,
+`thinPixels`, `steps`, `denoise`, `tongue`; the budget over the march's own boxes). The march is 0.5 a side of the
+buffer (was 0.338 at the laptop, 0.278 at the phone): **0.82 march pixels per CSS pixel at the laptop's 1.65× buffer,
+0.85 at the phone's 2×** (0.56 before); 34 / 28 / 20 steps (were 28 / 22 / 16); the new frame's same-surface denoise
+0.25 (was 0.5); the crown's tongues up to 2 cm (1.3); the pixel budget spent over the steam's boxes, the scissor still
+over the composite's. **Not taken:** one march pixel per CSS pixel at the laptop (0.607 a side) cost 6.5 ms at the held
+dome, and at 20 steps (to fit) its temporal grain was 1.15; a tighter or looser history clip (γ 1.0–3.0) and a lower
+blend raised the grain without sharpening; a Catmull-Rom upsample gave +0.03 of fine detail for +0.09 of grain;
+thinner, denser sheets +0.04 for +0.1. **Sharpness** (`soft.py`, proxies calibrated on the judges' frames; the fifth
+judge's own scripts were not kept): the edge band's median gradient 1.01 / 1.06 / 1.00 / 0.73 / 0.55 levels/px at
+0.54 / 0.58 / 0.61 / 0.67 / 0.74 s (polish 4 0.72 / 0.73 / 0.75 / 0.71 / 0.58; polish 3 1.21 / – / 0.96 / 0.76 / 0.65),
+at the outline 1.06 / 1.07 / 1.20 / 1.45 / 1.39 (0.82 / 1.09 / 1.03 / 0.93 / 0.83), detail under 1.5 px 0.44 / 0.43 /
+0.44 / 0.58 / 0.51 rms (0.45 / 0.48 / 0.48 / 0.51 / 0.47; polish 3 0.81 / – / 0.66 / 0.64 / 0.57). **Not met** (≥ 1.2,
+≥ 0.6): +35–45 % on the body's gradient at 0.54–0.61 s, −2…+67 % at the outline, the finest detail −8…+14 %. **Grain over the backdrop**
+temporal 0.82 / 0.77 / 0.53 at 0.58 / 0.67 / 0.90 s, spatial 0.94 / 0.63 / 0.44 (polish 4 0.86 / 0.64 and 0.74 / 0.65):
+within 0.9 but the spatial at 0.58 s (+0.04). **Crown anisotropy** (DoG 2/8) 1.35 / 1.05 / 1.04 / 1.29 / 1.22 / 1.31 at
+0.54–0.86 s: **not met** (polish 4 1.33–1.81); the walls 1.33–2.76 (`dome-edge-x2-0.54-0.61-0.67-p4top-p5bottom.png`).
+The far rim seen through the denser held dome went to 0.23: the young core 0.2 → 0.19 and the base's share of the
+density 0.55 → 0.35. The gush's last tenth of light (0.5–0.56 s) cost 2.7 ms of the judges' 1400² frame at the finer
+march: it fades by 0.5 s (0.34–0.5, was 0.36–0.56).
+
+**Kept / changed of what had passed:** far-rim transmittance **0.43 / 0.37 / 0.35 / 0.34 / 0.39 / 0.47** at 0.43–0.74 s;
+coverage still rising to the core (core / 1–2 cm ring 1.06–1.10, polish 4 1.25–1.54); the return's crown 0 px; no specks
+(0.43–0.48 s at 3×); the gush 28–122 k px outside the silhouette at 0.19–0.37 s, p95 48–81, the flank's p95 0–1 (as polish 4); the white plate
+(centre +1…+4, right 0…−10); no waterline (median step 1.1–1.6, 0 % over 12); eroded interior s8 p5–p95 99 / 78 / 58
+(polish 4 57 / 55 / 46); determinism (re-renders byte-identical); the clocks, `STEAM_END`, reduced motion (the tests);
+the Low tier (checkerboard, 60 % of the steps; grain 0.62 / 0.67 at 0.61 s); no pops (no frame's change over 1.8× its
+neighbours', 0.32–1.44 s); the end (5.95 s within 2 levels of clean; wisps to 5.1 s, ≤ 20 levels). **Lost: the own
+colour's terminator** (`own.py`, lit − shaded) +1 / +1 / +3 at 0.61 / 0.67 / 0.74 s (polish 4 +28 / +23 / +22): it was
+the drawn-up crown shading the cloud's centre-right below it (with the drag restored, +17 at 0.61 s), and the brighter key
+puts both sides near the tone curve's shoulder; the composite still shows the lit side over the shaded (brightening
++28 / +52 / +51, polish 4 +39 / +65 / +60). Warmth R − B +4.2…+4.8 (polish 4 +5.3…+6.6): the neutral key is a larger
+share of the light.
+
+**Cost** (`cost.txt`; p10 of the frame with steam less without, laptop and phone at their real buffers): **laptop
+1.1–4.2 ms**, two clouds 3.1; **phone 1.3–5.1 ms**, two clouds 2.8; the judges' squares 1400² 3.0–5.2, 2000² 3.1–5.5
+(polish 4: 0.8–2.0, 0.7–2.6, 1.9–2.9, 2.0–3.0). The whole Dinner frame with steam p50 3.4–7.8 ms. **Real-time pacing
+of the whole accept: p95 16.7–16.8 ms, max 16.8, no frame over 20 ms**, laptop and phone, three accepts each. Zero
+with no steam (unchanged: the scene-depth specs). (The fifth judge's bench opened its page at deviceScaleFactor 1, so
+its "laptop" ran a 1280 × 720 buffer; `tools/bench.ts` takes `DSF`.)
+
+**What a sixth judge would see** (the owner's view): the trapped steam now stands in the cloche's shape for a fifth of
+a second as the cloche clears it, then its crown frays and the whole of it rises away as a thermal, a filled cap with a
+rolled lip at its edge, and thins out high in the frame by 1.6 s; no cut, no pop at the seating. It is still **soft at
+2×** — the march is finer and the grain lower, but the converged image of an integrated, translucent field is as smooth
+as its structure, which is centimetre-scale: polish 3's "crisper" edge was grain (with no history at all this build
+reaches 1.22–1.34 / 0.60–0.76 on the same proxies, at a temporal grain of 1.2). The crown is not streaked 2:1, the lit
+side composites to 226–231 rather than 232+, and the own colour's terminator is gone; the cap at 1.2 s could read to
+some eyes as a vortex ring (that is what a thermal is), and there is about twice polish 1's vapour as it rises.
+**Whether the rest is reachable with this approach:** the constants are near their limits. Hollywood-crisp steam needs
+millimetre filaments that survive integration — a density advected per frame at ≈ 1–2 mm (a 128³–256³ simulated or
+advected volume, or a separate high-frequency filament pass) and many more samples per pixel; at this resolution
+budget that is not reachable in 6 ms, and the bright side is bounded by translucency at the neutral tone curve.
+
+**Tests.** `tests/dinner-steam.test.ts` 25 (changed: the drag — under 1.5 cm on the axis during the hold, 1–4 cm by
+1.2 s, the hold's timing; the held dome's top 0.5–5 cm, was 1–5; the rise ≥ 12 cm by 0.8 s of the thermal; the cap
+within 1.15× the plate's radius by 1.3 s, was the plate's; the cap keeping its fog to 1.4 s; the base's slump lifted
+≤ 1.35 cm; the base's density over 0.3; the gush gone by 0.5 s; the leftover clock outliving its seating's puffs);
+`tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6,
+`tests/browser/scene-depth.spec.ts` 5/5 (fresh server); `pnpm typecheck` clean.
+
 ## Decisions
 
 - **A material field, not particles.** Every sample asks where its air came from (the analytic flow's inverse), so
