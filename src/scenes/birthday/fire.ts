@@ -741,12 +741,18 @@ export const SMOKE = {
   /**
    * v1.6 polish 4 (judge 4: "below 8 cm still six evenly bright constant-width threads"): the stem necks
    * and swells, ± `neck[0]` of its width, as the plume's acceleration stretches it unevenly, and the
-   * smouldering ember's output wavers, ± `neck[1]`, with the air at it: each carried up with the smoke,
+   * smouldering ember's output wavers, ± `neck[1]`, with the air at it (smoulderShare: not the burst's):
+   * each carried up with the smoke,
    * at 2.5–7 Hz (a few centimetres apart along the stem), its own per candle.
    */
   neck: [0.35, 0.35] as const,
-  /** v1.6 polish 4: the breath's dilution of the vapour it carries: × 1 / (1 + U / this), U in m/s. */
-  breathDilute: 6,
+  /**
+   * v1.6 polish 4: the breath's dilution of the vapour it carries, × 1 / (1 + U / this), U in m/s: the
+   * jet entrains the room's air into the burst as it carries it off (was U / 6: at the breath's 1.2–1.6
+   * m/s the first puff was a fog bank over the candle behind it, judge 4; now × 0.5–0.6 of the vapour's
+   * optical depth, and the dense puff scatters the room's light on, SMOKE_VOLUME.roomOctaves).
+   */
+  breathDilute: 1.6,
   /** Swept smoke widens by this much per distance carried (the wick's wake keeps it narrow at first). */
   jetSpread: 0.06,
   /** Wick vapour rides the breath at 60 % of it (it leaves in the wick's own wake). */
@@ -787,6 +793,17 @@ export function smokeRate(i: number, t: number, kind: SmokeKind = 'breath'): num
   if (a <= 0) return 0;
   return src.strength * smooth(a / src.rise) * (SMOKE.puff * (1 - src.smoulder) * Math.exp(-a / (SMOKE.burst * src.slow)) + src.smoulder * Math.exp(-a / (SMOKE.decay * src.slow)))
     * (1 - smooth((a - 0.55 * src.stop) / (0.45 * src.stop)));
+}
+
+/**
+ * v1.6 polish 4: the smoulder's share of candle `i`'s vapour at time `t` (0 – 1; the rest is the burst):
+ * the ember's output wavers (SMOKE.neck), the flame's last fuel boiling off the wick does not.
+ */
+export function smoulderShare(i: number, t: number, kind: SmokeKind = 'breath'): number {
+  const src = smokeSource(i, kind);
+  const a = Math.max(0, t - src.bare);
+  const burst = SMOKE.puff * (1 - src.smoulder) * Math.exp(-a / (SMOKE.burst * src.slow)), smoulder = src.smoulder * Math.exp(-a / (SMOKE.decay * src.slow));
+  return smoulder / (burst + smoulder);
 }
 
 /**
@@ -1198,9 +1215,10 @@ function computePlume(i: number, t: number, wickAt: WickAt, kind: SmokeKind, wak
     // Opacity of the whole column here: the vapour condenses a millimetre above the ember (4 ms),
     // thins as it widens and fades with age; it leaves the wick dense even in the breath (in the
     // wick's own wake).
-    // (In the breath, the jet's entrainment dilutes it: SMOKE.breathDilute.)
+    // (In the breath, the jet's entrainment dilutes it: SMOKE.breathDilute; v1.6 polish 4: 1/(1 + U/1.6), was
+    // U/6: judge 4, the denser puff of polish 3 fogged the next candle to near-white.)
     const dilute = (breath ? 1 / (1 + breathAt(i, birth) / SMOKE.breathDilute) : 1) / (1 + moving / STRUNG_AT);
-    const qm = q * (1 + SMOKE.neck[1] * Math.sin(n3 * birth + m3));
+    const qm = q * (1 + SMOKE.neck[1] * smoulderShare(i, birth, kind) * Math.sin(n3 * birth + m3));
     B.rate[k] = qm * dilute;
     let depth = SMOKE.depth * qm * dilute * smooth(a / 0.004) * Math.pow((SMOKE.width0 * 1e-3 * head) / w, SMOKE.thin);
     const fades = (1 - smooth((a - src.fade[0]) / (src.fade[1] - src.fade[0]))) * tailFade;

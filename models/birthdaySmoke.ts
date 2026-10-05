@@ -127,8 +127,12 @@ export const SMOKE_VOLUME = {
   albedo: 0.92,
   key: 0.6,
   room: [0.6, 0.62, 0.66] as const,
-  /** v1.6 polish 2: the room light's multiple scattering in thick smoke (× 1 − e^−τ). */
-  roomOctaves: 1.1,
+  /**
+   * v1.6 polish 2: the room light's multiple scattering in thick smoke (× 1 − e^−τ). v1.6 polish 4: 1.1 → 4:
+   * the first puff, thinner (fire.ts SMOKE.breathDilute) so a candle behind it keeps its colour, gives the
+   * room's light back as a white cloud does, its core still +25–34 levels over the wall.
+   */
+  roomOctaves: 4.0,
 } as const;
 
 const VOX = SMOKE_VOLUME.voxel;

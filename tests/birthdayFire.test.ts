@@ -12,7 +12,7 @@ import { BirthdayScene } from '../src/scenes/birthday/index.ts';
 import { CARRY_FROM, DURATIONS, IGNITE_START, ON_STAND } from '../src/scenes/birthday/poses.ts';
 import {
   ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, frameScale, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
-  breathAt, POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeLaminar, smokeLean, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
+  breathAt, POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeLaminar, smokeLean, smokeRate, smokeSource, smokeStrand, smoulderShare, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /** Wick tip of candle i in cake_secondary space (seated, nominal). */
@@ -377,6 +377,22 @@ describe('Birthday fire: the smoke', () => {
       expect(wHi).toBeLessThanOrEqual(1 + SMOKE.neck[0] + 1e-6);
       expect(rHi).toBeGreaterThan(1.2);
       expect(rLo).toBeLessThan(0.8);
+    }
+  });
+
+  it('v1.6 polish 4: the breath dilutes the burst it carries (no fog bank over the next candle), and only the smoulder wavers', () => {
+    const st = newSmokeStrand();
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const b = BREATH_AT[i]!, t = b.lift + 0.02;
+      smokeStrand(i, 0, t, still(i), st);
+      // The newest parcel was born in the breath at its height: at most 1 / (1 + U / SMOKE.breathDilute) of its vapour is drawn.
+      const U = breathAt(i, t), q = smokeRate(i, t);
+      expect(U).toBeGreaterThan(0.9);
+      expect(st.rate[0]! / (0.42 * q)).toBeLessThan(1.02 / (1 + U / SMOKE.breathDilute));
+      expect(1 / (1 + U / SMOKE.breathDilute)).toBeLessThan(0.65);
+      // The burst's vapour does not waver with the ember; a second on, the smoulder is all of it.
+      expect(smoulderShare(i, b.lift + 0.01)).toBeLessThan(0.1);
+      expect(smoulderShare(i, b.lift + 1)).toBeGreaterThan(0.99);
     }
   });
 
