@@ -30,7 +30,7 @@ import {
 } from 'three';
 import { COVER, PLATE_PROFILE, plateTop } from './dinnerContract.ts';
 import {
-  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, crownFray, dragAt, EDGE, GUSH, gushOut, gushRise, leftSteamFade, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, SQUEEZE, STEM_HEAT, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
+  CAP_BAND, CLOUD, CLOUD_Y_MAX, cloudLook, crownFray, dragAt, EDGE, GUSH, gushOut, gushRise, RAISED_DIR, raisedGap, STEM_BAND, SPILL, spillFade, spillSource, type CloudState, cloudState, newCloudState, OUTER_STEPS, RISE_BAND, SKIRT_STEPS, SQUEEZE, squeezeLive, squeezeStrength, STEM_HEAT, type SteamClock, steamBounds, VEIL, VERTICAL_STEPS, veilSource,
 } from '../src/scenes/dinner/steam.ts';
 import { requestSceneDepth, type SceneDepthFrame } from '../src/render/sceneDepth.ts';
 
@@ -788,16 +788,19 @@ vec3 squeezeFrame(vec3 p, float ts) {
   cv.y -= mix(uLift, drawn, smoothstep(0.0, 0.03, ts));
   return cv;
 }
+// (v1.6 review: gated on their own strength, uK.z (a clock that carried a cloud and was closed over: \`squeezeStrength\`),
+// and their own window, no longer on the cloud's fade (uA.w): a decline captured late in the cloud's life lost them in one
+// frame at τ 2.8 s, when the cloud's own fade reached 0.)
 bool squeezeOccupies(vec3 p, int l) {
   float ts = uA[l].x - uD[l].z;
-  if (uA[l].w <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return false;
+  if (uK[l].z <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return false;
   vec3 cv = squeezeFrame(p, ts);
   float x = length(cv.xz) - ${f(COVER.radius)};
   return x > -0.03 && x < 0.5 && cv.y > -0.08 && cv.y < 0.32;
 }
 float squeeze(vec3 p, int l) {
   float ts = uA[l].x - uD[l].z;
-  if (uA[l].w <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return 0.0;
+  if (uK[l].z <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return 0.0;
   vec3 cv = squeezeFrame(p, ts);
   float r = length(cv.xz);
   float x = r - ${f(COVER.radius)};
@@ -2145,8 +2148,9 @@ export class DinnerSteam {
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
       // (v1.6 polish 5: and the seating's puffs' strength: the clock's light at the capture, the fog it squeezed out.)
       // (v1.6 polish 5: the crown's wake tongues come after the held dome, as its crown is drawn up, and go as the cap rolls.)
+      // (v1.6 review: on a clock that carried a cloud, whatever its fade has come to since: the puffs' own gate.)
       K[l]!.set(look.capCore, Math.min(STEAM_LOOK.tongue, 0.8 * dragAt(1.5)) * crownFray(Math.min(tau, c.emitEnd)) * (1 - smoothstep01((s.age - 0.55) / 0.35)),
-        Number.isFinite(c.capture) && Number.isFinite(c.emitEnd) ? leftSteamFade(c.capture, c.emitEnd, c.capture) : 0, s.recede);
+        squeezeStrength(c.emitStart, c.emitEnd, c.capture), s.recede);
       // (The body's mean density over the core's, for the light volume: the haze, the sheets' share of the volume
       // (≈ 1.6 × their half-width: the field's density at zero) less the holes torn in them, and the skin.)
       M[l]!.set(look.fold, look.foldWidth, look.haze, look.core * (look.haze + look.fold * look.foldWidth * 1.6 * 0.7) + 0.35 * look.sheet);
@@ -2173,8 +2177,9 @@ export class DinnerSteam {
       // (The occupancy reaches as far as the turbulence, the swell and the billows can move the edge.)
       S3[l]!.set(s.floor, s.turb + look.amp + look.billow + 2 * EDGE.fine * s.peel + 0.03, s.stemFade, 0);
       steamBounds(s, { tau, emitStart: c.emitStart, emitEnd: c.emitEnd }, cMin[l]!, cMax[l]!, vMin[l]!, vMax[l]!, sMin[l]!, sMax[l]!);
-      // (The seating's squeeze: round the seated cover, from just before the capture.)
-      if (present && Number.isFinite(c.capture) && tau >= c.capture - SQUEEZE_LEAD && tau <= c.capture + SQUEEZE_LIFE) {
+      // (The seating's squeeze: round the seated cover, from just before the capture. v1.6 review: while the puffs live,
+      // not while the cloud's own fade does: they were cut with their box at τ 2.8 s on a late decline.)
+      if (squeezeLive(tau, c.emitStart, c.emitEnd, c.capture)) {
         // (v1.6 polish 5: up to the descending cover they ride before the capture, and as far as the lifted dish draws them after it.)
         const at = this.uniforms.uSeated!.value as Vector3, rq = COVER.radius + 0.55;
         sMin[l]!.min(TMP_E.set(at.x - rq, Math.max(0, at.y - 0.1), at.z - rq));

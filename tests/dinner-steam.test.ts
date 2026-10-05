@@ -10,7 +10,7 @@ import { STEAM_LOOK } from '../models/dinnerSteam.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
   axisForward, axisInverse, CLOUD, cloudDensity, recedeWeight, cloudLook, cloudSeat, cloudState, crownFray, dragAt, dragCentre, EDGE, GUSH, heldDrag, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
-  spillSource, SQUEEZE, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
+  spillSource, SQUEEZE, squeezeFade, squeezeLive, squeezeStrength, STEAM_END, steamBounds, steamEndAfter, STEAM_GONE, STEAM_REST, stirFade, VEIL, veilDensity, veilSource, wakeFade,
 } from '../src/scenes/dinner/steam.ts';
 
 /**
@@ -609,6 +609,72 @@ describe('Dinner steam on stage (v1.5 clocks, v1.6 field)', () => {
     expect(veilSource(cut + VEIL.cut, -Infinity, cut)).toBe(0);
     const tau = cut + 0.6;
     expect(veilDensity(VEIL.rise * (tau - cut - VEIL.cut) - 0.01, tau, -Infinity, cut)).toBe(0);
+  });
+
+  it('v1.6 review: a decline late in the cloud\'s life keeps its seating puffs to their end, past the cloud\'s own (τ 2.8 s)', () => {
+    const s = stage();
+    s.director.setIntent('accept');
+    // The accept plays out and its steam settles on; the guest declines at τ ≈ 2.13 s: the rewind from the accepted
+    // pose sets the cover back on at τ ≈ 2.5, and the cloud's own end (τ 2.8) falls within the puffs' life.
+    s.run(2.13);
+    s.director.setIntent('decline');
+    const [left] = s.scene.steamState.left;
+    expect(left).toBeDefined();
+    const { capture, until } = left!;
+    expect(capture).toBeGreaterThan(2.45);
+    expect(capture).toBeLessThan(2.55);
+    const cloudEnd = CLOUD.release + CLOUD.life;
+    expect(capture + SQUEEZE.life).toBeGreaterThan(cloudEnd + 0.2);
+    expect(squeezeLive(cloudEnd + 0.1, -Infinity, left!.emitEnd, capture)).toBe(true);
+    // The clock that carries them ends with them: not before (cut off), nor long after (drawing nothing).
+    expect(until).toBeGreaterThanOrEqual(capture + SQUEEZE.life - 1e-9);
+    expect(until).toBeLessThanOrEqual(capture + SQUEEZE.life + 0.02);
+    // What the march is given on the clock left behind (layer 1), frame by frame: the puffs' strength (uK.z, their gate),
+    // their time since the capture (uA.x − uD.z), their box (the spill's), and the cloud's own gate (uA.w).
+    type V4 = { x: number; y: number; z: number; w: number };
+    const steam = (s.scene as unknown as { steam: { uniforms: Record<string, { value: unknown }>; marchMaterial: { fragmentShader: string } } }).steam;
+    const U = steam.uniforms;
+    let prev = 0, peak = 0, lastDrawn = -Infinity, pastCloud = 0, frames = 0;
+    s.run(until - s.now + 0.1, () => {
+      if (!s.scene.steamState.left.length) return;
+      const A = (U.uA!.value as V4[])[1]!, D = (U.uD!.value as V4[])[1]!, K = (U.uK!.value as V4[])[1]!;
+      const lo = (U.uSpillMin!.value as Vector3[])[1]!, hi = (U.uSpillMax!.value as Vector3[])[1]!;
+      const ts = A.x - D.z;
+      const on = K.z > 0 && ts >= -SQUEEZE.lead && ts <= SQUEEZE.life;
+      const v = on ? K.z * squeezeFade(ts) : 0;
+      // Their box is there while they are (it was the cloud's to keep).
+      if (on) expect(lo.x <= hi.x && lo.y <= hi.y && hi.y > COVER_SEATED.y).toBe(true);
+      // No frame loses over 30 % of them while they show (≥ 5 % of their peak; their last tenth of a second fades out).
+      if (prev > 0.05 * peak) expect(v).toBeGreaterThan(0.7 * prev);
+      // Past the cloud's own end: the cloud is no longer drawn, the puffs are.
+      if (A.x > cloudEnd && v > 0) {
+        expect(A.w).toBe(0);
+        pastCloud++;
+      }
+      if (v > 0) lastDrawn = A.x;
+      peak = Math.max(peak, v);
+      prev = v;
+      frames++;
+    });
+    expect(frames).toBeGreaterThan(30);
+    expect(pastCloud).toBeGreaterThan(15);
+    expect(peak).toBeGreaterThan(0.2);
+    // They are drawn to the end of their life, and the clock ends with them.
+    expect(lastDrawn).toBeGreaterThan(capture + SQUEEZE.life - 2 / 60);
+    expect(until - lastDrawn).toBeLessThan(0.02 + 2 / 60);
+    expect(s.scene.steamState.left).toHaveLength(0);
+    // The shader's own gate is their strength, not the cloud's fade.
+    const src = steam.marchMaterial.fragmentShader;
+    for (const fn of ['bool squeezeOccupies(vec3 p, int l)', 'float squeeze(vec3 p, int l)']) {
+      const at = src.indexOf(fn);
+      expect(at).toBeGreaterThan(0);
+      const body = src.slice(at, src.indexOf('\n}', at));
+      expect(body).toContain('uK[l].z <= 0.0');
+      expect(body).not.toContain('uA[l].w');
+    }
+    // A clock that carried no cloud (a reveal resumed part-way) squeezes nothing out.
+    expect(squeezeStrength(0.3, 0.6, 0.9)).toBe(0);
+    expect(squeezeStrength(-Infinity, 0.6, Infinity)).toBe(0);
   });
 
   it('changed back mid-rewind, the reveal resumes and releases its own steam beside what was left behind', () => {
