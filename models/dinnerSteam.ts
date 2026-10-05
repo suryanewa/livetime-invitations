@@ -565,6 +565,8 @@ uniform vec4 uSp1[${STEAM_LAYERS}];
 uniform vec4 uGp0[${STEAM_LAYERS}];
 uniform vec4 uGp1[${STEAM_LAYERS}];
 uniform float uSpillOn[${STEAM_LAYERS}];
+/** Per clock (v1.6 review): the cover's lift from the seat latched from the capture (su: the most it has been since), the seating's puffs' wake. */
+uniform float uWake[${STEAM_LAYERS}];
 
 const float RHO_MAX = ${f(RHO_MAX)};
 const float Y_MAX = ${f(Y_MAX)};
@@ -780,11 +782,13 @@ float spill(vec3 p, int l, float detail) {
  * seat as the dish rose: the judge's 30 k px of puffs gone in one frame at 0.832 s.) Before the capture they ride the
  * descending cover, as they did. \`ts\`: time since the capture.
  */
-vec3 squeezeFrame(vec3 p, float ts) {
+vec3 squeezeFrame(vec3 p, float ts, int l) {
   vec3 cv = p - uSeated;
   // (From the capture the dish is lifted out of them (the decline lifts it at once, ≈ 46 cm in 0.3 s): they stay in
-  // the room's air where they were squeezed out, drawn up a few centimetres in its wake, those over the porcelain most.)
-  float drawn = ${f(SQUEEZE_WAKE)} * (1.0 - exp(-uLift / ${f(SQUEEZE_WAKE)})) * (1.0 - 0.6 * smoothstep(0.72, 0.95, length(cv.xz)));
+  // the room's air where they were squeezed out, drawn up a few centimetres in its wake, those over the porcelain most.
+  // v1.6 review: by the lift latched from the capture (uWake: the most the dish has been lifted since, the live lift while
+  // it rises): after the live lift (uLift) they sank ≤ 4 cm with a dish a change back brought down, and rose again.)
+  float drawn = ${f(SQUEEZE_WAKE)} * (1.0 - exp(-uWake[l] / ${f(SQUEEZE_WAKE)})) * (1.0 - 0.6 * smoothstep(0.72, 0.95, length(cv.xz)));
   cv.y -= mix(uLift, drawn, smoothstep(0.0, 0.03, ts));
   return cv;
 }
@@ -794,14 +798,14 @@ vec3 squeezeFrame(vec3 p, float ts) {
 bool squeezeOccupies(vec3 p, int l) {
   float ts = uA[l].x - uD[l].z;
   if (uK[l].z <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return false;
-  vec3 cv = squeezeFrame(p, ts);
+  vec3 cv = squeezeFrame(p, ts, l);
   float x = length(cv.xz) - ${f(COVER.radius)};
   return x > -0.03 && x < 0.5 && cv.y > -0.08 && cv.y < 0.32;
 }
 float squeeze(vec3 p, int l) {
   float ts = uA[l].x - uD[l].z;
   if (uK[l].z <= 0.0 || ts < ${f(-SQUEEZE_LEAD)} || ts > ${f(SQUEEZE_LIFE)}) return 0.0;
-  vec3 cv = squeezeFrame(p, ts);
+  vec3 cv = squeezeFrame(p, ts, l);
   float r = length(cv.xz);
   float x = r - ${f(COVER.radius)};
   if (x < -0.03 || x > 0.5 || cv.y < -0.08 || cv.y > 0.32) return 0.0;
@@ -1696,7 +1700,8 @@ export class DinnerSteam {
   private readonly marchScene = new Scene();
   private readonly material: ShaderMaterial;
   private readonly marchMaterial: ShaderMaterial;
-  private readonly clocks: { tau: number | null; emitStart: number; emitEnd: number; capture: number; fade: number; state: CloudState }[] = [];
+  /** (v1.6 review: `wakeLift`, the cover's lift latched from the capture `wakeFor`, last at τ `wakeTau`: the seating's puffs' wake.) */
+  private readonly clocks: { tau: number | null; emitStart: number; emitEnd: number; capture: number; fade: number; state: CloudState; wakeLift: number; wakeFor: number; wakeTau: number }[] = [];
   private readonly coverInv = new Matrix4();
   private key: Object3D | null | undefined = undefined;
   private noise: WebGL3DRenderTarget | null = null;
@@ -1742,7 +1747,7 @@ export class DinnerSteam {
   constructor() {
     this.object.name = 'fx_steam';
     this.object.visible = false;
-    for (let l = 0; l < STEAM_LAYERS; l++) this.clocks.push({ tau: null, emitStart: -Infinity, emitEnd: Infinity, capture: Infinity, fade: 1, state: newCloudState() });
+    for (let l = 0; l < STEAM_LAYERS; l++) this.clocks.push({ tau: null, emitStart: -Infinity, emitEnd: Infinity, capture: Infinity, fade: 1, state: newCloudState(), wakeLift: 0, wakeFor: NaN, wakeTau: -Infinity });
     const v4 = () => Array.from({ length: STEAM_LAYERS }, () => new Vector4());
     const v3 = () => Array.from({ length: STEAM_LAYERS }, () => new Vector3());
     this.map = new WebGLRenderTarget(MAP_W, MAP_H * STEAM_LAYERS, {
@@ -1805,7 +1810,7 @@ export class DinnerSteam {
       uLift: { value: 0 },
       uSeated: { value: new Vector3() },
       uLight: { value: this.light.texture },
-      uR: { value: v4() }, uH: { value: v4() }, uK: { value: v4() }, uM: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uGp0: { value: v4() }, uGp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] },
+      uR: { value: v4() }, uH: { value: v4() }, uK: { value: v4() }, uM: { value: v4() }, uA: { value: v4() }, uB: { value: v4() }, uC: { value: v4() }, uD: { value: v4() }, uE: { value: v4() }, uF: { value: v4() }, uSp0: { value: v4() }, uSp1: { value: v4() }, uGp0: { value: v4() }, uGp1: { value: v4() }, uSpillOn: { value: [0, 0, 0] }, uWake: { value: [0, 0, 0] },
     };
     this.lightMaterial = new ShaderMaterial({
       name: 'fx_steam_light', uniforms: this.uniforms, vertexShader: FULLSCREEN_VERTEX, fragmentShader: LIGHT_FRAGMENT, depthTest: false, depthWrite: false, toneMapped: false,
@@ -2098,6 +2103,7 @@ export class DinnerSteam {
     const G = this.uniforms.uSp0!.value as Vector4[], H = this.uniforms.uSp1!.value as Vector4[];
     const Gp0 = this.uniforms.uGp0!.value as Vector4[], Gp1 = this.uniforms.uGp1!.value as Vector4[];
     const spillOn = this.uniforms.uSpillOn!.value as number[];
+    const wake = this.uniforms.uWake!.value as number[];
     const S0 = this.mapUniforms.uS0!.value as Vector4[], S1 = this.mapUniforms.uS1!.value as Vector4[];
     const S2 = this.mapUniforms.uS2!.value as Vector4[], S3 = this.mapUniforms.uS3!.value as Vector4[];
     const cMin = this.uniforms.uCloudMin!.value as Vector3[], cMax = this.uniforms.uCloudMax!.value as Vector3[];
@@ -2125,6 +2131,7 @@ export class DinnerSteam {
         A[l]!.set(0, 0, 0, 0);
         S0[l]!.set(0, 0, 0, 0);
         spillOn[l] = 0;
+        wake[l] = 0;
         return;
       }
       const tau = c.tau!;
@@ -2179,11 +2186,23 @@ export class DinnerSteam {
       steamBounds(s, { tau, emitStart: c.emitStart, emitEnd: c.emitEnd }, cMin[l]!, cMax[l]!, vMin[l]!, vMax[l]!, sMin[l]!, sMax[l]!);
       // (The seating's squeeze: round the seated cover, from just before the capture. v1.6 review: while the puffs live,
       // not while the cloud's own fade does: they were cut with their box at τ 2.8 s on a late decline.)
+      wake[l] = 0;
       if (squeezeLive(tau, c.emitStart, c.emitEnd, c.capture)) {
+        // (v1.6 review) The lift that draws them up, latched from the capture: the most the dish has been lifted since (the
+        // live lift while it rises, so a decline is drawn as before); before the capture, the descending cover's. A change
+        // back that brings the dish down again no longer takes them down with it.
+        const lift = this.uniforms.uLift!.value as number;
+        if (tau >= c.capture) {
+          if (c.wakeFor !== c.capture || tau < c.wakeTau) c.wakeLift = 0;
+          c.wakeLift = Math.max(c.wakeLift, lift);
+          c.wakeFor = c.capture;
+          c.wakeTau = tau;
+        }
+        wake[l] = tau >= c.capture ? c.wakeLift : lift;
         // (v1.6 polish 5: up to the descending cover they ride before the capture, and as far as the lifted dish draws them after it.)
         const at = this.uniforms.uSeated!.value as Vector3, rq = COVER.radius + 0.55;
         sMin[l]!.min(TMP_E.set(at.x - rq, Math.max(0, at.y - 0.1), at.z - rq));
-        sMax[l]!.max(TMP_E.set(at.x + rq, at.y + 0.35 + Math.min(this.uniforms.uLift!.value as number, tau < c.capture + 0.03 ? Infinity : SQUEEZE_WAKE), at.z + rq));
+        sMax[l]!.max(TMP_E.set(at.x + rq, at.y + 0.35 + Math.min(wake[l]!, tau < c.capture + 0.03 ? Infinity : SQUEEZE_WAKE), at.z + rq));
       }
       for (const [lo, hi, lit] of [[cMin[l]!, cMax[l]!, true], [vMin[l]!, vMax[l]!, true], [sMin[l]!, sMax[l]!, false]] as const) {
         lo.max(limMin);

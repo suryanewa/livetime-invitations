@@ -677,6 +677,47 @@ describe('Dinner steam on stage (v1.5 clocks, v1.6 field)', () => {
     expect(squeezeStrength(-Infinity, 0.6, Infinity)).toBe(0);
   });
 
+  it('v1.6 review: the seating\'s puffs keep the height the lifted dish drew them to when a change back brings it down', () => {
+    const s = stage();
+    s.director.setIntent('accept');
+    s.run(0.5);
+    s.director.setIntent('decline');
+    type V4 = { x: number; y: number; z: number; w: number };
+    const steam = (s.scene as unknown as { steam: { uniforms: Record<string, { value: unknown }>; marchMaterial: { fragmentShader: string } } }).steam;
+    const U = steam.uniforms;
+    const capture = s.scene.steamState.left[0]!.capture;
+    let wake = -1, top = -Infinity, rose = 0, held = 0, maxLift = 0;
+    const step = (changedBack: boolean) => () => {
+      const left = s.scene.steamState.left[0];
+      if (!left || !squeezeLive(left.tau, -Infinity, left.emitEnd, left.capture) || left.tau < capture) return;
+      const w = (U.uWake!.value as number[])[1]!, lift = U.uLift!.value as number, hi = (U.uSpillMax!.value as Vector3[])[1]!;
+      const K = (U.uK!.value as V4[])[1]!;
+      expect(K.z).toBeGreaterThan(0);
+      // The lift that draws them up never falls from the capture on (it followed the live lift down with the dish).
+      expect(w).toBeGreaterThanOrEqual(wake);
+      expect(w).toBeGreaterThanOrEqual(lift);
+      maxLift = Math.max(maxLift, lift);
+      expect(w).toBe(maxLift);
+      // While the decline lifts the dish it is the live lift: the decline is drawn as before.
+      if (!changedBack) { expect(w).toBe(lift); rose++; } else if (lift < w - 0.5) held++;
+      // Their box keeps its top (it is the wake's from 0.03 s after the capture).
+      if (left.tau >= capture + 0.03) { expect(hi.y).toBeGreaterThanOrEqual(top - 1e-9); top = hi.y; }
+      wake = w;
+    };
+    s.run(1.0 - s.now, step(false));
+    s.director.setIntent('accept');
+    s.run(capture + SQUEEZE.life + 0.1 - s.now, step(true));
+    expect(rose).toBeGreaterThan(5);
+    expect(wake).toBeGreaterThan(1);
+    // The change back brought the dish down past them (≥ 0.5 su below the latch) while they lived.
+    expect(held).toBeGreaterThan(3);
+    // The shader draws them up by the latched lift, not the live one.
+    const src = steam.marchMaterial.fragmentShader;
+    const frame = src.slice(src.indexOf('vec3 squeezeFrame('), src.indexOf('\n}', src.indexOf('vec3 squeezeFrame(')));
+    expect(frame).toContain('exp(-uWake[l]');
+    expect(frame).not.toContain('exp(-uLift');
+  });
+
   it('changed back mid-rewind, the reveal resumes and releases its own steam beside what was left behind', () => {
     const s = stage();
     s.director.setIntent('accept');
