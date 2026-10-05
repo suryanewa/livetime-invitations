@@ -3,15 +3,16 @@ import { Color, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { blackbodyAt, createFlameMaterial, SMOKE_RADIANCE, sootRadiance } from '../src/render/flame.ts';
 import { rigBirthday } from '../models/birthday.ts';
-import { CANDLE_LIGHT } from '../models/birthdayFire.ts';
+import { CANDLE_LIGHT, flameLightColor, SMOKE_RIBBON_POINTS, waxGlowColor } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
+import { ribbonShare, smokeTurbulence } from '../models/birthdaySmoke.ts';
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME_FRAME, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
 import { CARRY_FROM, DURATIONS, IGNITE_START, ON_STAND } from '../src/scenes/birthday/poses.ts';
 import {
   ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, frameScale, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
-  POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
+  POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeLaminar, smokeLean, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /** Wick tip of candle i in cake_secondary space (seated, nominal). */
@@ -44,7 +45,13 @@ describe('Birthday fire: the flame', () => {
     expect((2 * FLAME_REST.radius) / MM).toBeGreaterThanOrEqual(4.5);
     expect((2 * FLAME_REST.radius) / MM).toBeLessThanOrEqual(5.5);
     expect((WICK_TIP_Y - POOL_Y) / MM).toBeCloseTo(3, 6);
-    expect((WICK_TIP_Y - (FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length)) / MM).toBeCloseTo(1.2, 6);
+    // v1.6 polish 2: the luminous zone's foot 0.4 mm over the wick's tip (its soot forms there, the
+    // white-yellow core 1–1.5 mm over the tip); under it, the lowest ≈15–20 % of the flame is its dim
+    // blue zone (re-judge: the foot 1.2 mm under the tip drew an orange collar).
+    expect((FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length - WICK_TIP_Y) / MM).toBeCloseTo(0.4, 6);
+    const blue = (FLAME_REST.foot * FLAME_REST.length) / FLAME_REST.length;
+    expect(blue).toBeGreaterThan(0.15);
+    expect(blue).toBeLessThan(0.22);
     expect((FLAME_REST.base + FLAME_REST.widest * FLAME_REST.length - WICK_TIP_Y) / MM).toBeCloseTo(1, 6);
     // The bare wick under the luminous zone is at most a quarter of the flame seen above the pool.
     expect((FLAME_REST.base + FLAME_REST.foot * FLAME_REST.length - POOL_Y) / top).toBeLessThan(0.25);
@@ -121,6 +128,51 @@ describe('Birthday fire: the flame', () => {
   });
 });
 
+describe('Birthday fire: the flames\' light (v1.6 polish 2)', () => {
+  it('is a warm cream, not red: green proportionate, some blue (re-judge: the top went lilac, +73 % red, +20 % green, no blue)', () => {
+    const c = flameLightColor();
+    expect(c.r).toBeCloseTo(1, 6);
+    expect(c.g).toBeGreaterThan(0.7);
+    expect(c.g).toBeLessThan(0.9);
+    expect(c.b).toBeGreaterThan(0.3);
+    expect(c.b).toBeLessThan(0.6);
+    // The wax under its own flame glows warmer than the room-balanced light.
+    const w = waxGlowColor();
+    expect(w.g / w.r).toBeLessThan(c.g / c.r);
+    expect(w.b / w.r).toBeLessThan(c.b / c.r);
+  });
+
+  it('breathes with the flames, ±2–3 % round a candle and at the top\'s centre; exactly still at gain 0', () => {
+    const fl = newFlicker();
+    const own: number[][] = Array.from({ length: CANDLE_COUNT }, () => []), mean: number[] = [];
+    for (let t = 0; t < 60; t += 1 / 60) {
+      let m = 0;
+      for (let i = 0; i < CANDLE_COUNT; i++) { flicker(i, t, 1, fl); own[i]!.push(fl.light); m += fl.light / CANDLE_COUNT; }
+      mean.push(m);
+    }
+    const sd = (x: number[]) => { const a = x.reduce((p, q) => p + q, 0) / x.length; return Math.sqrt(x.reduce((p, q) => p + (q - a) ** 2, 0) / x.length) / a; };
+    for (const o of own) { expect(sd(o)).toBeGreaterThan(0.02); expect(sd(o)).toBeLessThan(0.035); }
+    expect(sd(mean)).toBeGreaterThan(0.012);
+    expect(sd(mean)).toBeLessThan(0.025);
+    for (let i = 0; i < CANDLE_COUNT; i++) expect(flicker(i, 3.3, 0, fl).light).toBe(1);
+  });
+
+  it('goes out candle by candle at the blow, each with its own flame, never the whole top at once', () => {
+    const outAt = Array.from({ length: CANDLE_COUNT }, (_, i) => {
+      const b = BREATH_AT[i]!;
+      // Full until its own lift-off, gone within BREATH.tear of it, never faster than 0.05 a millisecond.
+      expect(flameState(i, b.lift - 0.001, 'accept').intensity).toBeGreaterThan(0.99);
+      expect(flameState(i, b.lift + BREATH.tear + 0.001, 'accept').intensity).toBe(0);
+      for (let t = b.lift; t < b.lift + BREATH.tear; t += 0.001) expect(flameState(i, t, 'accept').intensity - flameState(i, t + 0.001, 'accept').intensity).toBeLessThan(0.05);
+      return b.lift;
+    });
+    // The six go out over more than 0.1 s, and at no 16 ms frame does more than half of the light go.
+    expect(Math.max(...outAt) - Math.min(...outAt)).toBeGreaterThan(0.1);
+    const total = (t: number) => Array.from({ length: CANDLE_COUNT }, (_, i) => flameState(i, t, 'accept').intensity).reduce((p, q) => p + q, 0);
+    for (let t = 0; t < 0.5; t += 0.004) expect(total(t) - total(t + 0.016)).toBeLessThan(0.5 * CANDLE_COUNT);
+  });
+});
+
 describe('Birthday fire: the smoke', () => {
   it('rises as a candle plume: 0.3–0.5 m/s a few centimetres up, slower higher', () => {
     const v = (z: number) => {
@@ -176,6 +228,54 @@ describe('Birthday fire: the smoke', () => {
       const wLow = Math.min(...st.width.slice(0, 3)), wHigh = Math.max(...st.width);
       expect(wHigh).toBeGreaterThan(2 * wLow);
     }
+  });
+
+  it('v1.6 polish 2: each stem ends at its own height, 4–12 cm, and leans its own way, 3–8°, neighbours splaying (re-judge: six evenly spaced parallel stems)', () => {
+    const h = Array.from({ length: CANDLE_COUNT }, (_, i) => smokeLaminar(i));
+    expect(Math.min(...h)).toBeGreaterThanOrEqual(0.04);
+    expect(Math.max(...h)).toBeLessThanOrEqual(0.12);
+    expect(Math.max(...h) - Math.min(...h)).toBeGreaterThan(0.06);
+    const sorted = [...h].sort((a, b) => a - b);
+    for (let k = 1; k < sorted.length; k++) expect(sorted[k]! - sorted[k - 1]!).toBeGreaterThan(0.008);
+    const leans = Array.from({ length: CANDLE_COUNT }, (_, i) => smokeLean(i));
+    for (const [a] of leans) { expect(a).toBeGreaterThanOrEqual((3 * Math.PI) / 180); expect(a).toBeLessThanOrEqual((8 * Math.PI) / 180); }
+    // Both ways across the picture: not six parallel stems.
+    const across = leans.map(([, x]) => x);
+    expect(Math.min(...across)).toBeLessThan(-0.3);
+    expect(Math.max(...across)).toBeGreaterThan(0.3);
+  });
+
+  it('v1.6 polish 2: the strips draw the stem and the thin filament it goes on as, the volume the rest (mass kept), the first puff and the breath-swept smoke', () => {
+    const lam = 0.08;
+    // The laminar stem: the strip's alone.
+    expect(ribbonShare(0.04, 0.04, lam, 1, 0.0015)).toBeCloseTo(1, 6);
+    // Above its transition a filament carries on (re-judge: "carry thin, folding, crisp structure above the stem"), fading out by 24 cm over it.
+    expect(ribbonShare(0.12, 0.11, lam, 1, 0.002)).toBeGreaterThan(0.6);
+    expect(ribbonShare(0.4, 0.33, lam, 1, 0.002)).toBe(0);
+    // Its own curls make its path longer than its rise: still a filament; the breath's sweep is the volume's.
+    expect(ribbonShare(0.2, 0.1, lam, 1.2, 0.002)).toBeGreaterThan(0.3);
+    expect(ribbonShare(0.03, 0.005, lam, 0.05, 0.002)).toBe(0);
+    // The first vapour off the wick, and anything wider than a thread: the volume's.
+    expect(ribbonShare(0.01, 0.01, lam, 0.05, 0.0015)).toBe(0);
+    expect(ribbonShare(0.03, 0.03, lam, 1, 0.006)).toBe(0);
+    // The volume's turbulence: none on the stem, folded sheets above it, rolled (half) where the breath swept it.
+    expect(smokeTurbulence(0.04, 0.04, lam, 1)).toBe(0);
+    expect(smokeTurbulence(0.15, 0.14, lam, 1)).toBe(1);
+    expect(smokeTurbulence(0.03, 0.005, lam, 0.1)).toBeCloseTo(0.5, 6);
+  });
+
+  it('v1.6 polish 2: the strands share their plume (computed once a candle), each splitting off it at its own height', () => {
+    const a = newSmokeStrand(), b = newSmokeStrand();
+    smokeStrand(3, 0, 1.7, still(3), a);
+    smokeStrand(3, 2, 1.7, still(3), b);
+    // Low down (a laminar stem) the strands are the same thread; above the split they part.
+    let low = 0, high = 0;
+    for (let k = 0; k < SMOKE_POINT_COUNT; k++) {
+      const d = Math.hypot(a.position[k * 3]! - b.position[k * 3]!, a.position[k * 3 + 2]! - b.position[k * 3 + 2]!);
+      if (a.rise[k]! < smokeLaminar(3) * 0.8) low = Math.max(low, d); else if (a.rise[k]! > smokeLaminar(3) + 0.08) high = Math.max(high, d);
+    }
+    expect(low).toBeLessThan(1e-6);
+    expect(high / MPS).toBeGreaterThan(0.005);
   });
 
   it('is deterministic per candle and differs between candles', () => {
@@ -332,6 +432,12 @@ describe('Birthday fire: the smoke', () => {
       expect(maxH).toBeLessThan(2);
       expect(minW).toBeLessThan(0.62);
       expect(maxBend).toBeGreaterThan(0.3);
+      // v1.6 polish 2: off the wick it is a dim wisp within one frame: what the shader draws of it,
+      // its output × (1 − cool)^5, under a third 8 ms after lift-off and under 1 % at 16 ms (re-judge:
+      // a golden sliver with a white core drifted for 2–3 frames).
+      const seen = (ms: number) => { const f = flameState(i, b.lift + ms / 1000, 'accept'); return f.intensity * (1 - f.cool) ** 5; };
+      expect(seen(8)).toBeLessThan(0.3);
+      expect(seen(16)).toBeLessThan(0.01);
       // Gone within 50 ms of lift-off (its light and its soot), never drifting off as a whole flame.
       const at50 = flameState(i, b.lift + 0.05, 'accept');
       expect(at50.intensity).toBeLessThan(0.02);
@@ -667,7 +773,7 @@ describe('Birthday fire: the scene\'s secondary channel', () => {
     rig.root.updateMatrixWorld(true);
     expect(rig.nodes.cake_authored!.position.distanceTo(ON_STAND)).toBeGreaterThan(0.1);
     for (let k = 0; k < rig.candles.length; k++) {
-      const v = (k * SMOKE_STRAND_COUNT * SMOKE_POINT_COUNT) * 2;
+      const v = (k * SMOKE_STRAND_COUNT * SMOKE_RIBBON_POINTS) * 2;
       expect(new Vector3(pos.getX(v), pos.getY(v), pos.getZ(v)).distanceTo(tipOf(k))).toBeLessThan(0.05 * MM);
     }
     // The braids curl each their own way.

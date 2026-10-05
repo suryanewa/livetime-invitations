@@ -8,9 +8,9 @@ import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
 import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, SMOKE_GLOW, sootRadiance } from '../src/render/flame.ts';
 import { addHaze } from '../src/render/heatHaze.ts';
 import { markDepthOccluders, SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
-import { SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
+import { ribbonShare, SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
 import {
-  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, POOL_Y, rand, restLean, WICK_TIP_Y, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
+  FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, POOL_Y, rand, restLean, WICK_TIP_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeLaminar, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /**
@@ -41,11 +41,30 @@ const CANDLE_LIGHT_SCALE = 1.5 / 2500;
 const FLAME_LIGHT_CAL = 2.0;
 export const CANDLE_LIGHT = CANDLE_CANDELA * 25 * CANDLE_LIGHT_SCALE * FLAME_LIGHT_CAL;
 
-/** The flame's light colour: soot at ≈1,900 K (linear sRGB, luminance-normalised). */
+/**
+ * v1.6 polish 2: the flames' light as the camera records it. Soot at ≈1,900 K is deep orange to a
+ * camera balanced to daylight (linear (1, 0.28, 0.01): over the blue frosting it read lilac, +73 % red,
+ * +20 % green, nothing in blue); the camera in a room lit by a window and six candles balances part of
+ * the way to them (`balance` K), and the frosting returns their light diffused through the room's
+ * (`cream`: the share of it the room's white mixes in): a warm cream, ≈ (1, 0.84, 0.45).
+ */
+export const FLAME_LIGHT_WB = { soot: 1900, balance: 2200, cream: 0.3 } as const;
+
+/** The flame's light colour (linear sRGB, its largest channel 1): FLAME_LIGHT_WB. */
 export function flameLightColor(): Color {
-  const [r, g, b] = sootRadiance(1900);
+  const [r, g, b] = sootRadiance(FLAME_LIGHT_WB.soot);
+  const [wr, wg, wb] = sootRadiance(FLAME_LIGHT_WB.balance);
+  const c = [r / wr, g / wg, b / wb];
+  const m = Math.max(...c);
+  const k = FLAME_LIGHT_WB.cream;
+  return new Color(...(c.map((x) => (x / m) * (1 - k) + k) as [number, number, number]));
+}
+
+/** The wax's glow under its flame: halfway between the soot's own colour and the balanced light. */
+export function waxGlowColor(): Color {
+  const [r, g, b] = sootRadiance(FLAME_LIGHT_WB.soot);
   const m = Math.max(r, g, b);
-  return new Color(r / m, g / m, b / m);
+  return new Color(r / m, g / m, b / m).lerp(flameLightColor(), 0.5);
 }
 
 /** Flames lighting the cake (the master has six candles; the v1.1 tooling cake three). */
@@ -61,6 +80,12 @@ export interface FlameLights {
   pos: { value: Vector3[] };
   intensity: { value: number[] };
   color: { value: Color };
+  /**
+   * v1.6 polish 2: the colour of the light a candle's top glows with (its own flame's, scattered in
+   * the wax right under it: warmer than the light the camera balances the room's top to; cream there
+   * read pale cyan on the blue candles' tops).
+   */
+  wax: { value: Color };
   radius2: { value: number };
   /**
    * v1.6: every candle as an occluder of every flame's light (world): its axis from its base to its
@@ -78,6 +103,7 @@ export function createFlameLights(): FlameLights {
     pos: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => new Vector3()) },
     intensity: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => 0) },
     color: { value: flameLightColor() },
+    wax: { value: waxGlowColor() },
     radius2: { value: FLAME_LIGHT_RADIUS ** 2 },
     // Unposed candles stand far away (they occlude nothing until a flame rig places them).
     candleA: { value: Array.from({ length: FLAME_LIGHT_COUNT }, () => new Vector3(0, -1e3, 0)) },
@@ -111,6 +137,7 @@ const FLAME_LIGHT_PARS = /* glsl */ `
 uniform vec3 uFlamePos[${FLAME_LIGHT_COUNT}];
 uniform float uFlameI[${FLAME_LIGHT_COUNT}];
 uniform vec3 uFlameColor;
+uniform vec3 uFlameWax;
 uniform float uFlameR2;
 uniform vec3 uCandleA[${FLAME_LIGHT_COUNT}];
 uniform vec3 uCandleB[${FLAME_LIGHT_COUNT}];
@@ -181,7 +208,7 @@ function flameLightLoop(wax: boolean): string {
     }
     ${wax ? `if (fOwn >= 0 && uFlameI[fOwn] > 0.0) {
       vec3 ft = uFlamePos[fOwn] - uCandleB[fOwn];
-      reflectedLight.indirectDiffuse += material.diffuseColor * uFlameColor * (uFlameI[fOwn] / (dot(ft, ft) + uFlameR2)) * ${WAX_GLOW.toFixed(3)} * exp(-fBelow / ${WAX_MFP.toFixed(4)});
+      reflectedLight.indirectDiffuse += material.diffuseColor * uFlameWax * (uFlameI[fOwn] / (dot(ft, ft) + uFlameR2)) * ${WAX_GLOW.toFixed(3)} * exp(-fBelow / ${WAX_MFP.toFixed(4)});
     }` : ''}
   }`;
 }
@@ -208,14 +235,14 @@ export function patchFlameLight(material: Material, lights: FlameLights): void {
   material.onBeforeCompile = (shader, renderer) => {
     prev.call(material, shader, renderer);
     Object.assign(shader.uniforms, {
-      uFlamePos: lights.pos, uFlameI: lights.intensity, uFlameColor: lights.color, uFlameR2: lights.radius2, uCandleA: lights.candleA, uCandleB: lights.candleB, uCandleR: lights.occluder,
+      uFlamePos: lights.pos, uFlameI: lights.intensity, uFlameColor: lights.color, uFlameWax: lights.wax, uFlameR2: lights.radius2, uCandleA: lights.candleA, uCandleB: lights.candleB, uCandleR: lights.occluder,
       uTier: lights.tier,
     });
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${FLAME_LIGHT_PARS}`)
       .replace('#include <lights_fragment_end>', `${flameLightLoop(wax)}\n#include <lights_fragment_end>`);
   };
-  material.customProgramCacheKey = () => `${prevKey.call(material)}+flame-light-v4${wax ? '-wax' : ''}`;
+  material.customProgramCacheKey = () => `${prevKey.call(material)}+flame-light-v5${wax ? '-wax' : ''}`;
   material.needsUpdate = true;
 }
 
@@ -333,8 +360,9 @@ export const HAZE = { width: 6, height: 4.5, px: 1.2, plume: 0.6 } as const;
  * bright orange point; at its in-flame glow (EMBER.lit) a dim red tip in the dark zone.
  */
 const EMBER_GAIN = 320;
-/** Scene units per millimetre (fire.ts MM). */
+/** Scene units per millimetre (fire.ts MM) and per metre (fire.ts MPS). */
 const MM_UNITS = 0.005;
+const MPS_UNITS = 5;
 
 /**
  * Replace a candle's authored flame mesh (the GLB's v1.1 lathe) with the volumetric flame and add
@@ -487,8 +515,26 @@ export function rigCandleFire(candle: Object3D, node: Object3D, wick: Object3D, 
 }
 
 let beadShared: SphereGeometry | null = null;
-/** The bead: a knob ≈1.1 mm across (the braid's char swells a little over the wick's 1 mm). */
-const beadGeometry = () => (beadShared ??= new SphereGeometry(0.55 * MM_UNITS, 12, 8));
+/**
+ * The bead: a knob of char (v1.6 polish 2: ≈ 0.6 mm across and lumpy, its radius ±25 % round it; the
+ * 1.1 mm sphere read as a match head in the macro and an orange dot at 192 px).
+ */
+const beadGeometry = () => {
+  if (beadShared) return beadShared;
+  const g = new SphereGeometry(0.3 * MM_UNITS, 10, 7);
+  const p = g.getAttribute('position') as BufferAttribute;
+  const v = new Vector3();
+  for (let k = 0; k < p.count; k++) {
+    v.fromBufferAttribute(p, k);
+    const n = v.clone().normalize();
+    // Lumps: a few low harmonics of the direction (seam-free: a function of the position only).
+    const lump = 0.16 * Math.sin(5.1 * n.x + 1.3) * Math.cos(4.3 * n.y - 0.7) + 0.1 * Math.sin(7.7 * n.z + 2.9 * n.x) - 0.08 * n.y;
+    v.multiplyScalar(1 + lump);
+    p.setXYZ(k, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return (beadShared = g);
+};
 
 const qInv = new Quaternion();
 const qCake = new Quaternion();
@@ -518,7 +564,9 @@ export function poseFlame(r: FlameRig, candle: Object3D, f: FlameState, fl: Flic
     e.setRGB(e.r / (1 + e.r), e.g / (1 + e.g), e.b / (1 + e.b));
   } else r.wick.ember.value.setRGB(0, 0, 0);
   // The light is the flame's luminous (soot) output: a fresh blue bead lights almost nothing.
-  r.lights.intensity.value[r.index] = CANDLE_LIGHT * Math.max(0, f.intensity * fl.intensity) * sootFormed(f.lit);
+  // (v1.6 polish 2: breathing with the flame and the room's draft, fl.light; at the blow it goes out
+  // candle by candle with each flame's own output, over BREATH.tear from its lift-off.)
+  r.lights.intensity.value[r.index] = CANDLE_LIGHT * Math.max(0, f.intensity * fl.light) * sootFormed(f.lit);
   // The candle as an occluder of every flame's light: its axis from its base to its wax top (in the
   // world, where the light's shader works), whether or not its own flame burns.
   candle.updateWorldMatrix(true, false);
@@ -632,6 +680,9 @@ function keyLight(scene: Object3D): Light | null {
   return k;
 }
 
+/** Points each smoke ribbon draws: its parcels and a Catmull–Rom midpoint between every two (v1.6 polish 2). */
+export const SMOKE_RIBBON_POINTS = 2 * SMOKE_POINT_COUNT - 1;
+
 /** Candle i's wick tip for smoke born at `birth` (SmokeRig.update; fire.ts WickAt). */
 export type WickSource = (i: number, birth: number, out: [number, number, number]) => number | void;
 
@@ -662,7 +713,7 @@ export class SmokeRig {
     if (!stand) parent.traverse((o) => { if (/^candle_\d\d$/.test(o.name)) markDepthOccluders(o); });
     this.volume = new SmokeVolume(parent);
     const strands = candles * SMOKE_STRAND_COUNT;
-    const n = strands * SMOKE_POINT_COUNT * 2;
+    const n = strands * SMOKE_RIBBON_POINTS * 2;
     const mk = (size: number) => new BufferAttribute(new Float32Array(n * size), size).setUsage(DynamicDrawUsage);
     this.attrs = { position: mk(3), aPrev: mk(3), aNext: mk(3), aWidth: mk(1), aAlpha: mk(1), aAge: mk(1), aSeed: mk(1), aHot: mk(1) };
     for (const [k, a] of Object.entries(this.attrs)) this.geometry.setAttribute(k, a);
@@ -671,8 +722,8 @@ export class SmokeRig {
     this.geometry.setAttribute('aSide', new BufferAttribute(side, 1));
     const index: number[] = [];
     for (let s = 0; s < strands; s++) {
-      for (let k = 0; k < SMOKE_POINT_COUNT - 1; k++) {
-        const v = (s * SMOKE_POINT_COUNT + k) * 2;
+      for (let k = 0; k < SMOKE_RIBBON_POINTS - 1; k++) {
+        const v = (s * SMOKE_RIBBON_POINTS + k) * 2;
         index.push(v, v + 2, v + 1, v + 1, v + 2, v + 3);
       }
     }
@@ -701,6 +752,12 @@ export class SmokeRig {
     parent.add(this.mesh);
   }
 
+  /** Per strand, per parcel: what its ribbon draws there (SmokeRig.update), and its subdivided path. */
+  private readonly tmp = (() => {
+    const f = () => new Float32Array(SMOKE_POINT_COUNT);
+    return { wid: f(), alp: f(), age: f(), seed: f(), hot: f(), pos: new Float32Array(SMOKE_RIBBON_POINTS * 3) };
+  })();
+
   /** Candle i's wick for the smoke (set per update): one closure per candle, made once. */
   private wickAt: WickSource = () => 0;
   private readonly at: WickAt[];
@@ -721,9 +778,8 @@ export class SmokeRig {
     }
     this.wickAt = wickAt;
     const tail = smokeTail(t);
-    const [r0, r1] = SMOKE_VOLUME.ribbon;
     let any = false, peak = 0;
-    const P = SMOKE_POINT_COUNT;
+    const P = SMOKE_POINT_COUNT, R = SMOKE_RIBBON_POINTS;
     const { position, aPrev, aNext, aWidth, aAlpha, aAge, aSeed, aHot } = this.attrs;
     const pos = position.array as Float32Array, prev = aPrev.array as Float32Array, next = aNext.array as Float32Array;
     const wid = aWidth.array as Float32Array, alp = aAlpha.array as Float32Array, age = aAge.array as Float32Array, seed = aSeed.array as Float32Array, hot = aHot.array as Float32Array;
@@ -732,35 +788,66 @@ export class SmokeRig {
       const bare = smokeSource(i, kind).bare;
       // A starved (snuffed) flame dies blue and dim: little glow passes to its wisp.
       const glowK = kind === 'breath' ? 1 : 0.25;
+      // v1.6 polish 2: this plume's laminar stem ends at its own height (the ribbon draws it, the volume the rest).
+      const laminar = smokeLaminar(i);
       for (let s = 0; s < SMOKE_STRAND_COUNT; s++) {
         const st = this.strands[i * SMOKE_STRAND_COUNT + s]!;
         if (smokeStrand(i, s, t, at, st, kind, wake)) any = true;
         peak = Math.max(peak, st.peak);
         const src = smokeSource(i, kind);
-        this.volume.addThread(st, [src.fade[0] * SMOKE_VOLUME.ageFade, src.fade[1] * SMOKE_VOLUME.ageFade], tail);
-        const base = (i * SMOKE_STRAND_COUNT + s) * P;
+        this.volume.addThread(st, [src.fade[0] * SMOKE_VOLUME.ageFade, src.fade[1] * SMOKE_VOLUME.ageFade], tail, laminar, t - bare);
+        // Per parcel: what the ribbon draws there.
+        const T = this.tmp;
         let path = 0;
         for (let k = 0; k < P; k++) {
           if (k > 0) path += Math.hypot(st.position[k * 3]! - st.position[k * 3 - 3]!, st.position[k * 3 + 1]! - st.position[k * 3 - 2]!, st.position[k * 3 + 2]! - st.position[k * 3 - 1]!);
           // The ribbon is the thread's laminar stem only: past it the volume carries the vapour.
-          const pr = path / 5, stem = pr <= r0 ? 1 : pr >= r1 ? 0 : 1 - ((pr - r0) / (r1 - r0)) ** 2 * (3 - 2 * (pr - r0) / (r1 - r0));
-          const kp = Math.max(0, k - 1), kn = Math.min(P - 1, k + 1);
-          for (let side = 0; side < 2; side++) {
-            const v = (base + k) * 2 + side;
-            for (let c = 0; c < 3; c++) {
-              pos[v * 3 + c] = st.position[k * 3 + c]!;
-              prev[v * 3 + c] = st.position[kp * 3 + c]!;
-              next[v * 3 + c] = st.position[kn * 3 + c]!;
+          // (v1.6 polish 2: and the thin filament it goes on as above its transition, fading as it spreads.)
+          const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!, st.full[k]!);
+          // (v1.6 polish 2: at the thread's own core width, 1–3 mm: the turbulent spread is the volume's veil.)
+          T.wid[k] = st.full[k]! * MPS_UNITS;
+          // (A filament at its own width: as dense as the share of the smoke it still carries, ribbonShare.)
+          T.alp[k] = stem > 0 ? 1 - Math.exp(Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * stem * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin) : 0;
+          T.age[k] = st.age[k]!;
+          // Noise coordinate travels with the parcel (its birth), distinct per thread.
+          T.seed[k] = (t - st.age[k]!) * 2.3 + s * 7.31 + i * 3.77;
+          // The flame's last glow in the first vapour (src/render/flame.ts SMOKE_GLOW): parcels
+          // born as the flame lets go, cooling over their first few hundredths of a second.
+          const born = t - st.age[k]! - bare;
+          T.hot[k] = born >= 0 && born < SMOKE_GLOW.born ? glowK * (1 - born / SMOKE_GLOW.born) * Math.exp(-st.age[k]! / SMOKE_GLOW.fade) : 0;
+        }
+        // v1.6 polish 2: drawn through a Catmull–Rom midpoint between every two parcels, so the
+        // curls the thread rolls into are round, not polygons (re-judge: curls; at 2× a parcel
+        // spacing of 4–6 mm drew corners).
+        const X = T.pos;
+        for (let j = 0; j < R; j++) {
+          const k = j >> 1;
+          for (let c = 0; c < 3; c++) {
+            if (!(j & 1)) X[j * 3 + c] = st.position[k * 3 + c]!;
+            else {
+              const p0 = st.position[Math.max(0, k - 1) * 3 + c]!, p1 = st.position[k * 3 + c]!, p2 = st.position[(k + 1) * 3 + c]!, p3 = st.position[Math.min(P - 1, k + 2) * 3 + c]!;
+              X[j * 3 + c] = (-p0 + 9 * p1 + 9 * p2 - p3) / 16;
             }
-            wid[v] = st.width[k]!;
-            alp[v] = st.alpha[k]! * stem;
-            age[v] = st.age[k]!;
-            // Noise coordinate travels with the parcel (its birth), distinct per thread.
-            seed[v] = (t - st.age[k]!) * 2.3 + s * 7.31 + i * 3.77;
-            // The flame's last glow in the first vapour (src/render/flame.ts SMOKE_GLOW): parcels
-            // born as the flame lets go, cooling over their first few hundredths of a second.
-            const born = t - st.age[k]! - bare;
-            hot[v] = born >= 0 && born < SMOKE_GLOW.born ? glowK * (1 - born / SMOKE_GLOW.born) * Math.exp(-st.age[k]! / SMOKE_GLOW.fade) : 0;
+          }
+        }
+        const base = (i * SMOKE_STRAND_COUNT + s) * R;
+        for (let j = 0; j < R; j++) {
+          const k = j >> 1, odd = j & 1, k2 = odd ? k + 1 : k;
+          const jp = Math.max(0, j - 1), jn = Math.min(R - 1, j + 1);
+          const lerp = (A: Float32Array) => (odd ? 0.5 * (A[k]! + A[k2]!) : A[k]!);
+          const wv = lerp(T.wid), av = lerp(T.alp), gv = lerp(T.age), sv = lerp(T.seed), hv = lerp(T.hot);
+          for (let side = 0; side < 2; side++) {
+            const v = (base + j) * 2 + side;
+            for (let c = 0; c < 3; c++) {
+              pos[v * 3 + c] = X[j * 3 + c]!;
+              prev[v * 3 + c] = X[jp * 3 + c]!;
+              next[v * 3 + c] = X[jn * 3 + c]!;
+            }
+            wid[v] = wv;
+            alp[v] = av;
+            age[v] = gv;
+            seed[v] = sv;
+            hot[v] = hv;
           }
         }
       }

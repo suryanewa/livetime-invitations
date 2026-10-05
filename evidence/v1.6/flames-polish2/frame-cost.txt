@@ -1,0 +1,23 @@
+Frame cost, v1.6 flames polish 2. M2 Pro, Chrome/Metal (ANGLE), headless, the live stage held at a
+moment (Stage.render only: the scene's update, the smoke physics included, is not in these numbers);
+each frame waited on with a 1-pixel readPixels; alternating 12-frame batches per case, 16 batches,
+medians, timed from node (the page's clock is Playwright's fake one). The machine was shared with
+other owners' servers: absolute times run high, batch-to-batch noise ~0.2-0.3 ms; the differences
+are the costs. Cases: full; nofx = no flame quads (volumes + twins), no bloom, no haze, no smoke
+(volume, ribbons); nosmoke = the smoke's volume and ribbons hidden; nobloom; nohaze.
+
+laptop 1280x720 @2 (2,108 x 1,185 after the 2.5 MP cap)
+  lit guest-ready   full 11.622  nofx 10.408  -> fire 1.21 (bloom 0.73, haze 0.57)
+  first puff 0.3 s  full 10.242  nofx  9.247  -> fire 1.00 (smoke 0.45)
+  smoke 1.5 s       full 10.282  nofx  9.470  -> fire 0.81 (smoke 0.63)
+phone 390x844 @2 (780 x 1,688)
+  lit guest-ready   full 10.654  nofx  9.488  -> fire 1.17 (bloom 0.90, haze 0.31)
+  first puff 0.3 s  full  9.587  nofx  8.724  -> fire 0.86 (smoke 0.54)
+  smoke 1.5 s       full  9.788  nofx  9.035  -> fire 0.75 (smoke 0.76)
+
+Budget: the whole fire <= 2.0 ms at both sizes: met.
+
+The smoke's physics on the main thread (node, the same code): 0.76 ms a frame while smoke shows
+(6 candles x 5 strands x 96 parcels, the plume's path computed once a candle), was 1.32 ms on
+v1.6/integration (6 x 3 x 64). None while the flames burn. With it the smoke at 1.5 s is
+0.81 + 0.76 = 1.57 ms (laptop), 1.51 ms (phone).

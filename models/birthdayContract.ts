@@ -214,8 +214,14 @@ export const FLAME = {
   height: 15.5 * MM,
   /** Half the widest width (5.2 mm). */
   radius: 2.6 * MM,
-  /** The luminous (soot) zone's foot: this far below the wick's tip, so it wraps the curled tip. */
-  foot: 1.2 * MM,
+  /**
+   * The luminous (soot) zone's foot: this far below the wick's tip (v1.6 polish 2: negative, 0.4 mm
+   * over it: its soot forms within a few tenths of a millimetre there, so the white-yellow core starts
+   * 1–1.5 mm over the tip, and under the foot, round the wick's tip, the flame is its dim, see-through
+   * blue zone, the lowest ≈15 % of it. At 1.2 mm under the tip the newly formed soot, cooler and in a
+   * hollow shell, drew a saturated orange collar on the lowest 15–20 % of the bright part.)
+   */
+  foot: -0.4 * MM,
   /** The flame is widest this far above the wick's tip. */
   widest: 1.0 * MM,
 } as const;

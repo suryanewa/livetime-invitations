@@ -1,0 +1,40 @@
+v1.6 flames polish 2: the re-judge's five fixes, measured on rendered frames through the real
+controller (the re-judge's scripts: lab.mjs repointed to 5610, s1-s7, grp2.py; plus sheets3.py,
+puffm.py, foot.py, footsz.py, the light on/off harness; all in the session's scratchpad).
+
+1. Smoke 1-4 s (2x close-up: z2 600@2, 1,200 px; ~3.4 px/mm at the wicks)
+  stems (smokeLaminar, cm): 4.2 / 7.4 / 11.4 / 9.9 / 5.9 / 8.5; leans (smokeLean, deg): 4.9 / 7.4 / 5.2 /
+  4.7 / 5.9 / 4.5, alternate sides across the picture.
+  crisp lines per plume (>= 6 levels over the wall, half-width <= 4 px, running >= 1 cm, in each plume's
+  zone 1-15 cm over its own stem; sheets3.py):
+     t (s)     1.07  1.58  1.97  2.48  2.99  3.50
+     lines      2.3   5.2   4.3   3.0   3.3   2.5      (median +9.8-16.9 levels, half-width 3.0-3.4 px)
+     re-judge frame at 1.97 s: 0 lines (soft columns, half-width 10-15 px)
+  motion (60 fps, 1.5-2.0 s): mean change 0.31 levels a frame; the frame differences are the filaments'
+  own motion (no grain).
+2. First puff (group view z3.5 600@2; puffm.py: over the pre-blow frame, flames masked)
+  core (mean of the brightest 2 % round each wick): 0.24 s +20-24, 0.32 s +25-33, 0.40 s +23-29 levels
+  (re-judge: +5-14 % near the wicks); salmon: the puff's red over its green -7.5 to -9.6 levels at
+  0.16-0.19 s (the last glow 0.4 -> 0.06); the hairline fan: the strips no longer draw the puff's head.
+3. Foot (30x, no bloom, foot.py: the lowest pixels of the bright part)
+  share of saturated orange (fcaa4c-like):  bottom 5-10 %   10-15 %   15-20 %
+     re-judge                                       5 %      50 %      71 %   (and 51 % at 20-25 %)
+     now                                           23 %      10 %      21 %   (0-5 %: the thin amber rim)
+  laptop, lowest 20 % of each flame (footsz.py): orange 40-52 % -> 10-19 %, mean (239,173,103) -> (244,210,137)
+  blue cup, A/B (FLAME_BLUE.max 0.012 vs 0) at 30x and 12x: at most +3 B, +2 G, +1-2 R levels
+  bead 1.1 -> 0.6 mm, lumpy; lit ember 1,240 -> 1,130 K; its glow sigma 0.5 -> 0.3 mm
+4. Lift-off (flameState; the shader draws output x (1 - cool)^5)
+  seen fraction of the burning flame:  +0 ms 1.00, +8 ms 0.23, +12 ms 0.046, +16 ms 0.003, +24 ms 0
+  close-up frames (16 ms apart): the frame 5 ms after lift-off carries 2.6 % of the flame's light (peak
+  +9 levels, orange, no white core); 21 ms after, none
+5. Light (group view z3.5 600@2, the flames' light on and off; the cake polish 2's pool, merged)
+                     levels R / G / B          linear R / G / B
+  centre, re-judged  +51 / +19 / +0.3          +86 / +24 / +0.3 %   (the first pool)
+  centre, re-judged  +8.0 / +2.5 / 0.0         +11.5 / +3.1 / 0 %    (the calibrated pool)
+  centre, now        +6.0 / +5.0 / +1.3        +8.7 / +6.0 / +1.2 %
+  left / right now   +11.1 / +9.6 / +3.4,  +9.0 / +7.4 / +1.5
+  breathing over 1 s (60 frames): centre sd 1.4 %, p-p 4.7 %; left sd 1.2 %, p-p 4.1 %; right sd 2.4 %, p-p 7.3 %
+  through the blow: the top's mean +12.6 R falls to 0 over 112-272 ms, at most 1.5 levels a frame; the left
+  candles' pools first (128-176 ms), the right's last (208-256 ms)
+Kept: lit 1 s group strip (grp2.py) tip-x sd 0.95-2.10 px, dominant 1-2 Hz, area corr -0.01, breathing
+area +-1.2-2.7 %; the accepted still at 8 s and under reduced motion: no smoke.
