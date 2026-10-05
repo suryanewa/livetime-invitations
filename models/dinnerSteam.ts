@@ -717,7 +717,9 @@ bool spillOccupies(vec3 p, int l) {
   if (uSpillOn[l] <= 0.0) return false;
   float rho = length(p.xz);
   float c = dot(p.xz / max(rho, 1e-4), vec2(${f(RAISED_DIR.x)}, ${f(RAISED_DIR.y)}));
-  return c > 0.0 && rho > GUSH_LIP - 0.12 && rho < GUSH_LIP + 0.7 && p.y < 1.3;
+  // (v1.6 review: as high as its box, steamBounds' from the live parcels' rise and reach (GUSH.grow), ≈ 1.5–1.6 su for the
+  // oldest; the probes' test is inside the box already. A fixed p.y < 1.3 cut the top of those parcels' tubes from the march.)
+  return c > 0.0 && rho > GUSH_LIP - 0.12 && rho < GUSH_LIP + 0.7 && p.y <= uSpillMax[l].y;
 }
 
 float spill(vec3 p, int l, float detail) {
