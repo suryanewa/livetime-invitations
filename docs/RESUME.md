@@ -161,9 +161,9 @@ Still open at the time of writing (updated when the pass closes):
   or — since the reveal is a pure function of time and deterministic — an offline fluid simulation baked into a sparse 4D
   volume texture that the runtime only marches (the cheapest route to film-quality filaments; the asset's size and the
   change-of-mind cases are the design questions). Either is a version of its own, with its own budget decision;
-- a second full `pnpm models birthday` to confirm the compressed export is deterministic — open: to be run on a quiet
-  machine (the meshopt owner could not finish one under load; the uncompressed export reproduced the committed bytes,
-  and the compressed export of a test document is bit-deterministic in `tests/masters.test.ts`);
+- ~~a second full `pnpm models birthday` to confirm the compressed export is deterministic~~ — done 2026-10-05 at
+  7ca077f: two consecutive runs byte-identical to each other and to the committed GLB (`docs/qualification.md`,
+  Verification on the integrated build);
 - `docs/coverage.md` §8 still says "KHR_mesh_quantization with no decoder" (generated from `coverage.json`);
 - the Business reader's pictogram and the Party key are not wired to the bloom (`markBloom`: one line each; it
   changes Business's posters and adds a pass on every lit Business frame — Surya's call);

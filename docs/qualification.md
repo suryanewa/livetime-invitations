@@ -108,9 +108,9 @@ before signing; a second owner per object then made them, and each later judging
 | Steam | Raymarched volume from the dome's cavity, material-space advection, vortex roll, scattering, steam shadow, scene depth (`dinner-v1.6-steam.md`) | laptop: form 3.5, motion 5, lighting 3.5, integration 4.5 → **4**; phone 5 / 5.5 / 4.5 / 5 → **5** | Not signed: "the timing is right … but it reads as a frosted cotton-wool ball with a crawling sand grain; the dome shape holds ~0.1 s". Fixes: (1) a sharp lobed edge and silky interior (a narrow threshold band carved by flow-advected billows, noise stretched along the flow, no upsample blur at the edge); (2) no grain (jitter anchored in material space or TAA, no octaves finer than ~4 px); (3) light it as a body (room ~0.3, steep key falloff, two-lobe phase, a legible offset shadow on the plate); (4) a visible bright sheet spilling from the gap at 0.15–0.35 s, then the dome-shaped wall held crisp for 0.25–0.4 s; (5) less vapour (cap no wider than the plate, half the opacity by 1.2 s), a real vortex ring, backlit wisps through 3–5 s, the returning cover pushing the cloud aside |
 
 Also landed: meshopt compression of every runtime GLB (−58 % raw, −45 % gzip; the cake 31.9 → 11.0 MiB raw after
-its regeneration grew it from 12.5), decoded geometry bit-identical, 36 capture stills pixel-identical. Whether a
-second full `pnpm models birthday` on the merged build reproduces the committed compressed GLB byte for byte is
-open: to be run on a quiet machine (the verification below).
+its regeneration grew it from 12.5), decoded geometry bit-identical, 36 capture stills pixel-identical. A second
+and third full `pnpm models birthday` on the merged build (2026-10-05, 7ca077f) reproduced the committed compressed GLB
+byte for byte (the verification below).
 
 ### Second and later judgings, after the polish rounds (2026-10-03 → 05)
 
@@ -153,8 +153,9 @@ unit tests (the Party clearance test, the Sports planning test) timed out under 
   GPU-level nondeterminism in the live smoke march, not a logic change (`docs/RESUME.md` has the fix in the test).
 - **The compressed export's determinism:** the compressed export of a test document is bit-deterministic
   (`tests/masters.test.ts`), the cake's piping generator too (`tests/birthdayPiping.test.ts`), and the uncompressed
-  export reproduced the committed bytes, but a second full `pnpm models birthday` on the merged build has
-  not been shown byte-identical to the committed `birthday.glb` — open: to be run on a quiet machine.
+  export reproduced the committed bytes, and two consecutive full `pnpm models birthday` runs on the merged
+  build (2026-10-05, 7ca077f, load average ≈ 4, ≈ 35 s each) gave byte-identical GLBs (sha256 2a5d3aa2…ee6a33) and left
+  `git status` clean: the compressed export reproduces the committed `birthday.glb` byte for byte.
 
 ### Known limitations (v1.6)
 
