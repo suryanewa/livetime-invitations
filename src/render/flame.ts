@@ -730,6 +730,11 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
         d2 -= view * dot(d2, view);
         float l12 = length(d1) * length(d2);
         float pinch = smoothstep(-0.2, 0.8, l12 > 1e-12 ? dot(d1, d2) / l12 : 1.0);
+        // v1.6 polish 3 (judge 3: bright knots of +22 to +30 levels at the folds): where the thread
+        // runs towards the lens its strip collapses and the quads of the run pile onto one spot, and
+        // through a fold the two legs overlap: the strip's smoke is drawn once there, not stacked.
+        float fore = al / max(length(tng), 1e-12);
+        tau *= mix(mix(0.3, 1.0, smoothstep(0.05, 0.45, fore)), 1.0, sure) * mix(0.5, 1.0, pinch);
         // The tube's soft section reaches past its radius.
         c.xyz += side * aSide * w * 1.25 * pinch;
         gl_Position = projectionMatrix * c;

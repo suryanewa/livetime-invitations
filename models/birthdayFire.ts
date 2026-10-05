@@ -8,7 +8,7 @@ import { bloomOnly, emitBloom } from '../src/render/bloom.ts';
 import { blackbodyAt, createFlameBloomMaterial, createSmokeMaterial, FLAME_BLOOM_FLOOR, type FlameUniforms, SMOKE_GLOW, sootRadiance } from '../src/render/flame.ts';
 import { addHaze } from '../src/render/heatHaze.ts';
 import { markDepthOccluders, SCENE_DEPTH_LAYER } from '../src/render/sceneDepth.ts';
-import { ribbonShare, SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
+import { filamentFace, filamentWidth, ribbonShare, SMOKE_VOLUME, SmokeVolume } from './birthdaySmoke.ts';
 import {
   FLAME_REST, flameScale, type FlameState, type Flicker, newSmokeStrand, POOL_Y, rand, restLean, WICK_TIP_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeAlive, type SmokeKind, smokeLaminar, smokeSource, smokeStrand, type SmokeStrand, smokeTail, sootFormed, type WakeAt, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
@@ -805,9 +805,11 @@ export class SmokeRig {
           // (v1.6 polish 2: and the thin filament it goes on as above its transition, fading as it spreads.)
           const stem = ribbonShare(path / 5, st.rise[k]!, laminar, t - bare - st.age[k]!, st.full[k]!);
           // (v1.6 polish 2: at the thread's own core width, 1–3 mm: the turbulent spread is the volume's veil.)
-          T.wid[k] = st.full[k]! * MPS_UNITS;
+          // (v1.6 polish 3: widening linearly with its height, filamentWidth, and thinning as it widens.)
+          const wf = filamentWidth(st.full[k]!, st.rise[k]!, filamentFace(t - st.age[k]!, i * SMOKE_STRAND_COUNT + s + 1, st.rise[k]! - laminar));
+          T.wid[k] = wf * MPS_UNITS;
           // (A filament at its own width: as dense as the share of the smoke it still carries, ribbonShare.)
-          T.alp[k] = stem > 0 ? 1 - Math.exp(Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * stem * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin) : 0;
+          T.alp[k] = stem > 0 ? 1 - Math.exp(Math.log(Math.max(1e-6, 1 - st.alpha[k]!)) * stem * (st.spread[k]! / Math.max(1e-9, st.full[k]!)) ** SMOKE.thin * (st.full[k]! / wf)) : 0;
           T.age[k] = st.age[k]!;
           // Noise coordinate travels with the parcel (its birth), distinct per thread.
           T.seed[k] = (t - st.age[k]!) * 2.3 + s * 7.31 + i * 3.77;

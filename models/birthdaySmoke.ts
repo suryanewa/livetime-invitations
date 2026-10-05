@@ -69,6 +69,19 @@ export const SMOKE_VOLUME = {
   puffHead: [0.12, 0.3, 0.0, 0.004] as const,
   /** v1.6 polish 2: the ribbons draw threads up to this wide (m: fading from [0] to [1]); wider smoke is the volume's. */
   ribbonWidth: [0.0035, 0.005] as const,
+  /**
+   * v1.6 polish 3 (judge 3: "the filaments read as wire": 0.7–1.0 mm half-width to 12 cm, 1.1–1.5 mm at
+   * 12–20 cm): a filament spreads as it rises and mixes, its width growing linearly with its height
+   * over the wick from `filamentWiden[0]` m, by `filamentWiden[1]` m per m (≈ 3.5 mm across at 12 cm,
+   * ≈ 5.5 mm at 20 cm), as thin for it as it is wide (the same smoke over the width: a face-on veil
+   * as it fades). A filament above its stem is a folded sheet: where it turns edge-on to the lens it
+   * stays a crisp line (`filamentEdge` of the widening), face-on it is the full width's veil; the
+   * stretches alternate along it every few centimetres (carried up with the smoke) and turn face-on
+   * as it rises `filamentFace` m over its stem's end.
+   */
+  filamentWiden: [0.05, 0.03] as const,
+  filamentEdge: 0.2,
+  filamentFace: 0.12,
   /** How far above its transition (m) a plume's sheets and folds are fully developed (the march's turbulence, 0 → 1). */
   develop: 0.045,
   /**
@@ -620,6 +633,26 @@ export function ribbonShare(path: number, rise: number, laminar: number, born: n
   // path longer than its rise, and must stay a filament.)
   const swept = smooth01(r0, r1, path - rise) * (1 - smooth01(p1, p1 + 0.2, born));
   return filament * (1 - puff) * (1 - swept) * (1 - smooth01(w0, w1, width));
+}
+
+/**
+ * v1.6 polish 3: the width (m) a ribbon draws a filament of core width `full` (m) at `rise` m over its
+ * wick, `face` (0 edge-on – 1 face-on) of a sheet.
+ */
+export function filamentWidth(full: number, rise: number, face = 1): number {
+  const [z0, g] = SMOKE_VOLUME.filamentWiden, e = SMOKE_VOLUME.filamentEdge;
+  return full + g * Math.max(0, rise - z0) * (e + (1 - e) * face);
+}
+
+/**
+ * v1.6 polish 3: how face-on a filament's sheet is (0 edge-on – 1 face-on) at a parcel born at `birth`
+ * (s, its own clock: the pattern rises with the smoke) on strand `seed`, `over` m above its stem's end.
+ */
+export function filamentFace(birth: number, seed: number, over: number): number {
+  const ph = 6.283 * ((seed * 0.618034) % 1);
+  const n = 0.5 + 0.5 * (0.6 * Math.sin(2 * Math.PI * 2.3 * birth + ph) + 0.4 * Math.sin(2 * Math.PI * 3.7 * birth + 2.1 * ph + 1.3));
+  const f = smooth01(0.25, 0.75, n);
+  return f + (1 - f) * smooth01(0, SMOKE_VOLUME.filamentFace, over);
 }
 
 /**

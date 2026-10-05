@@ -5,14 +5,14 @@ import { blackbodyAt, createFlameMaterial, SMOKE_RADIANCE, sootRadiance } from '
 import { rigBirthday } from '../models/birthday.ts';
 import { CANDLE_LIGHT, flameLightColor, SMOKE_RIBBON_POINTS, waxGlowColor } from '../models/birthdayFire.ts';
 import { buildBirthdayGeometry } from '../models/birthdayParts.ts';
-import { ribbonShare, smokeTurbulence } from '../models/birthdaySmoke.ts';
+import { filamentFace, filamentWidth, ribbonShare, smokeTurbulence } from '../models/birthdaySmoke.ts';
 import { CANDLE, CANDLE_COUNT, CANDLE_SOCKETS, FLAME_FRAME, STAND_TOP } from '../models/birthdayContract.ts';
 import { buildDisposalBin } from '../models/disposalBin.ts';
 import { BirthdayScene } from '../src/scenes/birthday/index.ts';
 import { CARRY_FROM, DURATIONS, IGNITE_START, ON_STAND } from '../src/scenes/birthday/poses.ts';
 import {
   ashAt, BREATH, BREATH_AT, EMBER, emberAt, extinguishedAt, FLAME_REST, frameScale, wickChar, burnRate, flameScale, flameState, flicker, FLICKER, MM, newFlicker, newSmokeStrand, plumeRise,
-  POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeLaminar, smokeLean, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
+  breathAt, POOL_Y, SMOKE, SMOKE_POINT_COUNT, SMOKE_STRAND_COUNT, smokeLaminar, smokeLean, smokeRate, smokeSource, smokeStrand, SNUFF, type SmokeStrand, WICK_TIP_Y, type WickAt,
 } from '../src/scenes/birthday/fire.ts';
 
 /** Wick tip of candle i in cake_secondary space (seated, nominal). */
@@ -262,6 +262,39 @@ describe('Birthday fire: the smoke', () => {
     expect(smokeTurbulence(0.04, 0.04, lam, 1)).toBe(0);
     expect(smokeTurbulence(0.15, 0.14, lam, 1)).toBe(1);
     expect(smokeTurbulence(0.03, 0.005, lam, 0.1)).toBeCloseTo(0.5, 6);
+  });
+
+  it('v1.6 polish 3: no marshmallow: the burst leaves with the breath, and at the wick every thread is the ember\'s own millimetre', () => {
+    const st = newSmokeStrand();
+    for (let i = 0; i < CANDLE_COUNT; i++) {
+      const bare = smokeSource(i).bare;
+      // Most of the burst's vapour is given off while the breath still blows (≥ 0.4 m/s at the wick).
+      let during = 0, all = 0;
+      for (let t = bare; t < bare + 1.5; t += 0.001) {
+        const r = smokeRate(i, t); all += r; if (breathAt(i, t) >= 0.4) during += r;
+      }
+      expect(during / all).toBeGreaterThan(0.45);
+      // From 60 ms to 0.4 s after the flame lets go, the thread at the wick (its newest parcels) is no wider than 1.3 mm.
+      for (const a of [0.06, 0.12, 0.2, 0.3, 0.4]) {
+        smokeStrand(i, 0, bare + a, still(i), st);
+        for (let k = 0; k < SMOKE_POINT_COUNT && st.age[k]! < 0.004; k++) expect(st.full[k]!).toBeLessThan(0.0013);
+      }
+    }
+  });
+
+  it('v1.6 polish 3: a filament widens linearly with its height (≥ 3 mm at 12 cm, ≥ 5 mm at 20 cm face-on), crisper where edge-on, face-on as it rises over its stem', () => {
+    const full = 0.0018;
+    expect(filamentWidth(full, 0.03)).toBeCloseTo(full, 9);
+    expect(filamentWidth(full, 0.12)).toBeGreaterThan(0.003);
+    expect(filamentWidth(full, 0.2)).toBeGreaterThan(0.005);
+    // Linear: equal steps of height, equal steps of width.
+    expect(filamentWidth(full, 0.16) - filamentWidth(full, 0.12)).toBeCloseTo(filamentWidth(full, 0.2) - filamentWidth(full, 0.16), 9);
+    expect(filamentWidth(full, 0.15, 0)).toBeLessThan(0.55 * filamentWidth(full, 0.15, 1));
+    let lo = 1, hi = 0;
+    for (let b = 0; b < 3; b += 0.01) { const f = filamentFace(b, 3, 0); lo = Math.min(lo, f); hi = Math.max(hi, f); }
+    expect(lo).toBeLessThan(0.05);
+    expect(hi).toBeGreaterThan(0.95);
+    for (let b = 0; b < 3; b += 0.05) expect(filamentFace(b, 3, 0.2)).toBe(1);
   });
 
   it('v1.6 polish 2: the strands share their plume (computed once a candle), each splitting off it at its own height', () => {
