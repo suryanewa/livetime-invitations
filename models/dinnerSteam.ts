@@ -705,7 +705,7 @@ float domeCavity(vec3 p) {
  * side. Its air left the gap k·dt ago (k = 0…7, uSp0/uSp1 its source then, uGp0/uGp1 the gap then):
  * out over the plate's rim and up, a tube in the meridional plane through those parcels, thicker
  * where the gap was wider (a tilt about the far rim opens the gap as (1 + cos) / 2 round it) and
- * as it mixes in. Whether it could be at p (the probes' test):
+ * as it mixes in (v1.6 polish 7: the drawn tube by `shownGrow`, its box by `grow`). Whether it could be at p (the probes' test):
  */
 const float GUSH_LIP = ${f(COVER.lipRadius)};
 const float GUSH_OUT[${SPILL.samples}] = float[${SPILL.samples}](${GUSH_OUT_K.map(f).join(', ')});
@@ -742,7 +742,7 @@ float spill(vec3 p, int l, float detail) {
     float g = (k < 4 ? uGp0[l][k] : uGp1[l][k - 4]) * w;
     float s = (k < 4 ? uSp0[l][k] : uSp1[l][k - 4]);
     vec2 c1 = vec2(GUSH_LIP + GUSH_OUT[k], GUSH_BASE + 0.6 * g + GUSH_RISE[k]);
-    float r1 = ${f(GUSH.radius)} + 0.4 * g + ${f(GUSH.grow)} * (GUSH_OUT[k] + GUSH_RISE[k]);
+    float r1 = ${f(GUSH.radius)} + 0.4 * g + ${f(GUSH.shownGrow)} * (GUSH_OUT[k] + GUSH_RISE[k]);
     if (k > 0 && (s > 0.0 || s0 > 0.0)) {
       vec2 e = c1 - c0;
       float t = clamp(dot(P - c0, e) / max(dot(e, e), 1e-6), 0.0, 1.0);
