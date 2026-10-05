@@ -149,6 +149,12 @@ Still open at the time of writing (updated when the pass closes):
   `accepted-pose` returns before the fire has settled, so the smoke tail is still drawn), not a logic change. Fix in the
   test: wait for the settled still (no smoke, as `scene-depth.spec › birthday` does) before the last `withAndWithout`,
   or compare with a tolerance of a few pixels. Script and still pairs: the session scratchpad's `bloomflake/`.
+- **the steam's next approach** (the sixth judge and the polish-5 owner agree the softness cannot be reached with the
+  present half-resolution analytic march in 6 ms): a density advected per frame at 1–2 mm (a 128³–256³ volume stepped on
+  the GPU, or a sparse grid), a full-resolution filament/sheet pass over it, more samples a pixel and multiple scattering;
+  or — since the reveal is a pure function of time and deterministic — an offline fluid simulation baked into a sparse 4D
+  volume texture that the runtime only marches (the cheapest route to film-quality filaments; the asset's size and the
+  change-of-mind cases are the design questions). Either is a version of its own, with its own budget decision;
 - a second full `pnpm models birthday` to confirm the compressed export is deterministic (the meshopt owner could
   not finish one under load; the uncompressed export reproduced the committed bytes and the codec is deterministic);
 - `docs/coverage.md` §8 still says "KHR_mesh_quantization with no decoder" (generated from `coverage.json`);
