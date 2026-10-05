@@ -598,3 +598,139 @@ still.
 `4-lit-group-0.5s-every-48ms.png`, `4-motion-stats.txt`, `5-blow-one-0-352ms-every-16ms.png`,
 `5-blow-closeup-z25-64-176ms.png`, `5-blow-group-0-384ms-every-32ms.png`,
 `6-light-off-on-relative-x4.png`, `frame-cost.txt`, `reduced-motion-guest-accepted-540x2.png`.
+
+## Polish round 2: the re-judge's fixes (v1.6 polish 2, branch `v1.6/flames-polish2`)
+
+The re-judge signed the flame at rest at phone and 540 (7/10) and the blow at laptop and phone, but
+not the whole, and named five fixes: the smoke from 1 to 4 s (the blocker: six evenly spaced parallel
+bright stems, then out-of-focus columns), the first puff (barely there; a salmon tint and a fan of
+hairlines), the flame's foot (an orange collar on a glowing orange bead; a pale blue glass bubble),
+the lift-off (a golden sliver with a white core drifting for 2–3 frames) and the light (it turned the
+top tier lilac and swapped it back all at once). Each fix is its own commit, measured with the
+re-judge's own scripts on frames through the real controller. Numbers: `evidence/v1.6/flames-polish2/measurements.txt`.
+`v1.6/integration` (the cake polish 2's light response) was merged in before fix 5, so the light is
+calibrated against the pool that ships.
+
+### 1. The smoke from 1 to 4 s (`fire.ts`, `models/birthdaySmoke.ts`, `models/birthdayFire.ts` `SmokeRig`)
+
+- **Stems of their own.** Each plume's laminar stem ends at its own height (`smokeLaminar`: 4–12 cm,
+  stratified in a seeded order: 4.2, 7.4, 11.4, 9.9, 5.9, 8.5 cm) and leans its own way (`smokeLean`:
+  3–8°, alternate sides across the picture, on top of the room's shared draft). The six no longer run
+  parallel, nor end together.
+- **Filaments above them.** Above its transition the thread's waves go on growing (× up to 2.6 over
+  7 cm) until they roll into curls; five strands (was three) split off at staggered heights. The
+  strips draw the stem *and* the thin filament it goes on as (`ribbonShare`): at the thread's own width
+  (1–3 mm, `full`), as dense as the smoke it still carries (the opacity the physics thinned for the
+  turbulent spread is given back, × (spread/full)^0.6), fading out 6–24 cm over the transition; the
+  volume draws the rest, so the mass is kept. The breath's sweep hands smoke to the volume only for
+  vapour born while it blew (a filament's own curls make its path longer than its rise). The strips
+  go through a Catmull–Rom midpoint between parcels (`SMOKE_RIBBON_POINTS`: curls are round).
+- **Sheets inside the grid.** The parcels carry their turbulence into a second channel of the density
+  atlas (0 on a stem, 1 folded); the light pass averages it over 1.25 cm, and the march folds the
+  developed smoke into sheets: the zero set of an advected noise (cells ≈0.8 cm growing with height,
+  ε thin), its profile integrated exactly over each step (erf of the linearised field: a thin sheet is
+  never missed nor stippled), a tenth of the smoke left as a veil; dense developing smoke billows
+  instead (below). A white-noise start replaces interleaved gradient noise (its diagonal showed as
+  hatching against thin sheets); the box keeps a 1.5 cm margin for the warp.
+- **Measured** (2× close-up, ≈3.4 px/mm): crisp lines per plume (≥ 6 levels over the wall, half-width
+  ≤ 4 px, running ≥ 1 cm, in each plume's zone 1–15 cm over its own stem) 2.3 / 5.2 / 4.3 / 3.0 / 3.3 /
+  2.5 at 1.1 / 1.6 / 2.0 / 2.5 / 3.0 / 3.5 s, median +10–17 levels, half-width 3.0–3.4 px (the
+  re-judge's frame at 2 s: none; its columns were 10–15 px soft). Curls show at laptop size from 1 s.
+  The plume's path is computed once a candle and shared by its strands: 0.76 ms a frame of physics for
+  5 × 96 parcels (v1.6/integration: 1.32 ms for 3 × 64).
+
+### 2. The first puff
+
+- The breath's burst of vapour is 12× the smoulder's rate at once, e-folding in 0.2 s (`SMOKE.puff`,
+  `burst`: the vapour the flame was burning, all condensing now); the breath's shear layer rolls it up
+  (`rollPuff`: the burst's parcels wind about their centroid in the flow's plane, faster nearer it);
+  the volume draws it (the strips draw threads only: no strip wider than 3.5–5 mm, nor the puff's head:
+  a wide strip drew the hairline fan and a marshmallow at the wick), with billows where the developing
+  smoke is dense (Worley lumps through the folds) and an octave of the room's light for thick smoke
+  (`roomOctaves`: a dense puff is whiter than the greige wall; single scattering capped it at +20).
+  The splat's Gaussian reaches 0 at its cut (its 4 % drew hard edges round the dense puff).
+- The last glow 0.4 → 0.06 (`SMOKE_GLOW`): no salmon puff.
+- **Measured** (group view, over the pre-blow frame): the puff's core +20–24 levels at 0.24 s, +25–33
+  at 0.32 s, +23–29 at 0.40 s; its red over its green −7 to −10 levels at 0.16–0.19 s.
+
+### 3. The flame's foot (`FLAME.foot`, `src/render/flame.ts`)
+
+- The luminous zone's foot is 0.4 mm over the wick's tip (was 1.2 mm under), its soot forming within
+  0.5 mm (`FLAME_FOOT.ramp`), its rounded bottom 0.22 of the zone (was 0.32: a 4 mm bowl whose light
+  rose through the camera's orange), the dark core closed within 2.5 mm (held open over the lower
+  half, that part's light came from the cooler shell alone), 60 K cooler at the foot (was 220 K). The
+  lowest ≈18 % of the flame is its dim blue zone; the white-yellow core starts 1–1.5 mm over the tip.
+- The bead: 0.6 mm, lumpy (was a 1.1 mm sphere); the lit ember ≈1,130 K (was 1,240 K: a fifth as
+  bright), its glow σ 0.3 mm (was 0.5).
+- The blue sheath is added after the camera's response, deep blue, as light only, at most +3 levels
+  (`FLAME_BLUE`); through the soot's alpha and the response it drew whitish-blue arcs.
+- **Measured.** 30×, the share of saturated orange in the bright part's lowest 5–10 / 10–15 / 15–20 %:
+  23 / 10 / 21 % (re-judge: 5 / 50 / 71 %, and 51 % at 20–25 %); the lowest 5 % is the thin amber rim.
+  Laptop, each flame's lowest 20 %: orange 40–52 % → 10–19 %. The blue cup, A/B: +3 B, +2 G, +1–2 R
+  at most.
+
+### 4. The lift-off (`fire.ts` `flameState`, the shader's fade)
+
+Off the wick the soot cools over 26 ms (`BREATH.cool`, the fastest C¹ ramp the scene's continuity
+tests allow) and the shader draws a cooling flame × (1 − cool)^5 (was ³): 23 % of its light 8 ms after
+lift-off, 4.6 % at 12 ms, 0.3 % at 16 ms. The luminous zone tears over 45 ms (was 60); its radiant
+output (its light, the melt) ramps with the tear alone. Close-up: the frame 5 ms after lift-off
+carries 2.6 % of the flame's light (peak +9 levels, orange, no white core); 21 ms after, none.
+
+### 5. The light (`models/birthdayFire.ts`)
+
+- **Colour.** Soot at 1,900 K through the camera's white balance part-way to the candles (2,200 K)
+  with 30 % of the room's white (`FLAME_LIGHT_WB`): (1, 0.84, 0.45) linear (was (1, 0.28, 0.01): deep
+  orange to a daylight camera, lilac over the blue frosting). The wax under its own flame glows
+  halfway back to the soot's colour (`waxGlowColor`).
+- **Breathing.** × (1 + 0.65 × the flame's length breathing + 3.5 % × the room's air at 0.6–2.3 Hz,
+  shared) (`FLICKER.light`, `Flicker.light`); exactly 1 in stills.
+- **The blow.** Each candle's light goes out with its own flame over 45 ms from its own lift-off.
+- **Measured** (the group view, the flames' light on and off, with the cake polish 2's pool): the
+  top's centre +6.0 R / +5.0 G / +1.3 B levels (linear +8.7 / +6.0 / +1.2 %; re-judge +51 / +19 / 0
+  on the first pool, +8 / +2.5 / 0 on the calibrated one); round the candles +9–11 R with G and B.
+  Over 1 s the centre's light varies sd 1.4 %, p-p 4.7 % (round the candles sd 1.2–2.4 %). Through the
+  blow the top's mean (+12.6 R) falls over 112–272 ms, at most 1.5 levels a frame, the left candles'
+  pools first (128–176 ms), the right's last (208–256 ms).
+
+### Tells
+
+Gone: the six parallel stems, the out-of-focus columns, the weak first puff, the salmon puff, the
+hairline fan, the orange collar, the match-head bead, the pale blue bubble, the golden sliver, the
+lilac top and its swap. Improved: the 192 px dots (the collar and bead gone; the warm footprint glow
+kept so the thumbnail reads lit). Remaining, recorded: at 2× the filaments' sharpest turns (rolls seen
+edge-on) are corners with a bright point where the strip doubles back; the first puff at 10× is a
+soft, rolled cloud (the volume's 5 mm grid) rather than a crisp one; the macro's wick is still the
+master's matte rod (tell 9); the vector-like constant-width rim at 12–60× and the march's stipple at
+12× (tells 7–8) are unchanged.
+
+### Cost (`evidence/v1.6/flames-polish2/frame-cost.txt`)
+
+The whole fire (flames, bloom, haze, smoke): lit 1.21 ms laptop / 1.17 ms phone; the first puff
+(0.3 s) 1.00 / 0.86 ms; the smoke at 1.5 s 0.81 / 0.75 ms (+0.76 ms of physics on the main thread).
+Budget ≤ 2.0 ms: met.
+
+### Verification
+
+`pnpm typecheck`; `tests/birthdayFire.test.ts` 35/35 (new: the stems' heights and leans, the strip /
+volume split, the strands sharing their plume, the lift-off's seen fraction, the light's colour,
+breathing and per-candle fade; the foot's position), `tests/flameRender.test.ts` 7/7,
+`tests/birthday.test.ts` 34/34 (the continuity bound on the faster lift-off), `birthdayChange` 7/7,
+`birthdayMeltCarry` 2/2, `scene-depth` 5/5, `birthdayPiping` 9/9. Browser (`BASE_URL=http://127.0.0.1:5610`):
+`birthday.spec` 7/7, `bloom.spec` 3/3 (one failure on a cold first run, 3/3 on the two full runs after),
+`scene-depth.spec` 5/5, `resilience.spec` 14/14, `collection.spec` 3/3, `posters.spec` Birthday 1/1 after
+the recapture (`pnpm capture birthday`: every Birthday poster and the thumbnail; the host-ready and
+accepted ones also carry the merged cake polish 2). The re-judge's kept qualities, re-measured: the
+lit 1 s strip's tip-x sd 0.95–2.10 px, dominant 1–2 Hz, area correlation −0.01; the bloom's
+byte-identical guard; the accepted still at 8 s and under reduced motion shows no smoke.
+
+### Evidence (`evidence/v1.6/flames-polish2/`)
+
+`1-smoke-2x-closeup-1-3s-before-after.webp`, `1-smoke-wide-sheet-0.3-3.9s.webp`,
+`1-2-smoke-laptop-0.4-3.5s.webp`, `1-2-smoke-phone-0.3-2.5s.webp`, `2-first-puff-group-160-480ms.webp`,
+`2-4-blow-closeup-128-400ms.webp`, `3-foot-macro-30x-60x-12x-before-after.webp`,
+`3-foot-macro-30x-nobloom-and-f3.webp`, `3-sizes-laptop-540-192-before-after.webp`,
+`4-blow-closeup-0-400ms-every-16ms.webp`, `5-light-off-before-after.webp`,
+`5-light-alone-x4-before-after.webp`, `5-light-through-the-blow-0-304ms.webp`,
+`lit-group-1s-every-128ms.webp`, `accepted-4s-8s-reduced-motion-540x2.webp`, `frame-cost.txt`,
+`measurements.txt`, `light-measurements.txt`.
