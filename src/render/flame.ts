@@ -766,6 +766,13 @@ export function createSmokeMaterial(): ShaderMaterial & { uniforms: SmokeUniform
         // through a fold the two legs overlap: the strip's smoke is drawn once there, not stacked.
         float fore = al / max(length(tng), 1e-12);
         tau *= mix(mix(0.3, 1.0, smoothstep(0.05, 0.45, fore)), 1.0, sure) * mix(0.5, 1.0, pinch);
+        // ... and where it turns on screen tighter than its own half-width, the strip's inner edge
+        // folds over itself and its quads fan into a star: narrowed there to the turn's radius.
+        float turnA = acos(clamp(l12 > 1e-12 ? dot(d1, d2) / l12 : 1.0, -1.0, 1.0));
+        float rTurn = min(length(d1), length(d2)) / max(turnA, 1e-4);
+        float curl = smoothstep(0.3, 1.0, rTurn / max(1.25 * w, 1e-9));
+        pinch *= mix(0.2, 1.0, curl);
+        tau *= mix(0.6, 1.0, curl);
         // The tube's soft section reaches past its radius.
         c.xyz += side * aSide * w * 1.25 * pinch;
         gl_Position = projectionMatrix * c;
