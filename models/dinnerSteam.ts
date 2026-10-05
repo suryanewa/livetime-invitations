@@ -155,8 +155,6 @@ export const STEAM_LOOK = {
   /** (v1.6 polish 2) The budget once only thin steam shows (the cloud past its fog, the veil). */
   thinPixels: 160_000,
   lowShare: 0.6,
-  /** (v1.6 polish 5) The composite's upsample: 0 bilinear, 1 Catmull-Rom held within the nearest 2 × 2's range. */
-  upsampleSharp: 0,
   /**
    * (v1.6 polish 5) The march's resolution a side over the drawing buffer's, at most (one march pixel per 2 × 2 buffer
    * pixels: a full-resolution march, one per CSS pixel at the laptop's 1.65×, cost 6.5 ms at the held dome).
@@ -484,7 +482,7 @@ uniform vec2 uScale;
 uniform bool uLow;
 uniform float uSigma;
 uniform int uDebug;
-/** Tooling: lighting terms off (bits: 1 key, 2 octaves, 4 room, 8 bounce, 16 no key depth, 32 no depth down). */
+/** Tooling: lighting terms off (bits: 1 key, 2 octaves, 4 room, 8 bounce, 16 no key depth, 32 no depth down; and the march's parts, e.g. 65536 the veil, 131072 the cloud, v1.6 polish 5: 67108864 the gush). */
 uniform int uFlags;
 /** The jitter's frame (from the steam clock). */
 uniform float uFrame;
@@ -1538,8 +1536,6 @@ uniform vec3 uKeyDir;
 uniform float uShadowOn;
 uniform float uSigma;
 uniform int uFlags;
-/** (v1.6 polish 5) The upsample's sharpness: 0 bilinear, 1 Catmull-Rom (held within the 2 × 2's range). */
-uniform float uSharp;
 varying vec3 vLocal;
 ${LIGHT_GLSL}
 
@@ -1604,26 +1600,6 @@ void main() {
   }
   // (Luminance, coverage, the key's luminance.)
   vec3 g = wsum > 1e-4 ? acc / wsum : bestV;
-  // (v1.6 polish 5) A Catmull-Rom upsample over the 4 × 4 march pixels round this one, with the same depth weights, held
-  // within the 2 × 2's range (no ringing): the bilinear one blurred the edge and the sheets across each 2 × 2 buffer pixels.
-  if (uSharp > 0.0 && wsum > 1e-4) {
-    vec2 w0 = fr * (-0.5 + fr * (1.0 - 0.5 * fr)), w1 = 1.0 + fr * fr * (-2.5 + 1.5 * fr);
-    vec2 w2 = fr * (0.5 + fr * (2.0 - 1.5 * fr)), w3 = fr * fr * (-0.5 + 0.5 * fr);
-    vec3 lo = vec3(1e9), hi = vec3(-1e9), cacc = vec3(0.0);
-    float csum = 0.0;
-    for (int k = 0; k < 16; k++) {
-      ivec2 o = ivec2(k & 3, k >> 2) - 1;
-      vec4 v = texelFetch(uVolume, clamp(b + o, ivec2(0), size - 1), 0);
-      float wx = o.x == -1 ? w0.x : (o.x == 0 ? w1.x : (o.x == 1 ? w2.x : w3.x));
-      float wy = o.y == -1 ? w0.y : (o.y == 0 ? w1.y : (o.y == 1 ? w2.y : w3.y));
-      float dd = abs(v.z - own);
-      float wd = exp(-dd / (0.02 * min(own, v.z) + 0.003));
-      cacc += v.xyw * wx * wy * wd;
-      csum += wx * wy * wd;
-      if (o.x >= 0 && o.x <= 1 && o.y >= 0 && o.y <= 1 && wd > 0.5) { lo = min(lo, v.xyw); hi = max(hi, v.xyw); }
-    }
-    if (csum > 1e-3 && hi.x >= lo.x) g = mix(g, clamp(cacc / csum, lo, hi), uSharp);
-  }
   vec2 v = g.xy;
   // The steam veils what is behind by its coverage; its shadow darkens what it falls on further.
   float shadow = surfaceShadow(own, v.y);
@@ -1840,7 +1816,6 @@ export class DinnerSteam {
       uCamLocal: this.uniforms.uCamLocal!, uModelView: this.uniforms.uModelView!, uLight: this.uniforms.uLight!,
       uLightMin: this.uniforms.uLightMin!, uLightMax: this.uniforms.uLightMax!, uCoverInv: this.uniforms.uCoverInv!,
       uKeyDir: this.uniforms.uKeyDir!, uShadowOn: this.uniforms.uShadowOn!, uSigma: this.uniforms.uSigma!, uFlags: this.uniforms.uFlags!,
-      uSharp: { value: STEAM_LOOK.upsampleSharp },
     };
     this.material = new ShaderMaterial({
       name: 'fx_steam_volume', uniforms: this.compositeUniforms, vertexShader: COMPOSITE_VERTEX, fragmentShader: COMPOSITE_FRAGMENT,
@@ -1890,7 +1865,6 @@ export class DinnerSteam {
     u.uOrtho!.value = (camera as OrthographicCamera).isOrthographicCamera === true;
     u.uHasDepth!.value = true;
     u.uDebug!.value = dbg.__steamDebug ?? 0;
-    this.compositeUniforms.uSharp!.value = (globalThis as { __steamSharp?: number }).__steamSharp ?? STEAM_LOOK.upsampleSharp;
     u.uFlags!.value = (globalThis as { __steamFlags?: number }).__steamFlags ?? 0;
     u.uProbes!.value = (globalThis as { __steamProbes?: number }).__steamProbes ?? PROBES;
     // (Two clouds at once, a change of mind's: every sample evaluates both, and the march's cost is the ray's length
@@ -2116,8 +2090,6 @@ export class DinnerSteam {
       }
       const tau = c.tau!;
       const s = cloudState(tau, c.emitStart, c.emitEnd, c.state);
-      const TT = (globalThis as { __tt?: Record<string, number> }).__tt ?? {};
-      if (TT.drag !== undefined) { s.dragUp *= TT.drag; s.dragSide.multiplyScalar(TT.drag); }
       const present = s.present && s.fade > 0;
       A[l]!.set(tau, 1, c.fade, present ? 1 : 0);
       if (this.l0 < 0 || (present && !this.l0Cloud)) { this.l0 = l; this.l0Cloud = present; this.tau0 = tau; }
@@ -2130,19 +2102,13 @@ export class DinnerSteam {
       B[l]!.set(s.dragSide.x, s.dragSide.y, s.lean.x, s.lean.y);
       Cc[l]!.set(s.turb, s.erode, s.age, s.rise);
       const look = cloudLook(s.age, s.erode, this.look, s.peel);
-      if (TT.billow !== undefined) look.billow *= TT.billow;
-      if (TT.band !== undefined) look.band *= TT.band;
-      if (TT.amp !== undefined) look.amp *= TT.amp;
-      if (TT.fold !== undefined) look.fold *= TT.fold;
-      if (TT.foldW !== undefined) look.foldWidth *= TT.foldW;
-      if (TT.haze !== undefined) look.haze *= TT.haze;
       E[l]!.set(look.amp, look.band, look.billow, look.warp);
       // (The fine curls belong to the young edge: as the band widens they would read as a felt over the aging cap.)
-      Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.25) / 0.2)) * (TT.fine ?? 1), s.peel * (TT.peel ?? 1), s.undercutReach, s.undercutHeight);
+      Hh[l]!.set(EDGE.fine * s.peel * (1 - smoothstep01((s.age - 0.25) / 0.2)), s.peel, s.undercutReach, s.undercutHeight);
       F[l]!.set(look.core, look.sheet, look.sheetWidth, s.floor);
       // (v1.6 polish 5: and the seating's puffs' strength: the clock's light at the capture, the fog it squeezed out.)
       // (v1.6 polish 5: the crown's wake tongues come after the held dome, as its crown is drawn up, and go as the cap rolls.)
-      K[l]!.set(look.capCore, Math.min(STEAM_LOOK.tongue, 0.8 * dragAt(1.5)) * crownFray(Math.min(tau, c.emitEnd)) * (1 - smoothstep01((s.age - 0.55) / 0.35)) * (TT.wake ?? 1),
+      K[l]!.set(look.capCore, Math.min(STEAM_LOOK.tongue, 0.8 * dragAt(1.5)) * crownFray(Math.min(tau, c.emitEnd)) * (1 - smoothstep01((s.age - 0.55) / 0.35)),
         Number.isFinite(c.capture) && Number.isFinite(c.emitEnd) ? leftSteamFade(c.capture, c.emitEnd, c.capture) : 0, 0);
       // (The body's mean density over the core's, for the light volume: the haze, the sheets' share of the volume
       // (≈ 1.6 × their half-width: the field's density at zero) less the holes torn in them, and the skin.)
