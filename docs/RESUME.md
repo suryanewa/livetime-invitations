@@ -110,6 +110,11 @@ they awaited their own background renders/tests or ran a >10-minute call on the 
 (load average 30–90 with several rendering sessions); brief them to commit WIP often, keep calls under ~3
 minutes, never await a background run, and write long files in pieces.
 
+State at the last write: every polish round is merged on `v1.6/integration` (cake ×3, flames ×2, steam ×2, meshopt);
+typecheck clean and the unit suite 452/452 (32 files, with `--testTimeout=1800000` for the Party clearance test);
+the Birthday and Dinner posters recaptured on the merged build; third judgings of the Birthday scene and the
+steam in progress; the full browser suite running.
+
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for
   ~80 s of CPU on this machine now, on v1.6 **and on v1.5 `main`** (timed alone, load average 5–9, 60 % memory free),

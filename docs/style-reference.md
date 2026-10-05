@@ -63,8 +63,37 @@ the judging is in `docs/qualification.md` v1.6.
   compression, no reorder or new quantisation; `models/imported.ts` `gltfLoader()` sets three's `MeshoptDecoder`
   once, its WASM inlined): the six GLBs go from 54.2 to 23.0 MiB raw (−58 %), 28.4 to 15.8 MiB gzip; the cake
   31.9 → 11.0 MiB raw (15.2 → 7.8 gzip), decoded geometry bit-identical, 36 stills pixel-identical but flicker.
-- **Polish round (the judges' fixes):** recorded in the three scene docs; summarised in `docs/qualification.md`
-  v1.6 once the second judging is in.
+- **The polish rounds (the judges' fixes).** Each object went through two more owners, each working only from the
+  previous judge's ranked tells and acceptance numbers (`docs/qualification.md` v1.6 has every score and measurement;
+  the scene docs have the rounds). The cake: the coat's satin range, scraper streaks, hue drift and clustered pinholes;
+  no two pieces alike (rosettes ±15 % with random start and tilt, domed crown swirls, far-side backs, dots with leaning
+  peaks, bays ±2.6 mm); a continuous shell chain slumped onto the plate; pearls bedded after the piping with a
+  pearlescent material and occlusion never below 60 %; rosette centres as a flush star kiss with the tail merged into
+  its loop; the silhouette rosettes' stacked sheets traced to a mid-air rope flare and a too-short press blend; grooves
+  tinted to the frosting; a 1–2 mm contact crease; a feathered smear; ivory piping; spatula-mark spiral arcs with
+  landing ridges; per-candle halos that multiply the coat's own lit colour (`FLAME_POOL`: +11–13 R at 0.5 cm, +3–5 at
+  2 cm, the top's hue within 2° of the side, the key's candle shadows staying blue — `KEY_CANDLE_SHADOW`, since a 1024²
+  shadow map cannot resolve an 8 mm candle); the arcs' specular prefiltered to the pixel footprint with
+  Tokuyoshi–Kaplanyan anti-aliasing (`SPEC_AA`). 1.74 M triangles. The flames: the smoke as a volume
+  (`models/birthdaySmoke.ts`: the strand physics splatted into a 5 mm grid over the top tier and marched with the
+  steam's technique, each stem ending at its own height and lean, thin filaments and sub-voxel sheets above, a first
+  puff 12× the smoulder rate); the flame on a 3 mm wick with its bright zone starting 0.4 mm above the tip, an 18 % dim
+  blue zone and a 0.6 mm lumpy bead; a 1 − e⁻ˣ camera response with a small low white core, a golden body (G/R
+  0.79–0.88) and an amber two-lobe bloom that no longer adds onto the flame; the coherent 11 Hz buzz replaced, on the
+  research (bundled flames oscillate; a single candle is steady), by per-candle 1/f sway (RMS 2°), breathing (RMS
+  3.2 %) and 100–300 ms flutters; a blow that bends from the base, stretches ×1.58 and tears within 44 ms, lift-off
+  dimming to 0.3 % in 16 ms; the light (1, 0.84, 0.45), +6 / +5 / +1 levels on the top centre, breathing, fading
+  candle by candle; whole fire ≤ 1.2 ms. The steam: the density as the signed distance to the cavity wall in material
+  coordinates carved by billows (an edge band of 2.5 mm widening to 1.4 cm, lobes peeling from lift-off, room air
+  undercutting the foot); material-space jitter with a reprojected temporal history (no octave under 6.6 mm); room 0.3 /
+  key 1.25 with a two-lobe phase, key and room kept separate through the march and tinted at the composite (red −
+  blue +6…+8); the spill 0.19–0.38 s as a 3–6 mm sheet, the dome's shape held to ~0.75 s; the steam's shadow per pixel
+  and suppressed where fog stands in front of the surface, the plate bouncing light up (the plate within 8 levels of
+  clean); a 1.7 cm soft band under the cap; a dense ring core that rolls and tears into lobes; puffs leaving the
+  closing gap on the return; cost 1.1–1.5 ms by removing the ray-entry bisection, holding the depth target while
+  paused, a checkerboard march and phase budgets (a `holdDepth` hook in `sceneDepth.ts`; the main pass's multisampled
+  depth cannot be reused). The depth pass lets the scene's lights take part (−0.5 ms of program re-checks); the bloom
+  draws on layer 29.
 
 
 Surya's twelve edits on v1.4 (`docs/perfection-pass-brief.md`: *"For each of these, I won't settle for anything less than perfection. Feel free to do external research or get experimental if it helps."*). Seven owners built in parallel, three independent judges measured the integrated build (motion and physics; materials and look; the guest's real-time experience on laptop and phone), and every owner then fixed what the judges found. The per-scene records are `docs/scenes/<scene>-v1.5*.md`; spec revisions #37–#40. What each edit became:
