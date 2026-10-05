@@ -1,0 +1,147 @@
+# v1.6 steam polish 4 (the structural round): the fourth judge's measurements on the final build (v1.6/steam-polish4),
+# with the judge's own frames.ts and scripts (judge-steam4/frames.ts, py/, tools/; laptop 1240^2 clip of 1280x720 @2,
+# WARM 2000, 16 ms virtual clock; nos = the judge's DEBUG 7 twin, byte-identical to this build's). Polish 3 = the
+# fourth judge's numbers (judge-steam4/measurements.txt). New scripts in tools/: cov.py (coverage by depth from the
+# outline: the judge's item 3), hfsplit.py (tn2's mask split at row 700: the steam over the backdrop vs over the
+# plate's far rim), iou.py (the seated dome's IoU), dipwhere.py (where each dip's peaks and trough sit), anivis.py /
+# anigy.py (the anisotropy band and its gradient energy).
+#
+# item                                     target                       polish 3                     polish 4 (final)
+# (1) body grain tn2, 0.58 / 0.67 s        temporal <= 0.9              1.70 / 1.47                  0.84 / 0.74
+#                                          spatial  <= 0.9              1.42 / 1.23                  1.01 / 1.09 overall:
+#        steam over the backdrop (rows < 700, 12 k / 7 k px)                                         0.74 / 0.65 (temporal 0.86 / 0.64)
+#        the plate's far rim through the fog (rows >= 700, 4.6 k / 5.5 k px; the clean frame there: 2.25)  1.51 / 1.47
+#     far-rim transmittance 0.48-0.74 s    0.3-0.5                      0.33-0.43                    0.31-0.39
+# (2) own colour lit - shaded 0.61-0.74    >= +20                       +12 / +8 (-3 at 0.48)        +27 / +23 / +22
+#     eroded interior s8 p5-p95            >= 40                        52 / 27                      57 / 55 / 46
+# (3) coverage core (>64 px) / 1-2 cm ring >= 1.1                       0.81-0.82 (limb shell)       1.25-1.54
+# (4) anisotropy DoG 2/8 (R / crown / L)   >= 2:1 all three             1.41-2.06 / 1.30-1.52 / 1.35-1.43   1.62-2.11 / 1.33-1.81 / 1.90-2.23  (not met: the crown)
+# (5) dip median 0.93-1.25 s               <= 5 from 0.93               10/10/13/13/10/9/4/6/3/0     4/9/8/5/5/5/0/3/3/0 (0.96/0.99: the lifted cloche's shadow across the cloud's lower left)
+# (6) return: crown+shoulders > 8 levels   0 px after 0.70              43/1512/3221/4729/2747/0     0/0/0/0/0/0
+# (7) cost                                 <= 3.0 ms (lifted)           1.2-1.6                      laptop 0.8-2.0, two clouds 2.3; phone 0.7-2.6, 2.4; 1400^2 1.9-2.9; 2000^2 2.0-3.0 (cost.txt)
+# (8) roll at 1.06-1.22 (optional)                                      a featureless blob            folded sheets in the cap, no distinct rolled lip
+# kept: gush outside 0.29-0.37             74-116 k px, p95 67-82, flank 0   74-116 k, 67-82, 0-1        74-126 k, p95 64-78, flank 0
+#       vapour vs polish 1                 0.85-1.00                    0.85-1.27                    0.87-1.14 (1.21 at 0.48 s with the gush; p3 1.27)
+#       plate centre / right                                            +0..+3 / -2..-10             +0..+4 / -2..-9
+#       warmth R-B of the bright steam     +5.6..+7.3                   +5.6..+7.3                   +5.3..+6.7
+#       waterline median step                                           1.2-1.4                      1.3-1.6
+#       dome IoU (0.48-0.74 s)                                          0.46/0.53/0.47/0.44/0.40     0.45/0.55/0.48/0.45/0.42
+#       return gone by 0.832 s; the end 5.95 s within 2 levels of clean; determinism (byte-identical runs)
+# bright steam (> 40 over the backdrop, luma > 215): polish 2 52-122 k px at 230-237; polish 3 6-31 k at 218-228;
+#       polish 4 9-27 k at 222-226 (unchanged: translucent steam over a 192-level cove composites to ~225 at most)
+# speckles over the cloche's reflections at 0.43-0.48 s and the gap's grey mottle at 0.32-0.35 s: gone
+#       (speckle-1to1-0.43-0.48-p3left-p4right.png, gap-1to1-0.32-0.35-p3left-p4right.png)
+#
+# ---- the full run (mall.sh) ----
+## (1) grain body tn2 (target <= 0.9 / 0.9)
+fin/lap 36-37 (0.576s) px 16649: temporal HF rms 0.84  spatial HF rms 1.01  ratio 0.83  |diff| 1.56
+fin/lap 42-43 (0.672s) px 12653: temporal HF rms 0.74  spatial HF rms 1.09  ratio 0.68  |diff| 1.76
+fin/lap 56-57 (0.896s) px 81798: temporal HF rms 0.50  spatial HF rms 0.51  ratio 0.97  |diff| 1.10
+## edge tn3
+fin/lap 36-37 (0.576s) edge px 18969: temporal HF rms 0.66  spatial HF rms 2.98 ratio 0.22
+fin/lap 42-43 (0.672s) edge px 34945: temporal HF rms 0.69  spatial HF rms 2.51 ratio 0.27
+## transmittance (0.3-0.5)
+0.432s far-rim T 0.39 (75 cols)  core T median 0.89 p10 0.71 p90 1.00
+0.480s far-rim T 0.31 (75 cols)  core T median 0.38 p10 0.22 p90 0.74
+0.544s far-rim T 0.31 (75 cols)  core T median 0.27 p10 0.14 p90 0.55
+0.608s far-rim T 0.34 (75 cols)  core T median 0.27 p10 0.13 p90 0.42
+0.672s far-rim T 0.35 (75 cols)  core T median 0.26 p10 0.13 p90 0.39
+0.736s far-rim T 0.39 (75 cols)  core T median 0.25 p10 0.13 p90 0.36
+## (2) own colour lit-shaded (>= +20 at 0.6-0.74)
+0.480s own: lit 244  shaded 245  lit-shaded -1  body p5 199 p95 250 (p5-p95 51)
+0.608s own: lit 246  shaded 218  lit-shaded +28  body p5 190 p95 248 (p5-p95 58)
+0.672s own: lit 245  shaded 222  lit-shaded +23  body p5 192 p95 248 (p5-p95 56)
+0.736s own: lit 245  shaded 223  lit-shaded +22  body p5 194 p95 248 (p5-p95 54)
+0.896s own: lit 245  shaded 234  lit-shaded +11  body p5 220 p95 247 (p5-p95 27)
+## (2) eroded interior (s8 form p5-p95 >= 40)
+0.480s raw p5-p95 50 (163794 px) | s4: form p5-p95 49  grain rms 1.0 | s8: form p5-p95 48  grain rms 1.9 | s16: form p5-p95 47  grain rms 3.3
+0.608s raw p5-p95 57 (165532 px) | s4: form p5-p95 57  grain rms 1.5 | s8: form p5-p95 57  grain rms 2.8 | s16: form p5-p95 57  grain rms 4.8
+0.672s raw p5-p95 55 (169996 px) | s4: form p5-p95 55  grain rms 1.3 | s8: form p5-p95 55  grain rms 2.4 | s16: form p5-p95 55  grain rms 4.3
+0.736s raw p5-p95 50 (177414 px) | s4: form p5-p95 48  grain rms 1.0 | s8: form p5-p95 46  grain rms 1.9 | s16: form p5-p95 42  grain rms 3.5
+## dense body o_ring
+0.608s dense steam 60071 px  luma p5 171 p50 209 p95 233  contrast p95-p5 62
+0.736s dense steam 53627 px  luma p5 185 p50 219 p95 234  contrast p95-p5 50
+0.800s dense steam 57899 px  luma p5 178 p50 223 p95 233  contrast p95-p5 55
+0.896s dense steam 71882 px  luma p5 181 p50 223 p95 233  contrast p95-p5 52
+## (3) coverage by depth (core >= 1.1x ring)
+0.544s 4-16: 0.16 | 16-32: 0.31 | 32-64: 0.60 | 64-128: 0.74 | 128-400: 0.78 || 1-2 cm ring 0.53 core(>64) 0.75 ratio 1.42
+0.608s 4-16: 0.18 | 16-32: 0.36 | 32-64: 0.64 | 64-128: 0.75 | 128-400: 0.76 || 1-2 cm ring 0.58 core(>64) 0.75 ratio 1.30
+0.672s 4-16: 0.19 | 16-32: 0.36 | 32-64: 0.64 | 64-128: 0.74 | 128-400: 0.76 || 1-2 cm ring 0.58 core(>64) 0.75 ratio 1.30
+0.736s 4-16: 0.21 | 16-32: 0.40 | 32-64: 0.65 | 64-128: 0.74 | 128-400: 0.75 || 1-2 cm ring 0.60 core(>64) 0.75 ratio 1.25
+## (4) anisotropy DoG 2/8 (>= 2:1)
+0.544s R wall: 1.94:1 @-14 gx/gy 1.76 (4275 px) | crown: 1.81:1 @+6 gx/gy 1.78 (3989 px) | L wall: 1.94:1 @+11 gx/gy 1.82 (4445 px)
+0.608s R wall: 2.01:1 @-15 gx/gy 1.77 (5309 px) | crown: 1.33:1 @+18 gx/gy 1.26 (5434 px) | L wall: 2.07:1 @+14 gx/gy 1.86 (3668 px)
+0.672s R wall: 1.79:1 @-17 gx/gy 1.59 (6987 px) | crown: 1.57:1 @+10 gx/gy 1.53 (6358 px) | L wall: 1.90:1 @+14 gx/gy 1.72 (1485 px)
+0.736s R wall: 1.63:1 @-28 gx/gy 1.29 (7983 px) | crown: 1.47:1 @-0 gx/gy 1.47 (7574 px) | L wall: 2.23:1 @+3 gx/gy 2.22 (1060 px)
+## lobes
+0.544s right wall: 3.0/10cm (3 in 9.9 cm, rms 5.9px)  crown: 3.9/10cm (5 in 12.9 cm, rms 4.3px)  left wall: 4.5/10cm (5 in 11.0 cm, rms 4.7px)
+0.608s right wall: 2.2/10cm (3 in 13.4 cm, rms 12.7px)  crown: 5.1/10cm (8 in 15.6 cm, rms 7.0px)  left wall: 5.2/10cm (6 in 11.6 cm, rms 5.9px)
+0.672s right wall: 4.3/10cm (6 in 13.8 cm, rms 8.3px)  crown: 4.6/10cm (8 in 17.3 cm, rms 8.8px)  left wall: 4.6/10cm (7 in 15.4 cm, rms 12.3px)
+0.736s right wall: 3.4/10cm (4 in 11.7 cm, rms 8.9px)  crown: 5.9/10cm (10 in 17.1 cm, rms 6.9px)  left wall: 3.8/10cm (6 in 15.9 cm, rms 16.1px)
+## (5) dip (<= 5 from 0.93)
+0.928s curl dip median 4, best 26 levels
+0.960s curl dip median 9, best 28 levels
+0.992s curl dip median 8, best 29 levels
+1.024s curl dip median 5, best 29 levels
+1.056s curl dip median 5, best 18 levels
+1.088s curl dip median 5, best 19 levels
+1.120s curl dip median 0, best 16 levels
+1.152s curl dip median 3, best 14 levels
+1.216s curl dip median 3, best 12 levels
+1.248s curl dip median 0, best 10 levels
+## (6) return cap (0 px > 8 after 0.70)
+0.672s cap band: area>8   3404 px  p95  15.8  p99  45.9  mean +2.24 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+0.704s cap band: area>8   2754 px  p95  10.8  p99  53.5  mean +2.14 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.04
+0.736s cap band: area>8   2544 px  p95   9.9  p99  50.9  mean +2.07 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+0.768s cap band: area>8   2449 px  p95  10.0  p99  51.6  mean +2.11 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+0.800s cap band: area>8   2228 px  p95   9.1  p99  43.9  mean +1.84 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+0.832s cap band: area>8      0 px  p95   0.0  p99   2.0  mean +0.04 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+## gush (74-116k, p95 67-82, flank 0-1)
+0.192s outside: area  28927 px  p95  45.5  p50  16.7 | flank: p95   0.0 mean +0.1 px>8 662
+0.224s outside: area  39440 px  p95  65.6  p50  18.1 | flank: p95   0.0 mean +0.1 px>8 720
+0.256s outside: area  58327 px  p95  71.6  p50  21.1 | flank: p95   0.7 mean +0.2 px>8 1691
+0.288s outside: area  73898 px  p95  63.8  p50  19.2 | flank: p95   0.0 mean +0.0 px>8 0
+0.304s outside: area  87883 px  p95  74.8  p50  19.2 | flank: p95   0.0 mean +0.0 px>8 0
+0.320s outside: area 105144 px  p95  76.9  p50  20.1 | flank: p95   0.0 mean +0.0 px>8 0
+0.336s outside: area 115514 px  p95  77.9  p50  20.2 | flank: p95   0.0 mean +0.0 px>8 0
+0.352s outside: area 116820 px  p95  72.1  p50  20.1 | flank: p95   0.0 mean +0.0 px>8 0
+0.368s outside: area 126218 px  p95  72.9  p50  20.1 | flank: p95   0.0 mean +0.0 px>8 0
+## vapour vs polish 1 (0.85-1.0)
+0.480s brightening 6.31 M  ref 5.22 M  ratio 1.21
+0.608s brightening 5.21 M  ref 5.96 M  ratio 0.87
+0.736s brightening 5.77 M  ref 6.44 M  ratio 0.90
+0.992s brightening 6.99 M  ref 6.55 M  ratio 1.07
+1.200s brightening 5.04 M  ref 4.42 M  ratio 1.14
+1.280s brightening 3.54 M  ref 3.75 M  ratio 0.94
+## warmth / bright steam
+0.480s bright steam (6890 px, luma 225) R-B +5.4 (median +5, p10 +4, p90 +6);  over the plate centre R-B +1.8
+0.608s bright steam (26564 px, luma 225) R-B +5.3 (median +5, p10 +4, p90 +6);  over the plate centre R-B +2.0
+0.736s bright steam (23539 px, luma 226) R-B +5.5 (median +5, p10 +5, p90 +6);  over the plate centre R-B +2.3
+0.864s bright steam (26634 px, luma 226) R-B +5.7 (median +6, p10 +5, p90 +7);  over the plate centre R-B +1.9
+0.992s bright steam (17406 px, luma 224) R-B +6.0 (median +6, p10 +5, p90 +7);  over the plate centre R-B +1.3
+1.120s bright steam (8990 px, luma 222) R-B +6.6 (median +6, p10 +6, p90 +8);  over the plate centre R-B +1.0
+## plate
+0.480s centre 240->244 (+4)  right 243->246 (+4)  left 230->232 (+3)
+0.608s centre 240->243 (+3)  right 243->236 (-6)  left 230->231 (+2)
+0.736s centre 240->243 (+3)  right 243->233 (-9)  left 230->230 (+0)
+0.992s centre 240->243 (+3)  right 243->239 (-4)  left 230->230 (+0)
+1.280s centre 240->241 (+1)  right 243->240 (-3)  left 230->230 (+0)
+1.600s centre 240->240 (+0)  right 243->241 (-2)  left 230->230 (+0)
+## waterline
+0.736s median step 1.3  p90 2.8  columns > 12: 0%
+0.832s median step 1.6  p90 2.4  columns > 12: 0%
+0.896s median step 1.3  p90 2.1  columns > 12: 0%
+0.960s median step 1.3  p90 1.9  columns > 12: 0%
+fin/lap 36: all T 0.84 S 1.01 (16649) | upper T 0.86 S 0.74 (12080) | lower T 0.79 S 1.52 (4569)
+fin/lap 42: all T 0.74 S 1.09 (12653) | upper T 0.64 S 0.65 (7200) | lower T 0.86 S 1.47 (5453)
+fin/lap 56: all T 0.50 S 0.51 (81798) | upper T 0.49 S 0.42 (64048) | lower T 0.53 S 0.74 (17750)
+## dome IoU
+0.480s IoU 0.46  steam top row 527  dome top row 562
+0.544s IoU 0.55  steam top row 519  dome top row 562
+0.608s IoU 0.48  steam top row 499  dome top row 562
+0.672s IoU 0.45  steam top row 478  dome top row 562
+0.736s IoU 0.42  steam top row 459  dome top row 562
+## dip rows
+0.960 28@671(583:231/203/768:242) 21@672(592:231/210/769:242) 16@735(598:229/213/770:242) 17@736(540:228/211/765:242) 21@737(556:231/210/758:242) 11@502(465:228/217/565:232) 9@511(474:229/220/567:230) 15@674(563:227/212/766:238) 0 5@597(544:223/216/641:221) 4@599(581:218/214/717:223) 4@606(584:216/212/718:226) 3@614(590:215/211/720:227) 3@623(598:213/211/721:226) 4@644(609:211/207/722:220)
+0.992 29@661(573:231/202/756:243) 22@663(583:231/209/756:243) 16@664(588:229/213/756:243) 14@735(582:228/214/756:243) 8@488(451:226/218/573:230) 11@493(455:228/216/575:232) 9@500(464:228/219/575:230) 15@665(598:227/212/766:239) 0 4@589(536:223/217/629:222) 4@591(572:219/214/712:224) 4@596(575:217/213/709:227) 0 0 2@626(601:211/209/717:222)
+1.216 3@641(580:205/202/703:209) 0 0 3@596(563:211/208/689:215) 7@605(563:216/208/698:217) 10@613(556:219/209/703:221) 12@612(548:221/209/706:224) 12@612(553:221/209/706:226) 8@614(562:219/211/702:226) 4@627(573:217/213/697:226) 7@488(441:209/203/692:226) 0 0 0 0

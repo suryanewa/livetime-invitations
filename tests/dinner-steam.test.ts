@@ -127,9 +127,10 @@ describe('Dinner steam field (v1.6)', () => {
     const at12 = cloudState(1.2);
     expect(cloudLook(at12.age, at12.erode).core).toBeLessThan(0.25);
     expect(at12.erode).toBeGreaterThan(0.3);
-    // The edge: a narrow band (≈ 2.5 mm) while young, widening as the room's air mixes in, carved by 1–2 cm lobes.
-    expect(cloudLook(0).band * SU_CM).toBeLessThan(0.3);
-    expect(cloudLook(1.5).band).toBeGreaterThan(cloudLook(0).band * 2.5);
+    // The edge: a band under a centimetre while young (v1.6 polish 4: ≈ 6 mm, the sheets that cross it carry the
+    // outline), widening as the room's air mixes in, carved by 1–2 cm lobes.
+    expect(cloudLook(0).band * SU_CM).toBeLessThan(0.7);
+    expect(cloudLook(1.5).band).toBeGreaterThan(cloudLook(0).band * 2);
     expect(cloudLook(0).billow * SU_CM).toBeGreaterThan(0.3);
     // The vortex ring rolls the cap's edge over more than half a turn by 1.2 s.
     expect(at12.roll).toBeGreaterThan(Math.PI);
@@ -178,7 +179,10 @@ describe('Dinner steam field (v1.6)', () => {
     // meets the room's air several times the core (the limb reads, the far rim shows through).
     const young = cloudLook(0.1, 0);
     expect(young.core).toBeLessThan(0.3);
-    expect(young.sheet).toBeGreaterThan(4 * young.core);
+    // (v1.6 polish 4: the body is thin dense sheets with clear air between, the skin light: a sheet is many times
+    // the haze between sheets and denser than the skin, so the limb is no denser than the core.)
+    expect(young.fold).toBeGreaterThan(10 * young.haze);
+    expect(young.core * young.fold).toBeGreaterThan(young.sheet);
     // No hollow ring: the cap keeps a fog of its own after the core has emptied, and it thins by 1.4 s.
     const at = (tau: number) => cloudLook(cloudState(tau).age, cloudState(tau).erode);
     expect(at(1.0).capCore).toBeGreaterThan(2 * at(1.0).core);

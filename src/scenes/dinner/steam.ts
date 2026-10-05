@@ -85,10 +85,10 @@ export const CLOUD = {
   riseStart: 0.3,
   riseMix: 0.9,
   /** The base follows the top's rise by this share (0: the lowest air stays, slumps and evaporates). */
-  base: 0,
+  base: 0.2,
   /** The cap's radius grows by this per su of rise (a thermal's entrainment, α ≈ 0.25, over R ≈ 0.63); the stem narrows by up to `stem`. */
   capGrow: 0.08,
-  stem: 0.3,
+  stem: 0.15,
   /** The cap flattens by up to this share of its height as it rises. */
   squash: 0.12,
   /** The updraft's fall-off from the axis to the cap's edge (share of the rise the edge loses). */
@@ -204,7 +204,7 @@ export function raisedGap(t: number): number {
  * from the lip and risen `gushRise(a)` (su): out to ≈ 3.7 cm, rising at up to ≈ 33 cm/s (the hot dome's
  * boundary layer and the lifting dome draw it up).
  */
-export const GUSH = { out: 0.22, outTime: 0.1, rise: 2.0, riseTime: 0.1, radius: 0.035, grow: 0.45, density: 6.0, spread: 1.1, centre: 0.5 } as const;
+export const GUSH = { out: 0.22, outTime: 0.1, rise: 2.0, riseTime: 0.1, radius: 0.035, grow: 0.45, density: 5.2, spread: 1.1, centre: 0.5 } as const;
 export const gushOut = (a: number) => GUSH.out * (1 - Math.exp(-Math.max(a, 0) / GUSH.outTime));
 export const gushRise = (a: number) => (a <= 0 ? 0 : GUSH.rise * (a - GUSH.riseTime * (1 - Math.exp(-a / GUSH.riseTime))));
 
@@ -643,18 +643,28 @@ export function leftSteamEnd(cut: number, emitStart = -Infinity, capture = Infin
  * as it ages; at the boundary the mixing layer keeps a thin sheet (`sheet`, `sheetWidth`): steam's
  * bright folds. `warp` folds the lobes by the large field.
  */
-export interface CloudLook { amp: number; band: number; billow: number; warp: number; core: number; sheet: number; sheetWidth: number; capCore: number }
-export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, band: 0, billow: 0, warp: 0, core: 0, sheet: 0, sheetWidth: 0, capCore: 0 }, peel = 0): CloudLook {
+export interface CloudLook { amp: number; band: number; billow: number; warp: number; core: number; sheet: number; sheetWidth: number; capCore: number; fold: number; foldWidth: number; haze: number }
+export function cloudLook(age: number, _erode = 0, out: CloudLook = { amp: 0, band: 0, billow: 0, warp: 0, core: 0, sheet: 0, sheetWidth: 0, capCore: 0, fold: 0, foldWidth: 0, haze: 0 }, peel = 0): CloudLook {
   out.amp = 0.008 + 0.07 * smooth(0.35, 1.5, age);
-  out.band = 0.015 + 0.065 * smooth(0.3, 1.3, age);
+  // (v1.6 polish 4: the envelope is softer, ≈ 6 mm young: the sheets that cross it carry the edge, so the outline is
+  // their torn ends drawn out along the flow, not a contour.)
+  out.band = 0.035 + 0.045 * smooth(0.3, 1.3, age);
   // (v1.6 polish 2: from the lift-off the outer layer peels and billows; the bulk keeps the dome's shape.)
   out.billow = Math.max(0.028 + EDGE.billow * peel, 0.028 + 0.042 * smooth(0.25, 1.3, age));
-  out.warp = 0.5 + 1.3 * smooth(0.25, 1.5, age);
+  // (v1.6 polish 4: the sheets curve and fold with the large field from the start: 0.5 → 0.9 young.)
+  out.warp = 0.9 + 0.9 * smooth(0.25, 1.5, age);
   out.core = 0.2 + (0.03 - 0.2) * smooth(0.15, 0.72, age);
-  out.sheet = 1.5 - 0.75 * smooth(0.15, 0.5, age) - 0.6 * smooth(0.4, 0.8, age);
+  // (v1.6 polish 4: the skin is light: a dense mixing skin round a thin body read as a bubble, the limb denser than the core.)
+  out.sheet = 0.3 - 0.15 * smooth(0.15, 0.5, age) - 0.1 * smooth(0.4, 0.8, age);
   out.sheetWidth = 0.035 + 0.03 * smooth(0.3, 1.3, age);
   // (v1.6 polish 3) The cap's fog: the stem and base empty, the cap keeps its own (a filled mushroom, not a ring).
-  out.capCore = 0.24 - 0.13 * smooth(0.25, 0.7, age) - 0.07 * smooth(0.65, 1.0, age);
+  out.capCore = 0.24 - 0.13 * smooth(0.25, 0.7, age) - 0.09 * smooth(0.6, 0.9, age);
+  // (v1.6 polish 4: the structural round) The body is thin, dense sheets with clear air between: the zero set of
+  // the sheet field (drawn out along the rise, folded with the air), `fold` times the core's density inside a
+  // sheet, `foldWidth` its half-width in the field's units (≈ 2 mm), `haze` the share of the core between them.
+  out.fold = 10;
+  out.foldWidth = 0.24;
+  out.haze = 0.5 - 0.25 * smooth(0.3, 1.0, age);
   return out;
 }
 
