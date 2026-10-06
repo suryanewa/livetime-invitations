@@ -270,17 +270,35 @@ export interface FramingPair {
 }
 
 /**
- * v1.7 (spec revision #42, pending Surya): a close-up a scene's accepted pose moves to (Dinner: the
- * invitation card, head-on). `points` (the subject's silhouette, the content's own space) are fitted
- * along their own direction, `azimuthDeg`/`elevationDeg`, through the same lens, aimed at their
- * centre, so that their width fills `widthFill` of the frame (centred). The one exception to the
- * one-angle rule besides the decline's dolly (#39); the azimuth is kept so the light holds.
+ * v1.7 (spec revision #42, pending Surya): a scene's second fit and its camera channel
+ * (`SceneInstance.frameClose`).
+ *
+ * - **A close-up** (`kind` 'close-up', the default; Dinner: the invitation card, head-on, its
+ *   accepted pose): `points` (the subject's silhouette, the content's own space) are fitted along
+ *   their own direction, `azimuthDeg`/`elevationDeg`, through the same lens, aimed at their centre,
+ *   so that their width fills `widthFill` of the frame (centred). The move to it is a boom and
+ *   push-in (`closeUpView`). The one exception to the one-angle rule besides the decline's dolly
+ *   (#39); the azimuth is kept so the light holds.
+ * - **A focus** (`kind` 'focus', `aim` 'stage'; v1.7 polish, Sports: the board, the rim, the net and
+ *   the ball's airborne path through the bank and the rattle): the hero rule again, along the
+ *   shared direction (`azimuthDeg`/`elevationDeg` the shared angles) at the rest fit's own aim,
+ *   `points` the hero at `fill` and `paths` held inside the clearance. The move to it is a dolly
+ *   along the shared direction, as the decline's pull (#39: slide, never zoom; `pulledView`).
  */
 export interface CloseUp {
   points: readonly Vector3[];
   azimuthDeg: number;
   elevationDeg: number;
-  widthFill: number;
+  /** A close-up's subject width over the frame's (its height may fill up to 1 − clearance). */
+  widthFill?: number;
+  /** v1.7 polish: what the channel is ('close-up' by default; `controller.framing()` reports a focus as `focus`). */
+  kind?: 'close-up' | 'focus';
+  /** v1.7 polish: the subject's fill by the hero rule (height, and the width cap), in place of `widthFill`. */
+  fill?: { readonly height: number; readonly width: number };
+  /** v1.7 polish: 'subject' (default), aimed at the subject's centre; 'stage', at the rest fit's aim (a dolly). */
+  aim?: 'subject' | 'stage';
+  /** v1.7 polish: points (the content's own space) this fit must also hold inside the clearance. */
+  paths?: readonly Vector3[];
 }
 
 /** A placed view: the camera's position, the point it looks at, and its slide (NDC of the fitted square). */
@@ -332,7 +350,7 @@ export function placeView(camera: PerspectiveCamera, position: Vector3, target: 
  * a straight line across the screen, so the hero slides calmly from its rest composition to its
  * decline composition, never swinging out and back. Exact at k = 0 and k = 1.
  */
-export function pulledView(rest: HeroFraming, decline: HeroFraming, k: number): { distance: number; offset: [number, number] } {
+export function pulledView(rest: Pick<HeroFraming, 'distance' | 'offset'>, decline: Pick<HeroFraming, 'distance' | 'offset'>, k: number): { distance: number; offset: [number, number] } {
   const kk = Math.min(1, Math.max(0, k));
   const d0 = rest.distance, d1 = decline.distance;
   if (kk <= 0) return { distance: d0, offset: [rest.offset[0], rest.offset[1]] };
@@ -464,10 +482,15 @@ export function solveHeroFits(
  * direction at their own centre, held by their width (`widthFill`; their height may fill up to
  * 1 − clearance), centred; nothing else is in it. Exact for any point set (no hull reduction: a
  * close-up's subject is a handful of corners).
+ * v1.7 polish: a focus (`CloseUp.fill`, `paths`, aimed at `aim`, the rest fit's) is the hero rule
+ * with its own fill and paths (in the world, like `points`).
  */
-export function solveCloseFit(camera: PerspectiveCamera, aim: Vector3, aspect: number, closeUp: CloseUp, points: readonly Vector3[], clearance: number, frame?: FrameRect): HeroFraming {
+export function solveCloseFit(
+  camera: PerspectiveCamera, aim: Vector3, aspect: number, closeUp: CloseUp, points: readonly Vector3[], clearance: number, frame?: FrameRect, paths: readonly Vector3[] = [],
+): HeroFraming {
   const dir = viewDirection(closeUp.azimuthDeg, closeUp.elevationDeg);
-  return solveHeroFits(camera, aim, aspect, points, [[]], { height: 1 - clearance, width: closeUp.widthFill }, clearance, frame, dir)[0]!;
+  const fill = closeUp.fill ?? { height: 1 - clearance, width: closeUp.widthFill ?? 1 - clearance };
+  return solveHeroFits(camera, aim, aspect, points, [paths], fill, clearance, frame, dir)[0]!;
 }
 
 /** The camera pose a fit places (`placeHeroView`): its position, target and slide. */

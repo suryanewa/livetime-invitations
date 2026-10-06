@@ -98,13 +98,16 @@ export interface SceneInstance {
   /**
    * v1.7 (spec revision #42, Dinner): a close-up the camera moves to after the accept (the invitation
    * card, head-on). The stage fits it once per content and aspect beside the rest and decline fits.
+   * v1.7 polish: or a focus (`CloseUp.kind` 'focus', Sports: the push-in on the bank and the rattle,
+   * a dolly along the shared direction to a fit of the board, rim, net and the ball's airborne path).
    */
   readonly closeUp?: CloseUp;
   /**
-   * v1.7: where the camera is between the (pulled) view (0) and the close-up (1), read by the
-   * controller every frame before drawing, like `framePull`: a pure function of what the scene shows
-   * (and of the reveal's own clock, which runs on past the accept in `simulate`); 1 at the accepted
-   * pose, 0 at every other pose. Omitted: 0.
+   * v1.7: where the camera is between the (pulled) view (0) and the close-up or focus (1), read by
+   * the controller every frame before drawing, like `framePull`: a pure function of what the scene
+   * shows (Dinner: and of the reveal's own clock, which runs on past the accept in `simulate`;
+   * Sports: of the decline's time, tail included); Dinner's 1 at the accepted pose, Sports' 0 at
+   * every pose, 0 at every other pose. Omitted: 0.
    */
   frameClose?(): number;
 
