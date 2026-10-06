@@ -66,12 +66,13 @@ export const FOCUS_EASE = cubicBezier(0.42, 0, 0.58, 1);
  * The focus fit (the hero rule along the shared direction): the board, the rim and the net fill
  * this much of the frame's height (and at most this much of its width), every point of the ball's
  * airborne path (FOCUS.path) PATH_CLEARANCE inside. Measured (tests/sports.test.ts; the GLB's
- * stand; the real stage): at 1:1 and 3:2 everything is 1.67× larger than at rest (the ball at the
- * strike ≈ 15 % of the frame's height, 76 CSS px on the laptop against 43), the frame's bottom
+ * stand; the real stage, `controller.framing()`): at 1:1 and 3:2 everything is 1.68× larger than
+ * at rest (the ball at the strike 14.4 % of the frame's height: 76 CSS px of the laptop's 528 px
+ * frame square, 45 px at rest), the frame's bottom
  * crosses the pole ≈ 45 cm above the floor, under its clamp collar, and the base's highest point
  * (its socket's boss, 17 cm) is 5 % of the frame below it (27 px on the laptop, past the 16 px the
  * fullscreen view shows under the frame square; on the phone 10 px under the dock); at 3:4 the
- * width binds: 1.59×, the base 2 % below the frame. 0.7 left the base's boss in the laptop's view.
+ * width binds: 1.60×, the base 2 % below the frame. 0.7 left the base's boss in the laptop's view.
  */
 export const SPORTS_FOCUS_FILL = { height: 0.8, width: 0.8 } as const;
 
