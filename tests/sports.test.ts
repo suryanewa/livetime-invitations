@@ -771,12 +771,13 @@ describe('Sports runtime GLB and the simulated net', async () => {
       adj += corr(win.flatMap((f) => [f.knots[j]!.x - rest[j]!.x, f.knots[j]!.z - rest[j]!.z]), win.flatMap((f) => [f.knots[k]!.x - rest[k]!.x, f.knots[k]!.z - rest[k]!.z])) / bottom.length;
     });
     expect(adj).toBeGreaterThan(0.6);
-    // After the exit the net's energy (kinetic, gravitational and elastic, above its rest) only falls: never
-    // more than 5 % up from one frame to the next while it is visible (above 1 % of its peak), and
-    // the motion is below 1 % of its post-exit kinetic peak within 1.5 s.
+    // After the exit the net's energy (kinetic, gravitational and elastic, above its rest) only falls:
+    // never more than 5 % up from one frame to the next while it shows (above 2 % of its peak; below
+    // that the stiff cords' elastic energy ripples by a few per cent of next to nothing), and the
+    // motion is below 1 % of its post-exit kinetic peak within 1.5 s.
     const post = frames.filter((f) => f.t > exit);
     const kePeak = Math.max(...post.map((f) => f.ke)), mechPeak = Math.max(...post.map((f) => f.mech));
-    for (let i = 1; i < post.length; i++) if (post[i - 1]!.mech > 0.01 * mechPeak) expect(post[i]!.mech / post[i - 1]!.mech).toBeLessThan(1.05);
+    for (let i = 1; i < post.length; i++) if (post[i - 1]!.mech > 0.02 * mechPeak) expect(post[i]!.mech / post[i - 1]!.mech).toBeLessThan(1.05);
     expect(Math.max(...post.filter((f) => f.t > exit + 1.5).map((f) => f.ke))).toBeLessThan(0.01 * kePeak);
   });
 

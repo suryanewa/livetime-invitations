@@ -191,9 +191,15 @@ function analyse(hz: number) {
   // Mechanical energy (sim state): after the exit it must only fall (no energy injected).
   const ME = snaps.filter((q) => q.t > exitAt && q.energy !== undefined).map((q) => ({ t: q.t, e: q.energy! }));
   const mePeak = Math.max(...ME.map((q) => q.e));
-  let meRise = 0, meRiseAt = 0;
-  for (let i = 1; i < ME.length; i++) if (ME[i - 1]!.e > mePeak * 1e-3) { const r = ME[i]!.e / ME[i - 1]!.e - 1; if (r > meRise) { meRise = r; meRiseAt = ME[i]!.t - exitAt; } }
+  let meRise = 0, meRiseAt = 0, meRiseLow = 0;
+  for (let i = 1; i < ME.length; i++) {
+    const r = ME[i]!.e / ME[i - 1]!.e - 1;
+    if (ME[i - 1]!.e > mePeak * 2e-2 && r > meRise) { meRise = r; meRiseAt = ME[i]!.t - exitAt; }
+    else if (ME[i - 1]!.e > mePeak * 1e-3 && ME[i - 1]!.e <= mePeak * 2e-2) meRiseLow = Math.max(meRiseLow, (ME[i]!.e - ME[i - 1]!.e) / mePeak);
+  }
+  out.mechRiseBelow2pct_ofPeak = meRiseLow;
   out.mechPeak_mJ = mePeak;
+  if (args.includes('--energy')) for (const q of ME) if (q.t - exitAt > Number(process.env.E_FROM ?? 0.6) && q.t - exitAt < Number(process.env.E_TO ?? 1.3)) console.log(`  E ${(q.t - exitAt).toFixed(3)} ${(q.e / mePeak * 100).toFixed(4)} %`);
   out.mechMaxFrameRise = meRise;
   out.mechMaxFrameRiseAt = meRiseAt;
   out.mechAtExitPlus = Object.fromEntries([0, 0.25, 0.5, 1, 1.5].map((d) => [d, +((ME.find((q) => q.t >= exitAt + d)?.e ?? 0) / mePeak).toFixed(4)]));

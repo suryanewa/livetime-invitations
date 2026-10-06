@@ -4,7 +4,7 @@ import {
 import { BALL_R, BOARD, BOARD_PIVOT, NET, netHangRadius, netRestRadius, RECOIL_LIMIT, recoilPoint, RIM, RIM_BACKSTOP, RIM_HINGE, RIM_LOCAL, SPORTS_CM_PER_UNIT } from './sportsContract.ts';
 
 /**
- * Sports v1.5: the net is a simulated cord lattice that drives the master's net.
+ * Sports v1.5–v1.7: the net is a simulated cord lattice that drives the master's net.
  *
  * **The lattice is the master's own.** The master net (`models/masters/basketball-hoop.glb`) is
  * a knotted diamond net: 10 loops laced over the rim, each feeding two cords; cords from
@@ -14,22 +14,23 @@ import { BALL_R, BOARD, BOARD_PIVOT, NET, netHangRadius, netRestRadius, RECOIL_L
  * the 10 loop attachments (pinned to the rim), the 60 knots (the simulated nodes) and the 120
  * cord pieces joining them (the structural constraints).
  *
- * **Simulation** (`NetSim`): position-based (Verlet with XPBD constraints, Macklin et al. 2016,
- * "small steps": fixed 1/480 s substeps on the sim's own clock, one constraint pass each), gravity 9.81 m/s²,
- * per-knot mass of a 40 g nylon mini net (±10 % seeded jitter, so the net is not a perfect
- * lathe), cords as elastic tension-only constraints (braided nylon: they stretch under the ball's
- * drag and snap back, and go slack under compression, so the net can bunch and billow), the
- * diamond's two diagonals as soft shear springs (the knots' and the braid's bending stiffness: the
- * net keeps its open diamonds instead of collapsing to a rope), air drag on the cords, the board
- * face as a wall behind the net, and the ball as a moving sphere: knots inside it are pushed out
- * along its normal and dragged along its surface by the leather's grip.
+ * **Simulation** (`NetSim`, rebuilt in v1.7, docs/scenes/sports-v1.7-net.md): XPBD (Macklin et al.
+ * 2016, "small steps") at fixed 1/480 s substeps on the sim's own clock, explicit velocities, two
+ * constraint passes per substep in a fixed topological order. Gravity 9.81 m/s²; a 40 g nylon mini
+ * net (±10 % seeded jitter per knot); the cords elastic and tension only, hung slack (rest lengths
+ * from the hanging pose); the diamond diagonals preloaded soft springs (the knots hold the net's
+ * open shape, but answer any change of it softly, so the net swings as a whole on gravity); hard
+ * minimum distances so the cords never cross; air drag; the knots' internal friction on the relative
+ * velocity of neighbours (kills a knot's own pendulum and the diamond 'scissor' within a cycle); the
+ * ball a moving sphere with an inelastic, gripping, Coulomb contact that injects no energy; the board
+ * face a wall. The loops ride the rim's and board's recoil, so the rim drags the net's top.
  * The hanging rest pose is the equilibrium under gravity (`rest`), solved once.
  *
- * **Rendering** (`NetSkin`): the master's strand and knot meshes become skinned meshes with one
- * bone per cord piece (its frame: along the cord, radial, binormal, stretched with the cord) and
- * one per knot (its frame from the cords above it). The GPU does the per-vertex work (~70k
- * vertices), the CPU only sets 190 bone transforms; the shadow pass skins the same way. The
- * loops stay on the rim.
+ * **Rendering** (`NetSkin`): the master's strand and knot meshes become skinned meshes with two
+ * bones per cord piece (its halves: a slack cord bows at its own length instead of shrinking) and
+ * one per knot (its frame from all its cords, smoothed round its row). The GPU does the per-vertex
+ * work (~76k vertices), the CPU sets 310 bone transforms, drawn between the last two substeps at the
+ * frame's exact time; the shadow pass skins the same way. The loops stay on the rim.
  *
  * **Rim and board** (`HoopSprings`): the cords pinned to the loops pull on the rim; their summed
  * force (from the constraint multipliers) drives the spring-action rim about its bracket hinge and
@@ -303,7 +304,7 @@ export const NET_SIM = {
    * (v1.5's stiff diagonals rang the whole net at ≈ 7 Hz).
    */
   shapeCompliance: 0.4,
-  shearCompliance: 40,
+  shearCompliance: 150,
   /**
    * Hard limits that keep the cords from crossing (pressed together they bunch, never pass through
    * each other): neighbouring knots in a row stay ≥ 70 % of their hanging spacing apart, a knot and
@@ -314,7 +315,7 @@ export const NET_SIM = {
   minVertical: 0.55,
   minThrough: 0.8,
   /** Air drag on the cords (1/s): velocity decays e^(−drag·t). */
-  drag: 2,
+  drag: 3,
   /**
    * The knots' and braid's internal friction (1/s): the relative velocity of every pair of
    * neighbouring knots (along a cord or round a row) decays at this rate, momentum kept. It acts
@@ -426,11 +427,6 @@ export class NetSim {
   private readonly _b = new Vector3();
   private readonly _vb = new Vector3();
   private readonly _p = new Vector3();
-  /** The rest relaxation's last quasi-static iteration and its residual (su), for diagnostics. */
-  relaxed: [number, number] = [0, 0];
-  relaxedShape: number[] = [];
-  shapeRest: Float64Array | null = null;
-  relaxSteps: number[] = [];
 
   constructor(readonly lattice: NetLattice, seed = 7) {
     const L = lattice;
@@ -531,23 +527,18 @@ export class NetSim {
     const relax = (heavy: number, still: number, drag: number) => {
       for (let i = 0; i < heavy; i++) {
         this.substep(h, null, drag, 0, 0, 0);
-        if (i % 50 === 49 && moved() < 1e-15) { this.relaxSteps.push(i + 1); break; }
-        if (i === heavy - 1) this.relaxSteps.push(heavy);
+        if (i % 50 === 49 && moved() < 1e-15) break;
       }
       for (let i = 0; i < still; i++) {
         this.v.fill(0);
         this.substep(h, null, 0, 0, 0, 0);
-        const d = moved();
-        this.relaxed = [i, d];
-        if (d < 1e-15) break;
+        if (moved() < 1e-15) break;
       }
     };
-    relax(3000, 400, 40);
-    this.relaxedShape = [...this.relaxed];
+    relax(3000, 400, 15);
     // Preload the diagonals: the multiplier each applied at this pose (its force, λ/h²), now from
     // the softer compliance: rest length d + α̃·λ, so the soft spring pushes the same at this pose.
     const soft = NET_SIM.shearCompliance * SU_M;
-    this.shapeRest = this.x.slice();
     for (let c = 0; c < m; c++) {
       if (this.mode[c] !== MODE.spring) continue;
       const a = this.ca[c]!, b = this.cb[c]!;
