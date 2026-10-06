@@ -106,6 +106,8 @@ Accessibility over the scene is the host page's job: put overlay text on a surfa
 
 **A change of mind from the close-up** (Decline after the card is shown) lifts the camera out of the close-up first, then the cover comes back onto the plate and the decline plays at its own pace: the decline's playback, and so its `onVisualComplete('decline')`, comes up to 0.34 s later than the usual 1.5 s (1.84 s from the close-up at rest).
 
+**Sports' decline pushes in (v1.7 polish, spec revision #43, pending Surya).** As the ball leaves the hand the camera dollies in along the shared angle until the board, the rim and the net fill the frame (the stand's base out of it), holds through the bank and the rattle on the ring, and is back on the rest frame by **2.1 s**, before the ball's first bounce; `onVisualComplete('decline')` fires at 1.6 s, during the pull back, and the ball's bounces run on to 6.6 s as before. Every pose (and so reduced motion, a saved decline and the posters) is at the rest frame; a decline from the accepted pose rolls the ball over without the bank and without the push-in. Tooling: `controller.framing().focus` (0 the rest view, 1 the push-in's) and `focusFit`, beside `pull` and Dinner's `close`.
+
 `setConfig(config)` switches preset or category. A category change loads the new scene and frees the old one's GPU resources; a preset change swaps materials at a canonical pose. Party's `songId` is carried through for your UI; the scene never fetches song data, and the showcase shows "Selected track" when metadata is missing.
 
 ### Modes
