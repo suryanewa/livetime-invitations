@@ -205,15 +205,17 @@ export class Stage {
    * `bounds`, `framePoints`, `heroPoints` and `restFramePoints` are in the content's own space (its
    * scene units): the stage carries them into the world through the content's transform (v1.4: a
    * scene root may carry its world scale, models/worldScale.ts). `studio.wallZ` is in world units.
+   * `heroFill` (v1.7): the content's own hero fill in place of HERO_FILL (Sports, #43).
    */
   setContent(
     object: Object3D | null, bounds?: Box3, studio?: { wallZ?: number; scale?: number }, framePoints?: readonly Vector3[], heroPoints?: readonly Vector3[],
-    restFramePoints?: readonly Vector3[], closeUp?: CloseUp,
+    restFramePoints?: readonly Vector3[], closeUp?: CloseUp, heroFill?: { readonly height: number; readonly width: number },
   ): void {
     if (this.content) this.scene.remove(this.content);
     this.content = object;
     this.framePoints = this.heroPoints = this.restPoints = undefined;
     this.closeUp = this.closePoints = null;
+    this.heroFill = heroFill;
     this.pull = 0;
     this.close = 0;
     this.fits.clear();
@@ -324,6 +326,8 @@ export class Stage {
   private framePoints: readonly Vector3[] | undefined;
   private heroPoints: readonly Vector3[] | undefined;
   private restPoints: readonly Vector3[] | undefined;
+  /** v1.7: the content's own hero fill (`SceneInstance.heroFill`), else HERO_FILL. */
+  private heroFill: { readonly height: number; readonly width: number } | undefined;
   /**
    * The last hero fits (null when the camera fitted bounds instead): `rest` and `decline`, the same
    * fit for content without `restFramePoints`.
@@ -431,7 +435,7 @@ export class Stage {
           const paths = this.framePoints?.length ? this.framePoints : boxCorners(this.bounds);
           // Two fits when the rest needs less room than the decline (v1.5), else one.
           const sets = this.restPoints?.length ? [this.restPoints, paths] : [paths];
-          const fits = solveHeroFits(this.camera, aim, aspect, this.heroPoints, sets, HERO_FILL, PATH_CLEARANCE, frame);
+          const fits = solveHeroFits(this.camera, aim, aspect, this.heroPoints, sets, this.heroFill ?? HERO_FILL, PATH_CLEARANCE, frame);
           pair = { rest: fits[0]!, decline: fits[fits.length - 1]! };
           // v1.7: the close-up's fit, in the same solve (a fit is still solved once per content and aspect).
           if (this.closeUp && this.closePoints) pair.closeUp = solveCloseFit(this.camera, this.closeAim, aspect, this.closeUp, this.closePoints, PATH_CLEARANCE, frame);

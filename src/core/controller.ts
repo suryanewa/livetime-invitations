@@ -415,7 +415,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       scene = instance;
       // A preset chosen while the asset was loading wins over the one the load started with.
       instance.setConfig(config);
-      s.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints, instance.heroPoints, instance.restFramePoints, instance.closeUp);
+      s.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints, instance.heroPoints, instance.restFramePoints, instance.closeUp, instance.heroFill);
       resize();
       applyTierDetail(quality.tier);
       let shaderError = false;

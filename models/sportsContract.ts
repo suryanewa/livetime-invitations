@@ -70,6 +70,11 @@ export const HOOP_MASTER = {
   frame: { halfWidth: 0.9169, bottom: -0.4927, top: 0.9492, back: -0.5453, front: -0.3389 },
   /** The grey laminate face inside the frame. */
   face: -0.4141,
+  /**
+   * v1.7: the laminate's opening inside the frame's proud lip (half width, bottom, top), where the
+   * ball can strike the face (`BOARD.opening`; re-measured from the exported GLB in the tests).
+   */
+  faceOpening: { halfWidth: 0.8318, bottom: -0.402, top: 0.865 },
   /** Centre of the board's flat back (`board-back`). */
   backCenterY: 0.2315,
   /** Rim bracket (plate, saddle and arms): the ring's mount on the board face. */
@@ -130,6 +135,12 @@ export const BOARD = (() => {
     centerY: (lo.y + hi.y) / 2,
     front: hi.z,
     face: hoopFromMaster(0, 0, HOOP_MASTER.face).z,
+    /** v1.7: the laminate's opening inside the frame lip (hoop space): x ∈ ±halfWidth, y ∈ [bottom, top]. */
+    opening: {
+      halfWidth: HOOP_MASTER.faceOpening.halfWidth * HOOP_SCALE,
+      bottom: hoopFromMaster(0, HOOP_MASTER.faceOpening.bottom, 0).y,
+      top: hoopFromMaster(0, HOOP_MASTER.faceOpening.top, 0).y,
+    },
   } as const;
 })();
 
@@ -252,9 +263,11 @@ export const BALL_AT = {
 
 /**
  * Motion bounds box: the key light aims at its centre and box-framed tools (lookdev) fit it. The
- * scene frames the camera with silhouette points of every path (tails to rest included).
+ * scene frames the camera with silhouette points of every path (tails to rest included). v1.7: it
+ * reaches the declined ball's rest wide of the guest spot (x −1.6 → −1.9) and the bank's wind-up
+ * towards the camera (z 1.4 → 1.6).
  */
-export const SPORTS_BOUNDS = new Box3(new Vector3(-1.6, -0.05, -3.7), new Vector3(2.4, 4.8, 1.4));
+export const SPORTS_BOUNDS = new Box3(new Vector3(-1.9, -0.05, -3.7), new Vector3(2.4, 4.8, 1.6));
 
 /**
  * Backdrop wall for this scene (studio sweep wall z), pushed back like Birthday's and Dinner's so

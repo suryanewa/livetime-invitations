@@ -9,11 +9,12 @@ import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { BUSINESS_BOUNDS } from '../models/businessContract.ts';
 import { PARTY_BOUNDS } from '../models/recordContract.ts';
 import { birthdayBounds, BIN_POS, BIN_YAW } from '../models/birthdayContract.ts';
-import { SPORTS_BOUNDS } from '../models/sportsContract.ts';
+import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netRestRadius, RIM, RIM_CENTER, SPORTS_BOUNDS, SPORTS_WORLD_SCALE } from '../models/sportsContract.ts';
 import { DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, dinnerBounds } from '../models/dinnerContract.ts';
 import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { partyFramePoints } from '../src/scenes/party/index.ts';
-import { sportsFramePoints } from '../src/scenes/sports/index.ts';
+import { SPORTS_HERO_FILL, sportsFramePoints } from '../src/scenes/sports/index.ts';
+import { HERO_FILL } from '../src/render/framing.ts';
 import { dinnerFramePoints } from '../src/scenes/dinner/index.ts';
 import { birthdayFramePoints } from '../src/scenes/birthday/framing.ts';
 
@@ -173,5 +174,60 @@ describe('v1.7: the stage\'s close-up (Dinner\'s accepted pose is the card view)
     expect(s.currentClose).toBe(0);
     expect(s.framing!.closeUp).toBeUndefined();
     expect(s.camera.position.distanceTo(p)).toBeLessThan(1e-12);
+  });
+});
+
+describe('v1.7: a scene\'s own hero fill (Sports, #43) reaches the fit through Stage.setContent', () => {
+  function stage(): Stage {
+    const renderer = { shadowMap: {}, toneMapping: 0, toneMappingExposure: 1, setPixelRatio() {}, setSize() {} } as unknown as WebGLRenderer;
+    const rig: Rig = { ...defineRig({
+      label: 'test', stageColor: '#808080', exposure: 1, toneMapping: NeutralToneMapping, environmentIntensity: 1, gobo: false,
+      backdrop: { kind: 'none' }, shadows: null, build: () => ({ environment: new Texture(), objects: [], dispose() {} }),
+    }), name: 'test' };
+    const Ctor = Stage as unknown as new (r: WebGLRenderer, o: { rig: Rig }) => Stage;
+    return new Ctor(renderer, { rig });
+  }
+  const content = () => {
+    const g = new Group();
+    g.add(new Mesh(new PlaneGeometry(1, 1), new MeshStandardMaterial()));
+    g.scale.setScalar(SPORTS_WORLD_SCALE);
+    return g;
+  };
+  // The Sports hero: the board's corners, the ring, the net's bottom and the ball at guest-ready (no stand).
+  const hero: Vector3[] = [];
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const z of [BOARD.front, BOARD.front - BOARD.thickness]) hero.push(new Vector3(HOOP_ROOT.x + (sx * BOARD.width) / 2, BOARD.centerY + (sy * BOARD.height) / 2, HOOP_ROOT.z + z));
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    hero.push(new Vector3(RIM_CENTER.x + Math.cos(a) * (RIM.innerRadius + 2 * RIM.tube), RIM_CENTER.y, RIM_CENTER.z + Math.sin(a) * (RIM.innerRadius + 2 * RIM.tube)));
+    hero.push(new Vector3(RIM_CENTER.x + Math.cos(a) * netRestRadius(1), RIM_CENTER.y - NET.depth, RIM_CENTER.z + Math.sin(a) * netRestRadius(1)));
+  }
+  for (const d of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) hero.push(BALL_AT.guest.clone().add(new Vector3(...d).multiplyScalar(BALL_R)));
+  const paths = sportsFramePoints();
+
+  it('Sports fills 0.92 of the height at 1:1 and 3:2 and 0.76 of the width at 3:4, never path-limited; without its fill the shared 0.6 holds', () => {
+    const s = stage();
+    s.resize(800, 800);
+    s.setContent(content(), SPORTS_BOUNDS, undefined, paths, hero, undefined, undefined, SPORTS_HERO_FILL);
+    const at = (a: number) => s.measureFraming(a)!.rest;
+    for (const a of [1, 1.5]) {
+      expect(at(a).binding, `${a}`).toBe('height');
+      expect(at(a).heroHeight, `${a}`).toBeCloseTo(0.92, 3);
+      expect(at(a).pathLimited, `${a}`).toBe(false);
+    }
+    expect(at(0.75).binding).toBe('width');
+    expect(at(0.75).heroWidth).toBeCloseTo(0.76, 3);
+    expect(at(0.75).heroHeight).toBeGreaterThan(0.89);
+    expect(at(0.75).pathLimited).toBe(false);
+    // The phone's fullscreen frame square (dock insets) is fitted as the square stage.
+    s.resize(390, 844);
+    s.setFrameInsets({ top: 180, right: 0, bottom: 330, left: 0 });
+    expect(s.framing!.rest.heroHeight).toBeCloseTo(0.92, 3);
+    expect(s.framing!.rest.pathLimited).toBe(false);
+    // The same content without its fill: the shared rule.
+    const t = stage();
+    t.resize(800, 800);
+    t.setContent(content(), SPORTS_BOUNDS, undefined, paths, hero);
+    expect(t.measureFraming(1)!.rest.heroHeight).toBeCloseTo(HERO_FILL.height, 3);
+    expect(t.measureFraming(1)!.rest.distance / s.measureFraming(1)!.rest.distance).toBeGreaterThan(1.45);
   });
 });

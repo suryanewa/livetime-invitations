@@ -1,0 +1,8 @@
+state before accepted-pose | 0.6 s after accept decline-playing | end declined-pose
+laptop run 0: frames 458 | all p50 16.70 p95 16.70 max 16.8 | effect window p95 16.70 >20ms 0
+laptop run 1: frames 458 | all p50 16.70 p95 16.70 max 16.8 | effect window p95 16.80 >20ms 0
+laptop run 2: frames 458 | all p50 16.70 p95 16.80 max 16.8 | effect window p95 16.80 >20ms 0
+state before accepted-pose | 0.6 s after accept decline-playing | end declined-pose
+phone run 0: frames 458 | all p50 16.70 p95 16.80 max 16.8 | effect window p95 16.80 >20ms 0
+phone run 1: frames 458 | all p50 16.70 p95 16.80 max 16.8 | effect window p95 16.80 >20ms 0
+phone run 2: frames 458 | all p50 16.70 p95 16.70 max 16.8 | effect window p95 16.70 >20ms 0

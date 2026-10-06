@@ -40,8 +40,11 @@ for (const scene of SCENES) {
         const [x0, x1, y0, y1] = fit.pathExtents;
         for (const v of [-x0, x1, -y0, y1]) expect(v, label).toBeLessThanOrEqual(CLEAR);
       }
-      expect(rest.heroHeight, label).toBeLessThanOrEqual(0.6 + 1e-3);
-      expect(rest.heroWidth, label).toBeLessThanOrEqual(0.75 + 1e-3);
+      // v1.7 (#43): Sports frames its board, rim, net and ball at its own fill, the largest that
+      // keeps every path inside the clearance (0.92 of the height; at 3:4 0.76 of the width binds).
+      const fill = scene === 'sports' ? { height: 0.92, width: 0.76 } : { height: 0.6, width: 0.75 };
+      expect(rest.heroHeight, label).toBeLessThanOrEqual(fill.height + 1e-3);
+      expect(rest.heroWidth, label).toBeLessThanOrEqual(fill.width + 1e-3);
       if (scene === 'dinner') {
         // The rule at rest, held only by the cover's own host and accept paths (the cover poised
         // above the plate, then set down beside it): 0.724 of the width at 3:4, 0.696 at 1:1, 0.547
@@ -49,8 +52,9 @@ for (const scene of SCENES) {
         expect(Math.max(rest.heroWidth / 0.75, rest.heroHeight / 0.6), label).toBeGreaterThan(0.9);
       } else {
         expect(rest.pathLimited, label).toBe(false);
-        if (rest.binding === 'height') expect(rest.heroHeight, label).toBeCloseTo(0.6, 2);
-        else expect(rest.heroWidth, label).toBeCloseTo(0.75, 2);
+        if (rest.binding === 'height') expect(rest.heroHeight, label).toBeCloseTo(fill.height, 2);
+        else expect(rest.heroWidth, label).toBeCloseTo(fill.width, 2);
+        if (scene === 'sports') expect(rest.binding, label).toBe(i === 0 ? 'width' : 'height');
         // Centred across (no rest path needs the room).
         expect(Math.abs(rest.heroCenter[0]), label).toBeLessThan(0.15);
       }

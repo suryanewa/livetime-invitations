@@ -1,19 +1,24 @@
 import { Quaternion, Vector3 } from 'three';
 import { seg, smoothstep } from '../../motion/curves.ts';
 import { CAMERA_ANGLES } from '../../render/camera.ts';
-import { BALL_AT, BALL_R, NET, netHangRadius, RIM_CENTER } from '../../../models/sportsContract.ts';
-import { BallTrack, bounceToRest, cloneState, type Contact, fly, GRAVITY, type NetDrag, throughNet, type BallState } from './ballPhysics.ts';
+import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netHangRadius, RIM, RIM_CENTER } from '../../../models/sportsContract.ts';
+import {
+  BallTrack, boardCollider, BOUNCE, bounceTime, bounceToRest, cloneState, type Collider, type Contact, fly, floorContact, flyUntil, GRAVITY, type Hit, type NetDrag, restSpeed,
+  rimCollider, rollingSpin, surfaceContact, throughNet, type BallState,
+} from './ballPhysics.ts';
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 
 /**
- * Pure choreography for Sports (Sports sub-spec), v1.5: physics, integrated once.
+ * Pure choreography for Sports (Sports sub-spec), v1.5 and v1.7: physics, integrated once.
  *
  * The beats are the approved ones (host 1.2 s, accept 1.7 s with net contact at 0.95 s, decline
- * 1.6 s). Each sequence is an authored gather (0–0.2 s: the ball rolls back and rises into its
- * release) followed by a physical track (`ballPhysics.ts`) from the release to rest: flight under
- * standard gravity, the net's grip on the made ball, every floor contact with restitution, friction
- * and spin coupling, the contact squash, and the roll to a stop. The tracks are integrated at
- * module load from fixed launch states, so a sequence is a pure function of t and replays exactly.
+ * 1.6 s with the glass struck on the same 0.95 s beat). Each sequence is an authored gather (0–0.2 s:
+ * the ball rolls back and rises into its release; v1.7: the decline's bank winds up to 0.525 s)
+ * followed by a physical track (`ballPhysics.ts`) from the release to rest: flight under standard
+ * gravity, the net's grip on the made ball, the bank's strikes on the glass and the ring (v1.7),
+ * every floor contact with restitution, friction and spin coupling, the contact squash, and the roll
+ * to a stop. The tracks are integrated at module load from fixed launch states, so a sequence is a
+ * pure function of t and replays exactly.
  *
  * A real ball keeps bouncing after the beat that matters. The director's durations stay the
  * approved ones; the rest of each track is the sequence's **tail**, which the scene plays in its
@@ -22,9 +27,9 @@ import type { CanonicalPose, SequenceName } from '../../core/types.ts';
  * tracks' rest states: where and how the ball really comes to rest.
  *
  * Launches are solved, not tuned by hand: the made shot leaves so it passes the rim centre at the
- * contact beat; the airball so it first lands on MISS_LAND (behind and beside the hoop); the host
- * pass so the ball comes to rest exactly on the guest spot. A change of mind continues the ball's
- * own physics (`change.ts`).
+ * contact beat; the bank so it meets the glass at BANK_POINT on that beat (v1.7; v1.5's airball
+ * landed on MISS_LAND behind the hoop); the host pass so the ball comes to rest exactly on the
+ * guest spot. A change of mind continues the ball's own physics (`change.ts`).
  */
 
 export const DURATIONS = { host: 1.2, accept: 1.7, decline: 1.6 } as const;
@@ -42,8 +47,10 @@ export interface SportsFrame {
   ballPos: Vector3;
   /** Ball orientation (world frame). */
   ballRot: Quaternion;
-  /** Contact compression along the floor normal (fraction of the diameter, ≥ 0); 0 in the air. */
+  /** Contact compression along `squashAxis` (fraction of the diameter, ≥ 0); 0 in the air. */
   squash: number;
+  /** v1.7: the contact normal the squash compresses along (unit): up on the floor, a hit's normal on the board or the rim. */
+  squashAxis: Vector3;
 }
 
 const UP = new Vector3(0, 1, 0);
@@ -62,6 +69,12 @@ export interface Launch {
   spin: number;
   /** Gather wind-up: how far the ball rolls back, away from the target, before release. */
   pullBack: number;
+  /**
+   * v1.7: an extra roll-back (su) at the middle of the gather window, for a gather longer than the
+   * shots' (the bank's): the hand draws the ball back further before it lifts and fires it. It
+   * leaves the release unchanged (it is 0 and still at both ends of the window). Default 0.
+   */
+  windUp?: number;
 }
 
 /** Height the gather lifts a shot before it leaves the hand. */
@@ -86,33 +99,73 @@ export const MADE_APEX = LAUNCH.y + (MADE.vy * MADE.vy) / (2 * GRAVITY);
 /** Time at which a ball launched at vy from y0, moving down, reaches height y. */
 export const fallTime = (y0: number, vy: number, y: number) => (vy + Math.sqrt(vy * vy + 2 * GRAVITY * (y0 - y))) / GRAVITY;
 
-// Airball: thrown long and wide to the left, past the backboard, into the back of the court.
+// ── The decline (v1.7): a hard bank off the glass that rattles the ring and caroms out ──
 /** Screen-right in the floor plane for the shared camera azimuth. */
 const AZ = (CAMERA_ANGLES.azimuthDeg * Math.PI) / 180;
-const SCREEN_RIGHT = new Vector3(Math.cos(AZ), 0, -Math.sin(AZ));
+export const SCREEN_RIGHT = new Vector3(Math.cos(AZ), 0, -Math.sin(AZ));
+/** The laminate face's plane (sports_root z) and the ball centre's plane when it touches it. */
+export const FACE_Z = HOOP_ROOT.z + BOARD.face;
+/** The surfaces a flying ball can strike: the laminate inside the frame's lip, and the ring. */
+export const HOOP_COLLIDERS: readonly Collider[] = [
+  boardCollider(FACE_Z, {
+    x0: HOOP_ROOT.x - BOARD.opening.halfWidth, x1: HOOP_ROOT.x + BOARD.opening.halfWidth, y0: BOARD.opening.bottom, y1: BOARD.opening.top,
+  }),
+  rimCollider(RIM_CENTER, RIM.innerRadius + RIM.tube, RIM.tube),
+];
 /**
- * The airball flies in the vertical plane from the guest spot to this floor point, where it first
- * lands: past the backboard's plane, left of the hoop and clear of its base. It lands running at
- * 2.4 su/s with 2 rev/s of backspin: the first bounce checks most of its run, and it bounces on
- * away from the shooter a little, then rolls to a stop (angular momentum about the contact point,
- * v − α·R·ω, leaves it ≈ 0.2 su/s).
+ * The bank's own gather. From the shared gather (release at 0.2 s, from the guest spot 40 cm in
+ * front of the board's plane) the glass at the 0.95 s beat is met at Δz / 0.75 s = 0.53 m/s
+ * whatever the arc, coming down at ≈ 1.8 m/s: a kiss that drops through the ring. A hard bank
+ * needs a shorter flight, so the decline winds up longer: the hand rolls the ball back (9 cm) and
+ * forward, lifts it 11 cm off the floor and fires it at BANK_RELEASE, 0.4 s before the glass.
  */
-export const MISS_LAND = new Vector3(-1.07, BALL_R, -1.5);
-const MISS_DIR = horiz(LAUNCH, MISS_LAND);
-/** Its apex sits under the made arc's, so it never widens the frame upwards. */
-const MISS_APEX = MADE_APEX - 0.35;
-const MISSED: Launch = (() => {
-  const vy = Math.sqrt(2 * GRAVITY * (MISS_APEX - LAUNCH.y));
-  const toFloor = fallTime(LAUNCH.y, vy, BALL_R);
-  const run = Math.hypot(MISS_LAND.x - LAUNCH.x, MISS_LAND.z - LAUNCH.z);
-  return { from: LAUNCH, vh: MISS_DIR.clone().multiplyScalar(run / toFloor), vy, spin: -2 * Math.PI * SHOT_BACKSPIN.missed, pullBack: 0.03 };
+export const BANK_TIMING: GatherTiming = { release: 0.525, riseFrom: 0.375 };
+/** Height the bank's gather lifts the ball before it leaves the hand. */
+export const BANK_LIFT = 0.3;
+/**
+ * The bank's extra wind-up (su): over its 0.525 s gather the hand draws the ball back 16 cm (to
+ * 0.44 su, the cubic's 0.2 and this) and forward again, so the throw reads from the tap on.
+ */
+export const BANK_WIND_UP = 0.25;
+/**
+ * Where the ball's centre meets the glass, at CONTACT_AT: on the grey laminate left of the target
+ * square (13 cm screen-left of the ring's left edge), 30 cm above the rim's top and 12 cm under the
+ * frame's top lip, its touching side BALL_R in front of the face. Chosen (scripts' search over the
+ * face, the release and the spin) as the strike that still rises into the glass, is kicked down by
+ * it onto the ring's front-left top, and pops out to the front-left, never inside the ring.
+ */
+export const BANK_POINT = new Vector3(-0.08, 4.16, FACE_Z + BALL_R);
+const BANK_FROM = BALL_AT.guest.clone().add(new Vector3(0, BANK_LIFT, 0));
+const BANK_DIR = horiz(BANK_FROM, BANK_POINT);
+const BANKED: Launch = (() => {
+  const T = CONTACT_AT - BANK_TIMING.release;
+  const vh = BANK_POINT.clone().sub(BANK_FROM).setY(0).divideScalar(T);
+  const vy = (BANK_POINT.y - BANK_FROM.y + 0.5 * GRAVITY * T * T) / T;
+  // The wind-up rolls back over the whole gather (the cubic pull-back's window is the release time).
+  return { from: BANK_FROM, vh, vy, spin: -2 * Math.PI * SHOT_BACKSPIN.missed, pullBack: (4 * vh.length() * BANK_TIMING.release) / 27, windUp: BANK_WIND_UP };
 })();
-/** Seconds after release at which the airball, coming down, passes rim height (beside the hoop). */
-const MISS_AT_RIM = fallTime(LAUNCH.y, MISSED.vy, RIM_CENTER.y);
-/** Where the airball passes rim height. */
-export const MISS_POINT = LAUNCH.clone().addScaledVector(MISSED.vh, MISS_AT_RIM).setY(RIM_CENTER.y);
-/** How far screen-left of the rim centre the airball passes rim height (su). */
-export const MISS_OFFSET = RIM_CENTER.clone().sub(MISS_POINT).dot(SCREEN_RIGHT);
+/**
+ * Where the declined ball comes to rest: front-left of the hoop, wide of the guest spot (≥ 1.2
+ * diameters apart on screen) and of the base. A real carom off a rim runs on for metres (the ring
+ * rolls it, and a rubber ball on a studio floor decelerates at 0.12 m/s²); so the player's hand
+ * traps its first bounce (`trapTo`), as a change of mind's hand acts through a floor contact.
+ */
+export const MISS_REST = new Vector3(-1.6, BALL_R, 0.3);
+
+/**
+ * The player traps the carom's first bounce (the hand acting through the floor, as in a change of
+ * mind, change.ts): the bounce keeps its own height (the floor's restitution), and its run is
+ * turned and slowed so that it bounces on at constant speed with matched spin and rolls to rest
+ * exactly on `target` (closed form).
+ */
+export function trapTo(track: BallTrack, st: BallState, target: Vector3): void {
+  const vIn = st.v.clone().setY(0);
+  const vy = BOUNCE.restitution * Math.max(0, -st.v.y);
+  const L = target.clone().sub(st.p).setY(0).addScaledVector(vIn, -BOUNCE.contactTime / 2);
+  const u = restSpeed(L.length(), bounceTime(vy) + BOUNCE.contactTime / 2);
+  const out = L.normalize().multiplyScalar(u);
+  floorContact(track, st, { v: out.clone().setY(vy), w: rollingSpin(out) });
+}
 
 // Host pass: a low bounce pass with backspin. The lob checks up at its first bounce, hops a few
 // times and rolls the last centimetres to rest exactly on the guest spot.
@@ -140,13 +193,22 @@ export const RISE_FROM = 0.1;
  * rolls with its own pull-back. A ball does not spin up on its own.
  */
 export const SPIN_FROM = RELEASE_AT - 0.03;
+/** When a gather releases its shot and when the hand starts lifting it off the floor (v1.7: the decline's bank has its own). */
+export interface GatherTiming {
+  release: number;
+  riseFrom: number;
+}
+export const SHOT_TIMING: GatherTiming = { release: RELEASE_AT, riseFrom: RISE_FROM };
 export interface Gather {
   origin: Vector3;
   launch: Launch;
+  /** End of the gather (the shot leaves `launch.from`) and the start of the rise. */
+  release: number;
+  riseFrom: number;
   /** Height gained by the release (launch.from.y − BALL_R). */
   lift: number;
   /**
-   * Rise exponent: height = lift · s^exp over [RISE_FROM, RELEASE_AT]. exp = vy·T/lift makes the
+   * Rise exponent: height = lift · s^exp over [riseFrom, release]. exp = vy·T/lift makes the
    * vertical speed at release exactly the launch's vy (C1 release); the ball is still
    * accelerating as it leaves, never parked in the air.
    */
@@ -154,36 +216,40 @@ export interface Gather {
   /** Start of the pull-back window. */
   windowFrom: number;
 }
-export const makeGather = (origin: Vector3, launch: Launch): Gather => {
+export const makeGather = (origin: Vector3, launch: Launch, timing: GatherTiming = SHOT_TIMING): Gather => {
+  const { release, riseFrom } = timing;
   const lift = launch.from.y - BALL_R;
-  const window = Math.min(RELEASE_AT, (launch.pullBack * 27) / (4 * Math.max(0.05, launch.vh.length())));
-  return { origin, launch, lift, exp: (launch.vy * (RELEASE_AT - RISE_FROM)) / lift, windowFrom: RELEASE_AT - window };
+  const window = Math.min(release, (launch.pullBack * 27) / (4 * Math.max(0.05, launch.vh.length())));
+  return { origin, launch, release, riseFrom, lift, exp: (launch.vy * (release - riseFrom)) / lift, windowFrom: release - window };
 };
+/** The hand puts the launch's spin on over the gather's last 30 ms (SPIN_FROM for the shared gather). */
+const spinFrom = (g: Gather) => g.release - (RELEASE_AT - SPIN_FROM);
 /**
  * Offset along the shot direction during the gather: at rest, then a cubic pull-back that swings
  * forward into its own horizontal speed at release.
  */
 function gatherAlong(g: Gather, t: number): number {
   const v = g.launch.vh.length();
-  const s = seg(t, g.windowFrom, RELEASE_AT);
-  return v * (RELEASE_AT - g.windowFrom) * (s * s * s - s * s);
+  const s = seg(t, g.windowFrom, g.release);
+  return v * (g.release - g.windowFrom) * (s * s * s - s * s) - 16 * (g.launch.windUp ?? 0) * s * s * (1 - s) * (1 - s);
 }
 /** d/dt gatherAlong. */
 function gatherSpeed(g: Gather, t: number): number {
-  if (t <= g.windowFrom || t >= RELEASE_AT) return t >= RELEASE_AT ? g.launch.vh.length() : 0;
-  const s = seg(t, g.windowFrom, RELEASE_AT);
-  return g.launch.vh.length() * (3 * s * s - 2 * s);
+  if (t <= g.windowFrom || t >= g.release) return t >= g.release ? g.launch.vh.length() : 0;
+  const s = seg(t, g.windowFrom, g.release);
+  const P = g.launch.windUp ?? 0;
+  return g.launch.vh.length() * (3 * s * s - 2 * s) - (32 * P * s * (1 - s) * (1 - 2 * s)) / (g.release - g.windowFrom);
 }
 const gatherDir = (g: Gather) => (g.launch.vh.lengthSq() > 1e-12 ? g.launch.vh.clone().normalize() : new Vector3(1, 0, 0));
 export function gatherAt(g: Gather, t: number, out: Vector3): Vector3 {
   out.copy(g.origin).addScaledVector(gatherDir(g), gatherAlong(g, t));
-  out.y = BALL_R + g.lift * seg(t, RISE_FROM, RELEASE_AT) ** g.exp;
+  out.y = BALL_R + g.lift * seg(t, g.riseFrom, g.release) ** g.exp;
   return out;
 }
 export function gatherVelocity(g: Gather, t: number, out: Vector3): Vector3 {
   out.copy(gatherDir(g)).multiplyScalar(gatherSpeed(g, t));
-  const s = seg(t, RISE_FROM, RELEASE_AT);
-  out.y = t > RISE_FROM && t < RELEASE_AT ? (g.lift * g.exp * s ** (g.exp - 1)) / (RELEASE_AT - RISE_FROM) : 0;
+  const s = seg(t, g.riseFrom, g.release);
+  out.y = t > g.riseFrom && t < g.release ? (g.lift * g.exp * s ** (g.exp - 1)) / (g.release - g.riseFrom) : 0;
   return out;
 }
 
@@ -202,15 +268,15 @@ function integrate(f: (t: number) => number, a: number, b: number): number {
  * (Gauss–Legendre between breaks, polynomial pieces), so the spin rate is continuous into the flight.
  */
 export function gatherRate(g: Gather, t: number): number {
-  const roll = t < RELEASE_AT ? gatherSpeed(g, t) / BALL_R : 0;
-  const w = smoothstep(seg(t, SPIN_FROM, RELEASE_AT));
+  const roll = t < g.release ? gatherSpeed(g, t) / BALL_R : 0;
+  const w = smoothstep(seg(t, spinFrom(g), g.release));
   return (1 - w) * roll + w * g.launch.spin;
 }
 export function gatherAngle(g: Gather, t: number): number {
-  const end = Math.min(t, RELEASE_AT);
+  const end = Math.min(t, g.release);
   if (end <= 0) return 0;
   let a = 0, sum = 0;
-  for (const br of [g.windowFrom, RISE_FROM, SPIN_FROM].sort((x, y) => x - y)) {
+  for (const br of [g.windowFrom, g.riseFrom, spinFrom(g)].sort((x, y) => x - y)) {
     if (br <= a) continue;
     if (br >= end) break;
     sum += integrate((u) => gatherRate(g, u), a, br);
@@ -286,16 +352,16 @@ interface Built {
   start: Quaternion;
 }
 
-/** Launch state at RELEASE_AT (orientation: the gather's turn, relative to the start). */
+/** Launch state at the gather's release (orientation: the gather's turn, relative to the start). */
 export function launchState(g: Gather, start = new Quaternion()): BallState {
   const l = g.launch;
   const axis = gatherAxis(g);
   return {
-    t: RELEASE_AT,
+    t: g.release,
     p: l.from.clone(),
     v: l.vh.clone().setY(l.vy),
     w: axis.clone().multiplyScalar(l.spin),
-    q: new Quaternion().setFromAxisAngle(axis, gatherAngle(g, RELEASE_AT)).multiply(start),
+    q: new Quaternion().setFromAxisAngle(axis, gatherAngle(g, g.release)).multiply(start),
   };
 }
 
@@ -313,10 +379,25 @@ function buildMade(): Built {
   return { gather, track, start: GUEST_ROT };
 }
 
+/**
+ * The bank: the shot meets the glass at BANK_POINT on the beat, strikes it (`surfaceContact`), and
+ * flies on among the board and the ring (`flyUntil`) until it reaches the floor, where the player
+ * traps the bounce to MISS_REST.
+ */
 function buildMissed(): Built {
-  const gather = makeGather(BALL_AT.guest, MISSED);
+  const gather = makeGather(BALL_AT.guest, BANKED, BANK_TIMING);
   const track = new BallTrack();
   const st = launchState(gather);
+  const first = flyUntil(track, st, HOOP_COLLIDERS);
+  if (first.kind !== 'hit' || first.collider.surface !== 'board' || Math.abs(st.t - CONTACT_AT) > 1e-6) throw new Error('the bank must meet the glass on the beat');
+  surfaceContact(track, st, first.collider);
+  for (let i = 0; ; i++) {
+    const next = flyUntil(track, st, HOOP_COLLIDERS);
+    if (next.kind === 'floor') break;
+    if (next.kind !== 'hit' || i > 24) throw new Error('the bank never reached the floor');
+    surfaceContact(track, st, next.collider);
+  }
+  trapTo(track, st, MISS_REST);
   bounceToRest(track, st);
   return { gather, track, start: GUEST_ROT };
 }
@@ -370,15 +451,17 @@ const _q = new Quaternion();
 export function sampleTrack(sequence: SequenceName, t: number, out: SportsFrame, vel?: Vector3, ang?: Vector3): SportsFrame {
   const b = BUILT[sequence];
   const tc = Math.min(Math.max(t, 0), REST_AT[sequence]);
-  if (tc < RELEASE_AT) {
+  if (tc < b.gather.release) {
     gatherAt(b.gather, tc, out.ballPos);
     out.ballRot.setFromAxisAngle(gatherAxis(b.gather), gatherAngle(b.gather, tc)).multiply(b.start);
     out.squash = 0;
+    out.squashAxis.set(0, 1, 0);
     if (vel) gatherVelocity(b.gather, tc, vel);
     if (ang) ang.copy(gatherAxis(b.gather)).multiplyScalar(gatherRate(b.gather, tc));
     return out;
   }
   out.squash = b.track.sample(tc, out.ballPos, _q, vel, ang);
+  b.track.squashAxis(tc, out.squashAxis);
   out.ballRot.copy(_q).multiply(b.start);
   return out;
 }
@@ -388,7 +471,7 @@ export function sampleSequence(sequence: SequenceName, t: number, out: SportsFra
   return sampleTrack(sequence, Math.min(Math.max(t, 0), DURATIONS[sequence]), out);
 }
 
-export const blankFrame = (): SportsFrame => ({ ballPos: new Vector3(), ballRot: new Quaternion(), squash: 0 });
+export const blankFrame = (): SportsFrame => ({ ballPos: new Vector3(), ballRot: new Quaternion(), squash: 0, squashAxis: new Vector3(0, 1, 0) });
 
 /** Canonical poses are the rest states at the ends of the tracks (orientation included). */
 const HOST_READY = { pos: BALL_AT.host.clone(), rot: BUILT.host.start.clone() };
@@ -407,6 +490,7 @@ export function frameFor(pose: CanonicalPose, out: SportsFrame): SportsFrame {
     out.ballRot.copy(e.ballRot);
   }
   out.squash = 0;
+  out.squashAxis.set(0, 1, 0);
   return out;
 }
 
@@ -417,9 +501,15 @@ export function newFrame(): SportsFrame {
 /** Diagnostics for tests and docs (and the change planner). */
 export const TRACKS: Readonly<Record<SequenceName, BallTrack>> = { host: BUILT.host.track, accept: BUILT.accept.track, decline: BUILT.decline.track };
 export const CONTACTS: Readonly<Record<SequenceName, readonly Contact[]>> = { host: BUILT.host.track.contacts, accept: BUILT.accept.track.contacts, decline: BUILT.decline.track.contacts };
-export const LAUNCHES = { accept: MADE, decline: MISSED, host: BUILT.host.gather.launch } as const;
+export const LAUNCHES = { accept: MADE, decline: BANKED, host: BUILT.host.gather.launch } as const;
+/** Each sequence's release (the end of its gather). */
+export const RELEASES: Readonly<Record<SequenceName, number>> = { host: BUILT.host.gather.release, accept: BUILT.accept.gather.release, decline: BUILT.decline.gather.release };
+/** v1.7: the strikes on the board and the rim (the decline's bank and rattle; none in the others). */
+export const HITS: Readonly<Record<SequenceName, readonly Hit[]>> = { host: BUILT.host.track.hits, accept: BUILT.accept.track.hits, decline: BUILT.decline.track.hits };
+/** The bank's strike on the glass. */
+export const BANK_HIT: Hit = BUILT.decline.track.hits[0]!;
 /** The shots' roll axes in the air. */
-export const SHOT_AXES = { accept: rollAxis(MADE.vh.clone().normalize()), decline: rollAxis(MISS_DIR), host: rollAxis(PASS_DIR) } as const;
+export const SHOT_AXES = { accept: rollAxis(MADE.vh.clone().normalize()), decline: rollAxis(BANK_DIR), host: rollAxis(PASS_DIR) } as const;
 /** Rest positions (the canonical poses' ball centres). */
 export const REST = { guest: GUEST_END.ballPos.clone(), made: MADE_END.ballPos.clone(), missed: MISSED_END.ballPos.clone() } as const;
 /** The made ball's speed entering and leaving the net (diagnostics). */
