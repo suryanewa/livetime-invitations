@@ -146,7 +146,9 @@ test('The accepted close-up prints the card legibly; a text change reprints it w
   const c = (fn: string) => page.evaluate(new Function(`const c = window.__showcase.controller; return (${fn})(c, window.__showcase);`) as () => unknown);
   await c('(c) => { c.setReducedMotion(true); c.setMode("guest"); c.chooseResponse("accept"); }');
   await expect.poll(async () => (await state(page)).visual).toBe('accepted-pose');
-  expect(await page.evaluate(() => (window as any).__showcase.controller.framing().close)).toBe(1);
+  // The close channel is placed by the next frame's prepareFrame (setClose), so a read straight after
+  // the state poll can precede it (seen once under load): poll it too.
+  await expect.poll(() => page.evaluate(() => (window as any).__showcase.controller.framing().close), { timeout: 2000 }).toBe(1);
   const before = (await c('(c) => c.captureStill(720, 1)')) as string;
   const small = (await c('(c) => c.captureStill(256, 1)')) as string;
   const ink = await inkOf(page, before);
