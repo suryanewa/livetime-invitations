@@ -54,12 +54,13 @@ export function hoopFramePoints(): Vector3[] {
  * frame before the ball's first floor contact (2.135 s). `path`: the ball's airborne path the focus
  * fit holds, from where the channel is three quarters in to the end of the hold.
  */
-export const FOCUS = { in: [0.45, 0.93], out: [1.62, 2.1], path: [0.7, 1.62] } as const;
+export const FOCUS = { in: [0.4, 0.93], out: [1.6, 2.1], path: [0.7, 1.6] } as const;
 /**
- * The ease both ways: the close-up's (Dinner, CLOSE_EASE): zero speed at both ends, a gathered
- * start, a slightly longer settle than its rise.
+ * The ease both ways: CSS's ease-in-out, cubic-bezier(0.42, 0, 0.58, 1): zero speed at both ends,
+ * symmetric, its peak only 1.72 × the mean (Dinner's close-up's (0.4, 0, 0.4, 1) 2.06 ×, the
+ * decline pull's (0.3, 0, 0.3, 1) 2.18 ×): a lean, not a punch.
  */
-export const FOCUS_EASE = cubicBezier(0.4, 0, 0.4, 1);
+export const FOCUS_EASE = cubicBezier(0.42, 0, 0.58, 1);
 /**
  * The focus fit (the hero rule along the shared direction): the board, the rim and the net fill
  * this much of the frame's height (and at most this much of its width), every point of the ball's
@@ -68,7 +69,7 @@ export const FOCUS_EASE = cubicBezier(0.4, 0, 0.4, 1);
  * base is out of frame; everything is 1.54× larger than at rest (the ball at the strike 8.9 → 14 %
  * of the frame's height).
  */
-export const SPORTS_FOCUS_FILL = { height: 0.7, width: 0.75 } as const;
+export const SPORTS_FOCUS_FILL = { height: 0.8, width: 0.8 } as const;
 
 /** The focus channel at decline time t: 0 to FOCUS.in[0], 1 through the hold, 0 from FOCUS.out[1]. */
 export function focusIn(t: number): number {
