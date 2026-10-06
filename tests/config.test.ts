@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_LIMITS, cardLine, presetOf, printOnlyChange, resolveConfig, sameConfig } from '../src/core/config.ts';
 import type { SceneConfig } from '../src/core/types.ts';
-import { dinnerCard, EVENTS, SAMPLE_INVITEE, withCard } from '../src/demo/fixtures.ts';
+import { dinnerCard, EVENTS, POSTER_CARD, posterConfig, SAMPLE_INVITEE, withCard } from '../src/demo/fixtures.ts';
 
 /**
  * v1.7 (spec revision #41): the Dinner config's optional card text. resolveConfig keeps it,
@@ -95,5 +95,25 @@ describe('the showcase\'s card (fixtures)', () => {
     expect(withCard({ category: 'sports', ball: 'cream' }, 'guest')).toEqual({ category: 'sports', ball: 'cream' });
     // What the showcase passes survives resolveConfig unchanged.
     expect(ok(resolveConfig(withCard(base, 'guest')))).toEqual(withCard(base, 'guest'));
+  });
+
+  it('v1.7 polish: the shipped posters print the eyebrow only (no sample title or name), and the showcase keeps it', () => {
+    // A poster is what a real guest sees before the scene is live, on Static, after a context
+    // loss or a load failure: it must never name someone else's event or guest.
+    expect(POSTER_CARD).toEqual({ eyebrow: 'You’re invited' });
+    const base: SceneConfig = { category: 'dinner', dish: 'pasta' };
+    const poster = posterConfig(withCard(base, 'guest'));
+    expect(poster).toEqual({ ...base, card: { eyebrow: 'You’re invited' } });
+    expect(poster.category === 'dinner' && (poster.card?.title ?? poster.card?.name)).toBeUndefined();
+    // It brings its own card, so the showcase keeps it through every mode change (withCard).
+    expect(withCard(poster, 'guest')).toBe(poster);
+    expect(withCard(poster, 'host')).toBe(poster);
+    expect(ok(resolveConfig(poster))).toEqual(poster);
+    // Same preset: the four shared posters stay four, and the change is print-only.
+    expect(presetOf(poster)).toBe(presetOf(withCard(base, 'guest')));
+    expect(printOnlyChange(withCard(base, 'guest'), poster)).toBe(true);
+    // Every other scene's config is untouched.
+    const sports: SceneConfig = { category: 'sports', ball: 'cream' };
+    expect(posterConfig(sports)).toBe(sports);
   });
 });

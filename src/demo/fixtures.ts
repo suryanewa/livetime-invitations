@@ -19,8 +19,8 @@ export const EVENTS: Record<Category, EventFixture> = {
 /**
  * v1.7 (Dinner, spec revision #41): the invitation card's print in the showcase. The eyebrow and
  * the event's title for everyone; a sample invitee's name in guest mode only (the host previews
- * an invitation before it has a guest). Every poster shows sample content: the accepted poster's
- * card carries this name; an integrating app passes its own guest's (docs/integration.md).
+ * an invitation before it has a guest). The live showcase prints them; the shipped posters do not
+ * (POSTER_CARD below); an integrating app passes its own guest's (docs/integration.md).
  */
 export const SAMPLE_INVITEE = 'Alex Rivera';
 export const CARD_EYEBROW = 'You\u2019re invited';
@@ -31,6 +31,19 @@ export function dinnerCard(mode: 'host' | 'guest'): { eyebrow: string; title: st
 export function withCard(config: SceneConfig, mode: 'host' | 'guest', replace = false): SceneConfig {
   if (config.category !== 'dinner' || (config.card && !replace)) return config;
   return { ...config, card: dinnerCard(mode) };
+}
+
+/**
+ * v1.7 polish (#41): the print on the shipped Dinner stills — the host-ready and accepted posters
+ * and `backdrop-accepted.webp` — is neutral: the eyebrow only, no title, no name. A poster is what
+ * a real guest sees before the scene is live (before load, on a saved accept), on the Static tier,
+ * after a context loss and on a load failure, so it must never carry someone else's event or name;
+ * the live card prints the config's own title and name as soon as the scene is ready.
+ */
+export const POSTER_CARD: Readonly<{ eyebrow: string }> = { eyebrow: CARD_EYEBROW };
+/** The config a shipped poster is rendered with (`pnpm capture`, posters.spec): Dinner's card neutral, every other config as is. */
+export function posterConfig(config: SceneConfig): SceneConfig {
+  return config.category === 'dinner' ? { ...config, card: { ...POSTER_CARD } } : config;
 }
 
 export const CATEGORY_LABEL: Record<Category, string> = {
