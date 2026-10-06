@@ -67,6 +67,12 @@ export interface Launch {
   spin: number;
   /** Gather wind-up: how far the ball rolls back, away from the target, before release. */
   pullBack: number;
+  /**
+   * v1.7: an extra roll-back (su) at the middle of the gather window, for a gather longer than the
+   * shots' (the bank's): the hand draws the ball back further before it lifts and fires it. It
+   * leaves the release unchanged (it is 0 and still at both ends of the window). Default 0.
+   */
+  windUp?: number;
 }
 
 /** Height the gather lifts a shot before it leaves the hand. */
@@ -115,6 +121,11 @@ export const BANK_TIMING: GatherTiming = { release: 0.525, riseFrom: 0.375 };
 /** Height the bank's gather lifts the ball before it leaves the hand. */
 export const BANK_LIFT = 0.3;
 /**
+ * The bank's extra wind-up (su): over its 0.525 s gather the hand draws the ball back 16 cm (to
+ * 0.44 su, the cubic's 0.2 and this) and forward again, so the throw reads from the tap on.
+ */
+export const BANK_WIND_UP = 0.25;
+/**
  * Where the ball's centre meets the glass, at CONTACT_AT: on the grey laminate left of the target
  * square (13 cm screen-left of the ring's left edge), 30 cm above the rim's top and 12 cm under the
  * frame's top lip, its touching side BALL_R in front of the face. Chosen (scripts' search over the
@@ -129,7 +140,7 @@ const BANKED: Launch = (() => {
   const vh = BANK_POINT.clone().sub(BANK_FROM).setY(0).divideScalar(T);
   const vy = (BANK_POINT.y - BANK_FROM.y + 0.5 * GRAVITY * T * T) / T;
   // The wind-up rolls back over the whole gather (the cubic pull-back's window is the release time).
-  return { from: BANK_FROM, vh, vy, spin: -2 * Math.PI * SHOT_BACKSPIN.missed, pullBack: (4 * vh.length() * BANK_TIMING.release) / 27 };
+  return { from: BANK_FROM, vh, vy, spin: -2 * Math.PI * SHOT_BACKSPIN.missed, pullBack: (4 * vh.length() * BANK_TIMING.release) / 27, windUp: BANK_WIND_UP };
 })();
 /**
  * Where the declined ball comes to rest: front-left of the hoop, wide of the guest spot (≥ 1.2
@@ -218,13 +229,14 @@ const spinFrom = (g: Gather) => g.release - (RELEASE_AT - SPIN_FROM);
 function gatherAlong(g: Gather, t: number): number {
   const v = g.launch.vh.length();
   const s = seg(t, g.windowFrom, g.release);
-  return v * (g.release - g.windowFrom) * (s * s * s - s * s);
+  return v * (g.release - g.windowFrom) * (s * s * s - s * s) - 16 * (g.launch.windUp ?? 0) * s * s * (1 - s) * (1 - s);
 }
 /** d/dt gatherAlong. */
 function gatherSpeed(g: Gather, t: number): number {
   if (t <= g.windowFrom || t >= g.release) return t >= g.release ? g.launch.vh.length() : 0;
   const s = seg(t, g.windowFrom, g.release);
-  return g.launch.vh.length() * (3 * s * s - 2 * s);
+  const P = g.launch.windUp ?? 0;
+  return g.launch.vh.length() * (3 * s * s - 2 * s) - (32 * P * s * (1 - s) * (1 - 2 * s)) / (g.release - g.windowFrom);
 }
 const gatherDir = (g: Gather) => (g.launch.vh.lengthSq() > 1e-12 ? g.launch.vh.clone().normalize() : new Vector3(1, 0, 0));
 export function gatherAt(g: Gather, t: number, out: Vector3): Vector3 {

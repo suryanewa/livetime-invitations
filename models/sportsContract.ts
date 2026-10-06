@@ -263,10 +263,11 @@ export const BALL_AT = {
 
 /**
  * Motion bounds box: the key light aims at its centre and box-framed tools (lookdev) fit it. The
- * scene frames the camera with silhouette points of every path (tails to rest included). v1.7: its
- * left side reaches the declined ball's rest wide of the guest spot (−1.6 → −1.9).
+ * scene frames the camera with silhouette points of every path (tails to rest included). v1.7: it
+ * reaches the declined ball's rest wide of the guest spot (x −1.6 → −1.9) and the bank's wind-up
+ * towards the camera (z 1.4 → 1.6).
  */
-export const SPORTS_BOUNDS = new Box3(new Vector3(-1.9, -0.05, -3.7), new Vector3(2.4, 4.8, 1.4));
+export const SPORTS_BOUNDS = new Box3(new Vector3(-1.9, -0.05, -3.7), new Vector3(2.4, 4.8, 1.6));
 
 /**
  * Backdrop wall for this scene (studio sweep wall z), pushed back like Birthday's and Dinner's so
