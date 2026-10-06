@@ -1,6 +1,7 @@
 import type { SequenceName } from '../../core/types.ts';
 import { cubicBezier } from '../../motion/curves.ts';
 import { declinePull } from '../../render/framing.ts';
+import { closeHome, type CloseHome, HOME_SAMPLES as N, PULL_TOP_SPEED, pullRate, rewindCurve } from '../../render/cameraChannel.ts';
 import { type AnswerChange, changeTime, REWIND } from './sequences.ts';
 
 /**
@@ -46,28 +47,12 @@ export function cameraClock(c: AnswerChange, t: number): number {
   return c.start + x + (c.k - 1) * q;
 }
 
-/** declinePull's rate (1/s) at decline time t, and its peak (the dolly's top speed). */
-const pullRate = (t: number) => (declinePull(t + 1e-4) - declinePull(t - 1e-4)) / 2e-4;
-const PULL_TOP_SPEED = (() => {
-  let v = 0;
-  for (let t = 0; t <= 1; t += 1 / 2000) v = Math.max(v, pullRate(t));
-  return v;
-})();
-/**
- * The move home: held for the first `hold` of the span, then a smootherstep (zero speed and zero
- * acceleration at both ends: it lands as softly as it starts).
- */
-const home = (u: number, hold: number) => {
-  const x = Math.min(1, Math.max(0, (u - hold) / (1 - hold)));
-  return x * x * x * (x * (6 * x - 15) + 10);
-};
-/** The camera's rewind at u ∈ [0, 1]: from p0 (leaving at the decline's own pull speed, m0 per unit u) to 0, landing at rest. */
-const rewindCurve = (u: number, p0: number, m0: number, hold: number) => p0 * (1 - home(u, hold)) + m0 * u * (1 - u) * (1 - u);
+// declinePull's rate and its peak (the dolly's top speed), the move home (a held smootherstep) and
+// the camera's rewind curve: shared with every scene's camera channels (src/render/cameraChannel.ts).
 
 /** The holds (fraction of the span) and the tails (s past the scene's rewind) tried, earliest and shortest first. */
 const SHAPES = Array.from({ length: 29 }, (_, i) => i * 0.025);
 const TAILS = Array.from({ length: 41 }, (_, i) => i * 0.01);
-const N = 240;
 const planOf = new WeakMap<AnswerChange, { span: number; hold: number; p0: number; v0: number }>();
 
 /**
@@ -159,30 +144,11 @@ export const closeRate = (tau: number) => (closeIn(tau + 1e-4) - closeIn(tau - 1
  * dolly at its top speed (PULL_TOP_SPEED, 3.4/s): from the close-up at rest, 0.56 s. The decline's
  * bin waits for it (planAnswerChange's `closeHome`): its pull may start BIN_DELAY before the camera
  * is home, so the two moves meet in one outward motion, and the bin enters only once it is.
+ *
+ * v1.7 polish: the homecoming (CloseHome, CLOSE_HOME, planCloseHome, closeHome) is shared with
+ * Sports' push-in: src/render/cameraChannel.ts, re-exported here unchanged.
  */
-export interface CloseHome {
-  c0: number;
-  v0: number;
-  span: number;
-}
-/** The shortest and longest homecoming (s). */
-export const CLOSE_HOME = { min: 0.2, max: 0.7 } as const;
-export function planCloseHome(c0: number, v0: number): CloseHome | null {
-  if (c0 <= 1e-6 && Math.abs(v0) <= 1e-6) return null;
-  const top = PULL_TOP_SPEED * 1.0001;
-  for (let span = CLOSE_HOME.min; span < CLOSE_HOME.max; span += 0.01) {
-    let ok = true, prev = c0;
-    for (let i = 1; i <= N && ok; i++) {
-      const p = homeCurve(i / N, c0, v0 * span);
-      ok = Math.abs(p - prev) / (span / N) <= top;
-      prev = p;
-    }
-    if (ok) return { c0, v0, span: Math.round(span * 100) / 100 };
-  }
-  return { c0, v0, span: CLOSE_HOME.max };
-}
-/** The homecoming at u ∈ [0, 1]: from c0 leaving at m0 (per unit u) to 0, a smootherstep landing. */
-const homeCurve = (u: number, c0: number, m0: number) => rewindCurve(u, c0, m0, 0);
+export { type CloseHome, CLOSE_HOME, closeHome, planCloseHome } from '../../render/cameraChannel.ts';
 /**
  * v1.7 polish: the close channel at which the camera has left the close-up. On a change of mind
  * the cover's return waits until the homecoming is at or under it for good (`closeClearAt`), so
@@ -197,9 +163,4 @@ export function closeClearAt(h: CloseHome | null): number {
   for (let i = 0; i * dt < h.span; i++) if (closeHome(h, i * dt) > CLOSE_CLEAR) last = i;
   return last < 0 ? 0 : Math.min(h.span, (last + 1) * dt);
 }
-/** The close channel `t` s into the change (0 from the span on), clamped to [0, 1]. */
-export function closeHome(h: CloseHome | null, t: number): number {
-  if (!h || t >= h.span) return 0;
-  if (t <= 0) return Math.min(1, Math.max(0, h.c0));
-  return Math.min(1, Math.max(0, homeCurve(t / h.span, h.c0, h.v0 * h.span)));
-}
+
