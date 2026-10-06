@@ -17,13 +17,16 @@ export function posterUrl(category: Category, preset: string, pose: CanonicalPos
 }
 
 /**
- * Fullscreen backdrop stills (bare studio, BACKDROP_FIELD = 7 × the frame): assets/scenes/<category>/backdrop.webp
- * at the scene's rest framing, and (v1.5 decline pull-back) backdrop-declined.webp at its decline
- * framing for the scenes whose declined pose is pulled back (Birthday, Dinner). A scene without one
- * has one framing, so its declined poster takes the rest backdrop. v1.7 (#42): Dinner's accepted
- * pose is the close-up on the card, so its accepted poster melts into backdrop-accepted.webp, the
- * close-up at the same field *with* the scene in it (the plate runs past the poster's edges on
- * every side, so a bare-studio still would cut it off at the feather).
+ * Backdrop stills (BACKDROP_FIELD = 7 × the frame), the studio around the square poster wherever the
+ * stage is larger than the frame square (fullscreen; v1.7 posters, also a square-layout mount of
+ * another aspect): assets/scenes/<category>/backdrop.webp at the scene's rest framing (host-ready and
+ * guest-ready posters), backdrop-declined.webp (v1.5; at the decline's framing for the scenes whose
+ * decline pulls back, Birthday and Dinner) and backdrop-accepted.webp (v1.7 #42; Dinner's at its
+ * close-up on the card). v1.7 posters: every still has the scene in it, at its pose (v1.4–v1.6: the
+ * bare studio), and every scene has all three: what the live view shows outside the frame square
+ * (cast shadows, Business's lanyard, which swings with the badge once answered, Dinner's plate) is
+ * there before the scene is live, and the poster's feather blends like with like. A missing pose
+ * still falls back to backdrop.webp.
  */
 const backdrops = import.meta.glob('../../assets/scenes/*/backdrop*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 

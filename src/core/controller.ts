@@ -45,12 +45,14 @@ export interface InvitationOptions extends CreateInvitationOptions {
   stage?: Omit<StageOptions, 'canvas' | 'preserveDrawingBuffer'>;
   posterFor?: PosterResolver;
   /**
-   * Fullscreen layout: a still of the bare studio at BACKDROP_FIELD × the frame field, centred on
-   * the same framing (`pnpm capture backdrops`). It extends the square poster to the whole stage,
-   * so a poster covers any aspect with the canvas's framing. Omitted, the stage colour does.
+   * A still of the studio at BACKDROP_FIELD × the frame field, centred on the same framing (`pnpm
+   * capture backdrops`). It extends the square poster to the whole stage, so a poster covers any
+   * aspect with the canvas's framing (fullscreen; v1.7 posters, also a square-layout mount of another
+   * aspect; never fetched while the frame square is the whole stage). Omitted, the stage colour does.
    * v1.5: asked for the pose of the poster it surrounds, since a scene that pulls back for its
    * decline (Birthday, Dinner) shows its declined poster at a wider framing and needs that
-   * framing's backdrop (`backdrop-declined.webp`).
+   * framing's backdrop (`backdrop-declined.webp`). v1.7 posters: the showcase's stills have the
+   * scene in them at that pose (`backdropUrl`), so what lies outside the frame square is there.
    */
   backdropFor?: (category: Category, pose: CanonicalPose) => string | null;
   /** Human-readable description of each pose for the text fallback when a poster fails. */

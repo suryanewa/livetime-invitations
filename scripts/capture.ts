@@ -6,8 +6,8 @@
  *   pnpm capture rigs [baseUrl] [rig,…] [--ortho]   studio rigs × scenes → outputs/rigs/ (src/render/rigs/README.md)
  *   pnpm capture stagecolor [baseUrl] [rig,…]       a rig's measured backdrop colour (stage tokens)
  *   CAPTURE_STAGE_ONLY=1 pnpm capture <scene>       posters, stills and clips staged in outputs/<scene>/ only
- *   pnpm capture backdrops [baseUrl]                fullscreen backdrop stills → assets/scenes/<scene>/backdrop.webp
- *                                                   (+ backdrop-declined.webp where the decline pulls back, v1.5)
+ *   pnpm capture backdrops [baseUrl]                backdrop stills (the scene in them) → assets/scenes/<scene>/backdrop.webp
+ *                                                   + backdrop-accepted.webp, backdrop-declined.webp (v1.7 posters)
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -424,25 +424,30 @@ async function captureUi() {
  * at the declined pose (pull 1); posters.ts serves it for that pose only. v1.7: a scene whose
  * accepted pose is a close-up (Dinner) also gets backdrop-accepted.webp, the close-up.
  * v1.7 posters: every backdrop is taken *with the scene in it* (v1.4–v1.6: the bare studio, content
- * hidden), the rest one at guest-ready, each with the posters' config (posterConfig). What the live
- * view shows outside the frame square — the set's cast shadows on the cove (Sports' hoop, Party's
- * and Birthday's), Business's lanyard, Dinner's plate — is then there before the scene is live and
- * does not pop in at the crossfade; and the poster's narrow feather blends it like with like (what
- * moves stays inside the frame's clearance, under the poster, by the framing rule).
+ * hidden), with the posters' config (posterConfig), and every scene has one per answered pose:
+ * backdrop.webp at guest-ready (host-ready's and guest-ready's posters), backdrop-accepted.webp and
+ * backdrop-declined.webp at those poses (at the decline's or the close-up's framing where the scene
+ * has one). What the live view shows outside the frame square — the set's cast shadows on the cove
+ * (Sports' hoop, Party's lid, Birthday's cake), Business's lanyard (which swings with the badge in
+ * the answered poses), Dinner's plate — is then there before the scene is live and does not pop in
+ * at the crossfade; and the poster's narrow feather blends it like with like (what moves stays
+ * inside the frame's clearance, under the poster, by the framing rule).
  */
 async function captureBackdrops() {
   await mkdir(outDir, { recursive: true });
   const browser = await launch();
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 1 });
   page.on('console', (m) => m.type() === 'error' && console.error('[page]', m.text()));
-  const { cp, rm } = await import('node:fs/promises');
-  const pulled = new Set<string>();
-  const closeUps = new Set<string>();
+  const { cp } = await import('node:fs/promises');
   const still = () => page.evaluate(() => (window as any).__showcase.controller.captureStill(2000, 1, 'image/webp', 0.92, { field: 7 })) as Promise<string>;
-  for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
+  /**
+   * A fresh page at guest-ready with the posters' config (Dinner's neutral card), snapped (reduced
+   * motion), then the answer if one is given: each backdrop is the pose its posters show, reached as
+   * a guest reaches it (a change of mind could leave the set elsewhere, e.g. Dinner's cloche).
+   */
+  const pose = async (scene: string, answer?: 'accept' | 'decline') => {
     await page.goto(`${base}/?scene=${scene}`);
     await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
-    // The posters' config (Dinner's neutral card), and guest-ready, snapped (reduced motion).
     await page.evaluate(async (category) => {
       const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
       const [{ posterConfig }, { DEFAULT_CONFIGS }] = await Promise.all([load('/src/demo/fixtures.ts'), load('/src/core/types.ts')]);
@@ -453,47 +458,42 @@ async function captureBackdrops() {
     }, scene);
     await page.waitForFunction(() => (window as any).__showcase.state.resource === 'ready', null, { timeout: 30_000 });
     await page.waitForFunction(() => (window as any).__showcase.state.visual === 'guest-ready');
+    if (answer) {
+      await page.evaluate((a) => (window as any).__showcase.controller.chooseResponse(a), answer);
+      await page.waitForFunction((v) => (window as any).__showcase.state.visual === v, answer === 'accept' ? 'accepted-pose' : 'declined-pose');
+    }
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    // The rest framing (pull 0).
+  };
+  for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
+    // The rest framing (pull 0), at guest-ready.
+    await pose(scene);
     const rest = await page.evaluate(() => (window as any).__showcase.controller.framing().pull);
     if (rest !== 0) throw new Error(`${scene}: the backdrop must be taken at rest (pull ${rest})`);
     await saveDataUrl(join(outDir, `${scene}.webp`), await still());
     console.log('backdrop', scene);
     const fit = await page.evaluate(() => (window as any).__showcase.controller.framing());
-    if (Math.abs(fit.rest.distance - fit.decline.distance) > 1e-9) {
-      // The declined pose, snapped (reduced motion): the stage at pull 1.
-      await page.evaluate(() => (window as any).__showcase.controller.chooseResponse('decline'));
-      await page.waitForFunction(() => (window as any).__showcase.state.visual === 'declined-pose');
-      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-      const pull = await page.evaluate(() => (window as any).__showcase.controller.framing().pull);
-      if (pull !== 1) throw new Error(`${scene}: the declined backdrop must be taken at pull 1 (got ${pull})`);
-      await saveDataUrl(join(outDir, `${scene}-declined.webp`), await still());
-      pulled.add(scene);
-      console.log('backdrop', scene, 'declined');
-    }
-    if (fit.closeUp) {
-      // v1.7 (#42): a scene whose accepted pose is a close-up (Dinner's card): its own backdrop, the
-      // close-up at the same field (the plate runs past the poster's edges), with the posters'
-      // neutral print (v1.7 polish, #41; set above).
-      await page.evaluate(() => (window as any).__showcase.controller.chooseResponse('accept'));
-      await page.waitForFunction(() => (window as any).__showcase.state.visual === 'accepted-pose');
-      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-      const close = await page.evaluate(() => (window as any).__showcase.controller.framing().close);
-      if (close !== 1) throw new Error(`${scene}: the accepted backdrop must be taken on the close-up (got ${close})`);
-      await saveDataUrl(join(outDir, `${scene}-accepted.webp`), await still());
-      closeUps.add(scene);
-      console.log('backdrop', scene, 'accepted (close-up)');
-    }
+    // The declined pose, snapped (reduced motion): at pull 1 where the decline pulls back (v1.5).
+    await pose(scene, 'decline');
+    const pull = await page.evaluate(() => (window as any).__showcase.controller.framing().pull);
+    const pulls = Math.abs(fit.rest.distance - fit.decline.distance) > 1e-9;
+    if (pull !== (pulls ? 1 : 0)) throw new Error(`${scene}: the declined backdrop must be taken at pull ${pulls ? 1 : 0} (got ${pull})`);
+    await saveDataUrl(join(outDir, `${scene}-declined.webp`), await still());
+    console.log('backdrop', scene, 'declined');
+    // The accepted pose: on the close-up where the scene has one (v1.7 #42, Dinner's card; the plate
+    // runs past the poster's edges), with the posters' neutral print (v1.7 polish, #41).
+    await pose(scene, 'accept');
+    const close = await page.evaluate(() => (window as any).__showcase.controller.framing().close);
+    if (close !== (fit.closeUp ? 1 : 0)) throw new Error(`${scene}: the accepted backdrop must be taken at close ${fit.closeUp ? 1 : 0} (got ${close})`);
+    await saveDataUrl(join(outDir, `${scene}-accepted.webp`), await still());
+    console.log('backdrop', scene, 'accepted');
   }
   await browser.close();
   // Copied last: writing into assets/ makes a running dev server reload its pages.
   for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
     const dir = join(import.meta.dirname, '..', 'assets', 'scenes', scene);
     await cp(join(outDir, `${scene}.webp`), join(dir, 'backdrop.webp'));
-    if (pulled.has(scene)) await cp(join(outDir, `${scene}-declined.webp`), join(dir, 'backdrop-declined.webp'));
-    else await rm(join(dir, 'backdrop-declined.webp'), { force: true });
-    if (closeUps.has(scene)) await cp(join(outDir, `${scene}-accepted.webp`), join(dir, 'backdrop-accepted.webp'));
-    else await rm(join(dir, 'backdrop-accepted.webp'), { force: true });
+    await cp(join(outDir, `${scene}-declined.webp`), join(dir, 'backdrop-declined.webp'));
+    await cp(join(outDir, `${scene}-accepted.webp`), join(dir, 'backdrop-accepted.webp'));
   }
 }
 
