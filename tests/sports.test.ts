@@ -920,7 +920,8 @@ describe('Sports runtime GLB and the simulated net', async () => {
       expect(down.get(k) ?? 0).toBe(r < 5 ? 2 : 0);
     }
     // v1.7: two bones per strand (its halves) and one per node; every vertex's weights sum to one.
-    const bones = 2 * lattice.cords.length + lattice.nodes.length;
+    // The polish round: and one per tail (10), so a tail can lag its knot.
+    const bones = 2 * lattice.cords.length + lattice.nodes.length + lattice.tails.length;
     for (const [, bind] of lattice.binding) {
       for (const b of bind.index) expect(b).toBeLessThan(bones);
       for (let v = 0; v < bind.weight.length; v += 4) expect(bind.weight[v]! + bind.weight[v + 1]! + bind.weight[v + 2]! + bind.weight[v + 3]!).toBeCloseTo(1, 5);
@@ -1059,6 +1060,37 @@ describe('Sports runtime GLB and the simulated net', async () => {
         expect(f.strand[1]).toBeLessThanOrEqual(1.06);
       }
     }
+  });
+
+  it('v1.7 polish: the tails follow their knots on their own bones, lagging and hanging: no flick after the exit; at rest they are their knots\' frames', () => {
+    const C = lattice.cords.length, N = lattice.nodes.length;
+    expect(lattice.tails).toHaveLength(10);
+    for (const k of lattice.tails) expect(lattice.rows.at(-1)).toContain(k);
+    // A tail tip 5 cm below its knot, carried by the tail's bone and by its knot's (the welded tail of before).
+    const tip = new Vector3(0, -0.145, 0);
+    const exit = NET_PASSAGE.exitAt;
+    let lagged = 0, welded = 0, restExact = true;
+    const prev: { lag: Vector3; weld: Vector3 }[] = [];
+    runNet(lattice, 'accept', exit + 1.5, (t, s, _sp, _b, skin) => {
+      lattice.tails.forEach((k, j) => {
+        const knot = skin.bones[C + k]!, tail = skin.bones[2 * C + N + j]!;
+        if (s.settled && (!tail.quaternion.equals(knot.quaternion) || !tail.position.equals(knot.position))) restExact = false;
+        const lag = tip.clone().applyQuaternion(tail.quaternion), weld = tip.clone().applyQuaternion(knot.quaternion);
+        const q = prev[j];
+        if (q && t > exit && t < exit + 0.25) {
+          lagged = Math.max(lagged, lag.distanceTo(q.lag) * 120);
+          welded = Math.max(welded, weld.distanceTo(q.weld) * 120);
+        }
+        prev[j] = { lag, weld };
+      });
+    });
+    expect(restExact).toBe(true);
+    // The tip's speed about its knot in the quarter second after the exit (cm/s): about half the welded tail's.
+    expect(toCm(lagged)).toBeLessThan(0.6 * toCm(welded));
+    expect(toCm(welded)).toBeGreaterThan(15);
+    // A change of mind carries the tails' lag over (settle, then restore): the same drawn tails as uninterrupted (to 1e-6 rad: 0.05 µm at the tip).
+    const a = runNet(lattice, 'accept', exit + 0.12), b = runNet(lattice, 'accept', exit + 0.12, undefined, 120, { at: exit + 0.06 });
+    for (const j of lattice.tails.keys()) expect(a.skin.bones[2 * C + N + j]!.quaternion.angleTo(b.skin.bones[2 * C + N + j]!.quaternion)).toBeLessThan(1e-6);
   });
 
   it('no crossing: pressed together the knots bunch, never pass through each other', () => {
