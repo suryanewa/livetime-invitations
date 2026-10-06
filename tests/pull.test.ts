@@ -412,7 +412,7 @@ function dinnerStage() {
   const director = new VisualDirector({ complete() {} }, 'guest', null);
   director.attach(scene);
   let now = 0;
-  const log: { t: number; close: number; pull: number; bin: boolean; state: string }[] = [];
+  const log: { t: number; close: number; pull: number; bin: number; state: string }[] = [];
   /** Frames at 120 Hz: the director, then simulate; the camera's channels as the controller reads them. */
   const run = (seconds: number) => {
     const end = now + seconds;
@@ -420,7 +420,8 @@ function dinnerStage() {
       now += 1 / 120;
       director.update(now);
       scene.simulate(1 / 120);
-      log.push({ t: now, close: scene.frameClose(), pull: scene.framePull(), bin: bin.visible, state: director.state });
+      // The bin's entrance: how far it has come in from its start (0 until it moves).
+      log.push({ t: now, close: scene.frameClose(), pull: scene.framePull(), bin: bin.visible ? bin.position.x - DINNER_BIN_START.x : 0, state: director.state });
     }
   };
   director.update(0);
@@ -440,7 +441,7 @@ describe('v1.7: Dinner\'s close-up channel (the camera moves to face the card)',
   it('waits for the cloud to go (τ 2.8 s), arrives as the veil\'s last wisps cross the card (4.4 s): monotone and C1', () => {
     expect(CLOSE).toEqual({ from: 2.8, to: 4.4 });
     const h = 1 / 960, p: number[] = [];
-    for (let t = 0; t <= 6; t += h) p.push(closeIn(t));
+    for (let i = 0; i * h <= 6; i++) p.push(closeIn(i * h));
     p.forEach((x, i) => {
       const t = i * h;
       if (t <= CLOSE.from) expect(x).toBe(0);
@@ -451,10 +452,10 @@ describe('v1.7: Dinner\'s close-up channel (the camera moves to face the card)',
     // Zero speed at both ends (C1 with the still camera before and after it).
     expect((closeIn(CLOSE.from + 1e-3) - closeIn(CLOSE.from)) / 1e-3).toBeLessThan(0.02);
     expect((closeIn(CLOSE.to) - closeIn(CLOSE.to - 1e-3)) / 1e-3).toBeLessThan(0.02);
-    // A calm boom: its top speed under twice the mean.
+    // A calm boom: its top speed about twice the mean (2.04 ×).
     let top = 0;
     for (let i = 1; i < p.length; i++) top = Math.max(top, (p[i]! - p[i - 1]!) / h);
-    expect(top * (CLOSE.to - CLOSE.from)).toBeLessThan(2);
+    expect(top * (CLOSE.to - CLOSE.from)).toBeLessThan(2.1);
   });
 
   it('through the scene: 0 for host, guest-ready, the reveal\'s 1.5 s and the decline; then the move; 1 at the accepted pose (settled, reduced motion, a saved accept)', () => {
@@ -541,15 +542,16 @@ describe('v1.7: Dinner\'s close-up channel (the camera moves to face the card)',
       expect(homeAt, label).toBeGreaterThan(0);
       for (const r of after.slice(homeAt)) expect(r.close, label).toBe(0);
       const pullAt = after.findIndex((r) => r.pull > 0);
-      const binAt = after.findIndex((r) => r.bin);
+      const binAt = after.findIndex((r) => r.bin > 1e-6);
       expect((homeAt - pullAt) / 120, label).toBeLessThanOrEqual(DINNER_BIN_DELAY + 1 / 120 + 1e-9);
-      expect(binAt, label).toBeGreaterThanOrEqual(homeAt - 1);
+      expect(binAt, label).toBeGreaterThanOrEqual(homeAt);
       expect(kinksOf(after.map((r) => r.pull), 1 / 120), label).toEqual([]);
       expect(after[after.length - 1]!.state, label).toBe('declined-pose');
       expect(after[after.length - 1]!.pull, label).toBe(1);
-      // The decline's own pace: at most 1.33× (planAnswerChange's k from the close-up).
-      const c = (s.scene as unknown as { change: ReturnType<typeof planAnswerChange> | null }).change;
-      if (c) expect(c.k, label).toBeLessThan(1.35);
+      // The decline's own pace from the close-up: k ≤ 1.35 (from rest: 1.33).
+      const c = planAnswerChange('accept', CONTENT_END.accept, 0, 'decline', planCloseHome(1, 0)!.span);
+      expect(c.k).toBeLessThan(1.35);
+      expect(c.start).toBe(0);
     }
   });
 

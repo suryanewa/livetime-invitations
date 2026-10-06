@@ -132,11 +132,13 @@ function planCameraRewind(c: AnswerChange): { span: number; hold: number; p0: nu
  */
 export const CLOSE = { from: 2.8, to: 4.4 } as const;
 /**
- * The move's ease: a gathered start and a long settle, zero speed at both ends (C1 with the still
- * camera before and after), as the decline's dolly (PULL_EASE) but symmetric enough for a 1.6 s
- * boom: cubic-bezier(0.45, 0, 0.25, 1), peak speed ≈ 1.9 × the mean (1.2 close/s).
+ * The move's ease: zero speed at both ends (C1 with the still camera before and after), a gathered
+ * start and a slightly longer settle than its rise, so the card lands softly under the eye:
+ * cubic-bezier(0.4, 0, 0.4, 1), half-way at 0.43 of the move, peak speed 2.04 × the mean (1.28
+ * close/s at 0.39). (Measured against (0.45, 0, 0.25, 1) 2.63 ×, (0.3, 0, 0.3, 1) 2.18 ×, the
+ * symmetric (0.42, 0, 0.58, 1) 1.72 ×.)
  */
-export const CLOSE_EASE = cubicBezier(0.45, 0, 0.25, 1);
+export const CLOSE_EASE = cubicBezier(0.4, 0, 0.4, 1);
 /** The close channel at reveal time τ: 0 to CLOSE.from, 1 from CLOSE.to. */
 export function closeIn(tau: number): number {
   const u = (tau - CLOSE.from) / (CLOSE.to - CLOSE.from);
