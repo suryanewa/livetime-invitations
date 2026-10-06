@@ -614,6 +614,26 @@ export class HoopSprings {
     if (Math.abs(this.board) > bl) { this.board = Math.sign(this.board) * bl; this.boardV = 0; }
     if (torqueRim === 0 && torqueBoard === 0 && Math.abs(this.rim) < 1e-5 && Math.abs(this.rimV) < 1e-4 && Math.abs(this.board) < 1e-6 && Math.abs(this.boardV) < 1e-5) this.settle();
   }
+  /**
+   * The ball's strike on the rim/board (the decline's bank), applied once at the contact time by
+   * the scene; units rad/s. Each argument is the change in that part's angular velocity about its
+   * pivot (the strike's angular impulse J = m·Δv·r, N·m·s with BALL_MASS_KG, over the part's
+   * inertia HOOP_SPRINGS.*.inertia), signed as the recoil: positive tips the front (+z) down. It
+   * adds to the springs' velocities and wakes them; the next `step`s ring them down under the same
+   * stops and limits as the net's pull. A part held on a stop takes nothing into it: the rim on its
+   * travel limit (RECOIL_LIMIT.rimDeg) or the board on its play (RECOIL_LIMIT.boardDeg) keeps no
+   * velocity towards it, and the rim on its back stop (RIM_BACKSTOP) rebounds as `step` has it.
+   */
+  kick(rimAngularImpulse: number, boardAngularImpulse: number): void {
+    if (rimAngularImpulse === 0 && boardAngularImpulse === 0) return;
+    this.rimV += rimAngularImpulse;
+    this.boardV += boardAngularImpulse;
+    const rl = (RECOIL_LIMIT.rimDeg * Math.PI) / 180, bl = (RECOIL_LIMIT.boardDeg * Math.PI) / 180;
+    if (this.rim >= rl && this.rimV > 0) this.rimV = 0;
+    if (this.rim <= RIM_BACKSTOP && this.rimV < 0) this.rimV = -0.3 * this.rimV;
+    if (Math.abs(this.board) >= bl && this.board * this.boardV > 0) this.boardV = 0;
+    this.settled = false;
+  }
   settle(): void {
     this.rim = this.board = this.rimV = this.boardV = 0;
     this.settled = true;

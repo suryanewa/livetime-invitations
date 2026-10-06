@@ -27,6 +27,13 @@ export const SPORTS_WORLD_SCALE = cm(REFERENCE_CM.miniBall / 2) / BALL_R;
 /** Centimetres per Sports scene unit (36). */
 export const SPORTS_CM_PER_UNIT = WORLD_UNIT_CM * SPORTS_WORLD_SCALE;
 const su = (centimetres: number) => centimetres / SPORTS_CM_PER_UNIT;
+/**
+ * The ball's mass (kg): a 7" rubber mini (size 3) basketball. Spalding's basketball size guide
+ * (https://www.spalding.com/size-guide/basketball, read 2026-10-06) gives the Mini, size 3, as
+ * 22" in circumference (7.0", 17.8 cm across: our 18 cm ball) and 10.5 oz: 0.298 kg. Strikes on
+ * the hoop scale by it (J = m·Δv·r about a pivot; `HoopSprings.kick` takes J over the part's inertia).
+ */
+export const BALL_MASS_KG = 10.5 * 0.028349523125;
 
 /**
  * v1.5 proportions: one real product. The scene shows a **mini hoop system** of the SKLZ Pro Mini
