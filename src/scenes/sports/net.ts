@@ -52,7 +52,7 @@ export class SportsNetChannel<S, C> {
    * swinging through a change of mind. Reduced motion, a replay or a reset never restore, so there
    * the net stays snapped to rest. Dropped by the next `follow` or `step`.
    */
-  private carry: { net: NetState; springs: ReturnType<HoopSprings['save']> } | null = null;
+  private carry: { net: NetState; springs: ReturnType<HoopSprings['save']>; tails: number[] } | null = null;
   /** The sampler's program for this step, and the drawn ball when there is none. */
   private on: { seq: S; change: C; offset: number } | null = null;
   private readonly still = new Vector3();
@@ -122,16 +122,17 @@ export class SportsNetChannel<S, C> {
     this.on = null;
     const a = sim.alpha;
     const board = springs.prevBoard + (springs.board - springs.prevBoard) * a, rim = springs.prevRim + (springs.rim - springs.prevRim) * a;
-    this.rig.recoil.set(board, rim);
+    const stand = springs.prevStand + (springs.stand - springs.prevStand) * a;
+    this.rig.recoil.set(board, rim, stand);
     // The skin is drawn at the director's time: redraw it unless the net rests or this step moved nothing (a frame's second step).
     const shown = this.shown;
-    if (!(wasSettled && sim.settled) && !(tick === sim.tick && a === shown.alpha && board === shown.board && rim === shown.rim)) {
-      net.skin.update(board, rim);
-      shown.alpha = a; shown.board = board; shown.rim = rim;
+    if (!(wasSettled && sim.settled) && !(tick === sim.tick && a === shown.alpha && board === shown.board && rim === shown.rim && stand === shown.stand)) {
+      net.skin.update(board, rim, stand);
+      shown.alpha = a; shown.board = board; shown.rim = rim; shown.stand = stand;
     }
   }
-  /** What the skin last drew (the net's interpolation and the recoil). */
-  private readonly shown = { alpha: NaN, board: NaN, rim: NaN };
+  /** What the skin last drew (the net's interpolation and the recoil, v1.7 polish: the stand's sway). */
+  private readonly shown = { alpha: NaN, board: NaN, rim: NaN, stand: NaN };
 
   /** The net or the hoop springs are still moving. */
   settling(): boolean {
@@ -142,14 +143,14 @@ export class SportsNetChannel<S, C> {
   settle(): void {
     this.clock = null;
     const net = this.rig.net, springs = this.rig.springs;
-    this.carry = net && (!net.sim.settled || !springs.settled) ? { net: net.sim.save(), springs: springs.save() } : null;
+    this.carry = net && (!net.sim.settled || !springs.settled) ? { net: net.sim.save(), springs: springs.save(), tails: net.skin.saveTails() } : null;
     if (net) {
       net.sim.settle();
       net.skin.update();
     }
     this.shown.alpha = NaN;
     springs.settle();
-    this.rig.recoil.set(0, 0);
+    this.rig.recoil.set(0, 0, 0);
   }
 
   /** Interruptions: the motion the last `settle()` snapped carries over (the net keeps swinging through a change of mind). */
@@ -158,8 +159,10 @@ export class SportsNetChannel<S, C> {
     if (this.carry && net) {
       net.sim.restore(this.carry.net);
       springs.restore(this.carry.springs);
-      this.rig.recoil.set(springs.board, springs.rim);
-      net.skin.update(springs.board, springs.rim);
+      this.rig.recoil.set(springs.board, springs.rim, springs.stand);
+      // v1.7 polish: the tails' lag too, so they carry on swinging rather than snapping to their knots.
+      net.skin.restoreTails(this.carry.tails);
+      net.skin.update(springs.board, springs.rim, springs.stand);
     }
     this.shown.alpha = NaN;
     this.carry = null;

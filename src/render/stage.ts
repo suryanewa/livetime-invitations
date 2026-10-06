@@ -1,6 +1,6 @@
 import { Box3, Color, type Material, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PCFShadowMap, PerspectiveCamera, Scene, type Texture, Vector3, VSMShadowMap, type WebGLRenderer } from 'three';
 import {
-  cameraDirection, type CloseUp, closeUpView, createStageCamera, type FrameInsets, type FrameRect, type FramingPair, frameSquare, fitCameraToBounds, fitPerspectiveToBounds,
+  cameraDirection, type CloseUp, closeUpView, createStageCamera, type FrameInsets, type FrameRect, type FramingPair, frameSquare, fitCameraToBounds, fitPerspectiveToBounds, type HeroFraming,
   fitPose, framingHull, PERSPECTIVE_FOV, placeHeroView, placeView, pulledView, solveCloseFit, solveHeroFits, viewDirection, type ViewPose,
 } from './camera.ts';
 import { HERO_FILL, PATH_CLEARANCE } from './framing.ts';
@@ -62,6 +62,13 @@ export interface FramingReport extends FramingPair {
   pull: number;
   /** v1.7 (#42): the live close-up channel (0 the pulled view, 1 the close-up; 0 for a scene without one). */
   close: number;
+  /**
+   * v1.7 polish: the live focus channel (Sports' push-in on the bank: 0 the rest view, 1 the focus
+   * fit; 0 for a scene without one). A content's second fit is either a close-up or a focus.
+   */
+  focus: number;
+  /** v1.7 polish: the focus fit, where the content's second fit is one (`CloseUp.kind` 'focus'; then `closeUp` is absent). */
+  focusFit?: HeroFraming;
   /** Hero fits solved since the stage was made (the render loop never solves one). */
   solves: number;
   /** Points the fit works on, after framingHull. */
@@ -214,7 +221,7 @@ export class Stage {
     if (this.content) this.scene.remove(this.content);
     this.content = object;
     this.framePoints = this.heroPoints = this.restPoints = undefined;
-    this.closeUp = this.closePoints = null;
+    this.closeUp = this.closePoints = this.closePaths = null;
     this.heroFill = heroFill;
     this.pull = 0;
     this.close = 0;
@@ -236,6 +243,10 @@ export class Stage {
         for (const p of this.closePoints) this.closeAim.add(p);
         this.closeAim.multiplyScalar(1 / this.closePoints.length);
         viewDirection(closeUp.azimuthDeg, closeUp.elevationDeg, this.closeDir);
+        // v1.7 polish: a focus's paths (the ball's airborne path), held inside the clearance.
+        // Along the shared direction (a focus) only the hull's vertices can set it (framingHull, exact there).
+        const paths = closeUp.paths?.map((p) => p.clone().applyMatrix4(toWorld));
+        this.closePaths = paths?.length ? (closeUp.aim === 'stage' ? framingHull(paths) : paths) : null;
       }
       if (bounds) this.bounds.copy(bounds).applyMatrix4(toWorld);
       this.assignOwnEnvironment(object);
@@ -340,6 +351,8 @@ export class Stage {
   /** The content's close-up (null without one): its spec, its subject in the world, its aim and direction. */
   private closeUp: CloseUp | null = null;
   private closePoints: Vector3[] | null = null;
+  /** v1.7 polish: a focus's paths in the world (null: none). */
+  private closePaths: Vector3[] | null = null;
   private readonly closeAim = new Vector3();
   private readonly closeDir = new Vector3();
   private readonly poses: [ViewPose, ViewPose, ViewPose] = [0, 1, 2].map(() => ({ position: new Vector3(), target: new Vector3(), offset: [0, 0] as [number, number] })) as [ViewPose, ViewPose, ViewPose];
@@ -391,11 +404,21 @@ export class Stage {
     return this.close;
   }
 
+  /** v1.7 polish: what the content's second fit is ('close-up', 'focus'), or null without one. */
+  get closeKind(): 'close-up' | 'focus' | null {
+    return this.closeUp ? this.closeUp.kind ?? 'close-up' : null;
+  }
+
   private placeView(): void {
     const f = this.framing, v = this.view;
     if (!f || !v || !(this.camera instanceof PerspectiveCamera)) return;
     const { distance, offset } = pulledView(f.rest, f.decline, this.pull);
-    if (this.close > 0 && f.closeUp) {
+    if (this.close > 0 && f.closeUp && this.closeUp?.aim === 'stage') {
+      // v1.7 polish (Sports' focus): a dolly along the shared direction from the (pulled) view to
+      // the focus fit, at the same aim, as the decline's pull (#39): slide, never zoom.
+      const d = pulledView({ distance, offset }, f.closeUp, this.close);
+      placeHeroView(this.camera, v.aim, v.aspect, d.distance, d.offset, v.frame);
+    } else if (this.close > 0 && f.closeUp) {
       const [a, b, c] = this.poses;
       fitPose(v.aim, distance, offset, cameraDirection(), a);
       fitPose(this.closeAim, f.closeUp.distance, f.closeUp.offset, this.closeDir, b);
@@ -438,7 +461,11 @@ export class Stage {
           const fits = solveHeroFits(this.camera, aim, aspect, this.heroPoints, sets, this.heroFill ?? HERO_FILL, PATH_CLEARANCE, frame);
           pair = { rest: fits[0]!, decline: fits[fits.length - 1]! };
           // v1.7: the close-up's fit, in the same solve (a fit is still solved once per content and aspect).
-          if (this.closeUp && this.closePoints) pair.closeUp = solveCloseFit(this.camera, this.closeAim, aspect, this.closeUp, this.closePoints, PATH_CLEARANCE, frame);
+          if (this.closeUp && this.closePoints) {
+            // v1.7 polish: a focus is aimed where the rest fit is (a dolly along the shared direction).
+            const closeAim = this.closeUp.aim === 'stage' ? aim : this.closeAim;
+            pair.closeUp = solveCloseFit(this.camera, closeAim, aspect, this.closeUp, this.closePoints, PATH_CLEARANCE, frame, this.closePaths ?? []);
+          }
           this.fits.set(key, pair);
           this.fitSolves++;
         }

@@ -1,0 +1,15 @@
+# pace-sports.ts (evidence/v1.7/sports-decline), SEQ=decline SCENE=sports RELOAD=1 RUNS=3 W0=24 W1=130 (the push-in, frames 24-130), from guest-ready on a fresh 5705 server, 2026-10-06, load ~5
+## laptop 1280x720@2
+state before guest-ready | 0.6 s after accept decline-playing | end declined-pose
+state before guest-ready | 0.6 s after accept decline-playing | end declined-pose
+state before guest-ready | 0.6 s after accept decline-playing | end declined-pose
+laptop run 0: frames 458 | all p50 16.70 p95 16.80 max 16.8 | effect window p95 16.70 >20ms 0
+laptop run 1: frames 458 | all p50 16.70 p95 16.80 max 16.8 | effect window p95 16.80 >20ms 0
+laptop run 2: frames 458 | all p50 16.70 p95 16.70 max 16.8 | effect window p95 16.70 >20ms 0
+## phone 390x844@3
+state before guest-ready | 0.6 s after accept decline-playing | end declined-pose
+state before guest-ready | 0.6 s after accept decline-playing | end declined-pose
+state before guest-ready | 0.6 s after accept decline-playing | end declined-pose
+phone run 0: frames 458 | all p50 16.70 p95 16.80 max 16.8 | effect window p95 16.80 >20ms 0
+phone run 1: frames 458 | all p50 16.70 p95 16.70 max 16.8 | effect window p95 16.80 >20ms 0
+phone run 2: frames 458 | all p50 16.70 p95 16.80 max 16.8 | effect window p95 16.70 >20ms 0

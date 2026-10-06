@@ -1,7 +1,7 @@
 import { Box3, type Camera, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
-  BALL_AT, BALL_MASS_KG, BALL_R, BOARD, BOARD_PIVOT, HOOP_ROOT, HOOP_SPRINGS, NET, netRestRadius, POLE, RIM, RIM_CENTER, RIM_HINGE, rigSports, SPORTS_CM_PER_UNIT, SPORTS_WALL_Z,
+  BALL_AT, BALL_MASS_KG, BALL_R, BOARD, BOARD_PIVOT, HOOP_ROOT, HOOP_SPRINGS, NET, netRestRadius, POLE, RIM, RIM_CENTER, RIM_HINGE, rigSports, SPORTS_CM_PER_UNIT, SPORTS_WALL_Z, STAND_PIVOT,
   SPORTS_WORLD_SCALE, STAND, type BallPreset, type SportsRig,
 } from '../../../models/sports.ts';
 import type { Hit } from './ballPhysics.ts';
@@ -13,14 +13,8 @@ import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.
 import { DURATIONS, frameFor, HITS, newFrame, REST_AT, sampleTrack, type SportsFrame } from './sequences.ts';
 import { type Change, changeHandover, planChange, type Showing } from './change.ts';
 import { SportsNetChannel } from './net.ts';
-
-/** Outer net silhouette beyond its inner envelope (cords, knots, the far layer's thickness). */
-const NET_OUTSET = 0.05;
-/**
- * How far the simulated net can swing out of its rest envelope (the made ball opens it to the
- * ball's radius and the whip throws the bottom out and up): a conservative envelope for framing.
- */
-const NET_SWING = { out: 0.12, down: 0.15 } as const;
+import { focusIn, hoopFramePoints, sportsFocus } from './focus.ts';
+import { closeHome, type CloseHome, planCloseHome } from '../../render/cameraChannel.ts';
 
 const SEQUENCES: readonly SequenceName[] = ['host', 'accept', 'decline'];
 
@@ -28,17 +22,20 @@ const SEQUENCES: readonly SequenceName[] = ['host', 'accept', 'decline'];
  * v1.7 (#43, "bigger … more focused on the backboard and ball"): the hero is the board, the rim,
  * the net and the ball at guest-ready; the stand (`hoop_stand` the base, `hoop_pole` the pole,
  * sleeve and arms, `hoop_hardware` the back plate, bolts and hubs) is left out of it, so it may be
- * cropped by the frame's bottom and right edges.
+ * cropped by the frame's bottom and right edges. v1.7 polish: with the swaying parts the rig cuts from
+ * the base and the hardware (`hoop_stand_sway`, `hoop_hardware_sway`, `standSwayParts`).
  */
-export const SPORTS_HERO_EXCLUDE = /^hoop_(stand|pole|hardware)$/;
+export const SPORTS_HERO_EXCLUDE = /^hoop_(stand|pole|hardware)(_sway)?$/;
 /**
- * v1.7: the Sports hero fill, the largest that keeps every path PATH_CLEARANCE inside the frame
- * (the solver, `tests/sports.test.ts`): the hero's height 0.92 of the frame at 1:1 and 3:2 (the
- * paths' own height allows 0.927: the made ball's rest, nearest the camera, sets the bottom), its
- * width at most 0.76 of the frame at 3:4, where the paths' width (the host spot right, the declined
- * rest left) binds. v1.4–v1.6: the shared 0.6 / 0.75 with the whole stand in the hero.
+ * v1.7: the Sports hero fill. #43 built it at the largest that keeps every path PATH_CLEARANCE
+ * inside the frame ({0.92, 0.76}: the board's top 2.5 % under the frame's top, the declined ball
+ * on the 2 % line, at 3:4 a tangent crop at the base's wheel); the judge gave the air back (the
+ * polish round): 0.85 of the frame's height at 1:1 and 3:2, at most 0.70 of its width at 3:4 (where
+ * the hero's width binds). Measured on the real stage: the board's top 6 % from the frame's top,
+ * the lowest ball 6 % from the bottom, the base whole at 3:4, the ball 8.2 % of the frame's height
+ * (v1.6: 5.9 %; 1.40× larger). v1.4–v1.6: the shared 0.6 / 0.75 with the whole stand in the hero.
  */
-export const SPORTS_HERO_FILL = { height: 0.92, width: 0.76 } as const;
+export const SPORTS_HERO_FILL = { height: 0.85, width: 0.7 } as const;
 const UP = new Vector3(0, 1, 0);
 const _up = new Vector3();
 
@@ -70,23 +67,11 @@ export function sportsFramePoints(sequences: readonly SequenceName[] = SEQUENCES
       }
     }
   }
-  // Hoop: the board's eight corners (its top-back edge is the silhouette at the 15° elevation) and
-  // the rim ring. v1.7: not the stand (its base's footprint went with it): the frame is the board,
-  // the rim, the net and the ball, so the stand may be cropped by the frame's bottom and right
-  // edges (#43). SPORTS_BOUNDS, the key light's aim, still covers it.
-  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const z of [BOARD.front, BOARD.front - BOARD.thickness]) {
-    pts.push(new Vector3(HOOP_ROOT.x + (sx * BOARD.width) / 2, BOARD.centerY + (sy * BOARD.height) / 2, HOOP_ROOT.z + z));
-  }
-  const dirs = Array.from({ length: 16 }, (_, i) => [Math.cos((i / 16) * Math.PI * 2), Math.sin((i / 16) * Math.PI * 2)] as const);
-  const ring = RIM.innerRadius + 2 * RIM.tube;
-  for (const [cx, sz] of dirs) pts.push(new Vector3(RIM_CENTER.x + cx * ring, RIM_CENTER.y, RIM_CENTER.z + sz * ring));
-  // The net: its rest envelope and the room its swing can take.
-  for (const [cx, sz] of dirs) {
-    for (const t of [0.25, 0.5, 0.75, 1]) {
-      const r = netRestRadius(t) + NET_OUTSET + NET_SWING.out * t, y = -t * NET.depth - NET_SWING.down * t * t;
-      pts.push(new Vector3(RIM_CENTER.x + cx * r, RIM_CENTER.y + y, RIM_CENTER.z + sz * r));
-    }
-  }
+  // Hoop: the board's eight corners (its top-back edge is the silhouette at the 15° elevation), the
+  // rim ring and the net's envelope (focus.ts). v1.7: not the stand (its base's footprint went with
+  // it): the frame is the board, the rim, the net and the ball, so the stand may be cropped by the
+  // frame's bottom and right edges (#43). SPORTS_BOUNDS, the key light's aim, still covers it.
+  pts.push(...hoopFramePoints());
   return pts;
 }
 
@@ -163,14 +148,22 @@ export function sportsInterruptCut(showing: Showing): boolean {
  * L = r_y·J_z − r_z·J_y. A strike on the glass turns the board about BOARD_PIVOT. A strike on the
  * ring turns the ring about RIM_HINGE, and its hinge pin hands the impulse to the board, which
  * turns by it about BOARD_PIVOT from the hinge (the ring's own mass neglected).
+ * v1.7 polish: the board's mount hands the same impulse to the pole, and the whole hoop sways about
+ * STAND_PIVOT by its moment from where it enters the board (the glass's contact, or the ring's hinge)
+ * over the stand's inertia (`stand`). The glass's strike sways the top back (−0.071 rad/s), the
+ * rattle's clangs push it forward (+0.058, 0.024, 0.012).
  */
-export function hitKick(hit: Pick<Hit, 'surface' | 'contact' | 'impulse'>): { rim: number; board: number } {
+export function hitKick(hit: Pick<Hit, 'surface' | 'contact' | 'impulse'>): { rim: number; board: number; stand: number } {
   const toM = SPORTS_CM_PER_UNIT / 100;
   const J = hit.impulse.clone().multiplyScalar(-BALL_MASS_KG * toM);
   const at = hit.contact.clone().sub(HOOP_ROOT);
   const moment = (from: Vector3, pivot: Vector3) => ((from.y - pivot.y) * J.z - (from.z - pivot.z) * J.y) * toM;
-  if (hit.surface === 'board') return { rim: 0, board: moment(at, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia };
-  return { rim: moment(at, RIM_HINGE) / HOOP_SPRINGS.rim.inertia, board: moment(RIM_HINGE, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia };
+  if (hit.surface === 'board') return { rim: 0, board: moment(at, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia, stand: moment(at, STAND_PIVOT) / HOOP_SPRINGS.stand.inertia };
+  return {
+    rim: moment(at, RIM_HINGE) / HOOP_SPRINGS.rim.inertia,
+    board: moment(RIM_HINGE, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia,
+    stand: moment(RIM_HINGE, STAND_PIVOT) / HOOP_SPRINGS.stand.inertia,
+  };
 }
 
 /** The strikes of a program (a sequence or a change of mind). */
@@ -209,6 +202,12 @@ export class SportsScene implements SceneInstance {
   readonly studio = { wallZ: SPORTS_WALL_Z };
   readonly framePoints = sportsFramePoints();
   readonly heroFill = SPORTS_HERO_FILL;
+  /**
+   * v1.7 polish: the decline's push-in (focus.ts): a focus fit of the board, the rim, the net and the
+   * ball's airborne path, the camera dollying there along the shared direction through the bank and
+   * the rattle (`frameClose`).
+   */
+  readonly closeUp = sportsFocus();
 
   private readonly frame = newFrame();
   private preset: BallPreset;
@@ -238,6 +237,8 @@ export class SportsScene implements SceneInstance {
    * without one. Dropped by the next sample or step.
    */
   private springsCarry: ReturnType<SportsRig['springs']['save']> | null = null;
+  /** v1.7 polish: the push-in's homecoming on the change of mind in progress (null: none). */
+  private focusHome: CloseHome | null = null;
   private readonly _axisQ = new Quaternion();
   private readonly _rest = new Quaternion();
 
@@ -315,7 +316,7 @@ export class SportsScene implements SceneInstance {
     for (const h of hitsOf(seq, change)) {
       if (h.at > k.t + 1e-9 && h.at <= t + 1e-9) {
         const kick = hitKick(h);
-        this.rig.springs.kick(kick.rim, kick.board);
+        this.rig.springs.kick(kick.rim, kick.board, kick.stand);
       }
     }
     k.t = t;
@@ -354,7 +355,7 @@ export class SportsScene implements SceneInstance {
     this.net.restore();
     if (this.springsCarry) {
       this.rig.springs.restore(this.springsCarry);
-      this.rig.recoil.set(this.rig.springs.board, this.rig.springs.rim);
+      this.rig.recoil.set(this.rig.springs.board, this.rig.springs.rim, this.rig.springs.stand);
       this.springsCarry = null;
     }
     const n = this.rig.nodes;
@@ -377,8 +378,33 @@ export class SportsScene implements SceneInstance {
   interruptCut(): boolean {
     const showing = this.showing();
     if ((showing.kind === 'track' && showing.seq === 'host') || !sportsInterruptCut(showing)) return false;
+    // v1.7 polish: the push-in comes home from where it is, at the speed it had (Dinner's close-up's homecoming).
+    this.focusHome = planCloseHome(this.frameClose(), this.focusRate());
     this.pending = showing;
     return true;
+  }
+
+  /**
+   * v1.7 polish: the push-in (focus.ts), a pure function of what the scene shows: on the decline
+   * played from guest-ready (the bank), its time, tail included (`focusIn`); on a change of mind,
+   * its homecoming from where the cut found it (`closeHome`: a decline → accept at any time comes
+   * home C1; a decline from the accepted pose, or after a change, never banks and never pushes in);
+   * 0 at every pose and in every other sequence.
+   */
+  frameClose(): number {
+    const c = this.tail ?? this.sampling;
+    return c ? this.focusOf(c, c.t) : 0;
+  }
+  private focusOf(c: Clock, t: number): number {
+    if (c.change) return closeHome(this.focusHome, t);
+    return c.seq === 'decline' ? focusIn(t) : 0;
+  }
+  /** The push-in's rate now (1/s), for a change of mind's homecoming to leave at. */
+  private focusRate(): number {
+    const c = this.tail ?? this.sampling;
+    if (!c) return 0;
+    const h = 1e-3, t0 = Math.max(0, c.t - h);
+    return (this.focusOf(c, c.t + h) - this.focusOf(c, t0)) / (c.t + h - t0);
   }
 
   /** Low tier for the imported ball, board, rim and net materials (the library handles the stand). */

@@ -1,7 +1,7 @@
-import { type BufferAttribute, Float32BufferAttribute, type Material, Matrix4, type Mesh, type Object3D, Quaternion, Vector3 } from 'three';
+import { type BufferAttribute, BufferGeometry, Float32BufferAttribute, type Material, Matrix4, Mesh, type Object3D, Quaternion, Uint32BufferAttribute, Vector3 } from 'three';
 import { cameraDirection } from '../src/render/camera.ts';
 import { ContactShadow } from '../src/render/contactShadow.ts';
-import { BALL_R, BOARD_PIVOT, recoilPoint, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_NODES, STAND, type BallPreset } from './sportsContract.ts';
+import { BALL_R, BOARD_PIVOT, recoilPoint, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_CM_PER_UNIT, SPORTS_NODES, STAND, standPoint, type BallPreset } from './sportsContract.ts';
 import { analyseNet, HoopSprings, NetSim, NetSkin, netMeshKind } from './sportsNet.ts';
 import { buildSportsGeometry } from './sportsPremium.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
@@ -23,7 +23,7 @@ export interface SportsRig {
   ballShadow: ContactShadow;
   /** The simulated net (null for a net without the master's knotted lattice: static). */
   net: SportsNet | null;
-  /** The rim and board springs the net's pull drives. */
+  /** The rim and board springs the net's pull drives, and (v1.7 polish) the stand's sway the strikes set going. */
   springs: HoopSprings;
   recoil: HoopRecoil;
   /** `ball_mesh`'s rest orientation (the master's seam frame); spins compose in front of it. */
@@ -101,31 +101,101 @@ export function rigNet(net: Object3D): SportsNet | null {
 /**
  * Hoop recoil on the nodes: the board pitches about its pivot on the arm's back plate, the rim
  * (and the net hanging from its hooks) about its hinge on the bracket plate and with the board.
- * Rest transforms are captured once, so a recoil of 0 restores them exactly.
+ * v1.7 polish: and everything above the base (`stand`: the pole, its collar, the arms and plates,
+ * then the board, the rim and the net) sways about the pole's foot (STAND_PIVOT) by `standPitch`.
+ * Every node is a child of `hoop_root` (hoop space). Rest transforms are captured once, so a recoil
+ * of 0 restores them exactly.
  */
 export interface HoopRecoil {
-  set(boardPitch: number, rimPitch: number): void;
+  set(boardPitch: number, rimPitch: number, standPitch?: number): void;
 }
-export function hoopRecoil(backboard: Object3D, rim: Object3D, net: Object3D): HoopRecoil {
+export function hoopRecoil(backboard: Object3D, rim: Object3D, net: Object3D, stand: readonly Object3D[] = []): HoopRecoil {
   const rest = [backboard, rim, net].map((n) => ({ n, p: n.position.clone(), q: n.quaternion.clone() }));
+  const standRest = stand.map((n) => ({ n, p: n.position.clone(), q: n.quaternion.clone() }));
   const qx = new Quaternion();
   const axis = new Vector3(1, 0, 0);
   const p = new Vector3();
-  let last = [0, 0];
+  let last = [0, 0, 0];
   return {
-    set(boardPitch, rimPitch) {
-      if (boardPitch === last[0] && rimPitch === last[1]) return;
-      last = [boardPitch, rimPitch];
+    set(boardPitch, rimPitch, standPitch = 0) {
+      if (boardPitch === last[0] && rimPitch === last[1] && standPitch === last[2]) return;
+      last = [boardPitch, rimPitch, standPitch];
       const [b, r, n] = rest as [typeof rest[0], typeof rest[0], typeof rest[0]];
-      // Board: about its own origin (the pivot), so only its rotation changes.
+      // Board: about its own origin (the pivot), so only its rotation changes (then the stand's sway carries it).
       b.n.position.copy(BOARD_PIVOT).add(p.copy(b.p).sub(BOARD_PIVOT).applyAxisAngle(axis, boardPitch));
-      b.n.quaternion.copy(qx.setFromAxisAngle(axis, boardPitch)).multiply(b.q);
+      if (standPitch !== 0) standPoint(b.n.position, standPitch, b.n.position);
+      b.n.quaternion.copy(qx.setFromAxisAngle(axis, boardPitch + standPitch)).multiply(b.q);
       for (const c of [r, n]) {
-        recoilPoint(c.p, boardPitch, rimPitch, c.n.position);
-        c.n.quaternion.copy(qx.setFromAxisAngle(axis, boardPitch + rimPitch)).multiply(c.q);
+        recoilPoint(c.p, boardPitch, rimPitch, c.n.position, standPitch);
+        c.n.quaternion.copy(qx.setFromAxisAngle(axis, boardPitch + rimPitch + standPitch)).multiply(c.q);
+      }
+      for (const c of standRest) {
+        standPoint(c.p, standPitch, c.n.position);
+        c.n.quaternion.copy(qx.setFromAxisAngle(axis, standPitch)).multiply(c.q);
       }
     },
   };
+}
+
+/**
+ * v1.7 polish: the height (hoop space, scene units) at which the stand's meshes are cut between the
+ * base, which stays on the floor, and the hoop above it, which sways (`HoopSprings.stand`): 30 cm,
+ * between the base and its bolts and hubs (≤ 19 cm) and the pole's clamp collar (≈ 60–80 cm, in
+ * the GLB's `hoop_stand`).
+ */
+export const STAND_SWAY_CUT = 30 / SPORTS_CM_PER_UNIT;
+/** The name a cut stand mesh's swaying part takes (`hoop_stand_sway`, `hoop_hardware_sway`). */
+export const STAND_SWAY_SUFFIX = '_sway';
+
+/**
+ * v1.7 polish: the stand's parts that sway with the hoop, as nodes under `hoop_root`: the pole whole
+ * (from its foot in the base's socket), and of `hoop_stand` (the base, the collar) and
+ * `hoop_hardware` (the wheels' hubs, the plates and bolts) the triangles above STAND_SWAY_CUT, split
+ * off into a sibling mesh `<name>_sway` that shares the geometry's attributes (only the index is
+ * new); the original keeps the triangles below. A name that is not a mesh (the code-authored
+ * lookdev model) is left whole and still.
+ */
+export function standSwayParts(root: Object3D): Object3D[] {
+  const hoop = root.getObjectByName('hoop_root');
+  if (!hoop) return [];
+  root.updateMatrixWorld(true);
+  const toHoop = new Matrix4().copy(hoop.matrixWorld).invert();
+  const parts: Object3D[] = [];
+  const pole = hoop.getObjectByName('hoop_pole');
+  if (pole?.parent === hoop) parts.push(pole);
+  const m = new Matrix4(), v = new Vector3();
+  for (const name of ['hoop_stand', 'hoop_hardware']) {
+    const mesh = hoop.getObjectByName(name) as Mesh | undefined;
+    if (!mesh?.isMesh || mesh.parent !== hoop) continue;
+    const g = mesh.geometry, pos = g.getAttribute('position');
+    m.multiplyMatrices(toHoop, mesh.matrixWorld);
+    const index = g.index ? Array.from(g.index.array as ArrayLike<number>) : Array.from({ length: pos.count }, (_, i) => i);
+    const below: number[] = [], above: number[] = [];
+    for (let k = 0; k + 2 < index.length; k += 3) {
+      let y = 0;
+      for (let j = 0; j < 3; j++) y += v.fromBufferAttribute(pos, index[k + j]!).applyMatrix4(m).y;
+      (y / 3 > STAND_SWAY_CUT ? above : below).push(index[k]!, index[k + 1]!, index[k + 2]!);
+    }
+    if (!above.length) continue;
+    if (!below.length) { parts.push(mesh); continue; }
+    const top = new BufferGeometry();
+    for (const [key, attr] of Object.entries(g.attributes)) top.setAttribute(key, attr);
+    top.setIndex(new Uint32BufferAttribute(above, 1));
+    g.setIndex(new Uint32BufferAttribute(below, 1));
+    g.computeBoundingSphere();
+    top.computeBoundingSphere();
+    const sway = new Mesh(top, mesh.material);
+    sway.name = name + STAND_SWAY_SUFFIX;
+    sway.position.copy(mesh.position);
+    sway.quaternion.copy(mesh.quaternion);
+    sway.scale.copy(mesh.scale);
+    sway.castShadow = mesh.castShadow;
+    sway.receiveShadow = mesh.receiveShadow;
+    sway.userData = { ...mesh.userData };
+    hoop.add(sway);
+    parts.push(sway);
+  }
+  return parts;
 }
 
 /**
@@ -198,7 +268,7 @@ export function rigSports(root: Object3D, lib: ModelContext['lib'], preset: Ball
     ballShadow,
     net,
     springs: new HoopSprings(),
-    recoil: hoopRecoil(nodes.backboard!, nodes.rim!, nodes.net!),
+    recoil: hoopRecoil(nodes.backboard!, nodes.rim!, nodes.net!, standSwayParts(root)),
     ballRest: nodes.ball_mesh!.quaternion.clone(),
     bounds: SPORTS_BOUNDS.clone(),
     setPreset,

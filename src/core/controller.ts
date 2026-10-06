@@ -94,8 +94,9 @@ export interface InvitationHandle extends InvitationController {
    * Tooling only (framing checks): the hero fits at `aspect` (width / height), or null: `rest`
    * (pull 0: host-ready, guest-ready) and `decline` (pull 1: the declined pose), the same fit for a
    * scene that does not pull back; v1.7 `closeUp`, the close-up's fit where a scene has one (Dinner's
-   * accepted pose, close 1); the live `pull` and `close`; and the fit's cost guards (`solves` so far,
-   * the reduced `points`).
+   * accepted pose, close 1), or (v1.7 polish) `focusFit`, the focus's (Sports' push-in on the bank);
+   * the live `pull`, `close` and `focus`; and the fit's cost guards (`solves` so far, the reduced
+   * `points`).
    */
   framing(aspect?: number): FramingReport | null;
   /**
@@ -633,7 +634,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   function prepareFrame(s: Stage, instance: SceneInstance) {
     instance.beforeRender?.();
     s.setPull(instance.framePull?.() ?? 0);
-    // v1.7 (#42): the close-up (Dinner's card), 0 for a scene without one.
+    // v1.7 (#42): the close-up (Dinner's card) or (v1.7 polish) the focus (Sports' push-in), 0 for a scene without one.
     s.setClose(instance.frameClose?.() ?? 0);
   }
 
@@ -1120,7 +1121,12 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     framing(aspect = 1) {
       if (!stage || !scene || resource !== 'ready') return null;
       const pair = stage.measureFraming(aspect);
-      return pair && { ...pair, pull: stage.currentPull, close: stage.currentClose, solves: stage.fitSolves, points: stage.framingPointCounts };
+      if (!pair) return null;
+      // v1.7 polish: the content's second fit and its channel, reported as a close-up (Dinner) or a focus (Sports).
+      const focus = stage.closeKind === 'focus', k = stage.currentClose;
+      const { closeUp, ...fits } = pair;
+      const second = closeUp ? (focus ? { focusFit: closeUp } : { closeUp }) : {};
+      return { ...fits, ...second, pull: stage.currentPull, close: focus ? 0 : k, focus: focus ? k : 0, solves: stage.fitSolves, points: stage.framingPointCounts };
     },
 
     captureStill(size: number, dpr = 2, type = 'image/png', quality?: number, captureOptions?: { empty?: boolean; field?: number }) {

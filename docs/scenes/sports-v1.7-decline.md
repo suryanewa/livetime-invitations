@@ -193,3 +193,220 @@ file, `docs/spec-revisions.md` (#43). The recoil block of the contract (pivots, 
 - The frame is as tight as the rule allows (above).
 - `scripts/capture.ts`: the clips were not re-recorded (`CAPTURE_NO_CLIPS`); `evidence/…/motion/` has the decline at
   both sizes instead.
+
+## Polish round (2026-10-06)
+
+The judge (`docs/qualification.md` v1.7, the decline row): ≈ 7 against v1.6's 5, "a clear win on both asks", but
+**the bank reads soft** (the rebound goes almost wholly towards the camera, so on screen the ball "floats up and dies
+on the glass"), **"cutting the bottom of the board" is not literally delivered** (the pole and the base whole and
+prominent, the black base the heaviest mass in the frame), and the fill leaves 2.6 % headroom. The orchestrator's
+decision: the fill at {0.85, 0.70}; a visible stand sway; a push-in during the decline. Branch `v1.7/sports-polish`
+from `v1.7/integration` dea242d, merged with the Dinner polish (43105ab) before the camera work and with the poster
+layer (cea22a6) before the captures. The net's half (the tails) is in `docs/scenes/sports-v1.7-net.md`.
+
+### 1. The fill: {0.92, 0.76} → {0.85, 0.70}
+
+`SPORTS_HERO_FILL` only. Measured on the real stage (`controller.framing()`, the GLB's silhouettes):
+
+| | #43 at {0.92, 0.76} (the judge's numbers) | {0.85, 0.70} |
+| --- | --- | --- |
+| Board's top from the frame's top, 1:1 and 3:2 | 2.6 % | **6.2 %** (3:4: 7.1 %) |
+| Lowest ball from the frame's bottom | 2.2 % | **6.2 %** (3:4: 7.1 %) |
+| Declined ball from the left edge at 3:4 | 2.4 % | **2.9 %** (the path samples; the judge's measure gave 3.3 %) |
+| The base at 3:4 | a tangent crop at its wheel | **whole**, 6.6 % from the right edge (the solver's hero) |
+| Binding | height at 1:1 and 3:2, width at 3:4 | the same: height 0.850, width 0.700 (its height 0.833) |
+| Camera distance at 1:1 (world units) | 31.6 | 33.9: everything **0.93×** #43's, **1.40×** v1.6's |
+| The ball's height on screen at 1:1 (the solver) | 8.9 % | **8.2 %** (v1.6 5.9 %) |
+
+Tests on the measured numbers: `tests/sports.test.ts` (0.85 / 0.70, the paths ≥ 5.5 % inside the top and bottom at
+every aspect, the ball 8–8.5 %), `tests/stage-framing.test.ts` (0.85 / 0.70, the phone's frame square, the distance
+1.38–1.45× the shared rule's), `tests/browser/framing.spec.ts` (the fill on the real silhouettes). The 8 posters, the
+thumbnail and the four backdrops were recaptured (below).
+
+### 2. The hardness: the stand sways
+
+A portable mini hoop sways on its pole; the board's own shudder (`HOOP_SPRINGS.board`, 15 Hz, 0.14°, ≈ 1 mm) was
+invisible. Added to `HoopSprings` (`models/sportsNet.ts`) a third mode, **`stand`**: the whole hoop above the base (the
+pole, its clamp collar, the arms and plates, the board, the rim and the net) pitching about the pole's foot in the
+base's socket (`STAND_PIVOT` = `POLE.foot`, 13 cm up, 34 cm behind the hoop's origin).
+
+| Quantity | Value | Source |
+| --- | --- | --- |
+| Inertia about the foot | **11.3 kg·m²**: the board 3 kg at its centre, the rim 0.9 kg at the ring's centre, the arms, sleeve and back plate 1.5 kg half-way from the pole's head to the board's back, the pole 2.0 kg (1.4 kg/m of 1¾–2" tube, 1.43 m, a rod about its end) | the masses of `HOOP_SPRINGS` (the net owner's), the contract's geometry |
+| Frequency | **3 Hz** (k = 4014 N·m/rad) | The cantilever with a tip mass, f = (1/2π)·√(3EI / ((M + 0.24 m)·L³)) (Blevins, *Formulas for Natural Frequency and Mode Shape*, 1979, table 8-1; engineersedge.com's "cantilever beam with mass at end" calculator), gives 8–9 Hz for this tube (2" × 1.2 mm steel, EI ≈ 1.15 × 10⁴ N·m², L 1.43 m, M ≈ 5.5 kg) clamped rigidly. A portable system is not clamped: the pole sits in a socket in a blow-moulded, sand- or water-filled base that rocks on the floor (Spalding's portable-system owner's manual: the filled base is the system's only anchor) through a telescoping joint held by a pin and a clamp collar; retailers' guidance: portable systems "shake and rattle quite a bit compared to in-ground" ones. Those compliances in series bring the mode down ≈ 3×: the middle of the judge's 2–4 Hz |
+| Damping | **ζ 0.1** | low (steel, the base's sand and plastic); chosen so the sway falls under 1 mm at the board's top 1.3 s after the glass |
+| Guard | `RECOIL_LIMIT.standDeg` **0.75°** | never reached (the decline peaks at 0.27°); past it a weighted mini base would rock off its edge, which is not modelled |
+| Drive | the same derived impulses (`hitKick` → `kick(rim, board, stand)`): the strike's moment about `STAND_PIVOT` over the stand's inertia, from the glass's contact or (a ring strike) the hinge where it enters the board | the glass **−0.071 rad/s** (the top back), the clangs **+0.058, +0.024, +0.012** (forward). Not the net's pull: a swish's 0.66 N·s over 0.15 s would sway it ≈ 2 mm, and the accept is left as judged |
+
+- **The transform.** `recoilPoint(p, board, rim, out, stand)` carries the sway after the board's pitch, `standPoint`
+  rotates about the foot; `hoopRecoil.set(board, rim, stand)` moves the board, the rim and the net and the stand's
+  swaying parts (`standSwayParts`): the pole whole, and of `hoop_stand` (the base and the collar) and `hoop_hardware`
+  (the wheels' hubs, the plates and bolts) the triangles above **30 cm** (`STAND_SWAY_CUT`, between the base's ≤ 19 cm
+  and the collar's 60–80 cm), split at load into a `<name>_sway` sibling sharing the geometry's attributes (only the
+  index is new; `SPORTS_HERO_EXCLUDE` covers it). The base stays on the floor.
+- **The net rides it** in the same transform: the net is simulated in the base's frame and its loops are pinned to
+  the swaying rim (`NetSim` pins, `NetSkin.update` inverting the full transform), so the knots follow through the
+  cords and lag as hanging cord does (the sway's inertia on the net at no extra cost, nothing added to the
+  integrator). A glass strike jolts the loops back at ≈ 8.5 cm/s; the hanging net (1.15 Hz) swings ≈ 1.2 cm relative
+  to the hoop (the board's shudder alone 0.3 cm), then hangs still (unit test). `HoopSprings.active()` counts the
+  sway by its energy (its peak rate, which only falls) over 0.025 rad/s, so a net that settles on a dying sway is
+  never woken by it again (tested: no flapping).
+- **Carried and exact.** `save()` appends the sway and its rate while it moves (a hoop that does not sway saves the
+  same five-tuple as before, so the existing tests hold unchanged); `restore()` takes either; a change of mind carries
+  it over the director's settle (tested at the scene). 0 at rest: the rest pose and the posters are unchanged.
+
+**Measured on the stage** (`evidence/v1.7/sports-polish/tools/sway-stage.ts`, 16 ms frames through the real controller,
+the board's top centre against its rest, with the push-in below applied; `measurements/sway-stage-*.csv`):
+
+| | Laptop 1280 × 720 | Phone 390 × 844 |
+| --- | --- | --- |
+| After the glass alone (1.04 s, 0.18°, 6.2 mm at the board's top) | **1.38 CSS px** | 1.0 px |
+| Peak (1.23 s, after the first clang: 0.27°, 7.6 mm) | **1.85 px** | 1.36 px |
+| Last frame over 0.5 px | 1.74 s (0.79 s after the glass) | 1.71 s |
+| Last frame over 0.25 px | 1.92 s | 1.89 s |
+| Frequency | 3 Hz (2.98 Hz damped) | |
+| Under 1 mm at the board's top | 1.3 s after the glass | |
+| Springs settled (< 2 µrad) | ≈ 5.7 s, before the ball rests (6.6 s); the loop idles 6.59 s after the tap (was 6.63) | |
+
+It reads as a shiver on the strike (the board kicked back, three quick swings, the clangs re-striking it) and is gone
+within a second; the pole visibly flexes against the static base at the strips' 16 ms. The board starts moving one
+frame after the contact frame (the kick fires when the director's sample passes the strike, as the rim's and the
+board's always have). **The ball against the swaying ring:** at the three clangs the sway stands at 0.08°, −0.17°,
+0.14°, moving the ring's struck point ≤ 3.9 mm, ≤ 2.2 mm of it vertical: ≤ 0.9 CSS px at laptop (≤ 0.7 px on the
+phone) of gap or overlap for the 20 ms contact, on top of the known rim-dip gap (below).
+
+**The impact accent: not adopted.** One or two frames of a stronger squash on the glass were tried
+(`strips/impact-accent-1x1-0.944-0.976-physics-vs-x2.2-not-adopted.jpg`, 1:1 with the push-in): the glass's normal
+lies near the line of sight (the shared view is 20° and 15° off it), so the squash compresses the ball *towards the
+camera*; even at 2.2× (3.5 %) the silhouette only widens ≈ 2 % for one frame. It does not read as an impact and is
+not physical, so the drawn strike stays the physics (1.6 %).
+
+Tests: `tests/sportsSprings.test.ts` (+5: 3 Hz about the foot, low damping, the inertia's range; Δω/ω per impulse and
+the damped frequency from the zero crossings, under 1 mm within 1.5 s, settled within 5 s; the guard both ways and a
+part on it taking no velocity; save/restore exact through a settle; no flapping of `active()`);
+`tests/sports.test.ts` (the kicks' moments about the foot by hand; the decline sways the board's top 5–10 mm, gone
+1.5 s after the glass, settled before the ball rests; the recoil carrying every part about the foot and 0 restoring
+exactly; `standSwayParts` cutting a mesh and sharing its attributes; the scene carrying the sway over an
+interruption; the net riding the sway, its loops on the rim within 0.5 mm, the bottom lagging 0.5–2 cm, settling).
+
+### 3. "Cutting the bottom of the board": the decline pushes in
+
+The rest frame cannot hide the stand while the ball rests on the near floor (above), but the decline's dramatic moment
+is airborne. So the camera leans in on it (`src/scenes/sports/focus.ts`):
+
+- **The focus fit** (`SceneInstance.closeUp`, kind `'focus'`): the hero rule along the **shared direction** (azimuth
+  20°, elevation 15°, the 18° lens) at the **rest fit's own aim**, the hoop (the board's corners, the ring, the net's
+  envelope with its swing: `hoopFramePoints`, the frame points' own) at **`SPORTS_FOCUS_FILL` {0.8, 0.8}**, the ball's
+  airborne path from 0.78 s (the channel four fifths in) to the end of the rattle held PATH_CLEARANCE inside. Solved
+  once per content and aspect beside the rest fit (no refit during a sequence: tested).
+- **The channel** (`frameClose`, `focusIn`): a pure function of the decline's time, its tail included: 0 to
+  **0.40 s** (the hand lifting the ball; it leaves at 0.525 s), eased to **1 at 0.93 s** (before the glass at 0.95 s),
+  held through the rattle (its last strike 1.586 s + 20 ms) to **1.61 s**, eased back to **0 at 2.10 s** (before the
+  first floor contact at 2.135 s). The ease both ways is CSS's ease-in-out, cubic-bezier(0.42, 0, 0.58, 1): its peak
+  rate only 1.72× the mean (Dinner's close-up's 2.06×, the decline pull's 2.18×), ≈ 3 % of image scale a frame at
+  its fastest. 0 at every pose: the posters, reduced motion (the camera cuts with the pose) and the declined still are
+  unchanged.
+- **The move** is a dolly along the shared direction between the rest view and the focus fit (`pulledView`, #39's:
+  slide, never zoom; the camera looks along the shared direction at every k, tested), not the close-up's boom.
+- **A change of mind** (decline → accept at any τ) brings it home C1 on Dinner's homecoming (`planCloseHome` /
+  `closeHome`, from where the cut finds it, at the speed it had, ≤ 0.7 s, 0.56 s from 1 at rest) while the ball
+  carries on through its copied rattle: tested at 0.6–2.0 s for continuity of place and speed and the ball in frame;
+  strip `strips/change-decline-to-accept-at-1.25s-laptop-every3.jpg`. Accept → decline, and a decline from the
+  accepted pose (a saved accept: the ball rolls from the accepted rest, no bank), never push in: their decline is a
+  change track (tested at the scene and in the browser).
+
+**What it shows** (the real stage, `controller.framing()`, `tools/focus-stage.ts`, `measurements/focus-stage-*.csv`):
+
+| | 1:1, 3:2 (and every fullscreen frame square) | 3:4 (a per-aspect fit: `framing(0.75)`; a 3:4 mount now frames the square, below) |
+| --- | --- | --- |
+| Zoom (rest distance / focus distance) | **1.68×** (33.86 → 20.20 world units) | 1.60× (the width binds at 0.8) |
+| The hoop's height in the frame | 0.80 | 0.745 |
+| The ball at the strike | **14.4 % of the frame's height**: 76 CSS px of the laptop's 528 px frame square (45 px at rest), 56 px on the phone | |
+| Where the frame's bottom crosses the pole | ≈ 45 cm above the floor, under the clamp collar | ≥ 38 cm |
+| The base's highest point (the socket's boss, 17.2 cm, the GLB's vertices) | **5.2 % of the frame below** the bottom edge | 2.0 % below |
+| Fullscreen (the view extends past the frame square) | laptop: the base's top 731 px against the canvas's 720 (11 px out); phone: 584 against the dock's top at 574 (10 px under it) | |
+| The base out of the visible frame | laptop 0.88–1.68 s, phone 0.86–1.68 s: from just before the glass to after the rattle | |
+| The ball inside the frame | on every 1/240 s frame of the decline at 3:4, 1:1 and 3:2, ≥ PATH_CLEARANCE (unit test); on the stage ≥ 69 px inside the laptop frame square's left edge | |
+
+At 0.7 (the first try) the base's boss stayed 4 px inside the laptop's view; 0.76 left a 1 px sliver; 0.8 clears it at
+every size. On the 16 ms strips (`strips/after-*`, `strips/after-push-in-laptop-0.4-1.0s-every16ms.jpg`,
+`after-pull-back-laptop-1.55-2.2s-every16ms.jpg`, `motion/decline-*.mp4`) the camera leans in as the hand lifts the
+ball, the hoop growing and sliding to the centre as the ball rises; at the strike the glass and the rim fill the frame,
+the pole runs out of the bottom and the base is gone (`stills/focus-1x1-at-the-strike-0.96s.png`); it holds through the
+rattle (the stand's shiver visible against the frame) and pulls back calmly as the ball drops off the ring, the
+base sliding back in under it before the bounce. It reads as the camera leaning in on the shot, not a zoom-punch.
+
+**The mechanism, generalised from Dinner's close-up** (Dinner's behaviour byte-identical; its tests unchanged and
+green: dinner 35, pull 18, framing 11, stage-framing's Dinner cases, the browser dinner and framing specs):
+- `CloseUp` (`src/render/camera.ts`) gains `kind` ('close-up' | 'focus'), `fill` (the hero rule's, instead of
+  `widthFill`), `aim` ('subject' | 'stage') and `paths`; `solveCloseFit` takes the paths (Dinner's `[[]]` and fill
+  unchanged); `pulledView` takes any two `{distance, offset}`.
+- `Stage` (`src/render/stage.ts`): a focus is aimed at the rest fit's aim and placed as a dolly from the (pulled) view
+  (`pulledView` → `placeHeroView`); Dinner's boom (`closeUpView`) is the other branch, unchanged; `closeKind` says
+  which; the focus's paths go through `framingHull` (exact along the shared direction).
+- `controller.framing()` reports a focus as **`focus`** (the live channel) and **`focusFit`** (its fit), a close-up as
+  `close` / `closeUp` as before (Sports' `close` is 0, Dinner's `focus` 0).
+- The homecoming moved to `src/render/cameraChannel.ts` (`planCloseHome`, `closeHome`, `PULL_TOP_SPEED`,
+  `rewindCurve`), re-exported unchanged by `src/scenes/dinner/pull.ts`.
+
+Tests: `tests/sports.test.ts` (+5: the channel's timing against the strikes and the floor, C1, the ease's peak; the
+focus fit's zoom, the pole's cut and the base out of frame at 3:4, 1:1, 3:2, the ball ≥ 14 % at the strike; the ball
+in frame at every 1/240 s frame; the scene: 0 at every pose, `focusIn` along the decline and its tail, nothing for the
+accept or a decline from the accepted pose; changes of mind at seven times: no jump in place or speed, home within
+0.7 s, the ball in frame), `tests/stage-framing.test.ts` (+1: the dolly along the shared direction, the focus fit at 1,
+exactly home at 0, no refit), `tests/browser/framing.spec.ts` (+1: the focus fit at every aspect on the real
+silhouettes; the live channel up, held, home through a real decline; poses, reduced motion and a decline from the
+accept stay at 0; no fit solved).
+
+### 4. Not done: the trap absorbing height
+
+The 6.6 s tail could be shortened by 1–1.5 s with the trap keeping less height (≈ 0.5 instead of the floor's 0.77).
+Left as built: the judge accepted the tail as natural and found the trap invisible, and a trapped bounce visibly lower
+than the ones around it would make the one guided bounce read as guided, the risk the brief named.
+
+### Pacing, captures, tests
+
+- **Pacing** (`pacing-decline.txt`, `pace-sports.ts` from guest-ready with a reload per run, three declines at each
+  size, the push-in's frames 24–130): p50 16.70, **p95 16.70–16.80 ms, max 16.8 ms, no frame over 20 ms** at laptop
+  and phone (#43: the same).
+- **Captures** on a fresh 5705 server after merging the poster layer: `CAPTURE_NO_CLIPS=1 pnpm capture sports` (the 8
+  posters, the thumbnail) and `pnpm capture backdrops` (Sports' four, with the scene; Birthday's re-render reverted);
+  `posters.spec` green (max 16/255, 0.00 % over 24/255). The decline clip was recorded with the strips tool through
+  the real controller (`motion/decline-{laptop-1280x720,phone-390x844,1x1-540}.mp4`, 2.6 s).
+- **Tests** (one file per call): typecheck clean; `tests/sports.test.ts` **76** (was 64), `tests/sportsSprings.test.ts`
+  **9** (4), `tests/stage-framing.test.ts` **15**, `tests/framing.test.ts` 11, `tests/pull.test.ts` 18,
+  `tests/dinner.test.ts` 35, `tests/posters.test.ts` 1; the whole suite once (`pnpm vitest run --testTimeout=1800000`):
+  **535 passed in 34 files**. Browser on a fresh 5705 server, one spec per call: sports 6, framing 10, posters 6,
+  fullscreen 15, dinner 10, scene-depth 5: **52 passed**. (`idle.spec`'s Party "plays on" case counts 30 frames a
+  second where it wants 40 on this machine today, on this branch and on `v1.7/integration` alike: not this round's.)
+
+### Evidence (`evidence/v1.7/sports-polish/`)
+
+- `strips/before-decline-{laptop-1280x720,phone-390x844}-0.4-2.4s-every4.jpg` (the integration build) and
+  `strips/after-decline-*-0.4-2.4s-every4.jpg`; `strips/after-push-in-laptop-0.4-1.0s-every16ms.jpg`,
+  `strips/after-pull-back-laptop-1.55-2.2s-every16ms.jpg`; `strips/change-decline-to-accept-at-1.25s-laptop-every3.jpg`;
+  `strips/impact-accent-1x1-0.944-0.976-physics-vs-x2.2-not-adopted.jpg`.
+- `stills/poses-{3x4,1x1,3x2}.jpg` (a square-layout mount of that aspect, after the poster layer: every pose and the
+  decline at the strike),
+  `stills/poses-{laptop-1280x720,phone-390x844}.jpg`, `stills/focus-1x1-at-the-strike-0.96s.png`.
+- `motion/decline-*.mp4`; `pacing-decline.txt`; `measurements/` (the sway and the focus per 16 ms frame on the stage,
+  the loop's idle, the tails); `tools/` (`sway-stage.ts`, `focus-stage.ts`, `framing-probe.ts`, `idle.ts`,
+  `tail-probe.ts`).
+
+### Known gaps after the polish
+
+- The kicks fire on the frame the director's sample passes a strike, so the board and the stand answer one frame
+  after the contact frame (as before for the rim and the board).
+- The sway is a rigid pitch about the pole's foot (no bending shape, no twist from the bank's 20 cm offset).
+- The ball is drawn on its track, so it sits ≤ 2.2 mm (≤ 0.9 px at laptop) off the swaying ring during a clang, on
+  top of the rim-dip gap.
+- **A portrait square-layout mount (3:4).** The poster layer (cea22a6, merged before the captures) frames a
+  square-layout mount of another aspect like fullscreen: the frame square, the rest of the mount extending the same
+  view. The focus is fitted on that square, so in a 3:4 mount, which shows a sixth of the square more below it, the
+  base's top is back in the bottom **54 of 720 px (7.5 %)** at the strike (`stills/poses-3x4.jpg`, the last cell);
+  landscape (3:2) and 1:1 mounts and the showcase's laptop and phone frames hide it. This follows Surya's pending
+  decision on non-square mounts (RESUME, v1.7 decision 5): if the square framing stays, fit the focus to the mount's
+  free area in the square layout (a window fit in `Stage.fit`, the dolly unchanged); if per-aspect fits come back,
+  the per-aspect focus at 3:4 already hides the base (2 % of the frame below its bottom: the table above).
+- The focus is fitted on the frame square; a fullscreen layout that shows much more below the square than the laptop
+  (16 px) or the phone (under the dock) would show the base's top again.
