@@ -89,6 +89,32 @@ Still open:
 - The shared-code follow-ups the scene docs route to the foundation owner: a scene path for interruptions in `visualDirector.ts`, a stage-level fix for the shadow-depth texture leak, and recipe options for load-time finishes.
 - `docs/coverage.md` regenerates cleanly (`node --experimental-strip-types scripts/coverage-table.ts`, 650 rows), but the output is unchanged because `docs/coverage.json` still records the checkpoint 5 audit. Its rows were not re-audited for v1.2 (for example the 60k-triangle budget row, the three-candle rows and the Dinner food rows).
 
+## The v1.7 revisions (in progress)
+
+Written 2026-10-06. Surya, after approving v1.6 ("I veto and approve of everything"), set three revisions
+(`docs/revisions-v1.7-brief.md`, verbatim): the Dinner steam reveals an invitation card (event name, "You're invited",
+the invitee's name) lying flat on the plate, then the camera moves to a head-on close-up; the Sports decline bounces off
+the backboard and does not go in, more dramatically, framed bigger with the bottom of the board cut and the focus on the
+backboard and ball; the net physics, which "just vibrates really weirdly and unrealistically", rebuilt.
+
+Shape of the work: an understand workflow (four read-only reporters: the Dinner reveal/camera/text, the Sports decline
+and framing, the net's solver, the shared pipeline) whose maps and the orchestrator's decisions are in the brief (#41 the
+card and its print with one bundled OFL typeface; #42 the close-up as the accepted pose, an exception to the one-angle
+rule; #43 the bank off the glass with a rim rattle and a hero of board + rim + net + ball at the largest fill that keeps
+the paths in frame — the stand cannot be hidden at the shared 15° elevation while the ball rests in frame; #44 the net
+rebuilt in place: slack hang, damped XPBD, smoothed skin, render interpolation); a pre-split on `v1.7/integration`
+(a157690: the net channel extracted to `src/scenes/sports/net.ts` with byte-identical output; `HoopSprings.kick`;
+`BALL_MASS_KG`) so the two Sports owners own disjoint files; three owners in parallel worktrees — `v1.7/dinner-card`
+(`v17-dinner-card`, port 5701), `v1.7/sports-decline` (`v17-sports-decline`, 5702), `v1.7/sports-net` (`v17-sports-net`,
+5703); integration on `v1.7/integration` (worktree `.claude/worktrees/v16-int`, port 5508) merging net → decline → dinner;
+then one judge per revision and a guest-experience judge through the real controller, polish rounds, the docs, `main`.
+
+State at the last write: the three owners are building (no merges yet); the brief and the pre-split are on
+`v1.7/integration` (c97793c, a157690). Open: Surya's confirmation of #41–#44 (the posters carry the showcase's sample
+print; per-event posters would need a runtime still); the Sports owners' touch points (the recoil block in
+`models/sportsContract.ts` :209–242 read by both; the net's swing allowances `NET_OUTSET/NET_SWING/NET_SHELL` in
+`src/scenes/sports/index.ts`); the two flaky browser specs from v1.6 (below) still to be fixed in-test.
+
 ## Hollywood pass (v1.6)
 
 Written 2026-10-03. Surya, on v1.5: the cake "still has a plasticky, too perfect and geometric shape / texture",
