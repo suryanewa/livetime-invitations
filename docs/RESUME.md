@@ -156,6 +156,13 @@ multiple-scattering light volume per frame, lighting from the scene's real envir
 8–12 ms validated on the guests' hardware.
 Final verification on 004e95d: typecheck clean, unit 465/465, browser 116/117 (the known bloom flake only), the eighth
 judge's pacing clean at both sizes on a quiet machine; `main` fast-forwarded to it and pushed.
+**Next (2026-10-05, after the push of c1b4643): the signature's path is being measured** — a feasibility round on the
+eighth judge's prescription (branch `v1.7/steam-bake`, worktree `.claude/worktrees/v17-steam-sim`): an offline
+incompressible solver at 2 mm cells over the reveal's box with the cloche as a moving boundary and the plate as the
+source, MacCormack advection and vorticity confinement, baked at 60 fps over 0–2 s; the baked density rendered at the
+judges' scale and measured with their scripts (edge ≥ 1.2, fine detail ≥ 0.6, crown ≥ 2:1), the asset sized as sparse
+8-bit bricks (raw / gzip / temporal delta, 60 and 30 fps), the runtime estimated. Go/no-go on those numbers before any
+runtime work; the analytic field stays for the decline and change-of-mind cases in any case.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for
