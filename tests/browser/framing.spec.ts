@@ -176,24 +176,29 @@ test('sports (v1.7 polish, #43): the decline pushes in on the bank and back befo
   await page.getByRole('button', { name: 'Guest', exact: true }).click();
   await expect.poll(() => visual(page)).toBe('guest-ready');
   await expect.poll(async () => (await report(page)).focus, { timeout: 2000 }).toBe(0);
-  // The channel every animation frame through the decline: up to 1, held, back to 0, never a step.
+  // The channel every animation frame through the decline (3.5 s from the tap, whatever the frame
+  // rate under load): up to 1, held, back to 0, never a step.
   await page.evaluate(() => {
     const w = window as any;
     w.__focus = [];
-    const t0 = performance.now();
+    w.__focusDone = false;
+    let t0 = -1;
     const loop = (now: number) => {
+      if (t0 < 0) t0 = now;
       w.__focus.push([now - t0, w.__showcase.state.visual, w.__showcase.controller.framing().focus]);
-      if (w.__focus.length < 420) requestAnimationFrame(loop);
+      if (now - t0 < 3500) requestAnimationFrame(loop);
+      else w.__focusDone = true;
     };
     requestAnimationFrame(loop);
   });
   await page.getByRole('button', { name: 'Decline' }).click();
   await expect.poll(() => visual(page), { timeout: 5000 }).toBe('declined-pose');
-  await expect.poll(async () => (await page.evaluate(() => (window as any).__focus.length)) as number, { timeout: 10_000 }).toBeGreaterThanOrEqual(420);
+  await expect.poll(async () => (await page.evaluate(() => (window as any).__focusDone)) as boolean, { timeout: 10_000 }).toBe(true);
   const k = (await page.evaluate(() => (window as any).__focus as [number, string, number][])).map(([, , c]) => c);
   expect(Math.max(...k)).toBe(1);
-  expect(k.filter((c) => c === 1).length).toBeGreaterThan(20);
-  expect(k.filter((c) => c > 0 && c < 1).length).toBeGreaterThan(20);
+  // The hold (≈ 0.68 s) and the eases (≈ 1 s): many frames each even at 30 fps.
+  expect(k.filter((c) => c === 1).length).toBeGreaterThan(10);
+  expect(k.filter((c) => c > 0 && c < 1).length).toBeGreaterThan(10);
   const peak = k.indexOf(1), last = k.lastIndexOf(1);
   for (let i = 1; i <= peak; i++) expect(k[i]!).toBeGreaterThanOrEqual(k[i - 1]! - 1e-9);
   for (let i = last + 1; i < k.length; i++) expect(k[i]!).toBeLessThanOrEqual(k[i - 1]! + 1e-9);
