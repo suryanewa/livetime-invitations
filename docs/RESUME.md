@@ -252,6 +252,10 @@ Still open at the time of writing (updated when the pass closes):
   empty-stage stills keep byte identity; 10/10 runs. Tangents for the buttercream (bit-stable Birthday stills; a
   re-export and posters that move by a level) remain a later option — the cake is signed as it is. Scripts: the session
   scratchpad's `flake17/` (`bloom.mjs`, `seq.mjs`, `poses.mjs`, `bisect2.mjs`).
+- `tests/browser/idle.spec.ts › Party plays on after acceptance…` counted 30 frames a second (wants > 40) on 2026-10-06
+  on both `v1.7/integration` and v1.6 `main`: the Mac was on battery at 9 %, where macOS throttles the browser to 30 fps.
+  Environmental, not a regression; re-run it on mains power before reading anything into it (and the same for every
+  pacing number taken while on battery).
 - **the steam's next approach** (the sixth judge and the polish-5 owner agree the softness cannot be reached with the
   present half-resolution analytic march in 6 ms): a density advected per frame at 1–2 mm (a 128³–256³ volume stepped on
   the GPU, or a sparse grid), a full-resolution filament/sheet pass over it, more samples a pixel and multiple scattering;
