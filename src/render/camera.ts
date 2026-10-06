@@ -498,13 +498,14 @@ function sightOf(p: Vector3, position: Vector3, target: Vector3, out: [number, n
 /**
  * v1.7 (#42): the move from a view `from` (the rest fit, or wherever the decline's pull has it) to
  * the close-up `to`, both aimed through the same lens, at `k` (0 exactly `from`, 1 exactly `to`).
- * A boom and push-in about the subject's centre `subject`: the camera travels on an arc round it,
- * its distance moving geometrically (equal steps of k are equal ratios of size, as the decline's
- * dolly) and its elevation and azimuth linearly; it turns from `from`'s target to the subject's;
- * and the slide is set so the subject's centre crosses the screen on a straight line from where
- * `from` shows it to where `to` does — no swing. Every quantity is smooth in k, so a C1 k(t) is a
- * C1 move. `fov` and `aspect` are the lens and the fitted frame's aspect (1 in fullscreen), which
- * the slide is measured in.
+ * A boom and push-in: the camera's line of sight turns from `from`'s to `to`'s, its elevation and
+ * azimuth moving linearly (the close-up keeps the shared azimuth, so the sight never swings sideways
+ * and the card's long edges, parallel to the camera's right, stay level on screen throughout); the
+ * point it looks at travels from `from`'s target to `to`'s; its distance from it moves geometrically
+ * (equal steps of k are equal ratios of size, as the decline's dolly); and the slide is set so the
+ * subject's centre `subject` crosses the screen on a straight line from where `from` shows it to
+ * where `to` does — no swing. Every quantity is smooth in k, so a C1 k(t) is a C1 move. `fov` and
+ * `aspect` are the lens and the fitted frame's aspect (1 in fullscreen), which the slide is measured in.
  */
 export function closeUpView(from: ViewPose, to: ViewPose, subject: Vector3, k: number, fov: number, aspect: number, out?: ViewPose): ViewPose {
   const o = out ?? { position: new Vector3(), target: new Vector3(), offset: [0, 0] };
@@ -513,9 +514,9 @@ export function closeUpView(from: ViewPose, to: ViewPose, subject: Vector3, k: n
   if (kk >= 1) return copyPose(to, o);
   probe.fov = fov;
   probe.aspect = aspect;
-  // The arc: spherical coordinates of each camera about the subject.
-  arc0.copy(from.position).sub(subject);
-  arc1.copy(to.position).sub(subject);
+  // Each end's line of sight (target → camera) in spherical coordinates.
+  arc0.copy(from.position).sub(from.target);
+  arc1.copy(to.position).sub(to.target);
   const r0 = arc0.length(), r1 = arc1.length();
   const el0 = Math.asin(arc0.y / r0), el1 = Math.asin(arc1.y / r1);
   const az0 = Math.atan2(arc0.x, arc0.z);
@@ -523,8 +524,8 @@ export function closeUpView(from: ViewPose, to: ViewPose, subject: Vector3, k: n
   if (az1 - az0 > Math.PI) az1 -= 2 * Math.PI;
   else if (az0 - az1 > Math.PI) az1 += 2 * Math.PI;
   const r = r0 * Math.pow(r1 / r0, kk), el = el0 + (el1 - el0) * kk, az = az0 + (az1 - az0) * kk;
-  o.position.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(r).add(subject);
   o.target.lerpVectors(from.target, to.target, kk);
+  o.position.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(r).add(o.target);
   // The subject's centre on screen: where each end shows it (after its slide), on a straight line.
   const q0 = sightOf(subject, from.position, from.target, [0, 0]);
   const q1 = sightOf(subject, to.position, to.target, [0, 0]);
