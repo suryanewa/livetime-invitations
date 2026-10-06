@@ -1,0 +1,27 @@
+[
+ {
+  "view": "phone",
+  "scene": "dinner",
+  "pose": "accepted",
+  "frame": {
+   "max": 19,
+   "over": 0.0,
+   "mean": 1.19
+  },
+  "core": {
+   "max": 19,
+   "over": 0.0,
+   "mean": 1.24
+  },
+  "band": {
+   "max": 6,
+   "over": 0.0,
+   "mean": 1.11
+  },
+  "outside": {
+   "max": 69,
+   "over": 1.656,
+   "mean": 2.19
+  }
+ }
+]

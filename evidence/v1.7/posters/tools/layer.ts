@@ -15,6 +15,12 @@ const view = process.env.VIEW ?? '3x2';
 const out = process.env.OUT!;
 const scenes = (process.env.SCENES ?? 'party,birthday,sports,dinner,business').split(',');
 const poses = (process.env.POSES ?? 'host-ready,guest-ready,accepted,declined').split(',');
+/**
+ * VIA=choose: the live capture of an answered pose is taken on a second load without the saved
+ * answer, the answer chosen once live (reduced motion); the poster layer is always the saved
+ * answer's (what a guest with a saved answer sees before load). Default: both from the saved load.
+ */
+const via = process.env.VIA ?? 'saved';
 const VIEWS: Record<string, { w: number; h: number; dpr: number; layout?: string; insets?: object }> = {
   '3x2': { w: 1080, h: 720, dpr: 1 },
   '1x1': { w: 720, h: 720, dpr: 1 },
@@ -85,9 +91,12 @@ for (const scene of scenes) {
     const st = await page.evaluate(() => (window as any).__showcase.state.resource);
     await page.locator('#s').screenshot({ path: join(out, `${scene}-${pose}-poster.png`) });
     // Live: open the gate, wait for ready, the pose, the canvas shown and the poster gone.
+    if (via !== 'saved' && p.resp) { qs.delete('resp'); await page.goto(`${base}/__posters/harness.html?${qs}`); }
+    await page.waitForFunction(() => typeof (window as any).__release === "function");
     await page.evaluate(() => (window as any).__release());
     await page.waitForFunction(() => (window as any).__showcase.state.resource === 'ready', null, { timeout: 60000 });
     await page.waitForFunction(() => (window as any).__showcase.controller.deferredReady(), null, { timeout: 60000 });
+    if (via !== 'saved' && p.resp) await page.evaluate((r) => (window as any).__showcase.controller.chooseResponse(r), p.resp);
     await page.waitForFunction((vis) => (window as any).__showcase.state.visual === vis, p.visual, { timeout: 20000 });
     await page.waitForFunction(() => document.querySelector('.lt-stage__canvas')?.classList.contains('is-visible'), null, { timeout: 20000 });
     await page.waitForTimeout(700);
