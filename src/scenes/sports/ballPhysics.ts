@@ -34,6 +34,11 @@ import { BALL_R, SPORTS_CM_PER_UNIT } from '../../../models/sportsContract.ts';
  *   envelope: it checks the fall a little, hands the drift towards the board back out and grips
  *   the backspin.
  *
+ * - v1.7, the backboard and the rim (the decline's bank and rattle): the same impulse on any
+ *   surface (`surfaceImpulse`) with each one's sourced constants (`SURFACES`), struck in free flight
+ *   (`flyUntil` over a `Collider` set: the laminate's plane, the ring's torus) and drawn like a
+ *   floor contact along the strike's normal (`surfaceContact`), each one recorded as a `Hit`.
+ *
  * A contact can also be **redirected** (`floorContact` with an outgoing state): the invisible
  * player's hand acting through a bounce, used only by a change of mind (`change.ts`). Its squash
  * follows the larger impulse.

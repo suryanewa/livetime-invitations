@@ -9,14 +9,16 @@ import {
 import type { CanonicalPose, SequenceName } from '../../core/types.ts';
 
 /**
- * Pure choreography for Sports (Sports sub-spec), v1.5: physics, integrated once.
+ * Pure choreography for Sports (Sports sub-spec), v1.5 and v1.7: physics, integrated once.
  *
  * The beats are the approved ones (host 1.2 s, accept 1.7 s with net contact at 0.95 s, decline
- * 1.6 s). Each sequence is an authored gather (0–0.2 s: the ball rolls back and rises into its
- * release) followed by a physical track (`ballPhysics.ts`) from the release to rest: flight under
- * standard gravity, the net's grip on the made ball, every floor contact with restitution, friction
- * and spin coupling, the contact squash, and the roll to a stop. The tracks are integrated at
- * module load from fixed launch states, so a sequence is a pure function of t and replays exactly.
+ * 1.6 s with the glass struck on the same 0.95 s beat). Each sequence is an authored gather (0–0.2 s:
+ * the ball rolls back and rises into its release; v1.7: the decline's bank winds up to 0.525 s)
+ * followed by a physical track (`ballPhysics.ts`) from the release to rest: flight under standard
+ * gravity, the net's grip on the made ball, the bank's strikes on the glass and the ring (v1.7),
+ * every floor contact with restitution, friction and spin coupling, the contact squash, and the roll
+ * to a stop. The tracks are integrated at module load from fixed launch states, so a sequence is a
+ * pure function of t and replays exactly.
  *
  * A real ball keeps bouncing after the beat that matters. The director's durations stay the
  * approved ones; the rest of each track is the sequence's **tail**, which the scene plays in its
@@ -25,9 +27,9 @@ import type { CanonicalPose, SequenceName } from '../../core/types.ts';
  * tracks' rest states: where and how the ball really comes to rest.
  *
  * Launches are solved, not tuned by hand: the made shot leaves so it passes the rim centre at the
- * contact beat; the airball so it first lands on MISS_LAND (behind and beside the hoop); the host
- * pass so the ball comes to rest exactly on the guest spot. A change of mind continues the ball's
- * own physics (`change.ts`).
+ * contact beat; the bank so it meets the glass at BANK_POINT on that beat (v1.7; v1.5's airball
+ * landed on MISS_LAND behind the hoop); the host pass so the ball comes to rest exactly on the
+ * guest spot. A change of mind continues the ball's own physics (`change.ts`).
  */
 
 export const DURATIONS = { host: 1.2, accept: 1.7, decline: 1.6 } as const;
