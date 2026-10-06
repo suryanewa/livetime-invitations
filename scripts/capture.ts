@@ -415,14 +415,20 @@ async function captureUi() {
 }
 
 /**
- * Fullscreen backdrop stills (v1.4): per scene, the bare studio (content hidden) under the
- * production rig at BACKDROP_FIELD (7) × the square frame, centred on the square framing, so the
- * controller can extend a square poster to any viewport with the canvas's framing. Written to
- * assets/scenes/<scene>/backdrop.webp. Re-run after any change to bounds, rig or framing.
+ * Backdrop stills (v1.4): per scene, the studio under the production rig at BACKDROP_FIELD (7) × the
+ * square frame, centred on the square framing, so the controller can extend a square poster to any
+ * viewport (and, v1.7 posters, to a square-layout mount of another aspect) with the canvas's framing.
+ * Written to assets/scenes/<scene>/backdrop.webp. Re-run after any change to bounds, rig or framing.
  * v1.5 decline pull-back: a scene whose decline fit differs from its rest fit (Birthday, Dinner)
- * shows its declined poster at the wider framing, so it also gets backdrop-declined.webp, the bare
- * studio at the declined pose (pull 1); posters.ts serves it for that pose only. v1.7: a scene whose
- * accepted pose is a close-up (Dinner) also gets backdrop-accepted.webp, the close-up with its content.
+ * shows its declined poster at the wider framing, so it also gets backdrop-declined.webp, the studio
+ * at the declined pose (pull 1); posters.ts serves it for that pose only. v1.7: a scene whose
+ * accepted pose is a close-up (Dinner) also gets backdrop-accepted.webp, the close-up.
+ * v1.7 posters: every backdrop is taken *with the scene in it* (v1.4–v1.6: the bare studio, content
+ * hidden), the rest one at guest-ready, each with the posters' config (posterConfig). What the live
+ * view shows outside the frame square — the set's cast shadows on the cove (Sports' hoop, Party's
+ * and Birthday's), Business's lanyard, Dinner's plate — is then there before the scene is live and
+ * does not pop in at the crossfade; and the poster's narrow feather blends it like with like (what
+ * moves stays inside the frame's clearance, under the poster, by the framing rule).
  */
 async function captureBackdrops() {
   await mkdir(outDir, { recursive: true });
@@ -432,11 +438,23 @@ async function captureBackdrops() {
   const { cp, rm } = await import('node:fs/promises');
   const pulled = new Set<string>();
   const closeUps = new Set<string>();
-  const still = () => page.evaluate(() => (window as any).__showcase.controller.captureStill(2000, 1, 'image/webp', 0.92, { empty: true, field: 7 })) as Promise<string>;
+  const still = () => page.evaluate(() => (window as any).__showcase.controller.captureStill(2000, 1, 'image/webp', 0.92, { field: 7 })) as Promise<string>;
   for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
     await page.goto(`${base}/?scene=${scene}`);
     await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
-    // The rest framing (the page opens at host-ready, pull 0).
+    // The posters' config (Dinner's neutral card), and guest-ready, snapped (reduced motion).
+    await page.evaluate(async (category) => {
+      const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
+      const [{ posterConfig }, { DEFAULT_CONFIGS }] = await Promise.all([load('/src/demo/fixtures.ts'), load('/src/core/types.ts')]);
+      const sc = (window as any).__showcase;
+      sc.setConfig(posterConfig(DEFAULT_CONFIGS[category]));
+      sc.controller.setReducedMotion(true);
+      sc.controller.setMode('guest');
+    }, scene);
+    await page.waitForFunction(() => (window as any).__showcase.state.resource === 'ready', null, { timeout: 30_000 });
+    await page.waitForFunction(() => (window as any).__showcase.state.visual === 'guest-ready');
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    // The rest framing (pull 0).
     const rest = await page.evaluate(() => (window as any).__showcase.controller.framing().pull);
     if (rest !== 0) throw new Error(`${scene}: the backdrop must be taken at rest (pull ${rest})`);
     await saveDataUrl(join(outDir, `${scene}.webp`), await still());
@@ -444,12 +462,7 @@ async function captureBackdrops() {
     const fit = await page.evaluate(() => (window as any).__showcase.controller.framing());
     if (Math.abs(fit.rest.distance - fit.decline.distance) > 1e-9) {
       // The declined pose, snapped (reduced motion): the stage at pull 1.
-      await page.evaluate(() => {
-        const c = (window as any).__showcase.controller;
-        c.setReducedMotion(true);
-        c.setMode('guest');
-        c.chooseResponse('decline');
-      });
+      await page.evaluate(() => (window as any).__showcase.controller.chooseResponse('decline'));
       await page.waitForFunction(() => (window as any).__showcase.state.visual === 'declined-pose');
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       const pull = await page.evaluate(() => (window as any).__showcase.controller.framing().pull);
@@ -460,25 +473,14 @@ async function captureBackdrops() {
     }
     if (fit.closeUp) {
       // v1.7 (#42): a scene whose accepted pose is a close-up (Dinner's card): its own backdrop, the
-      // close-up at the same field with the scene in it (the plate runs past the poster's edges).
-      // v1.7 polish (#41): with the posters' neutral print (posterConfig), as its poster has.
-      await page.evaluate(async (category) => {
-        const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
-        const [{ posterConfig }, { DEFAULT_CONFIGS }] = await Promise.all([load('/src/demo/fixtures.ts'), load('/src/core/types.ts')]);
-        (window as any).__showcase.setConfig(posterConfig(DEFAULT_CONFIGS[category]));
-      }, scene);
-      await page.evaluate(() => {
-        const c = (window as any).__showcase.controller;
-        c.setReducedMotion(true);
-        c.setMode('guest');
-        c.chooseResponse('accept');
-      });
+      // close-up at the same field (the plate runs past the poster's edges), with the posters'
+      // neutral print (v1.7 polish, #41; set above).
+      await page.evaluate(() => (window as any).__showcase.controller.chooseResponse('accept'));
       await page.waitForFunction(() => (window as any).__showcase.state.visual === 'accepted-pose');
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       const close = await page.evaluate(() => (window as any).__showcase.controller.framing().close);
       if (close !== 1) throw new Error(`${scene}: the accepted backdrop must be taken on the close-up (got ${close})`);
-      const full = await page.evaluate(() => (window as any).__showcase.controller.captureStill(2000, 1, 'image/webp', 0.92, { field: 7 })) as string;
-      await saveDataUrl(join(outDir, `${scene}-accepted.webp`), full);
+      await saveDataUrl(join(outDir, `${scene}-accepted.webp`), await still());
       closeUps.add(scene);
       console.log('backdrop', scene, 'accepted (close-up)');
     }
