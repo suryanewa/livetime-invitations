@@ -374,6 +374,8 @@ type Outcome = 'accept' | 'decline';
 export const CONTENT_END: Readonly<Record<Outcome, number>> = { accept: ACCEPT.settled, decline: FLAPS_SHUT };
 /** The decline's first 0.25 s only bring the bin in: they may run during the rewind. */
 const DECLINE_LEAD = 0.25;
+/** v1.7 polish: how much later than its earliest the decline's pull may start for the cover's hold (s). */
+const HOLD_SLACK = 0.05;
 /** Plan clearance between the returning cover and the bin coming in (bin rim + bead + margin). */
 export const BIN_CLEARANCE = DINNER_BIN.radius + COVER.radius + 0.05;
 /** Bin position on the decline's clock (its entrance). */
@@ -404,8 +406,20 @@ export interface AnswerChange {
   /** Path length from the outcome's start to `at`, and the path speed there (`lengthAt`). */
   length: number;
   speed: number;
-  /** Rewind duration (0 when the change returns to the outcome being rewound). */
+  /** Rewind duration (0 when the change returns to the outcome being rewound), its `hold` included. */
   rewind: number;
+  /**
+   * v1.7 polish (#42): the first part of the rewind during which the outcome holds still (it is at
+   * rest) while the camera leaves the close-up; its own rewind takes the rest (`rewind − hold`). 0
+   * for every change with no close-up out.
+   */
+  hold: number;
+  /**
+   * The new outcome's whole playback (s, the director's duration for it): its own DURATIONS, plus
+   * the `hold` (the cover waiting while the camera leaves the close-up), so that the decline after
+   * it keeps its own pace.
+   */
+  span: number;
   /** The new outcome; its time `start + (t − rewind)·k` after the rewind (k fits it in its duration). */
   next: Outcome;
   start: number;
@@ -549,37 +563,60 @@ export function rewindDuration(from: Outcome, L0: number, v0: number, max: numbe
  * no sooner than BIN_DELAY before the camera is home, so the bin never sweeps into the close-up.
  * The reveal's rewind is stretched to that start if it is shorter (a gentler return of the cover)
  * and the decline's lead is cut to fit; the decline then plays up to (CONTENT_END − lead) /
- * (1.5 − rewind) faster (from the close-up at rest: the rewind 0.44 s, 1.34×).
+ * (1.5 − rewind) faster.
+ *
+ * `holdFor` (v1.7 polish): how long the camera takes to leave the close-up (pull.ts
+ * `closeClearAt`, the close channel ≤ CLOSE_CLEAR). The cover holds still beside the plate that
+ * long before it comes back, so it never sweeps across the card while the camera is still near
+ * it (the mirror dome filled the frame and crossed the card in ≈ 140 ms); only from rest (the
+ * outcome still), and never so long that the decline's pull could no longer start `wait` in (the
+ * camera's two moves stay one outward motion). The playback grows by the hold (`span`), so the
+ * decline after it keeps its own pace. From the close-up at rest: the cover waits 0.34 s, comes
+ * back in 0.36 s, and the decline plays at 1.03 × (was 1.34 ×) over 1.84 s; moving in at τ 3.5 s
+ * it waits 0.06 s (k 1.03, was 1.08).
  */
-export function planAnswerChange(from: Outcome, at: number, rate: number, next: Outcome, closeHome = 0): AnswerChange {
+export function planAnswerChange(from: Outcome, at: number, rate: number, next: Outcome, closeHome = 0, holdFor = 0): AnswerChange {
   const a = Math.min(Math.max(at, 0), CONTENT_END[from]);
   const r = a < CONTENT_END[from] ? rate : 0;
   // Changing back to the outcome being rewound: it simply plays on from where it is.
-  if (from === next) return { from, at: a, rate: r, length: 0, speed: 0, rewind: 0, next, start: a, k: 1 };
+  if (from === next) return { from, at: a, rate: r, length: 0, speed: 0, rewind: 0, hold: 0, span: DURATIONS[next], next, start: a, k: 1 };
   const length = lengthAt(from, a), speed = r * speedAt(from, a);
   const minRewind = rewindDuration(from, length, speed, REWIND.max[next]);
   // The earliest the decline's clock may start: its bin enters BIN_DELAY of that clock later, which
   // the decline's own speed-up k shortens; so that is BIN_DELAY / k before the camera is home (a
-  // fixed point in k, three steps are exact to a microsecond).
-  let wait = 0, rewind = minRewind, start = 0, k = 1;
-  for (let i = 0; i < (next === 'decline' && closeHome > 0 ? 3 : 1); i++) {
-    if (next === 'decline' && closeHome > 0) wait = Math.min(REWIND.max.decline, Math.max(0, closeHome - BIN_DELAY / k));
-    rewind = Math.max(minRewind, wait);
+  // fixed point in k: a few steps are exact to a microsecond).
+  const toBin = next === 'decline' && closeHome > 0;
+  let wait = 0, hold = 0, rewind = minRewind, start = 0, k = 1;
+  for (let i = 0; i < (toBin ? 6 : 1); i++) {
+    if (toBin) {
+      wait = Math.min(REWIND.max.decline, Math.max(0, closeHome - BIN_DELAY / k));
+      // The cover waits while the camera leaves the close-up; the decline's lead (≤ DECLINE_LEAD)
+      // must still be able to start the pull at `wait`.
+      hold = speed === 0 ? Math.max(0, Math.min(holdFor, wait + DECLINE_LEAD + HOLD_SLACK - minRewind)) : 0;
+    }
+    rewind = Math.max(hold + minRewind, wait);
     // A decline's lead (the bin coming in) runs during the end of the rewind, as much of it as
     // keeps the bin clear of the returning cover (the bin sweeps in past the reveal's landing
     // spot) and does not start before `wait`; an accept starts after the rewind.
-    start = next === 'decline' ? Math.max(0, Math.min(declineLead(from, length, speed, rewind), rewind - wait)) : 0;
-    k = Math.max(1, (CONTENT_END[next] - start) / (DURATIONS[next] - rewind));
+    start = next === 'decline' ? Math.max(0, Math.min(declineLead(from, length, speed, rewind, hold), rewind - wait)) : 0;
+    k = Math.max(1, (CONTENT_END[next] - start) / (DURATIONS[next] + hold - rewind));
   }
-  return { from, at: a, rate: r, length, speed, rewind, next, start, k };
+  return { from, at: a, rate: r, length, speed, rewind, hold, span: DURATIONS[next] + hold, next, start, k };
+}
+
+/** The rewind's outcome time and path-length rate at time t of a rewind of `R` s whose first `hold` s are still. */
+function rewound(from: Outcome, length: number, speed: number, R: number, hold: number, t: number): [number, number] {
+  const M = R - hold;
+  const [d, dd] = rewindLength(length, speed, M, Math.min(Math.max(t - hold, 0) / M, 1));
+  return [timeAtLength(from, d), t < hold ? 0 : dd / M];
 }
 
 const binP = new Vector3();
-function declineLead(from: Outcome, length: number, speed: number, R: number): number {
+function declineLead(from: Outcome, length: number, speed: number, R: number, hold = 0): number {
   for (let L = Math.min(DECLINE_LEAD, R); L > 0; L -= 0.01) {
     let clear = true;
     for (let t = Math.max(0, R - L); t <= R + 1e-9 && clear; t += 0.004) {
-      sampleSequence(from, timeAtLength(from, rewindLength(length, speed, R, Math.min(t / R, 1))[0]), fa);
+      sampleSequence(from, rewound(from, length, speed, R, hold, t)[0], fa);
       binAt(t - (R - L), binP);
       clear = Math.hypot(fa.coverPos.x - binP.x, fa.coverPos.z - binP.z) >= BIN_CLEARANCE;
     }
@@ -591,10 +628,9 @@ function declineLead(from: Outcome, length: number, speed: number, R: number): n
 /** Where the change is at time `t` of the new outcome's playback: [outcome, its time, its rate]. */
 export function changeTime(c: AnswerChange, t: number): [Outcome, number, number] {
   if (t < c.rewind) {
-    const [d, dd] = rewindLength(c.length, c.speed, c.rewind, t / c.rewind);
-    const s = timeAtLength(c.from, d);
+    const [s, rate] = rewound(c.from, c.length, c.speed, c.rewind, c.hold, t);
     const v = speedAt(c.from, s);
-    return [c.from, s, v > 1e-9 ? dd / c.rewind / v : 0];
+    return [c.from, s, v > 1e-9 ? rate / v : 0];
   }
   const s = c.start + (t - c.rewind) * c.k;
   return s >= CONTENT_END[c.next] ? [c.next, CONTENT_END[c.next], 0] : [c.next, s, c.k];

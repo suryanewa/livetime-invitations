@@ -178,6 +178,20 @@ export function planCloseHome(c0: number, v0: number): CloseHome | null {
 }
 /** The homecoming at u ∈ [0, 1]: from c0 leaving at m0 (per unit u) to 0, a smootherstep landing. */
 const homeCurve = (u: number, c0: number, m0: number) => rewindCurve(u, c0, m0, 0);
+/**
+ * v1.7 polish: the close channel at which the camera has left the close-up. On a change of mind
+ * the cover's return waits until the homecoming is at or under it for good (`closeClearAt`), so
+ * the mirror dome never sweeps across the card while the camera is still near it.
+ */
+export const CLOSE_CLEAR = 0.3;
+/** The time (s) after which the homecoming stays at or under CLOSE_CLEAR (0 when it already is). */
+export function closeClearAt(h: CloseHome | null): number {
+  if (!h) return 0;
+  const dt = 1 / 960;
+  let last = -1;
+  for (let i = 0; i * dt < h.span; i++) if (closeHome(h, i * dt) > CLOSE_CLEAR) last = i;
+  return last < 0 ? 0 : Math.min(h.span, (last + 1) * dt);
+}
 /** The close channel `t` s into the change (0 from the span on), clamped to [0, 1]. */
 export function closeHome(h: CloseHome | null, t: number): number {
   if (!h || t >= h.span) return 0;

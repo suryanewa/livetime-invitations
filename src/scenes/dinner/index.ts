@@ -22,7 +22,7 @@ import {
   type DinnerFrame,
 } from './sequences.ts';
 import { leftSteamEnd, leftSteamFade, STEAM_END, STEAM_REST } from './steam.ts';
-import { CLOSE, type CloseHome, closeHome, closeIn, closeRate, dinnerPull, planCloseHome } from './pull.ts';
+import { CLOSE, type CloseHome, closeClearAt, closeHome, closeIn, closeRate, dinnerPull, planCloseHome } from './pull.ts';
 
 /**
  * Silhouette samples of every Dinner path: the plate, the cover along the host and accept paths
@@ -74,7 +74,14 @@ export class DinnerScene implements SceneInstance {
   readonly bounds: Box3;
   /** Silhouette of the objects on stage at guest-ready: the v1.4 framing rule's hero. */
   readonly heroPoints: Vector3[];
-  readonly durations = DURATIONS;
+  /**
+   * The director's duration for each sequence: DURATIONS, except during a change of mind from the
+   * close-up (v1.7 polish), whose playback grows by the cover's hold (`AnswerChange.span`).
+   */
+  get durations(): Readonly<Record<SequenceName, number>> {
+    return this.playDurations;
+  }
+  private playDurations: Readonly<Record<SequenceName, number>> = DURATIONS;
   readonly animatedNodes: Object3D[];
   readonly studio = { wallZ: DINNER_WALL_Z };
   readonly framePoints: Vector3[];
@@ -158,6 +165,7 @@ export class DinnerScene implements SceneInstance {
     else {
       this.change = null;
       this.home = null;
+      this.playDurations = DURATIONS;
     }
     // The reveal has just played to its end: its steam carries on (simulate) until it has gone.
     const revealEnded = pose === 'accepted' && this.shown?.seq === 'accept' && this.shown.rate > 0 && this.steamT !== null && !this.steamFree;
@@ -179,6 +187,7 @@ export class DinnerScene implements SceneInstance {
     if (this.change && sequence !== this.change.next) {
       this.change = null;
       this.home = null;
+      this.playDurations = DURATIONS;
     }
     this.shown = { seq: sequence, t, rate: 1 };
     // The reveal playing forwards drives the steam clock; anything else shows only steam that a
@@ -279,8 +288,10 @@ export class DinnerScene implements SceneInstance {
     const [from, at, rate] = this.change && s.seq === this.change.next ? changeTime(this.change, s.t) : [s.seq, s.t, s.rate];
     const next = s.seq === 'accept' ? 'decline' : 'accept';
     // v1.7: the close-up comes home from where it is, at the speed it had; the bin waits for it.
+    // v1.7 polish: and the cover's return waits for the camera to leave the close-up (closeClearAt).
     const home = (this.home = planCloseHome(this.frameClose(), this.closeSpeed()));
-    const plan = (this.change = planAnswerChange(from, at, rate, next, home?.span ?? 0));
+    const plan = (this.change = planAnswerChange(from, at, rate, next, home?.span ?? 0, closeClearAt(home)));
+    this.playDurations = plan.span === DURATIONS[next] ? DURATIONS : { ...DURATIONS, [next]: plan.span };
     this.changeArmed = true;
     this.revealRest();
     // Steam already released is left behind: it rises on, on its own clock, and disperses over
