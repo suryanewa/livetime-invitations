@@ -7,7 +7,7 @@
  *   pnpm capture stagecolor [baseUrl] [rig,…]       a rig's measured backdrop colour (stage tokens)
  *   CAPTURE_STAGE_ONLY=1 pnpm capture <scene>       posters, stills and clips staged in outputs/<scene>/ only
  *   pnpm capture backdrops [baseUrl]                backdrop stills (the scene in them) → assets/scenes/<scene>/backdrop.webp
- *                                                   + backdrop-accepted.webp, backdrop-declined.webp (v1.7 posters)
+ *                                                   + backdrop-<host-ready|accepted|declined>.webp (v1.7 posters)
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -424,8 +424,8 @@ async function captureUi() {
  * at the declined pose (pull 1); posters.ts serves it for that pose only. v1.7: a scene whose
  * accepted pose is a close-up (Dinner) also gets backdrop-accepted.webp, the close-up.
  * v1.7 posters: every backdrop is taken *with the scene in it* (v1.4–v1.6: the bare studio, content
- * hidden), with the posters' config (posterConfig), and every scene has one per answered pose:
- * backdrop.webp at guest-ready (host-ready's and guest-ready's posters), backdrop-accepted.webp and
+ * hidden), with the posters' config (posterConfig), and every scene has one per canonical pose:
+ * backdrop.webp at guest-ready, backdrop-host-ready.webp, backdrop-accepted.webp and
  * backdrop-declined.webp at those poses (at the decline's or the close-up's framing where the scene
  * has one). What the live view shows outside the frame square — the set's cast shadows on the cove
  * (Sports' hoop, Party's lid, Birthday's cake), Business's lanyard (which swings with the badge in
@@ -445,7 +445,7 @@ async function captureBackdrops() {
    * motion), then the answer if one is given: each backdrop is the pose its posters show, reached as
    * a guest reaches it (a change of mind could leave the set elsewhere, e.g. Dinner's cloche).
    */
-  const pose = async (scene: string, answer?: 'accept' | 'decline') => {
+  const pose = async (scene: string, answer?: 'accept' | 'decline' | 'host') => {
     await page.goto(`${base}/?scene=${scene}`);
     await page.waitForFunction(() => (window as any).__showcase?.state?.resource === 'ready', null, { timeout: 30_000 });
     await page.evaluate(async (category) => {
@@ -458,7 +458,10 @@ async function captureBackdrops() {
     }, scene);
     await page.waitForFunction(() => (window as any).__showcase.state.resource === 'ready', null, { timeout: 30_000 });
     await page.waitForFunction(() => (window as any).__showcase.state.visual === 'guest-ready');
-    if (answer) {
+    if (answer === 'host') {
+      await page.evaluate(() => { const c = (window as any).__showcase.controller; c.setMode('host'); c.resetVisual(); });
+      await page.waitForFunction(() => (window as any).__showcase.state.visual === 'host-ready');
+    } else if (answer) {
       await page.evaluate((a) => (window as any).__showcase.controller.chooseResponse(a), answer);
       await page.waitForFunction((v) => (window as any).__showcase.state.visual === v, answer === 'accept' ? 'accepted-pose' : 'declined-pose');
     }
@@ -486,6 +489,10 @@ async function captureBackdrops() {
     if (close !== (fit.closeUp ? 1 : 0)) throw new Error(`${scene}: the accepted backdrop must be taken at close ${fit.closeUp ? 1 : 0} (got ${close})`);
     await saveDataUrl(join(outDir, `${scene}-accepted.webp`), await still());
     console.log('backdrop', scene, 'accepted');
+    // Host-ready (the host's own preview; Sports' ball lies by the frame's foot).
+    await pose(scene, 'host');
+    await saveDataUrl(join(outDir, `${scene}-host-ready.webp`), await still());
+    console.log('backdrop', scene, 'host-ready');
   }
   await browser.close();
   // Copied last: writing into assets/ makes a running dev server reload its pages.
@@ -494,6 +501,7 @@ async function captureBackdrops() {
     await cp(join(outDir, `${scene}.webp`), join(dir, 'backdrop.webp'));
     await cp(join(outDir, `${scene}-declined.webp`), join(dir, 'backdrop-declined.webp'));
     await cp(join(outDir, `${scene}-accepted.webp`), join(dir, 'backdrop-accepted.webp'));
+    await cp(join(outDir, `${scene}-host-ready.webp`), join(dir, 'backdrop-host-ready.webp'));
   }
 }
 
