@@ -203,7 +203,7 @@ describe('Dinner\'s close-up on the card (v1.7, spec revision #42)', () => {
     return v;
   };
 
-  it('the card fills 65 % of the frame\'s width, centred, its long edges level, near plan (80°) at the shared azimuth', () => {
+  it('the card fills 55 % of the frame\'s width (v1.7 polish; was 65 %), centred, its long edges level, near plan (80°) at the shared azimuth', () => {
     for (const aspect of [0.75, 1, 1.5]) {
       const { camera, c } = fits(aspect);
       placeHeroView(camera, subject, aspect, c.distance, c.offset, undefined, closeDir);
@@ -219,11 +219,12 @@ describe('Dinner\'s close-up on the card (v1.7, spec revision #42)', () => {
       // Its print reads upright: the far edge (the print's top) is higher on screen.
       expect(q[0]!.y).toBeGreaterThan(q[3]!.y);
     }
-    expect(CARD_VIEW).toEqual({ azimuthDeg: 20, elevationDeg: 80, widthFill: 0.65 });
-    // 48.5 cm from the card's centre: a close-up through the same 18° lens.
+    expect(CARD_VIEW).toEqual({ azimuthDeg: 20, elevationDeg: 80, widthFill: 0.55 });
+    // ≈ 58 cm from the card's centre (was 49 cm at 65 %): a close-up through the same 18° lens.
     const { c } = fits(1);
-    expect(c.distance * DINNER_WORLD_SCALE * 20).toBeGreaterThan(45);
-    expect(c.distance * DINNER_WORLD_SCALE * 20).toBeLessThan(52);
+    if (process.env.CLOSE_DEBUG) console.log('close-up distance cm', c.distance * DINNER_WORLD_SCALE * 20);
+    expect(c.distance * DINNER_WORLD_SCALE * 20).toBeGreaterThan(54);
+    expect(c.distance * DINNER_WORLD_SCALE * 20).toBeLessThan(62);
   });
 
   it('the move: exactly the rest fit at 0 and the close-up at 1; the card crosses the screen on a straight line, growing all the way', () => {

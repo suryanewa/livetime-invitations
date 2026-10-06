@@ -110,11 +110,11 @@ for (const scene of ['birthday', 'dinner'] as const) {
 
 test('dinner (v1.7 #42): the accepted pose\'s live camera is the close-up on the card; host, guest-ready and the decline stay off it; no fit is solved', async ({ page }) => {
   await ready(page, '/?scene=dinner');
-  // The close-up's fit: the card 65 % of the frame's width, centred, at every aspect.
+  // The close-up's fit: the card 55 % of the frame's width (v1.7 polish; was 65 %), centred, at every aspect.
   for (const a of [0.75, 1, 1.5]) {
     const f = (await report(page, a)).closeUp!;
     expect(f, `${a}`).toBeDefined();
-    expect(f.heroWidth, `${a}`).toBeCloseTo(0.65, 2);
+    expect(f.heroWidth, `${a}`).toBeCloseTo(0.55, 2);
     expect(Math.abs(f.heroCenter[0]) + Math.abs(f.heroCenter[1]), `${a}`).toBeLessThan(0.01);
   }
   // (Measuring other aspects solved and cached them; from here nothing may solve.)

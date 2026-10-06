@@ -1,0 +1,64 @@
+# CARD_VIEW.widthFill 0.65 -> 0.55: the judge's measure_print.py on the accepted close-up (reduced motion), laptop 1280x720@2 (region 300,500,1400,1300), phone 390x844@3 (region 0,700,1170,1700), square 720@1 and 540@2 (captureStill)
+## BEFORE (judge, measurements.txt)
+stills/acc-laptop/f0400.png: card bbox x 257-934 y 146-613 (W 678 H 468 px, 6.78 px/mm), frame width 1100 -> card 61.6% ; paper luma 235.2 (rgb [239. 235. 226.])
+  ink(luma<=90) px inside card: 12698, ink(<=170): 17676; lines: 6
+  line y 150-155 h 5px (0.74 mm)  x 261-261 w 1px  minL 206  ink<=90 0  stroke(h-run median) 1.0px p25 1.0
+  line y 248-266 h 18px (2.65 mm)  x 479-712 w 234px  minL 89  ink<=90 15  stroke(h-run median) 4.0px p25 4.0
+  line y 294-353 h 59px (8.70 mm)  x 412-777 w 366px  minL 30  ink<=90 5477  stroke(h-run median) 10.0px p25 10.0
+  line y 365-408 h 43px (6.34 mm)  x 395-794 w 400px  minL 30  ink<=90 5701  stroke(h-run median) 10.0px p25 10.0
+  line y 437-439 h 2px (0.29 mm)  x 552-640 w 89px  minL 206  ink<=90 0  stroke(h-run median) 2.0px p25 1.2
+  line y 470-500 h 30px (4.42 mm)  x 495-695 w 201px  minL 30  ink<=90 1505  stroke(h-run median) 7.0px p25 6.0
+stills/acc-phone/f0400.png: card bbox x 209-960 y 147-664 (W 752 H 518 px, 7.52 px/mm), frame width 1170 -> card 64.3% ; paper luma 235.2 (rgb [239. 235. 226.])
+  ink(luma<=90) px inside card: 15310, ink(<=170): 21785; lines: 6
+  line y 151-194 h 43px (5.72 mm)  x 213-955 w 743px  minL 175  ink<=90 0  stroke(h-run median) 1.0px p25 1.0
+  line y 259-279 h 20px (2.66 mm)  x 455-714 w 260px  minL 92  ink<=90 0  stroke(h-run median) 5.0px p25 5.0
+  line y 309-376 h 67px (8.91 mm)  x 381-786 w 406px  minL 30  ink<=90 6636  stroke(h-run median) 12.0px p25 11.0
+  line y 389-437 h 48px (6.38 mm)  x 362-805 w 444px  minL 30  ink<=90 6977  stroke(h-run median) 11.0px p25 11.0
+  line y 469-471 h 2px (0.27 mm)  x 536-633 w 98px  minL 206  ink<=90 0  stroke(h-run median) 2.0px p25 1.2
+  line y 505-538 h 33px (4.39 mm)  x 473-695 w 223px  minL 31  ink<=90 1697  stroke(h-run median) 8.0px p25 7.0
+posters/acc-540x2/f0025.png: card bbox x 193-886 y 301-778 (W 694 H 478 px, 6.94 px/mm), frame width 1080 -> card 64.3% ; paper luma 235.2 (rgb [239. 235. 226.])
+  ink(luma<=90) px inside card: 14559, ink(<=170): 18071; lines: 6
+  line y 305-311 h 6px (0.86 mm)  x 197-197 w 1px  minL 193  ink<=90 0  stroke(h-run median) 1.0px p25 1.0
+  line y 405-422 h 17px (2.45 mm)  x 420-659 w 240px  minL 89  ink<=90 212  stroke(h-run median) 4.0px p25 4.0
+  line y 452-512 h 60px (8.65 mm)  x 352-725 w 374px  minL 30  ink<=90 6220  stroke(h-run median) 10.0px p25 9.0
+  line y 524-569 h 45px (6.48 mm)  x 334-743 w 410px  minL 30  ink<=90 6392  stroke(h-run median) 10.0px p25 9.0
+  line y 598-601 h 3px (0.43 mm)  x 494-585 w 92px  minL 206  ink<=90 0  stroke(h-run median) 2.0px p25 2.0
+  line y 632-662 h 30px (4.32 mm)  x 437-641 w 205px  minL 30  ink<=90 1735  stroke(h-run median) 6.0px p25 6.0
+posters/acc-720x1/f0025.png: card bbox x 129-590 y 201-518 (W 462 H 318 px, 4.62 px/mm), frame width 720 -> card 64.2% ; paper luma 235.2 (rgb [239. 235. 226.])
+  ink(luma<=90) px inside card: 5843, ink(<=170): 7950; lines: 5
+  line y 270-282 h 12px (2.60 mm)  x 280-439 w 160px  minL 90  ink<=90 0  stroke(h-run median) 3.0px p25 3.0
+  line y 301-341 h 40px (8.66 mm)  x 235-483 w 249px  minL 30  ink<=90 2576  stroke(h-run median) 7.0px p25 6.0
+  line y 350-379 h 29px (6.28 mm)  x 223-495 w 273px  minL 30  ink<=90 2620  stroke(h-run median) 7.0px p25 7.0
+  line y 398-400 h 2px (0.43 mm)  x 330-389 w 60px  minL 207  ink<=90 0  stroke(h-run median) 1.0px p25 1.0
+  line y 421-441 h 20px (4.33 mm)  x 291-427 w 137px  minL 31  ink<=90 647  stroke(h-run median) 4.0px p25 4.0
+fill55/laptop/f0400.png: card bbox x 309-882 y 182-577 (W 574 H 396 px, 5.74 px/mm), frame width 1100 -> card 52.2% ; paper luma 235.2 (rgb [239. 235. 226.])
+## AFTER (v1.7/dinner-polish)
+acc-laptop/f0025.png: card bbox x 309-882 y 182-577 (W 574 H 396 px, 5.74 px/mm), frame width 1100 -> card 52.2% ; paper luma 235.2 (rgb [239. 235. 226.])
+  ink(luma<=90) px inside card: 8760, ink(<=170): 12512; lines: 5
+  line y 269-283 h 14px (2.44 mm)  x 496-695 w 200px  minL 93  ink<=90 0  stroke(h-run median) 4.0px p25 4.0
+  line y 307-357 h 50px (8.71 mm)  x 440-749 w 310px  minL 30  ink<=90 3839  stroke(h-run median) 9.0px p25 8.0
+  line y 367-404 h 37px (6.45 mm)  x 425-764 w 340px  minL 30  ink<=90 3984  stroke(h-run median) 9.0px p25 9.0
+  line y 429-430 h 1px (0.17 mm)  x 568-623 w 56px  minL 208  ink<=90 0  stroke(h-run median) 1.0px p25 1.0
+  line y 456-482 h 26px (4.53 mm)  x 511-679 w 169px  minL 31  ink<=90 937  stroke(h-run median) 6.0px p25 5.0
+acc-phone/f0025.png: card bbox x 267-902 y 186-624 (W 636 H 439 px, 6.36 px/mm), frame width 1170 -> card 54.4% ; paper luma 235.2 (rgb [239. 235. 226.])
+  ink(luma<=90) px inside card: 10032, ink(<=170): 15530; lines: 4
+  line y 282-298 h 16px (2.52 mm)  x 475-694 w 220px  minL 103  ink<=90 0  stroke(h-run median) 5.0px p25 4.0
+  line y 324-381 h 57px (8.96 mm)  x 412-755 w 344px  minL 30  ink<=90 4396  stroke(h-run median) 10.0px p25 10.0
+  line y 392-433 h 41px (6.45 mm)  x 396-772 w 377px  minL 30  ink<=90 4651  stroke(h-run median) 10.0px p25 9.0
+  line y 490-519 h 29px (4.56 mm)  x 490-678 w 189px  minL 31  ink<=90 985  stroke(h-run median) 7.0px p25 6.0
+sq720/f0025.png: card bbox x 164-555 y 225-494 (W 392 H 270 px, 3.92 px/mm), frame width 720 -> card 54.4% ; paper luma 235.2 (rgb [239. 235. 226.])
+  ink(luma<=90) px inside card: 3844, ink(<=170): 5774; lines: 5
+  line y 284-294 h 10px (2.55 mm)  x 292-427 w 136px  minL 94  ink<=90 0  stroke(h-run median) 3.0px p25 2.0
+  line y 310-344 h 34px (8.67 mm)  x 254-464 w 211px  minL 30  ink<=90 1697  stroke(h-run median) 6.0px p25 6.0
+  line y 351-376 h 25px (6.38 mm)  x 244-474 w 231px  minL 30  ink<=90 1732  stroke(h-run median) 6.0px p25 6.0
+  line y 393-394 h 1px (0.26 mm)  x 385-385 w 1px  minL 209  ink<=90 0  stroke(h-run median) 1.0px p25 1.0
+  line y 412-429 h 17px (4.34 mm)  x 302-417 w 116px  minL 31  ink<=90 415  stroke(h-run median) 4.0px p25 4.0
+sq540x2/f0025.png: card bbox x 246-833 y 337-742 (W 588 H 406 px, 5.88 px/mm), frame width 1080 -> card 54.4% ; paper luma 235.2 (rgb [239. 235. 226.])
+  ink(luma<=90) px inside card: 9873, ink(<=170): 13116; lines: 5
+  line y 426-441 h 15px (2.55 mm)  x 438-641 w 204px  minL 89  ink<=90 87  stroke(h-run median) 4.0px p25 3.0
+  line y 465-516 h 51px (8.67 mm)  x 381-697 w 317px  minL 30  ink<=90 4232  stroke(h-run median) 9.0px p25 8.0
+  line y 527-565 h 38px (6.46 mm)  x 366-712 w 347px  minL 30  ink<=90 4385  stroke(h-run median) 8.0px p25 8.0
+  line y 589-592 h 3px (0.51 mm)  x 501-578 w 78px  minL 206  ink<=90 0  stroke(h-run median) 2.0px p25 1.0
+  line y 618-644 h 26px (4.42 mm)  x 453-625 w 173px  minL 30  ink<=90 1169  stroke(h-run median) 5.0px p25 5.0
+## dinner.spec legibility (720 px still): before inside 5843 / outside 0 / 86 rows; after inside 3844 / outside 0 / 72 rows, grey-type rows 84 (the eyebrow's 12 above the ink's)
+(the eyebrow is the 2.4-2.5 mm line: 14 device px laptop (was 18), 16 phone (was 20), 10 px in the 720 poster (was 12); title stems 9 px laptop (was 10), 10 phone (was 12))

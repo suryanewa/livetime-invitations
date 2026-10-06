@@ -113,8 +113,8 @@ test('Accept releases steam that rises on after the reveal, then the camera move
   expect(await stillDiff(page, cleared, canonical)).toBeLessThan(0.3);
 });
 
-/** Dark ("ink") pixels of a 720 px still inside and outside the card's rectangle (the close-up: 65 % of the width, centred). */
-async function inkOf(page: Page, url: string): Promise<{ inside: number; outside: number; rows: number }> {
+/** Dark ("ink") pixels of a 720 px still inside and outside the card's rectangle (the close-up: 55 % of the width, centred; v1.7 polish, was 65 %). */
+async function inkOf(page: Page, url: string): Promise<{ inside: number; outside: number; rows: number; greyRows: number }> {
   return page.evaluate(async (u) => {
     const img = new Image();
     img.src = u;
@@ -125,19 +125,22 @@ async function inkOf(page: Page, url: string): Promise<{ inside: number; outside
     const x = c.getContext('2d')!;
     x.drawImage(img, 0, 0, n, n);
     const d = x.getImageData(0, 0, n, n).data;
-    // The card's print area: inside its rectangle (half-width 0.65 × the half-frame, 10:7, a hair of perspective).
-    const hw = 0.65 * n / 2 * 0.9, hh = 0.65 * n / 2 * 0.7 * 0.9;
+    // The card's print area: inside its rectangle (half-width 0.55 × the half-frame, 10:7, a hair of perspective).
+    const hw = 0.55 * n / 2 * 0.9, hh = 0.55 * n / 2 * 0.7 * 0.9;
     let inside = 0, outside = 0;
-    const rows = new Set<number>();
+    const rows = new Set<number>(), grey = new Set<number>();
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const k = (j * n + i) * 4;
         const luma = 0.2126 * d[k]! + 0.7152 * d[k + 1]! + 0.0722 * d[k + 2]!;
+        const onCard = Math.abs(i - n / 2) < hw && Math.abs(j - n / 2) < hh;
+        // The Sage Graphite eyebrow (luma ≈ 90–95 at its darkest here) counts as grey type (≤ 170), not ink.
+        if (onCard && luma <= 170) grey.add(j);
         if (luma > 90) continue;
-        if (Math.abs(i - n / 2) < hw && Math.abs(j - n / 2) < hh) { inside++; rows.add(j); } else outside++;
+        if (onCard) { inside++; rows.add(j); } else outside++;
       }
     }
-    return { inside, outside, rows: rows.size };
+    return { inside, outside, rows: rows.size, greyRows: grey.size };
   }, url);
 }
 
@@ -153,12 +156,15 @@ test('The accepted close-up prints the card legibly; a text change reprints it w
   const small = (await c('(c) => c.captureStill(256, 1)')) as string;
   const ink = await inkOf(page, before);
   console.log('dinner close-up ink (720 px still):', JSON.stringify(ink));
-  // Ink only on the card (the porcelain round it is clean), in several lines of type: measured
-  // 5,843 ink pixels (luma ≤ 90) inside the card's print area and none outside, across 86 pixel rows
-  // (two title lines and the name; the Sage Graphite eyebrow is lighter than the threshold).
+  // Ink only on the card (the porcelain round it is clean), in several lines of type: measured at the
+  // polish round's 55 % fill 3,844 ink pixels (luma ≤ 90) inside the card's print area and none
+  // outside, across 72 pixel rows (two title lines and the name; 5,843 / 86 at the first cut's 65 %).
   expect(ink.inside).toBeGreaterThan(3000);
   expect(ink.outside).toBeLessThan(ink.inside / 50);
   expect(ink.rows).toBeGreaterThan(60);
+  // The eyebrow (Sage Graphite, lighter than the ink threshold) is there too: rows of grey type
+  // (luma ≤ 170) above the ink's, at least its capitals' height (≈ 10 px here).
+  expect(ink.greyRows - ink.rows).toBeGreaterThanOrEqual(8);
   // A new title (print-only): the same pose, a new print.
   await c('(c, s) => s.setConfig({ category: "dinner", dish: "pasta", card: { eyebrow: "You’re invited", title: "A much longer evening title for the card", name: "Sam" } })');
   await page.waitForTimeout(200);
