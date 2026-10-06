@@ -1,12 +1,15 @@
 /**
- * Sports v1.5 frame strips (evidence for docs/scenes/sports-v1.5.md): deterministic 60 fps-
- * equivalent frames (Playwright's fake clock, 16 ms per frame as in scripts/capture.ts) of host,
- * accept and decline with their tails, plus an mp4 per sequence.
+ * Sports frame strips (evidence for docs/scenes/sports-v1.5.md, sports-v1.7-decline.md):
+ * deterministic 60 fps-equivalent frames (Playwright's fake clock, 16 ms per frame as in
+ * scripts/capture.ts) of host, accept and decline with their tails, plus an mp4 per sequence.
  *
  *   node --experimental-transform-types --no-warnings scripts/sports-strips.ts <outDir> [baseUrl] [seq,…] [seconds]
  *
  * Env: STRIP_SIZE (px, default 540), STRIP_CROP=x0,y0,x1,y1 (fractions of the still: a close-up),
- * STRIP_CHANGE=<s>:<accept|decline> (change of mind at that time).
+ * STRIP_CHANGE=<s>:<accept|decline> (change of mind at that time), STRIP_FROM / STRIP_TO (s: only
+ * the frames in that window are written), STRIP_VIEW=laptop|phone (v1.7: the page at 1280 × 720
+ * @2 or 390 × 844 @3, each frame the real stage as the guest sees it, screenshotted, rather than a
+ * square still).
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -18,9 +21,12 @@ const base = process.argv[3] ?? 'http://127.0.0.1:5504';
 const seqs = (process.argv[4] ?? 'accept,decline,host').split(',');
 const seconds = Number(process.argv[5] ?? 7.5);
 const size = Number(process.env.STRIP_SIZE ?? 540);
+const view = process.env.STRIP_VIEW;
+const vp = view === 'phone' ? { width: 390, height: 844, dpr: 3 } : view === 'laptop' ? { width: 1280, height: 720, dpr: 2 } : { width: 1200, height: 1000, dpr: 1 };
+const from = Number(process.env.STRIP_FROM ?? 0), to = Number(process.env.STRIP_TO ?? Infinity);
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=metal', '--enable-gpu-rasterization', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: 1200, height: 1000 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: vp.dpr });
 page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && console.error('[page]', m.text()));
 page.on('pageerror', (e) => console.error('[pageerror]', e));
 await page.clock.install();
@@ -45,6 +51,12 @@ for (const seq of seqs) {
   const change = process.env.STRIP_CHANGE?.split(':');
   for (let i = 0; i <= total; i++) {
     if (change && i === Math.round((Number(change[0]) * 1000) / 16)) await call(`(s) => s.controller.chooseResponse("${change[1]}")`);
+    if ((i * 16) / 1000 < from - 1e-9 || (i * 16) / 1000 > to + 1e-9) { await tick(16); continue; }
+    if (view) {
+      await page.locator('[data-bind="stage"]').screenshot({ path: join(dir, `f${String(i).padStart(4, '0')}.png`) });
+      await tick(16);
+      continue;
+    }
     const crop = process.env.STRIP_CROP;
     const url = crop
       ? await page.evaluate(async ([sz, c]) => {
@@ -63,6 +75,7 @@ for (const seq of seqs) {
     await save(join(dir, `f${String(i).padStart(4, '0')}.png`), url);
     await tick(16);
   }
+  if (from > 0 || Number.isFinite(to)) { console.log(seq, 'frames', from, '…', to, 's'); continue; }
   try {
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '62.5', '-i', join(dir, 'f%04d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-r', '60', join(out, `${seq}.mp4`)]);
   } catch (e) { console.error('ffmpeg failed', e); }

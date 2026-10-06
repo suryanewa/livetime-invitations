@@ -111,7 +111,7 @@ export const HOOP_COLLIDERS: readonly Collider[] = [
  * needs a shorter flight, so the decline winds up longer: the hand rolls the ball back (9 cm) and
  * forward, lifts it 11 cm off the floor and fires it at BANK_RELEASE, 0.4 s before the glass.
  */
-export const BANK_TIMING: GatherTiming = { release: 0.55, riseFrom: 0.4 };
+export const BANK_TIMING: GatherTiming = { release: 0.525, riseFrom: 0.375 };
 /** Height the bank's gather lifts the ball before it leaves the hand. */
 export const BANK_LIFT = 0.3;
 /**
@@ -121,7 +121,7 @@ export const BANK_LIFT = 0.3;
  * face, the release and the spin) as the strike that still rises into the glass, is kicked down by
  * it onto the ring's front-left top, and pops out to the front-left, never inside the ring.
  */
-export const BANK_POINT = new Vector3(-0.11, 4.2, FACE_Z + BALL_R);
+export const BANK_POINT = new Vector3(-0.08, 4.16, FACE_Z + BALL_R);
 const BANK_FROM = BALL_AT.guest.clone().add(new Vector3(0, BANK_LIFT, 0));
 const BANK_DIR = horiz(BANK_FROM, BANK_POINT);
 const BANKED: Launch = (() => {
