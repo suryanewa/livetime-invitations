@@ -151,7 +151,8 @@ const SCENE_CAPTURE = {
     presets: [['orange', '{ category: "sports", ball: "orange" }'], ['cream', '{ category: "sports", ball: "cream" }']],
     // Every pose shows the ball, so each preset gets its own posters.
     sharedDeclined: false,
-    clips: { host: 1.5, accept: 2.0, decline: 1.9, change: 2.6 },
+    // v1.7: the decline clip runs on through the rattle to the carom's first bounce (2.13 s).
+    clips: { host: 1.5, accept: 2.0, decline: 2.4, change: 2.6 },
   },
   dinner: {
     // v1.2 has no food and no dish preset: one look, so one capture pass and one shared poster
@@ -260,9 +261,11 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
     }
   }
 
-  // Recordings at 60 fps (first preset, motion on).
-  await setPreset(plan.presets[0][1]);
+  // Recordings at 60 fps (first preset, motion on). CAPTURE_NO_CLIPS=1 skips them (posters and
+  // thumbnail only: a run that fits a short tool call; the clips are review material in outputs/).
+  if (!process.env.CAPTURE_NO_CLIPS) await setPreset(plan.presets[0][1]);
   const record = async (name: string, setup: string, action: string, seconds: number, mid?: [number, string]) => {
+    if (process.env.CAPTURE_NO_CLIPS) return;
     await reset();
     await call('(s) => s.controller.setReducedMotion(false)');
     await call(setup);
@@ -291,7 +294,7 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
   // The second preset plays both outcomes too (dark card, cobalt label, cocoa, cream ball);
   // a one-look scene (Dinner v1.2) has none.
   const second = (plan.presets as readonly (readonly [string, string])[])[1];
-  if (second) {
+  if (second && !process.env.CAPTURE_NO_CLIPS) {
     const [secondKey, secondLiteral] = second;
     await setPreset(secondLiteral);
     await waitReady();
