@@ -113,7 +113,7 @@ State at the last write: the three owners are building (no merges yet); the brie
 `v1.7/integration` (c97793c, a157690). Open: Surya's confirmation of #41–#44 (the posters carry the showcase's sample
 print; per-event posters would need a runtime still); the Sports owners' touch points (the recoil block in
 `models/sportsContract.ts` :209–242 read by both; the net's swing allowances `NET_OUTSET/NET_SWING/NET_SHELL` in
-`src/scenes/sports/index.ts`); the two flaky browser specs from v1.6 (below) still to be fixed in-test.
+`src/scenes/sports/index.ts`). The two flaky browser specs from v1.6 are settled in-test on this branch (below).
 
 ## Hollywood pass (v1.6)
 
@@ -208,10 +208,12 @@ Still open at the time of writing (updated when the pass closes):
   with its normal map removed, or with vertex tangents computed for it (`geometry.computeTangents()`, so the normal map
   no longer builds its tangent frame from screen-space derivatives), 20 of 20 stills are identical (also with its AO
   map removed, which changes the program; AO intensity 0 does not help). So Birthday stills are not bit-reproducible
-  on this GPU (ANGLE/Metal); at 320 px (`scene-depth.spec`'s pairs) 24 of 24 pairs were identical. The owner's call:
-  tangents for the buttercream (an asset/scene change; posters move by a level here and there), or a tolerance of a
-  few pixels in this assertion. Scripts: the session scratchpad's `flake17/` (`bloom.mjs`, `seq.mjs`, `poses.mjs`,
-  `bisect2.mjs`).
+  on this GPU (ANGLE/Metal); at 320 px (`scene-depth.spec`'s pairs) 24 of 24 pairs were identical. **Settled in the
+  test (2026-10-06, `v1.7/integration`):** the blown-out still's assertion now proves the bloom ran no pass and bounds the
+  on/off difference to that noise (≤ 8 pixels, ≤ 12 levels, measured in the page from the two PNGs), while the Party and
+  empty-stage stills keep byte identity; 10/10 runs. Tangents for the buttercream (bit-stable Birthday stills; a
+  re-export and posters that move by a level) remain a later option — the cake is signed as it is. Scripts: the session
+  scratchpad's `flake17/` (`bloom.mjs`, `seq.mjs`, `poses.mjs`, `bisect2.mjs`).
 - **the steam's next approach** (the sixth judge and the polish-5 owner agree the softness cannot be reached with the
   present half-resolution analytic march in 6 ms): a density advected per frame at 1–2 mm (a 128³–256³ volume stepped on
   the GPU, or a sparse grid), a full-resolution filament/sheet pass over it, more samples a pixel and multiple scattering;
