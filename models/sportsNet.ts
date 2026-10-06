@@ -1010,12 +1010,18 @@ export class HoopSprings {
   }
   /**
    * Moving enough to stir a resting net (the loops ride the rim): a strike, not the last of a
-   * ring-down. v1.7 polish: the stand's sway counts while its loops move faster than three times
-   * the net's settling speed (0.03 su/s at the rim, ≈ 0.025 rad/s × 1.2 su), so a net that has
-   * settled on a dying sway is never woken by it again.
+   * ring-down. v1.7 polish: the stand's sway counts while its peak rate (its energy as an
+   * amplitude, √(θ² + (θ̇/ω)²)·ω, which only falls) is over 0.025 rad/s: the loops then swing faster
+   * than three times the net's settling speed (0.03 su/s at the rim, 1.2 su from the foot), and a
+   * net that has settled on a dying sway is never woken by it again.
    */
   active(): boolean {
-    return !this.settled && (Math.abs(this.rimV) > 0.02 || Math.abs(this.boardV) > 0.02 || Math.abs(this.rim) > 1e-3 || Math.abs(this.standV) > 0.025);
+    return !this.settled && (Math.abs(this.rimV) > 0.02 || Math.abs(this.boardV) > 0.02 || Math.abs(this.rim) > 1e-3 || this.standRate() > 0.025);
+  }
+  /** The stand's sway as a peak rate (rad/s): its energy, which falls monotonically as it rings down. */
+  private standRate(): number {
+    const w = Math.sqrt(HOOP_SPRINGS.stand.stiffness / HOOP_SPRINGS.stand.inertia);
+    return Math.hypot(this.stand * w, this.standV);
   }
   /**
    * The ball's strike on the rim/board (the decline's bank), applied once at the contact time by

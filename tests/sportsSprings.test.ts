@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BALL_MASS_KG, RECOIL_LIMIT, RIM_BACKSTOP } from '../models/sportsContract.ts';
+import { BALL_MASS_KG, RECOIL_LIMIT, RIM_BACKSTOP, SPORTS_CM_PER_UNIT, STAND_PIVOT } from '../models/sportsContract.ts';
 import { HOOP_SPRINGS, HoopSprings } from '../models/sportsNet.ts';
 
 /** The stops in radians, computed as `HoopSprings.step` clamps to them. */
@@ -106,5 +106,105 @@ describe('Hoop springs: the ball\'s strike (HoopSprings.kick)', () => {
     s.restore([RIM_BACKSTOP, 0, 0, 0, false]);
     s.kick(-1, 0);
     expect(s.save()[2]).toBeCloseTo(0.3, 12);
+  });
+});
+
+describe('v1.7 polish: the stand sways (HoopSprings.stand)', () => {
+  const SL = (RECOIL_LIMIT.standDeg * Math.PI) / 180;
+  const sway = HOOP_SPRINGS.stand;
+
+  it('is a portable pole\'s mode: ≈ 3 Hz about the pole\'s foot, low damping, its inertia the parts\' Σ m·r²', () => {
+    expect(omega(sway) / (2 * Math.PI)).toBeCloseTo(3, 6);
+    expect(sway.frequency).toBe(3);
+    expect(sway.zeta).toBeGreaterThanOrEqual(0.05);
+    expect(sway.zeta).toBeLessThanOrEqual(0.15);
+    // Board 3 kg, rim 0.9 kg, arms and plates 1.5 kg at 1.3–1.4 m from the foot, and the pole: 10–13 kg·m².
+    expect(sway.inertia).toBeGreaterThan(10);
+    expect(sway.inertia).toBeLessThan(13);
+    expect(STAND_PIVOT.y * SPORTS_CM_PER_UNIT).toBeCloseTo(13, 6);
+  });
+
+  it('a strike sways it by Δω/ω at its frequency, then it rings down and settles, alone (the rim and the board untouched)', () => {
+    const s = new HoopSprings();
+    const dw = -0.07;
+    s.kick(0, 0, dw);
+    expect(s.settled).toBe(false);
+    expect(s.save()).toHaveLength(7);
+    let peak = 0, settledAt = Infinity, last = 0;
+    const crossings: number[] = [];
+    let lastBig = 0;
+    for (let t = DT; t <= 8 + 1e-9; t += DT) {
+      s.step(DT, 0, 0);
+      expect(s.rim).toBe(0);
+      expect(s.board).toBe(0);
+      peak = Math.max(peak, Math.abs(s.stand));
+      if (last < 0 && s.stand >= 0) crossings.push(t);
+      last = s.stand;
+      // 1 mm at the board's top (1.65 m from the foot).
+      if (Math.abs(s.stand) * 1.65 > 0.001) lastBig = t;
+      if (s.settled && settledAt === Infinity) settledAt = t;
+    }
+    // Amplitude per impulse: the damped first swing (sampled at 120 Hz, within 10 %).
+    expect(peak).toBeGreaterThan(0.9 * firstPeak(Math.abs(dw), sway));
+    expect(peak).toBeLessThan(1.02 * firstPeak(Math.abs(dw), sway));
+    // ≈ 0.2° (6 mm at the board's top) for the glass's strike.
+    expect((peak * 180) / Math.PI).toBeGreaterThan(0.15);
+    expect((peak * 180) / Math.PI).toBeLessThan(0.3);
+    // The damped frequency from its upward zero crossings: 3 Hz × √(1 − ζ²).
+    const period = (crossings.at(-1)! - crossings[0]!) / (crossings.length - 1);
+    expect(1 / period).toBeCloseTo(3 * Math.sqrt(1 - sway.zeta ** 2), 1);
+    // A shiver, not a wobble: under 1 mm at the board's top within 1.5 s, and settled (exactly at rest) within 5 s.
+    expect(lastBig).toBeLessThan(1.5);
+    expect(settledAt).toBeLessThan(5);
+    expect(s.save()).toEqual([0, 0, 0, 0, true]);
+  });
+
+  it('never sways past its guard, either way, and still settles; on the guard it takes no velocity into it', () => {
+    for (const dw of [2, -2]) {
+      const s = new HoopSprings();
+      s.kick(0, 0, dw);
+      let max = 0;
+      for (let t = 0; t < 8; t += DT / 8) {
+        s.step(DT / 8, 0, 0);
+        max = Math.max(max, Math.abs(s.stand));
+      }
+      expect(max, `${dw}`).toBe(SL);
+      expect(s.settled, `${dw}`).toBe(true);
+    }
+    const s = new HoopSprings();
+    s.restore([0, 0, 0, 0, false, SL, 0]);
+    s.kick(0, 0, 1);
+    expect(s.save()).toEqual([0, 0, 0, 0, false, SL, 0]);
+    s.kick(0, 0, -1);
+    expect(s.save()[6]).toBe(-1);
+  });
+
+  it('save/restore carries the sway exactly (a change of mind never pops it); a resting hoop saves as before', () => {
+    const a = new HoopSprings(), b = new HoopSprings();
+    a.kick(0.5, -0.05, -0.07);
+    b.kick(0.5, -0.05, -0.07);
+    for (let i = 0; i < 30; i++) { a.step(DT, 0, 0); b.step(DT, 0, 0); }
+    const state = a.save();
+    a.settle();
+    expect(a.save()).toEqual([0, 0, 0, 0, true]);
+    a.restore(state);
+    for (let i = 0; i < 60; i++) { a.step(DT, 0, 0); b.step(DT, 0, 0); }
+    expect(a.save()).toEqual(b.save());
+    expect(a.stand).not.toBe(0);
+  });
+
+  it('keeps a resting net awake only while it sways faster than the net settles (no flapping)', () => {
+    const s = new HoopSprings();
+    s.kick(0, 0, -0.07);
+    expect(s.active()).toBe(true);
+    let wasActive = true, reactivated = false;
+    for (let t = DT; t <= 4; t += DT) {
+      s.step(DT, 0, 0);
+      const now = s.active();
+      if (now && !wasActive) reactivated = true;
+      wasActive = now;
+    }
+    expect(reactivated).toBe(false);
+    expect(s.active()).toBe(false);
   });
 });

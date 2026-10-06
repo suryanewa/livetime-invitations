@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { Box3, BufferAttribute, BufferGeometry, Matrix4, Object3D, OrthographicCamera, PerspectiveCamera, Quaternion, Vector3 } from 'three';
+import { Box3, BufferAttribute, BufferGeometry, Matrix4, Mesh, Object3D, OrthographicCamera, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import type { Document, Node } from '@gltf-transform/core';
 import type { KHRMaterialsVariants } from '@gltf-transform/extensions';
 import { listTextureSlots } from '@gltf-transform/functions';
@@ -9,7 +9,7 @@ import { HERO_FILL, PATH_CLEARANCE } from '../src/render/framing.ts';
 import { SEAM_FRAME } from '../src/render/ballMaterial.ts';
 import {
   BALL_AT, BALL_MASS_KG, BALL_R, BOARD, BOARD_PIVOT, HOOP_PRODUCT_CM, HOOP_ROOT, HOOP_SCALE, NET, netRestRadius, POLE, RECOIL_LIMIT, RIM, RIM_BACKSTOP, RIM_BRACKET,
-  RIM_CENTER, RIM_HINGE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_CM_PER_UNIT, SPORTS_NODES, STAND, recoilPoint,
+  RIM_CENTER, RIM_HINGE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_CM_PER_UNIT, SPORTS_NODES, STAND, STAND_PIVOT, recoilPoint, standPoint,
 } from '../models/sportsContract.ts';
 import { analyseNet, HOOP_SPRINGS, HoopSprings, NET_SIM, NetSim, NetSkin, netMeshKind, type NetLattice } from '../models/sportsNet.ts';
 import { SportsNetChannel } from '../src/scenes/sports/net.ts';
@@ -1145,6 +1145,47 @@ describe('Sports runtime GLB and the simulated net', async () => {
     expect(sim.settled && springs.settled).toBe(true);
   });
 
+  it('v1.7 polish: the net rides the stand\'s sway: its loops on the swaying rim, its knots lagging a little through the cords, then it settles', () => {
+    const sim = new NetSim(lattice), springs = new HoopSprings(), skin = new NetSkin(new Object3D(), sim, []);
+    const channel = new SportsNetChannel<SequenceName, null>({ net: { sim, skin }, springs, recoil: { set() {} } }, () => new Vector3());
+    const far = new Vector3(5, 0, 5);
+    // The glass's strike (board and stand), as the scene fires it.
+    const k = hitKick(BANK_HIT);
+    springs.kick(k.rim, k.board, k.stand);
+    const loops = lattice.pinned.flatMap((p, i) => (p ? [i] : []));
+    const bottom = lattice.rows.at(-1)!;
+    const p = new Vector3(), q = new Vector3();
+    let loopErr = 0, lag = 0, rigid = 0, settledAt = Infinity;
+    for (let i = 1; i <= 5 * 120; i++) {
+      channel.step(1 / 120, null, far);
+      if (!sim.settled) {
+        for (const j of loops) {
+          sim.drawn(j, p);
+          recoilPoint(q.copy(sim.restNode(j)).add(RIM_LOCAL), springs.board, springs.rim, q, springs.stand).sub(RIM_LOCAL);
+          loopErr = Math.max(loopErr, p.distanceTo(q));
+        }
+        for (const j of bottom) {
+          sim.drawn(j, p);
+          recoilPoint(q.copy(sim.restNode(j)).add(RIM_LOCAL), springs.board, 0, q, springs.stand).sub(RIM_LOCAL);
+          lag = Math.max(lag, p.distanceTo(q));
+          rigid = Math.max(rigid, q.distanceTo(sim.restNode(j)));
+        }
+      }
+      if (!channel.settling() && settledAt === Infinity) settledAt = i / 120;
+    }
+    // The loops are the rim's (to the drawn interpolation: 0.2 mm). The strike jolts the rim back at
+    // ≈ 8.5 cm/s; the hanging net, a 1.15 Hz pendulum, lags it and swings ≈ v/ω ≈ 1.2 cm relative to
+    // the swaying hoop (the board's own shudder alone: 0.3 cm), then hangs still: the jolt a hard bank
+    // gives a real net. The rigid sway at the bottom ring is ≈ 0.4 cm.
+    expect(toCm(loopErr)).toBeLessThan(0.05);
+    expect(toCm(rigid)).toBeGreaterThan(0.2);
+    expect(toCm(rigid)).toBeLessThan(0.6);
+    expect(toCm(lag)).toBeGreaterThan(0.5);
+    expect(toCm(lag)).toBeLessThan(2);
+    expect(settledAt).toBeLessThan(5);
+    expect(sim.settled && springs.settled).toBe(true);
+  });
+
   it('the net simulation is cheap: well under a millisecond per frame (eight fixed substeps), measured so machine load cannot fail it', () => {
     // Cost per 60 fps frame with the ball in the net, in units of a fixed reference kernel timed in
     // the same process (fastest of interleaved rounds: contention only adds time). On the M2 Pro the
@@ -1286,3 +1327,104 @@ describe('Sports v1.7: the hoop answers the bank and the rattle (hitKick → Hoo
   });
 });
 
+
+describe('Sports v1.7 polish: the stand sways on the strikes (HoopSprings.stand, standSwayParts, the recoil)', () => {
+  const deg = 180 / Math.PI;
+  /** The board's top centre (hoop space) and its distance from the pole's foot (m). */
+  const BOARD_TOP = new Vector3(0, BOARD.centerY + BOARD.height / 2, BOARD.front);
+
+  it('every strike also sways the whole hoop about the pole\'s foot by its moment there: the glass back, the clangs forward', () => {
+    const toM = SPORTS_CM_PER_UNIT / 100;
+    const moment = (h: Hit, from: Vector3) => {
+      const J = h.impulse.clone().multiplyScalar(-BALL_MASS_KG * toM);
+      const r = from.clone().sub(STAND_PIVOT).multiplyScalar(toM);
+      return (r.y * J.z - r.z * J.y) / HOOP_SPRINGS.stand.inertia;
+    };
+    const glass = hitKick(BANK_HIT);
+    expect(glass.stand).toBeCloseTo(moment(BANK_HIT, BANK_HIT.contact.clone().sub(HOOP_ROOT)), 12);
+    expect(glass.stand).toBeLessThan(-0.06);
+    expect(glass.stand).toBeGreaterThan(-0.08);
+    for (const h of HITS.decline.filter((x) => x.surface === 'rim')) {
+      const k = hitKick(h);
+      expect(k.stand, `${h.at}`).toBeCloseTo(moment(h, RIM_HINGE), 12);
+      expect(k.stand, `${h.at}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('the decline sways the board\'s top 0.5–1 cm, never past the guard, a shiver gone (< 1 mm) 1.5 s after the glass; settled before the ball rests', () => {
+    const springs = new HoopSprings(), dt = 1 / 120;
+    const r = BOARD_TOP.clone().sub(STAND_PIVOT).length() * (SPORTS_CM_PER_UNIT / 100);
+    let peak = 0, lastBig = 0, settledAt = Infinity, fired = 0;
+    for (let t = 0; t < REST_AT.decline + 2; t += dt) {
+      for (const h of HITS.decline) if (h.at > t && h.at <= t + dt) { const k = hitKick(h); springs.kick(k.rim, k.board, k.stand); fired++; }
+      springs.step(dt, 0, 0);
+      peak = Math.max(peak, Math.abs(springs.stand));
+      if (Math.abs(springs.stand) * r > 0.001) lastBig = t;
+      if (springs.settled && settledAt === Infinity && fired === HITS.decline.length) settledAt = t;
+      if (!springs.settled) settledAt = Infinity;
+    }
+    expect(peak * r).toBeGreaterThan(0.005);
+    expect(peak * r).toBeLessThan(0.01);
+    expect(peak * deg).toBeLessThan(RECOIL_LIMIT.standDeg);
+    expect(lastBig - BANK_HIT.at).toBeLessThan(1.5);
+    expect(settledAt).toBeLessThan(REST_AT.decline);
+  });
+
+  it('the recoil carries the pole, its collar and plates, the board, the rim and the net about the pole\'s foot; 0 restores the rest exactly', () => {
+    const make = (name: string, p: Vector3) => Object.assign(new Object3D(), { name }).translateX(p.x).translateY(p.y).translateZ(p.z);
+    const board = make('backboard', BOARD_PIVOT), rim = make('rim', RIM_HINGE), net = make('net', RIM_LOCAL), pole = make('hoop_pole', new Vector3(0, 1.5, -0.4));
+    const rest = [board, rim, net, pole].map((n) => [n.position.clone(), n.quaternion.clone()] as const);
+    const recoil = sportsModel.hoopRecoil(board, rim, net, [pole]);
+    const th = 0.004;
+    recoil.set(0.001, 0.02, th);
+    expect(pole.position.distanceTo(standPoint(rest[3]![0], th))).toBeLessThan(1e-12);
+    expect(net.position.distanceTo(recoilPoint(rest[2]![0], 0.001, 0.02, new Vector3(), th))).toBeLessThan(1e-12);
+    expect(board.position.distanceTo(standPoint(rest[0]![0], th))).toBeLessThan(1e-12);
+    expect(pole.quaternion.angleTo(rest[3]![1])).toBeCloseTo(th, 9);
+    expect(net.quaternion.angleTo(rest[2]![1])).toBeCloseTo(0.001 + 0.02 + th, 9);
+    // The foot itself does not move.
+    expect(standPoint(STAND_PIVOT, 0.3).distanceTo(STAND_PIVOT)).toBe(0);
+    recoil.set(0, 0, 0);
+    [board, rim, net, pole].forEach((n, i) => {
+      expect(n.position.equals(rest[i]![0])).toBe(true);
+      expect(n.quaternion.equals(rest[i]![1])).toBe(true);
+    });
+  });
+
+  it('standSwayParts cuts a stand mesh at 30 cm: the base keeps the triangles below, a `_sway` sibling sharing its attributes takes those above', () => {
+    const root = new Object3D(), hoop = Object.assign(new Object3D(), { name: 'hoop_root' });
+    root.add(hoop);
+    const g = new BufferGeometry();
+    const lo = 0.1, hi = 2;
+    g.setAttribute('position', new BufferAttribute(new Float32Array([0, lo, 0, 1, lo, 0, 0, lo, 1, 0, hi, 0, 1, hi, 0, 0, hi, 1]), 3));
+    g.setIndex([0, 1, 2, 3, 4, 5]);
+    const stand = new Mesh(g);
+    stand.name = 'hoop_stand';
+    hoop.add(stand);
+    const pole = Object.assign(new Object3D(), { name: 'hoop_pole' });
+    hoop.add(pole);
+    const parts = sportsModel.standSwayParts(root);
+    expect(parts.map((p) => p.name)).toEqual(['hoop_pole', 'hoop_stand_sway']);
+    const sway = parts[1] as Mesh;
+    expect(Array.from(g.index!.array)).toEqual([0, 1, 2]);
+    expect(Array.from(sway.geometry.index!.array)).toEqual([3, 4, 5]);
+    expect(sway.geometry.getAttribute('position')).toBe(g.getAttribute('position'));
+    expect(SPORTS_HERO_EXCLUDE.test(sway.name)).toBe(true);
+    expect(sportsModel.STAND_SWAY_CUT * SPORTS_CM_PER_UNIT).toBeCloseTo(30, 9);
+  });
+
+  it('the scene sways the stand on the strikes and carries the sway over an interruption (no pop)', () => {
+    const rig = fakeRig();
+    const scene = new SportsScene(rig, { category: 'sports', ball: 'orange' } as Extract<SceneConfig, { category: 'sports' }>);
+    for (let t = 0; t <= BANK_HIT.at + 0.05; t += 1 / 60) scene.sample('decline', t);
+    for (let i = 0; i < 6; i++) rig.springs.step(1 / 120, 0, 0);
+    expect(rig.springs.stand).toBeLessThan(0);
+    const moving = rig.springs.save();
+    expect(moving).toHaveLength(7);
+    scene.interruptCut();
+    scene.settle();
+    expect(rig.springs.stand).toBe(0);
+    scene.refresh();
+    expect(rig.springs.save()).toEqual(moving);
+  });
+});
