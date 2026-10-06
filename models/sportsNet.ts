@@ -314,7 +314,7 @@ export const NET_SIM = {
   minVertical: 0.55,
   minThrough: 0.8,
   /** Air drag on the cords (1/s): velocity decays e^(−drag·t). */
-  drag: 1.5,
+  drag: 2,
   /**
    * The knots' and braid's internal friction (1/s): the relative velocity of every pair of
    * neighbouring knots (along a cord or round a row) decays at this rate, momentum kept. It acts
@@ -324,7 +324,13 @@ export const NET_SIM = {
    */
   coupling: 8,
   /** Ball–cord friction coefficient (Coulomb: the cords slide on the leather, never pushed faster than it). */
-  friction: 2,
+  friction: 0.8,
+  /**
+   * The cords' grip on the pebbled leather (1/s): while a knot touches the ball its slip along the
+   * surface decays at this rate (the net wraps the ball, and a wrapped cord holds by more than its
+   * pressure alone). Rate and μ only ever reduce the slip, never reverse it: no energy goes in.
+   */
+  grip: 250,
   /** Cord radius at a knot (su): the ball keeps this clearance from a knot's centre. */
   knotRadius: 0.018,
   /**
@@ -536,7 +542,7 @@ export class NetSim {
         if (d < 1e-15) break;
       }
     };
-    relax(Number(process.env.NET_RELAX1 ?? 3000), 400, 40);
+    relax(3000, 400, 40);
     this.relaxedShape = [...this.relaxed];
     // Preload the diagonals: the multiplier each applied at this pose (its force, λ/h²), now from
     // the softer compliance: rest length d + α̃·λ, so the soft spring pushes the same at this pose.
@@ -549,7 +555,7 @@ export class NetSim {
       this.cl[c] = d + (soft / (h * h)) * this.lambda[c]!;
       this.cc[c] = soft;
     }
-    relax(Number(process.env.NET_RELAX2 ?? 3000), 400, Number(process.env.NET_RELAX2_DRAG ?? 8));
+    relax(3000, 400, 8);
     this.v.fill(0);
     this.substep(h, null, 0, 0, 0, 0);
     this.restTorqueRim = this.stepRim;
@@ -733,7 +739,7 @@ export class NetSim {
       this.collide(ball);
     }
     // Velocities from the motion, then the contacts' and the knots' own dissipation.
-    const vbx = this._vb.x, vby = this._vb.y, vbz = this._vb.z, mu = NET_SIM.friction;
+    const vbx = this._vb.x, vby = this._vb.y, vbz = this._vb.z, mu = NET_SIM.friction, grip = Math.exp(-NET_SIM.grip * h);
     for (let i = 0; i < n; i++) {
       const j = i * 3;
       let nvx = (x[j]! - xl[j]!) / h, nvy = (x[j + 1]! - xl[j + 1]!) / h, nvz = (x[j + 2]! - xl[j + 2]!) / h;
@@ -748,7 +754,7 @@ export class NetSim {
         const rnNew = Math.min(rn, Math.max(0, rnPre));
         const tx = rx - rn * nx, ty = ry - rn * ny, tz = rz - rn * nz;
         const tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
-        const keep = tl > 1e-12 ? 1 - Math.min(1, (mu * Math.max(0, rnNew - rnPre)) / tl) : 1;
+        const keep = tl > 1e-12 ? (1 - Math.min(1, (mu * Math.max(0, rnNew - rnPre)) / tl)) * grip : 1;
         nvx = vbx + rnNew * nx + tx * keep; nvy = vby + rnNew * ny + ty * keep; nvz = vbz + rnNew * nz + tz * keep;
       }
       if (c & 2 && nvz < 0) nvz = 0;
@@ -978,6 +984,7 @@ export class NetSkin {
   private readonly lower: number[][];
   /** Node positions as drawn (net node space, flat). */
   private readonly drawnPos: Float64Array;
+  private readonly ups: Float64Array;
   private readonly ringNext: Int16Array;
   private readonly ringPrev: Int16Array;
 
@@ -993,6 +1000,7 @@ export class NetSkin {
     this.bindLen = L.cords.map(([a, b]) => L.nodes[a]!.distanceTo(L.nodes[b]!));
     this.strand = new Float64Array(L.cords.length).fill(1);
     this.drawnPos = new Float64Array(L.nodes.length * 3);
+    this.ups = new Float64Array(L.nodes.length * 3);
     const count = 2 * L.cords.length + L.nodes.length;
     for (let i = 0; i < count; i++) {
       const bone = new Bone();
@@ -1058,10 +1066,15 @@ export class NetSkin {
       this.halfBone(this.bones[k]!, a, mid, half);
       this.halfBone(this.bones[nc + nn + k]!, mid, c, half);
     });
+    // Knot ups, then each smoothed with its ring neighbours' (a knot turns with the net round it).
+    const ku = this.ups;
+    for (let i = 0; i < nn; i++) this.knotUp(i, up).toArray(ku, i * 3);
     for (let i = 0; i < nn; i++) {
       const bone = this.bones[nc + i]!;
       this.at(i, a);
-      this.knotUp(i, up);
+      up.fromArray(ku, i * 3);
+      const nx = this.ringNext[i]!, pv = this.ringPrev[i]!;
+      if (nx >= 0) up.multiplyScalar(2).add(this.s.fromArray(ku, nx * 3)).add(this.s.fromArray(ku, pv * 3)).normalize();
       // Knot frame: (radial, up, radial × up).
       this.frame(up, a.x, a.z, this.nn, b);
       m.makeBasis(this.nn, up, b.negate());

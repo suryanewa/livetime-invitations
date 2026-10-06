@@ -54,7 +54,7 @@ const NC = L.cords.length;
 const KNOTS: number[] = L.rows.flat();
 const BOTTOM: number[] = L.rows[5];
 
-interface Snap { t: number; run: number; knots: Float64Array; up: Float64Array; scaleMin: number; scaleMax: number; rim: number; board: number; force: number; settled: boolean; ball: any }
+interface Snap { energy?: number; t: number; run: number; knots: Float64Array; up: Float64Array; scaleMin: number; scaleMax: number; rim: number; board: number; force: number; settled: boolean; ball: any }
 
 /** One accept run through the channel at `hz`; a snapshot of what is drawn after every frame. */
 function run(hz: number, seconds = REST_AT.accept + 2.5) {
@@ -99,10 +99,32 @@ function run(hz: number, seconds = REST_AT.accept + 2.5) {
       if (tailDone) runT += h;
     });
     snaps.push(snapshot(T, runT, skin, sim, springs, drawnRecoil, ballAt));
+    snaps[snaps.length - 1]!.energy = simEnergy(sim);
   }
   return { snaps, sim, springs, skin, ch };
 }
 
+/** The net's mechanical energy above its hanging rest (mJ): KE + gravity + the cords' and diagonals' elastic energy (the sim's own state). */
+let restPotential: number | null = null;
+function potential(S: any, x: Float64Array): number {
+  let pe = 0;
+  for (let i = 0; i < S.n; i++) if (S.invMass[i] > 0) pe += (1 / S.invMass[i]) * G * x[i * 3 + 1];
+  for (let c = 0; c < S.ca.length; c++) {
+    const a = S.ca[c], b = S.cb[c], mode = S.mode[c], cc = S.cc[c];
+    if (mode === 2 || cc === 0) continue;
+    const d = Math.hypot(x[b * 3] - x[a * 3], x[b * 3 + 1] - x[a * 3 + 1], x[b * 3 + 2] - x[a * 3 + 2]);
+    const C = d - S.cl[c];
+    if (mode === 1 && C <= 0) continue;
+    pe += (0.5 * C * C) / cc;
+  }
+  return pe;
+}
+function simEnergy(S: any): number {
+  if (restPotential === null) restPotential = potential(S, S.rest);
+  let ke = 0;
+  for (let i = 0; i < S.n; i++) if (S.invMass[i] > 0) ke += 0.5 * (1 / S.invMass[i]) * (S.v[i * 3] ** 2 + S.v[i * 3 + 1] ** 2 + S.v[i * 3 + 2] ** 2);
+  return (ke + potential(S, S.x) - restPotential) * SU_M * SU_M * 1000;
+}
 const _q = new Quaternion(), _p = new Vector3(), _o = new Vector3(), _u = new Vector3();
 /** Net-frame point → hoop space under the drawn recoil. */
 function toHoop(p: any, board: number, rim: number, out: any) {
@@ -166,6 +188,15 @@ function analyse(hz: number) {
     if (ePrev > Math.max(...post.map((r) => r.e)) * 1e-3) { const r = eNow / ePrev - 1; if (r > eRise) { eRise = r; eRiseAt = post[i]!.t; } }
   }
   const ke1pct = post.find((r, i) => post.slice(i).every((q) => q.ke < kePeak * 0.01));
+  // Mechanical energy (sim state): after the exit it must only fall (no energy injected).
+  const ME = snaps.filter((q) => q.t > exitAt && q.energy !== undefined).map((q) => ({ t: q.t, e: q.energy! }));
+  const mePeak = Math.max(...ME.map((q) => q.e));
+  let meRise = 0, meRiseAt = 0;
+  for (let i = 1; i < ME.length; i++) if (ME[i - 1]!.e > mePeak * 1e-3) { const r = ME[i]!.e / ME[i - 1]!.e - 1; if (r > meRise) { meRise = r; meRiseAt = ME[i]!.t - exitAt; } }
+  out.mechPeak_mJ = mePeak;
+  out.mechMaxFrameRise = meRise;
+  out.mechMaxFrameRiseAt = meRiseAt;
+  out.mechAtExitPlus = Object.fromEntries([0, 0.25, 0.5, 1, 1.5].map((d) => [d, +((ME.find((q) => q.t >= exitAt + d)?.e ?? 0) / mePeak).toFixed(4)]));
   out.kePeak_mJ = kePeak * 1e3;
   out.kePeakAfterExit = kePeakAt - exitAt;
   out.keMaxFrameRise = keRise;
@@ -236,7 +267,8 @@ function analyse(hz: number) {
   out.adjInPlaneCorr = adjXY;
   // Spectrum of the ring's mean lateral position (x: screen-lateral; z: towards the camera)
   const spectrum = (sig: number[], fs: number) => {
-    const N = sig.length, mean = sig.reduce((a, b) => a + b, 0) / N, x = sig.map((v) => v - mean);
+    // Hann-windowed (a decaying swing cut at the window's edges would otherwise leak power into every frequency).
+    const N = sig.length, mean = sig.reduce((a, b) => a + b, 0) / N, x = sig.map((v, i) => (v - mean) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1))));
     const pk: { f: number; p: number }[] = [];
     for (let fq = 0.1; fq <= Math.min(fs / 2, 60); fq += 0.05) {
       let re = 0, im = 0;
@@ -245,7 +277,7 @@ function analyse(hz: number) {
     }
     const top = pk.reduce((a, b) => (b.p > a.p ? b : a));
     const hf = pk.filter((q) => q.f >= 8).reduce((s, q) => s + q.p, 0), lf = pk.filter((q) => q.f < 8).reduce((s, q) => s + q.p, 0);
-    return { peakHz: +top.f.toFixed(2), hfOverLf: hf / Math.max(lf, 1e-300), ampl_mm: (2 / N) * Math.sqrt(top.p) * SU_M * 1000 };
+    return { peakHz: +top.f.toFixed(2), hfOverLf: hf / Math.max(lf, 1e-300), ampl_mm: (4 / N) * Math.sqrt(top.p) * SU_M * 1000 };
   };
   out.swayX = spectrum(meanX, hz);
   out.swayZ = spectrum(meanZ, hz);
@@ -264,6 +296,16 @@ function analyse(hz: number) {
   out.lateSwingAtExit2_mm = late * SU_M * 1000;
   out.tiltRateAfterExit025_degps = tiltRate;
   out.tiltRateAt = tiltRateAt;
+  // Per row: the largest tilt rate after exit + 0.25 s (deg/s) and when.
+  out.tiltRateByRow = L.rows.map((row: number[]) => {
+    let best = 0, at = 0;
+    for (let i = 1; i < snaps.length; i++) {
+      const s = snaps[i]!, p = snaps[i - 1]!;
+      if (s.t <= exitAt + 0.25) continue;
+      for (const k of row) { const j = KNOTS.indexOf(k); const a = Math.acos(Math.min(1, s.up[j * 3]! * p.up[j * 3]! + s.up[j * 3 + 1]! * p.up[j * 3 + 1]! + s.up[j * 3 + 2]! * p.up[j * 3 + 2]!)) * DEG / (s.t - p.t); if (a > best) { best = a; at = s.t - exitAt; } }
+    }
+    return `${best.toFixed(0)}@${at.toFixed(2)}`;
+  });
   out.tiltDevAfterExit1_deg = tiltDev;
   out.strandScaleAfterExit = [sMin, sMax];
   // Whole-run tilt (during the whip) for the record
@@ -358,7 +400,7 @@ if (args.includes('--series')) {
   const r = analyse(HZ);
   if (args.includes('--brief')) {
     const f = (x: number, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : String(x));
-    console.log(`${SET ?? 'default'} | settle ${f(r.settleAfterExit)} | sway x ${r.swayX.peakHz}Hz ${f(r.swayX.ampl_mm)}mm hf ${f(r.swayX.hfOverLf, 3)} z ${r.swayZ.peakHz}Hz ${f(r.swayZ.ampl_mm)}mm | rigid ${f(r.ringRigidRms_mm)} rel ${f(r.ringRelativeRms_mm)} ${JSON.stringify(r.ringModes_mm)} ratio ${f(r.ringRigidOverRelative)} adj ${f(r.adjTangentialCorr)}/${f(r.adjInPlaneCorr)} | KE1% ${f(r.keBelow1pctAfterExit)} Erise ${f(r.eMaxFrameRise, 3)} | late ${f(r.lateSwingAtExit2_mm)} | tilt ${f(r.tiltRateAfterExit025_degps, 0)}dps ${f(r.tiltDevAfterExit1_deg)}deg | scale ${f(r.strandScaleAfterExit[0], 3)}-${f(r.strandScaleAfterExit[1], 3)} | open ${f(r.maxOpen_su, 3)} gap ${f(r.minGap_su, 4)} lift ${f(r.lift_su, 3)} | F ${f(r.hookForceMax_N)}N rim ${f(r.rimMax_deg)}/${f(r.rimMin_deg)} quiet ${f(r.rimQuietAfterContact)} | dy ${JSON.stringify(r.bottomMeanDy_mm)}`);
+    console.log(`${SET ?? 'default'} | settle ${f(r.settleAfterExit)} | sway x ${r.swayX.peakHz}Hz ${f(r.swayX.ampl_mm)}mm hf ${f(r.swayX.hfOverLf, 3)} z ${r.swayZ.peakHz}Hz ${f(r.swayZ.ampl_mm)}mm | rigid ${f(r.ringRigidRms_mm)} rel ${f(r.ringRelativeRms_mm)} ${JSON.stringify(r.ringModes_mm)} ratio ${f(r.ringRigidOverRelative)} adj ${f(r.adjTangentialCorr)}/${f(r.adjInPlaneCorr)} | KE1% ${f(r.keBelow1pctAfterExit)} mechRise ${f(r.mechMaxFrameRise, 3)}@${f(r.mechMaxFrameRiseAt)} | late ${f(r.lateSwingAtExit2_mm)} | tilt ${f(r.tiltRateAfterExit025_degps, 0)}dps ${f(r.tiltDevAfterExit1_deg)}deg | scale ${f(r.strandScaleAfterExit[0], 3)}-${f(r.strandScaleAfterExit[1], 3)} | open ${f(r.maxOpen_su, 3)} gap ${f(r.minGap_su, 4)} lift ${f(r.lift_su, 3)} | F ${f(r.hookForceMax_N)}N rim ${f(r.rimMax_deg)}/${f(r.rimMin_deg)} quiet ${f(r.rimQuietAfterContact)} | dy ${JSON.stringify(r.bottomMeanDy_mm)}`);
   } else if (args.includes('--json')) console.log(JSON.stringify(r));
   else for (const [k, v] of Object.entries(r)) console.log(k.padEnd(28), typeof v === 'number' ? +v.toPrecision(4) : JSON.stringify(v));
 }
