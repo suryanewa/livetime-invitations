@@ -156,13 +156,14 @@ multiple-scattering light volume per frame, lighting from the scene's real envir
 8–12 ms validated on the guests' hardware.
 Final verification on 004e95d: typecheck clean, unit 465/465, browser 116/117 (the known bloom flake only), the eighth
 judge's pacing clean at both sizes on a quiet machine; `main` fast-forwarded to it and pushed.
-**Next (2026-10-05, after the push of c1b4643): the signature's path is being measured** — a feasibility round on the
+**Vetoed by Surya (2026-10-05, "I veto and approve of everything"): the steam work stops here** — a feasibility round on the
 eighth judge's prescription (branch `v1.7/steam-bake`, worktree `.claude/worktrees/v17-steam-sim`): an offline
 incompressible solver at 2 mm cells over the reveal's box with the cloche as a moving boundary and the plate as the
 source, MacCormack advection and vorticity confinement, baked at 60 fps over 0–2 s; the baked density rendered at the
 judges' scale and measured with their scripts (edge ≥ 1.2, fine detail ≥ 0.6, crown ≥ 2:1), the asset sized as sparse
 8-bit bricks (raw / gzip / temporal delta, 60 and 30 fps), the runtime estimated. Go/no-go on those numbers before any
-runtime work; the analytic field stays for the decline and change-of-mind cases in any case.
+runtime work; the analytic field stays for the decline and change-of-mind cases in any case — was started and then
+stopped at Surya's veto; whatever it committed stays on `v1.7/steam-bake` for a later version, unjudged.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for
@@ -204,7 +205,12 @@ Still open at the time of writing (updated when the pass closes):
 
 ### Decisions for Surya (v1.6)
 
-Everything this push asks the owner to decide or confirm, in one place:
+Everything this push asks the owner to decide or confirm, in one place. **Surya approved all of them on 2026-10-05
+("I veto and approve of everything")**: the steam ships at 7.5 / 7.5 with its limits, ≤ 9 ms is the Dinner reveal's budget
+(the target-hardware run still to be done), the rig's cake ask and the steam's next approach are later versions, the
+close-up tiers are known gaps, the bloom wiring and the §9 ceiling stand as they are, and the v1.5 revisions #37–#40 and
+#23 are approved — the mechanical follow-ups (marking them in `docs/spec-revisions.md`, reconciling into the Master, the
+`coverage.md` §8 regeneration) are for the next working session.
 
 1. **Ship the steam unsigned at 7.5 / 7.5** (8 / 7.5 at CSS size) with its limits (the soft body and fibrous fringe at
    2×, the cap's lip lost to the lighting balance at 1.06–1.22 s, grain under one level, the gush a structureless soft
