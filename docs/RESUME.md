@@ -146,7 +146,14 @@ the two that keep the accept byte-identical are merged (1796b77; `docs/scenes/di
 final suites on that build are in `docs/qualification.md`, Verification on the integrated build. **After the push** (main 4e815b7, 2026-10-05): a second structural steam round (polish 8, branch
 `v1.6/steam-polish8` from main, worktree `.claude/worktrees/v16-steam9`, port 5621) on the seventh judge's two prescriptions
 — a steam-only rim/back light with the own colour off the tone shoulder, and a full-resolution edge band or a per-frame
-advected density — at ≤ 9 ms while steam shows; polish 7 is the fallback; an eighth judging follows — in progress.
+advected density — at ≤ 9 ms while steam shows. Polish 8 (6c32749) met the light (own-colour lit − shaded +18…+21; a
+window-side key, a back light composited as light, a steam tone curve) and fell short on the edge (0.68–1.02; a 128³
+advected field came out softer than the analytic field and was dropped). The eighth judge, A/B against polish 7 on two
+fresh servers: 7.5 / 7.5 at device size, 8 / 7.5 at CSS size, not signed (a method limit), "ship polish 8 as built" —
+merged 004e95d, the v1.6 steam. The judge's prescription for a signature is a version of its own: an offline simulation of
+the lift baked into a sparse 4D volume (1–2 mm bricks at the boundary) with motion-vector accumulation, a precomputed
+multiple-scattering light volume per frame, lighting from the scene's real environment (the window as an area light),
+8–12 ms validated on the guests' hardware.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for
@@ -190,18 +197,25 @@ Still open at the time of writing (updated when the pass closes):
 
 Everything this push asks the owner to decide or confirm, in one place:
 
-1. **Ship the steam unsigned at 7 / 7.5** with its limits (soft and combed at 2×, no light direction in the volume, the
-   gush a structureless soft puff, the held dome's stillness; `docs/qualification.md` v1.6, known limitations). If
-   yes: v1.6 goes to `main` with the steam as merged at 7ca077f and those limits stand as known gaps until item 4.
-2. **The steam's 6 ms budget while steam shows** (budgets are waived for this pass, #21 and the Hollywood brief; the
-   3 ms and 6 ms ceilings were the orchestrator's). If yes: ≤ 6 ms becomes the Dinner reveal's recorded budget (the
-   laptop measures 3.9–5.2 ms at the real framing, the frame pacing at 16.7 ms) and a spec revision records it.
-3. **The rig: two asks, one decision** — a raking or side key for the decorated cake face, and a steam-specific rim or
-   back light against the cove so the volume carries a light direction. If yes: every scene's look and every poster,
-   thumbnail and backdrop change, and each scene is re-judged on the new rig.
-4. **The steam's next approach as a later version** (a 1–2 mm advected density, or an offline simulation baked into a
-   sparse 4D volume; above). If yes: a steam version of its own with its own budget decision, polish 6–7 kept as the
-   reference for the envelope, the cap, the timing, the clip and the cost.
+1. **Ship the steam unsigned at 7.5 / 7.5** (8 / 7.5 at CSS size) with its limits (the soft body and fibrous fringe at
+   2×, the cap's lip lost to the lighting balance at 1.06–1.22 s, grain under one level, the gush a structureless soft
+   puff; `docs/qualification.md` v1.6, known limitations). If yes: the steam as merged at 004e95d stands, and those limits
+   stand as known gaps until item 4.
+2. **The steam's 9 ms budget while steam shows, and its cost on the guests' hardware** (budgets are waived for this pass,
+   #21 and the Hollywood brief; the 3, 6 and 9 ms ceilings were the orchestrator's). The laptop measures 4.6–7.6 ms (the
+   owner) to 6.5–9.4 ms (the judge, on a busier session) at the real framing, the phone 4.5–8.1, the whole Dinner frame
+   p50 10–14 ms at laptop with pacing clean at 16.7 ms on this Mac; the eighth judge's one condition is a run on the
+   guests' hardware. If yes: ≤ 9 ms becomes the Dinner reveal's recorded budget and a spec revision records it; if the
+   target hardware drops frames, polish 7 (7ca077f; 3.9–5.2 ms) is the fallback and is one revert away.
+3. **The rig: the cake's ask** — a raking or side key for the decorated cake face (the steam no longer needs a rig change:
+   polish 8 lights it with a steam-only rig that the judge found consistent with the room — the window side and a back
+   light with no visible source). If yes: every scene's look and every poster, thumbnail and backdrop change, and each
+   scene is re-judged on the new rig. Whether the steam's own lights should instead come from the scene's real environment
+   (the window as an area light) belongs to item 4.
+4. **The steam's next approach as a later version** (the eighth judge's prescription: an offline simulation of the lift
+   baked into a sparse 4D volume with 1–2 mm bricks at the boundary, a precomputed multiple-scattering light volume per
+   frame, environment lighting, 8–12 ms validated on the guests' hardware; above). If yes: a steam version of its own with
+   its own budget decision, polish 8 kept as the reference for the envelope, the cap, the timing, the clip and the light.
 5. **The cake's 30× macro and the flames' close-up tiers (the 10× blow, the 2× smoke, the 30× macro) as known gaps**
    below any size a guest sees (the orchestrator's decision: no further round). If yes: the two signatures stand as
    recorded, at the showcase sizes only.

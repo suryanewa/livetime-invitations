@@ -146,9 +146,19 @@ the judging is in `docs/qualification.md` v1.6.
   was the soft white ball beside the plate at about 0.45 s, so a seventh, constants-only round cut the gush's density
   (5.2 → 1.72) and its drawn growth: its share of the visible steam at 0.48 s fell from 51 to 22 %, the cloche's shape
   reads again in the whole frame (IoU 0.53 → 0.71 at 0.48 s), the cloud itself byte-identical. As merged (7ca077f, seven
-  polish rounds) the steam stands at the seventh judging's 7 / 7.5, not signed; that judge's re-check of polish 7 found
+  polish rounds) the steam stood at the seventh judging's 7 / 7.5, not signed; that judge's re-check of polish 7 found
   the gush no longer takes the eye at CSS size (the reveal there 7.5 / 7.5), the dome's stillness not a visible freeze,
-  and pacing at p95 16.7–16.8 ms at both sizes. What a later version needs to be signed is in
+  and pacing at p95 16.7–16.8 ms at both sizes. An eighth round then took the two blockers inside the steam module: a
+  **light of its own** — a steam-only second key low from the window's side carrying the lit/shade split, the rig's key
+  in the steam cut to 1.0 with a ×60 self-shadow, the room as the shade's floor, a back light on the cloud's outer 5 mm
+  composited as light against the cove, and a steam tone curve with its own shoulder — and a **full-resolution edge
+  pass** over the silhouette band (one march pixel per CSS pixel, its own reprojected history, millimetre tears) while
+  the cloud is young. The eighth judging: own-colour lit − shaded +18 / +18 / +21 (was +3 / +3 / +5), the held dome at
+  0.5–0.75 s "a lit form with a defined crown" where polish 7 was a flat white mass, the window light agreeing with the
+  cloche's reflections, the back light a rim with no visible source; the outline denser but hardly narrower (edge
+  0.68–1.02), the body still soft; **7.5 / 7.5 at device size, 8 / 7.5 at CSS size, not signed** — a limit of the method,
+  and the judge's A/B verdict "ship polish 8 as built" (merged 004e95d; 5–9 ms steam cost at the real framing, to be
+  confirmed on the guests' hardware). What a later version needs to be signed is in
   `docs/RESUME.md`: light the steam on purpose, and a density advected per frame at 1–2 mm (or a full-resolution edge
   band with motion-vector accumulation) for both the body and the gush, with polish 6 and 7 (7ca077f) kept as the
   reference for the envelope, the cap, the gush's size, the timing, the clip and the cost.
@@ -167,7 +177,11 @@ record's "Known gaps".
   the 30× macro are withheld: detail finer than 3 mm is the 5 mm voxel smoke's limit ("a balloon on a string"), the
   stream a clean line at 10×, the 2× smoke only 0.44–0.59 mm lines. The live smoke march is not bit-deterministic
   between consecutive stills (two pixels by 1–7 levels; the `bloom.spec` flake).
-- **Steam: 7 / 7.5, not signed** (confirmed by the seventh judge's re-check of polish 7; 7.5 / 7.5 at CSS size). Soft and combed edges at 2× (edge
+- **Steam: 7.5 / 7.5, not signed** (the eighth judging of polish 8; 8 / 7.5 at CSS size). Lit with direction by a
+  steam-only rig (own-colour lit − shaded +18…+21); the remaining limits: the soft body and fibrous fringe at 2× (edge
+  0.68–1.02 — the method's), the cap's rolled lip lost to the lighting balance at 1.06–1.22 s, grain under one level at
+  0.55–0.9 s, the steam cost at the 9 ms budget (to be confirmed on the guests' hardware). Polish 7's items, as the
+  seventh judging left them: soft and combed edges at 2× (edge
   0.56–0.99, crown anisotropy 1.13–1.41: the design limit of a half-resolution analytic march); no light direction in
   the volume (own lit − shaded +2…+5: the key 44° off the camera lights the dome through its top and the own colour
   sits on the tone curve's shoulder — a rig decision); the gush a structureless soft puff at 0.42–0.62 s (a limit of
