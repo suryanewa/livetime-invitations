@@ -527,7 +527,7 @@ export class NetSim {
     const relax = (heavy: number, still: number, drag: number) => {
       for (let i = 0; i < heavy; i++) {
         this.substep(h, null, drag, 0, 0, 0);
-        if (i % 50 === 49 && moved() < 1e-15) break;
+        if (i % 50 === 49 && moved() < 1e-13) break;
       }
       for (let i = 0; i < still; i++) {
         this.v.fill(0);

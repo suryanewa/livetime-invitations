@@ -6,7 +6,8 @@
  *   node --experimental-transform-types --no-warnings evidence/v1.7/sports-net/tools/net-strips.ts <outDir> <baseUrl> <from s> <to s> [every n frames]
  *
  * Env: STRIP_SIZE (the frame square, CSS px, default 540), STRIP_DPR (default 1), STRIP_CROP=x0,y0,x1,y1 (fractions of the still), STRIP_VIEW=WxH
- * (the page viewport, default 1200x1000), STRIP_COLS (contact sheet columns, default 10), STRIP_SEQ (accept).
+ * (the page viewport, default 1200x1000), STRIP_COLS (contact sheet columns, default 10), STRIP_SHEET_EVERY (the sheet
+ * shows every nth frame), STRIP_SEQ (accept). Every 16 ms frame (every = 1) also makes motion.mp4 at 62.5 fps.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -67,7 +68,10 @@ for (let i = 0; i <= last; i++) {
 await browser.close();
 // Contact sheet, each frame labelled with its time (ms since the response).
 const cols = Number(process.env.STRIP_COLS ?? 10);
-execFileSync('montage', [...files.flatMap((f) => ['-label', `${Number(f.slice(-8, -4)) * 16} ms`, f]), '-tile', `${cols}x`, '-geometry', '+2+2', '-font', '/System/Library/Fonts/Supplemental/Arial.ttf', '-pointsize', '11', '-background', '#202020', '-fill', '#e0e0e0', join(out, 'sheet.jpg')]);
+// STRIP_SHEET_EVERY: the sheet shows every nth captured frame (the clip keeps them all).
+const sheetEvery = Number(process.env.STRIP_SHEET_EVERY ?? 1);
+const sheet = files.filter((_, i) => i % sheetEvery === 0);
+execFileSync('montage', [...sheet.flatMap((f) => ['-label', `${Number(f.slice(-8, -4)) * 16} ms`, f]), '-tile', `${cols}x`, '-geometry', '+2+2', '-font', '/System/Library/Fonts/Supplemental/Arial.ttf', '-pointsize', '11', '-background', '#202020', '-fill', '#e0e0e0', join(out, 'sheet.jpg')]);
 // Every 16 ms frame: also a 62.5 fps clip (the strips' clock), scaled to an even width.
 if (every === 1) execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '62.5', '-start_number', String(first), '-i', join(dir, 'f%04d.png'), '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', join(out, 'motion.mp4')]);
 console.log(`${files.length} frames, ${from}–${to} s every ${every * 16} ms → ${join(out, 'sheet.jpg')}`);

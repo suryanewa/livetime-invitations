@@ -13,7 +13,7 @@ keMaxFrameRise               4.358
 eMaxFrameRise                1.46
 eMaxFrameRiseAt              0.2367
 keBelow1pctAfterExit         0.4783
-keAtExitPlus                 {"1":0.0003313180857566143,"2":0,"0.5":0.004174837788154807,"1.5":0.000050073866938634514}
+keAtExitPlus                 {"1":0.00033131808577467636,"2":0,"0.5":0.00417483778817622,"1.5":0.00005007386694136091}
 ringModes_mm                 {"breathe":2.97,"twist":0.1,"n1":3.64,"n2":1.09,"n3":0.43,"n4":0.75,"n5":0.32}
 ringRigidRms_mm              3.055
 ringRelativeRms_mm           3.85
@@ -21,14 +21,14 @@ ringRigidOverRelative        0.7936
 ringOutOfRoundRms_mm         3.765
 adjTangentialCorr            0.4339
 adjInPlaneCorr               0.7532
-swayX                        {"peakHz":1.15,"hfOverLf":0.000021602451652696784,"ampl_mm":0.8496069537869736}
-swayZ                        {"peakHz":1.15,"hfOverLf":0.000024640082624099177,"ampl_mm":0.5071694119522723}
+swayX                        {"peakHz":1.15,"hfOverLf":0.000021602451651337573,"ampl_mm":0.8496069537455223}
+swayZ                        {"peakHz":1.15,"hfOverLf":0.00002464008271908534,"ampl_mm":0.5071694119444407}
 lateSwingAtExit2_mm          0
 tiltRateAfterExit025_degps   184.6
 tiltRateAt                   0.3367
 tiltRateByRow                ["15@0.33","40@0.25","84@0.25","126@0.28","160@0.30","185@0.34"]
 tiltDevAfterExit1_deg        1.177
-strandScaleAfterExit         [1,1.005322848413772]
+strandScaleAfterExit         [1,1.0053228484141703]
 tiltDevMax_deg               30.49
 tiltRateMax_degps            1647
 maxOpen_su                   0.1259

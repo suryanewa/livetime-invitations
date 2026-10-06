@@ -666,11 +666,12 @@ describe('Sports runtime GLB and the simulated net', async () => {
     const sim = new NetSim(lattice);
     // Hung slack (rest lengths from the hanging pose × 1.005): its own weight takes the slack up, no pre-stretch.
     for (const e of sim.restCordStrains()) expect(Math.abs(e)).toBeLessThanOrEqual(0.005);
-    // The rest pose is the substep's own fixed point: a resting net woken without the ball does not creep.
+    // The rest pose is the substep's own fixed point: a resting net woken without the ball does not creep
+    // (well under a nanometre in a second; the relaxation stops at 1e-13 su per substep).
     const s = sim as unknown as { wake(sp: null): void; substep(h: number, b: null, d: number, c: number, bo: number, r: number): void };
     s.wake(null);
     for (let i = 0; i < 480; i++) s.substep(NET_SIM.step, null, NET_SIM.drag, NET_SIM.coupling, 0, 0);
-    expect(sim.maxDisplacement()).toBeLessThan(1e-12);
+    expect(sim.maxDisplacement()).toBeLessThan(1e-10);
     // The rim loops and the top rows hang as the master; the lower rows open (NET_HANG).
     const fresh = new NetSim(lattice);
     for (const k of lattice.rows[0]!) expect(lattice.nodes[k]!.distanceTo(fresh.restNode(k))).toBeLessThan(0.01);

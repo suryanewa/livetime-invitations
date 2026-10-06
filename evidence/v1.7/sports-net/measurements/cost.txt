@@ -3,3 +3,9 @@ before (a157690): net 0.113 ms per 60 fps frame; reference 0.253 ms; ratio 0.45 
 after:             net 0.137 ms per 60 fps frame; reference 0.271 ms; ratio 0.51 (bound 2)
 before (a157690): net 0.113 ms per 60 fps frame; reference 0.253 ms; ratio 0.45 (bound 2)
 after:             net 0.136 ms per 60 fps frame; reference 0.252 ms; ratio 0.54 (bound 2)
+# Load, once (best of 5 NetSim constructions; analyseNet once), load averages: 8.17 11.79 15.31
+before (a157690): analyseNet 33 ms; NetSim (the rest relaxation) best of 5: 22 ms
+after:            analyseNet 42 ms; NetSim (the rest relaxation) best of 5: 56 ms
+
+# Skin per frame (NetSkin.update + bone matrices + Skeleton.update; tools/skin-cost.ts)
+before: 190 bones, 0.045 ms; after: 310 bones, 0.073 ms (once per frame: a frame's second step skips the redraw)
