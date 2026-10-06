@@ -145,7 +145,11 @@ Everything this version asks the owner to decide or confirm, in one place (each 
 4. **#44, the net rebuilt** — ship as built (judged 8.6 / 8.5 against 4.5); the follow-ups a tail lag in the skin
    (the bottom-right tail's 0.1 s flick), baking or caching the rest pose (NetSim 65–71 ms at scene load through the
    controller, likely 3–5× on a phone CPU), the sub-pixel settle snap. If yes: the v1.5 net record is superseded.
-5. **The v1.6 items that still stand** (the steam's 9 ms budget on the guests' hardware, the rig's cake ask, the
+5. **A square-layout mount at a non-square aspect frames like fullscreen** (the poster layer's fix, cea22a6): the
+   frame square plus the scene's backdrop, so the poster matches the live view before load; at 1:1 (the documented
+   layout and the gallery's) nothing changes; at 3:4 objects are 7–25 % smaller than the old per-aspect fit. If no:
+   per-aspect posters (or shipped fit data) to keep the per-aspect fit.
+6. **The v1.6 items that still stand** (the steam's 9 ms budget on the guests' hardware, the rig's cake ask, the
    steam's next approach, the close-up tiers, the bloom wiring, the §9 ceiling, the v1.5 revisions — approved on
    2026-10-05; their mechanical follow-ups remain for a working session).
 
