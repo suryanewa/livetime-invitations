@@ -1,0 +1,27 @@
+[
+ {
+  "view": "laptop",
+  "scene": "dinner",
+  "pose": "accepted",
+  "frame": {
+   "max": 9,
+   "over": 0.0,
+   "mean": 1.08
+  },
+  "core": {
+   "max": 9,
+   "over": 0.0,
+   "mean": 1.11
+  },
+  "band": {
+   "max": 4,
+   "over": 0.0,
+   "mean": 1.03
+  },
+  "outside": {
+   "max": 80,
+   "over": 0.413,
+   "mean": 1.74
+  }
+ }
+]
