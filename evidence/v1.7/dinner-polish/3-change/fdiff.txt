@@ -1,0 +1,37 @@
+# fdiff (the judge's fdiff.py, box 368,0,1423,1440 = the laptop frame square's column at 2x; 16 ms frames; mean abs luma diff per frame at 1/4 size)
+## change from the close-up at rest (accept at 0, decline at 6.0 s) -- BEFORE (judge, v1.7/integration f2f2d05)
+6.00-6.25 s: mean 7.97 max 25.79
+6.25-6.50 s: mean 14.51 max 27.06
+6.50-6.75 s: mean 9.03 max 14.42
+6.75-7.00 s: mean 4.66 max 12.14
+7.00-7.25 s: mean 0.81 max 1.59
+7.25-7.50 s: mean 0.45 max 1.00
+## AFTER (v1.7/dinner-polish)
+6.00-6.25 s: mean 5.43 max 11.14
+6.25-6.50 s: mean 11.61 max 14.03
+6.50-6.75 s: mean 8.47 max 10.69
+6.75-7.00 s: mean 8.61 max 11.93
+7.00-7.25 s: mean 1.24 max 3.27
+7.25-7.50 s: mean 0.65 max 1.39
+7.50-7.75 s: mean 0.51 max 0.83
+spikes (>2.5x local median, >0.3): none
+(peak 14.03 at 6.352 s: the camera's homecoming at its top speed (the dolly's 3.36/s) the frame the cover starts back; the cover's return 6.34-6.70 s at <= 10.7; the decline at 1.03x <= 11.9)
+## change mid-move (decline at 3.5 s, close 0.51 moving in) -- BEFORE (judge)
+3.50-3.75 s: mean 11.70 max 20.36
+3.75-4.00 s: mean 8.60 max 15.57
+4.00-4.25 s: mean 7.50 max 12.07
+4.25-4.50 s: mean 1.05 max 1.99
+4.50-4.75 s: mean 0.57 max 0.84
+## AFTER
+3.50-3.75 s: mean 9.41 max 13.41
+3.75-4.00 s: mean 8.97 max 12.73
+4.00-4.25 s: mean 8.99 max 11.97
+4.25-4.50 s: mean 1.46 max 4.25
+4.50-4.75 s: mean 0.69 max 1.38
+spikes (>2.5x local median, >0.3): none
+close/pull overlap: 6 frames (16 ms) at 3.68-3.76 s (was 9); combined outward rate dips to 0.035/frame from 0.053 for 4 frames
+## plain decline (judge, reference)
+0.00-0.25 s: mean 3.17 max 4.50
+0.25-0.50 s: mean 9.15 max 11.47
+0.50-0.75 s: mean 2.53 max 6.09
+0.75-1.00 s: mean 0.66 max 1.40

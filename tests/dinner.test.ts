@@ -13,11 +13,12 @@ import {
   CARD, CARD_BOTTOM, CARD_TOP, cardCorners, COVER, COVER_BESIDE, COVER_SEATED, COVER_TOP, DINNER_BIN, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_GLB_NODES, DINNER_NODES,
   DINNER_RIM_CLEARANCE, DINNER_WORLD_SCALE, DISH_HEIGHT, DISH_SCALE, PLATE, plateTop, dinnerBounds,
 } from '../models/dinnerContract.ts';
-import { DinnerCard } from '../models/dinnerCard.ts';
+import { CARD_KEY, CARD_LIGHT_FALLOFF, CARD_SHADOW_OPACITY, DinnerCard, KEY_THETA_DEG } from '../models/dinnerCard.ts';
 import { cameraDirection, CAMERA_ANGLES } from '../src/render/camera.ts';
 import { CLOUD, cloudDensity, cloudState } from '../src/scenes/dinner/steam.ts';
 import { WORLD_UNIT_CM } from '../models/worldScale.ts';
-import { CARD_LAYOUT, CARD_MM, CARD_PRINT_SIZE, layoutTitle } from '../src/render/cardPrint.ts';
+import { CARD_LAYOUT, CARD_MM, CARD_PRINT_SIZE, layoutEyebrow, layoutName, layoutTitle } from '../src/render/cardPrint.ts';
+import { CARD_LIMITS } from '../src/core/config.ts';
 import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
@@ -437,12 +438,78 @@ describe('Dinner invitation card (v1.7, spec revision #41)', () => {
     expect(smaller.px).toBeLessThan(CARD_LAYOUT.title.size * mm);
     expect(smaller.lines.join(' ')).toBe('The harvest supper club and winter menu tasting');
     for (const l of smaller.lines) expect([...l].length * 0.55 * smaller.px).toBeLessThanOrEqual(max + 1e-6);
-    // Too long for two lines at the smallest size: cut with an ellipsis, never wider than the card's measure.
+    // v1.7 polish: too long for two lines: three balanced lines (from CARD_LAYOUT.title.three down),
+    // so an 80-character title (the config's clamp) is printed whole.
+    const eighty = 'A long table under the orchard lights: five courses, natural wines and slow talk';
+    expect([...eighty]).toHaveLength(CARD_LIMITS.title);
+    const three = layoutTitle(ctx, eighty, max, mm);
+    expect(three.lines).toHaveLength(3);
+    expect(three.lines.join(' ')).toBe(eighty);
+    expect(three.px).toBeLessThanOrEqual(CARD_LAYOUT.title.three * mm + 1e-6);
+    expect(three.px).toBeGreaterThanOrEqual(CARD_LAYOUT.title.min3 * mm - 1e-6);
+    for (const l of three.lines) expect([...l].length * 0.55 * three.px).toBeLessThanOrEqual(max + 1e-6);
+    // Longer than the clamp: cut with an ellipsis only at the smallest size, on three lines, never wider than the measure.
     const cut = layoutTitle(ctx, 'The twentieth annual harvest supper club and winter menu tasting evening at the studio kitchen', max, mm);
-    expect(cut.px).toBeCloseTo(CARD_LAYOUT.title.min * mm, 6);
-    expect(cut.lines).toHaveLength(2);
-    expect(cut.lines[1]!.endsWith('…')).toBe(true);
+    expect(cut.px).toBeCloseTo(CARD_LAYOUT.title.min3 * mm, 6);
+    expect(cut.lines).toHaveLength(3);
+    expect(cut.lines[2]!.endsWith('…')).toBe(true);
     for (const l of cut.lines) expect([...l].length * 0.55 * cut.px).toBeLessThanOrEqual(max + 1e-6);
+  });
+
+  it('v1.7 polish: prints the name on one line, else two balanced lines (between words, or after a hyphen), whole up to the clamp', () => {
+    let px = 10;
+    const ctx = {
+      set font(f: string) { px = Number(/ ([\d.]+)px/.exec(f)![1]); },
+      get font() { return ''; },
+      measureText: (t: string) => ({ width: [...t].length * 0.55 * px }),
+    } as unknown as CanvasRenderingContext2D;
+    const mm = CARD_PRINT_SIZE.full[0] / CARD_MM.width;
+    const max = (CARD_MM.width - 2 * CARD_LAYOUT.margin) * mm;
+    const N = CARD_LAYOUT.name;
+    const fits = (r: { lines: string[]; px: number }) => r.lines.every((l) => [...l].length * 0.55 * r.px <= max + 1e-6);
+    // Short: one line at the full size.
+    expect(layoutName(ctx, 'Alex Rivera', max, mm)).toEqual({ lines: ['Alex Rivera'], px: N.size * mm });
+    // A 35-character one-word name cannot break: one line, shrunk (never below wrapMin), whole.
+    const word = layoutName(ctx, 'Wolfeschlegelsteinhausenbergerdorff', max, mm);
+    expect(word.lines).toEqual(['Wolfeschlegelsteinhausenbergerdorff']);
+    expect(word.px).toBeGreaterThanOrEqual(N.wrapMin * mm - 1e-6);
+    expect(fits(word)).toBe(true);
+    // 48 characters (the clamp): two lines, whole, at most the one-line minimum; a hyphenated surname
+    // breaks after its hyphen when that balances the lines far better than the word breaks do.
+    const long = 'Anne-Sophie Vandenberghe-Østergaard de la Fuente';
+    expect([...long]).toHaveLength(CARD_LIMITS.name);
+    const two = layoutName(ctx, long, max, mm);
+    expect(two.lines).toEqual(['Anne-Sophie Vandenberghe-', 'Østergaard de la Fuente']);
+    expect(two.px).toBeLessThanOrEqual(N.min * mm + 1e-6);
+    expect(two.px).toBeGreaterThanOrEqual(N.wrapMin * mm - 1e-6);
+    expect(fits(two)).toBe(true);
+    // Word breaks are preferred when they balance about as well (no needless break in "Jean-Pierre").
+    const words = layoutName(ctx, 'Jean-Pierre Alexandre Dupont-Moreau de Saint-Exupéry', max, mm);
+    expect(words.lines.join(' ')).toBe('Jean-Pierre Alexandre Dupont-Moreau de Saint-Exupéry');
+    expect(words.lines.some((l) => l.endsWith('-'))).toBe(false);
+    // The eyebrow (capitals): one line, else two balanced lines at its minimum; 60 characters whole.
+    const sixty = 'YOU’RE INVITED TO A VERY SPECIAL EVENING WITH FRIENDS AND FA';
+    expect([...sixty]).toHaveLength(CARD_LIMITS.eyebrow);
+    const eb = layoutEyebrow(ctx, sixty, max, mm);
+    expect(eb.lines).toHaveLength(2);
+    expect(eb.lines.join(' ')).toBe(sixty);
+    expect(eb.px).toBeCloseTo(CARD_LAYOUT.eyebrow.min * mm, 6);
+  });
+
+  it('v1.7 polish: its contact shadow is cast 1 mm away from the production key, at 0.3; the stock falls off 5 % away from it', () => {
+    // The neutral-room key: world θ = atan2(z, x) 118°, camera-left and a little towards the camera.
+    expect(KEY_THETA_DEG).toBe(118);
+    expect(Math.hypot(CARD_KEY[0], CARD_KEY[1])).toBeCloseTo(1, 12);
+    // In the card's frame (x the print's right, y towards the camera): camera-left, front.
+    expect(CARD_KEY[0]).toBeLessThan(-0.7);
+    expect(CARD_KEY[1]).toBeGreaterThan(0.6);
+    // Back to the world by the card's yaw: the key's own direction.
+    const c = Math.cos(CARD.yaw), s = Math.sin(CARD.yaw);
+    const wx = CARD_KEY[0] * c + CARD_KEY[1] * s, wz = -CARD_KEY[0] * s + CARD_KEY[1] * c;
+    expect(Math.atan2(wz, wx) * 180 / Math.PI).toBeCloseTo(118, 9);
+    expect(CARD_SHADOW_OPACITY).toBe(0.3);
+    expect(CARD_LIGHT_FALLOFF).toBeGreaterThan(0.02);
+    expect(CARD_LIGHT_FALLOFF).toBeLessThanOrEqual(0.06);
   });
 
   it('is built as one opaque body (its printed face on top) and a contact shadow, the shadow left out where there is no canvas', () => {

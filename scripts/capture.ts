@@ -221,6 +221,9 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
   const still = (size: number, dpr: number, type = 'image/png', q?: number) =>
     call<string | null>('(s, a) => s.controller.captureStill(a[0], a[1], a[2], a[3])', size, dpr, type, q);
   const setPreset = (literal: string) => call(`(s) => s.setConfig(${literal})`);
+  // v1.7 polish (#41): the shipped posters are rendered with the poster config (src/demo/fixtures.ts
+  // posterConfig: Dinner's card neutral, the eyebrow only); the recordings keep the showcase's print.
+  const setPosterPreset = (literal: string) => call(`(s) => import('/src/demo/fixtures.ts').then((m) => s.setConfig(m.posterConfig(${literal})))`);
 
   await setPreset(plan.presets[0][1]);
   await waitReady();
@@ -232,7 +235,7 @@ async function captureScene(category: keyof typeof SCENE_CAPTURE) {
   // Posters + review stills for every preset (reduced motion snaps to exact canonical poses).
   for (const [key, literal] of plan.presets) {
     await reset();
-    await setPreset(literal);
+    await setPosterPreset(literal);
     await waitReady();
     await call('(s) => s.controller.setReducedMotion(true)');
     await tick(100);
@@ -458,6 +461,12 @@ async function captureBackdrops() {
     if (fit.closeUp) {
       // v1.7 (#42): a scene whose accepted pose is a close-up (Dinner's card): its own backdrop, the
       // close-up at the same field with the scene in it (the plate runs past the poster's edges).
+      // v1.7 polish (#41): with the posters' neutral print (posterConfig), as its poster has.
+      await page.evaluate(async (category) => {
+        const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
+        const [{ posterConfig }, { DEFAULT_CONFIGS }] = await Promise.all([load('/src/demo/fixtures.ts'), load('/src/core/types.ts')]);
+        (window as any).__showcase.setConfig(posterConfig(DEFAULT_CONFIGS[category]));
+      }, scene);
       await page.evaluate(() => {
         const c = (window as any).__showcase.controller;
         c.setReducedMotion(true);
