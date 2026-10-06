@@ -432,6 +432,14 @@ export class DinnerScene implements SceneInstance {
     coverShadow.setHeight(f.dishVisible ? f.coverPos.y + (1 - beside) * 2 : 99, 1.2);
     this.placeBin(f.binPos);
     n.bin_root!.visible = f.binVisible;
+    // v1.7: the bin's light on the dish (inside its mouth the dish sees its walls) comes from where
+    // the bin is now, not from its last draw (the warm-up draws it once behind the camera:
+    // src/scenes/deferredBin.ts), and only while it is on stage. A saved accept warms the bin at
+    // the close-up, whose "behind the camera" is straight above the plate's near half: its light,
+    // always on, darkened the near well until the bin next drew (models/dinner.ts binShade).
+    (n.bin_root!.userData.binLightUpdate as (() => void) | undefined)?.();
+    const shade = this.rig.binShade as DinnerRig['binShade'] | undefined;
+    if (shade) shade.value = f.binVisible ? 1 : 0;
     if (!this.binOccludes && this.bin.ready) {
       markDepthOccluders(n.bin_root!);
       this.binOccludes = true;

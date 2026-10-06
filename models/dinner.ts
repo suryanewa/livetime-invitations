@@ -1,9 +1,9 @@
-import type { Object3D } from 'three';
+import type { Material, Mesh, Object3D } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { COVER, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
 import { CARD_SHADOW_OPACITY, DinnerCard } from './dinnerCard.ts';
 import { buildDinnerGeometry } from './dinnerPremium.ts';
-import { attachBin, BIN_CONTACT, buildDisposalBin, detachBin } from './disposalBin.ts';
+import { attachBin, BIN_CONTACT, binLight, buildDisposalBin, detachBin, patchBinVisibility } from './disposalBin.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
 import { collectNodes, disposeGeometry, type BuiltModel, type ModelContext } from './types.ts';
 
@@ -25,6 +25,16 @@ export interface DinnerRig {
   coverShadow: ContactShadow;
   /** v1.7 (#41): the invitation card in the plate's well (under `plate_authored`). */
   card: DinnerCard;
+  /**
+   * v1.7: the gate of the bin's light on the dish and the cloche (models/disposalBin.ts
+   * patchBinVisibility: inside the bin's mouth they see its walls, not the room). The scene opens it
+   * only while the bin is on stage (DinnerScene.apply). Its mouth's uniforms otherwise follow the
+   * bin's last draw, and the bin's warm-up draws it once out of sight behind the camera
+   * (src/scenes/deferredBin.ts drawOutOfSight): behind the accepted close-up's camera that is
+   * straight above the plate's near half, which then read as inside the bin (a dark band across
+   * the near well, under a saved accept, whose bin warms at the close-up).
+   */
+  binShade: { value: number };
   flapL: Object3D;
   flapR: Object3D;
   bounds: ReturnType<typeof dinnerBounds>;
@@ -36,8 +46,16 @@ export type DinnerModel = DinnerRig & BuiltModel;
 
 export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['lib']): DinnerRig {
   const dir = lib.direction;
-  // The covered dish sees the bin's walls once it is inside (models/disposalBin.ts patchBinVisibility).
-  attachBin(root, binRoot, lib, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE, { shade: () => true });
+  // The covered dish sees the bin's walls once it is inside (models/disposalBin.ts patchBinVisibility),
+  // gated by `binShade` (on while the bin is on stage: the scene sets it per frame).
+  attachBin(root, binRoot, lib, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE);
+  const binShade = { value: 1 };
+  const light = binLight(binRoot);
+  root.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh || inBin(mesh, binRoot)) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material] as Material[]) patchBinVisibility(m, light, binShade);
+  });
   applyShadowProxies(root);
   const nodes = collectNodes(root, DINNER_NODES);
   const replace = (name: string, shadow: ContactShadow) => {
@@ -70,6 +88,7 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
     dishShadow,
     coverShadow,
     card,
+    binShade,
     flapL: root.getObjectByName('bin_flap_l')!,
     flapR: root.getObjectByName('bin_flap_r')!,
     bounds: dinnerBounds(),
@@ -83,6 +102,11 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
       disposeShadowProxies(root);
     },
   };
+}
+
+function inBin(o: Object3D, binRoot: Object3D): boolean {
+  for (let p: Object3D | null = o; p; p = p.parent) if (p === binRoot) return true;
+  return false;
 }
 
 /** Tooling (lookdev, tests in a browser): the stand-in dish + bin geometry and the rig in one call. */

@@ -1,26 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { Box3, Color, Euler, Group, MathUtils, Matrix4, Mesh, MeshStandardMaterial, type Object3D, OrthographicCamera, Vector3 } from 'three';
+import { Box3, Color, Euler, Group, MathUtils, Matrix4, Mesh, MeshStandardMaterial, type Object3D, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
 import * as dinnerModel from '../models/dinner.ts';
 import type { DinnerRig } from '../models/dinner.ts';
 import { VisualDirector } from '../src/core/visualDirector.ts';
 import type { Node } from '@gltf-transform/core';
 import { listTextureSlots } from '@gltf-transform/functions';
 import { fitCameraToBounds } from '../src/render/camera.ts';
-import { DinnerScene, dinnerFramePoints } from '../src/scenes/dinner/index.ts';
+import { CARD_VIEW, DinnerScene, dinnerFramePoints } from '../src/scenes/dinner/index.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import {
   CARD, CARD_BOTTOM, CARD_TOP, cardCorners, COVER, COVER_BESIDE, COVER_SEATED, COVER_TOP, DINNER_BIN, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_GLB_NODES, DINNER_NODES,
   DINNER_RIM_CLEARANCE, DINNER_WORLD_SCALE, DISH_HEIGHT, DISH_SCALE, PLATE, plateTop, dinnerBounds,
 } from '../models/dinnerContract.ts';
 import { CARD_KEY, CARD_LIGHT_FALLOFF, CARD_SHADOW_OPACITY, DinnerCard, KEY_THETA_DEG } from '../models/dinnerCard.ts';
-import { cameraDirection, CAMERA_ANGLES } from '../src/render/camera.ts';
+import { cameraDirection, CAMERA_ANGLES, viewDirection } from '../src/render/camera.ts';
 import { CLOUD, cloudDensity, cloudState } from '../src/scenes/dinner/steam.ts';
 import { WORLD_UNIT_CM } from '../models/worldScale.ts';
 import { CARD_LAYOUT, CARD_MM, CARD_PRINT_SIZE, layoutEyebrow, layoutName, layoutTitle } from '../src/render/cardPrint.ts';
 import { CARD_LIMITS } from '../src/core/config.ts';
 import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
-import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
+import { attachBin, BIN, binLight, type BinLight, buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
 import {
   ACCEPT, type AnswerChange, BIN_CLEARANCE, binStep, changeTime, CONTENT_END, coverBlendSafe, coverLowering, dishStep, DURATIONS, outcomePace, planAnswerChange, REWIND,
@@ -764,6 +764,83 @@ describe('Dinner change of mind (v1.2.1: rewind along the authored path, no cut)
     // A replay starts clean from guest-ready (no rewind left over).
     v.replay();
     expect(cover.position.distanceTo(COVER_SEATED)).toBeLessThan(1e-9);
+  });
+});
+
+describe('Dinner: the bin\'s light on the dish (v1.7: a saved accept\'s close-up)', () => {
+  const FRAME = 1 / 60;
+  /**
+   * patchBinVisibility's weight at a world point (models/disposalBin.ts, its `binIn`): inside the
+   * bin mouth's cylinder, below its rim (fading over 2 cm above it), times the gate. Where it is
+   * above 0 the surface sees the bin's walls instead of the room: its image-based light darkens.
+   */
+  const binWeight = (light: BinLight, gate: number, p: Vector3) => {
+    const r = light.radius.value;
+    const across = Math.hypot(p.x - light.axis.value.x, p.z - light.axis.value.y);
+    return gate * (1 - MathUtils.smoothstep(across, r * 0.92, r * 1.08)) * (1 - MathUtils.smoothstep(p.y - light.rimY.value, 0, (0.1 * r) / BIN.opening));
+  };
+
+  it('shades the dish only while the bin is on stage, from where the scene put it: the warm-up\'s draw behind the close-up camera leaves the plate alone', () => {
+    // The scene over the real bin (its light and its body's hook, as the runtime fills it) and the rig's gate.
+    const lib = plainLibrary();
+    const bin = buildDisposalBin({ lib });
+    const plate = new Group(); plate.name = 'plate_authored';
+    const cover = new Group(); cover.name = 'cover_authored';
+    const root = new Group().add(plate, cover);
+    attachBin(root, bin, lib, DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE);
+    const stub = { setFootprint() {}, setHeight() {}, visible: false };
+    const binShade = { value: 1 };
+    const rig = {
+      root, nodes: { plate_authored: plate, cover_authored: cover, bin_root: bin }, shadows: [], dishShadow: stub, coverShadow: stub, binShade,
+      flapL: bin.getObjectByName('bin_flap_l')!, flapR: bin.getObjectByName('bin_flap_r')!, bounds: dinnerBounds(), setPreset() {}, dispose() {},
+    } as unknown as DinnerRig;
+    const scene = new DinnerScene(rig, { category: 'dinner', dish: 'pasta' });
+    const light = binLight(bin);
+    // A saved accept: the director lands on the accepted pose (the camera on the card's close-up).
+    const v = new VisualDirector({ complete() {} }, 'guest', 'accept');
+    v.attach(scene);
+    v.update(0);
+    expect(v.state).toBe('accepted-pose');
+    expect(bin.visible).toBe(false);
+    expect(binShade.value).toBe(0);
+    // Then the bin's warm-up (src/scenes/deferredBin.ts drawOutOfSight) draws it once 4 units behind
+    // the camera; its body's hook moves the bin's light there. Behind the close-up's camera (CARD_VIEW,
+    // 80° up) is straight above the plate's near half.
+    const aim = new Vector3(0, CARD_TOP, 0);
+    const camera = new PerspectiveCamera(18, 1, 0.5, 200);
+    camera.position.copy(viewDirection(CARD_VIEW.azimuthDeg, CARD_VIEW.elevationDeg)).multiplyScalar(2.9).add(aim);
+    camera.lookAt(aim);
+    camera.updateMatrixWorld();
+    const saved = bin.position.clone();
+    bin.position.copy(new Vector3(0, 0, 4).applyMatrix4(camera.matrixWorld));
+    bin.visible = true;
+    const body = bin.getObjectByName('bin_body')!;
+    body.onBeforeRender(null as never, null as never, camera, null as never, null as never, null as never);
+    bin.position.copy(saved);
+    bin.visible = false;
+    bin.updateMatrixWorld(true);
+    // The plate's near well (towards the camera) now lies inside that mouth: ungated, the dark band.
+    const nearWell = viewDirection(CARD_VIEW.azimuthDeg, 0).multiplyScalar(PLATE.radius * 0.6).setY(plateTop(PLATE.radius * 0.6));
+    expect(binWeight(light, 1, nearWell)).toBeGreaterThan(0.99);
+    // Gated off while the bin is away: the close-up shades the plate as a chosen accept's does.
+    expect(binWeight(light, binShade.value, nearWell)).toBe(0);
+    // A change of mind to decline: the bin comes on stage. Its light is on from its first frame, read
+    // from where the scene placed it (never the warm-up's place), and the dish in it sees its walls.
+    v.setIntent('decline');
+    let shown = 0, inBin = 0;
+    const p = new Vector3();
+    for (let t = FRAME; t <= 6; t += FRAME) {
+      v.update(t);
+      expect(binShade.value, `t ${t.toFixed(3)}`).toBe(bin.visible ? 1 : 0);
+      if (!bin.visible) continue;
+      shown++;
+      bin.getWorldPosition(p);
+      expect(Math.hypot(light.axis.value.x - p.x, light.axis.value.y - p.z), `t ${t.toFixed(3)}`).toBeLessThan(1e-9);
+      if (plate.visible) inBin = Math.max(inBin, binWeight(light, binShade.value, plate.getWorldPosition(p)));
+    }
+    expect(v.state).toBe('declined-pose');
+    expect(shown).toBeGreaterThan(30);
+    expect(inBin).toBeGreaterThan(0.99);
   });
 });
 
