@@ -210,6 +210,30 @@ test('v1.7 polish: the print holds the config\'s clamps in the bundled face (no 
   }
 });
 
+test('v1.7 polish: the eyebrow\'s capitals follow the page\'s language, not the browser\'s', async ({ browser }) => {
+  // A Turkish browser (its default locale upper-cases i to İ) showing an English page.
+  const context = await browser.newContext({ locale: 'tr-TR' });
+  const page = await context.newPage();
+  await ready(page);
+  const out = await page.evaluate(async () => {
+    const m = await import(/* @vite-ignore */ '/src/render/cardPrint.ts' as string);
+    const browserDefault = 'invited'.toLocaleUpperCase();
+    const en = m.capitals('You’re invited');
+    document.documentElement.lang = 'tr';
+    const tr = m.capitals('Davetlisiniz');
+    document.documentElement.lang = 'not a tag!';
+    const bad = m.capitals('invited');
+    document.documentElement.lang = 'en';
+    return { browserDefault, en, tr, bad };
+  });
+  // (Whether the browser's own default maps i to İ depends on the build's ICU default locale: logged, not asserted.)
+  console.log('browser default upper case of "invited" under tr-TR:', out.browserDefault);
+  expect(out.en).toBe('YOU’RE INVITED');
+  expect(out.tr).toBe('DAVETLİSİNİZ');
+  expect(out.bad).toBe('INVITED');
+  await context.close();
+});
+
 test('A card text change mid-reveal reprints the card and does not restart or cut the reveal', async ({ page }) => {
   await ready(page);
   await page.getByRole('button', { name: 'Guest', exact: true }).click();

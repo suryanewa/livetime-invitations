@@ -248,6 +248,21 @@ export function layoutEyebrow(ctx: Ctx, eyebrow: string, max: number, mm: number
   return { lines: balanced(ctx, eyebrow, 2, E.weight, px, E.tracking, max) ?? filled(ctx, eyebrow, 2, E.weight, px, E.tracking, max), px };
 }
 
+/**
+ * v1.7 polish: capitals in the language of the page the card is printed for (its `<html lang>`, the
+ * event's), never the browser's: an English "invited" on a Turkish browser stays "INVITED" (not
+ * "İNVİTED"), a Turkish eyebrow on a `lang="tr"` page gets its dotted İ. No (or an invalid) `lang`:
+ * the language-neutral mapping.
+ */
+export function capitals(text: string): string {
+  const lang = typeof document !== 'undefined' ? document.documentElement.lang.trim() : '';
+  try {
+    return lang ? text.toLocaleUpperCase(lang) : text.toUpperCase();
+  } catch {
+    return text.toUpperCase();
+  }
+}
+
 /** A deterministic hash in [0, 1) (no Math.random: the print is the same on every load). */
 const hash = (x: number, y: number) => {
   let h = (x * 374761393 + y * 668265263) | 0;
@@ -337,7 +352,7 @@ export function drawCardPrint(canvas: HTMLCanvasElement, text: CardText, light?:
   const lines: Line[] = [];
   const gaps: number[] = [];
   if (eyebrow) {
-    const e = layoutEyebrow(ctx, eyebrow.toLocaleUpperCase(), max, mm);
+    const e = layoutEyebrow(ctx, capitals(eyebrow), max, mm);
     e.lines.forEach((s, i) => {
       if (i > 0) gaps.push(e.px * L.eyebrow.leading - cap(L.eyebrow.weight, e.px));
       lines.push({ text: s, weight: L.eyebrow.weight, px: e.px, em: L.eyebrow.tracking, color: CARD_INK.eyebrow, cap: cap(L.eyebrow.weight, e.px), advance: 0 });
