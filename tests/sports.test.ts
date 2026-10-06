@@ -11,7 +11,10 @@ import {
   BALL_AT, BALL_R, BOARD, BOARD_PIVOT, HOOP_PRODUCT_CM, HOOP_ROOT, HOOP_SCALE, NET, netRestRadius, POLE, RECOIL_LIMIT, RIM, RIM_BACKSTOP, RIM_BRACKET,
   RIM_CENTER, RIM_HINGE, RIM_LOCAL, SPORTS_BOUNDS, SPORTS_CM_PER_UNIT, SPORTS_NODES, STAND, recoilPoint,
 } from '../models/sportsContract.ts';
-import { analyseNet, HoopSprings, NET_SIM, NetSim, netMeshKind, type NetLattice } from '../models/sportsNet.ts';
+import { analyseNet, HoopSprings, NET_SIM, NetSim, NetSkin, netMeshKind, type NetLattice } from '../models/sportsNet.ts';
+import { Object3D } from 'three';
+import { SportsNetChannel } from '../src/scenes/sports/net.ts';
+import { FixedStepper } from '../src/motion/spring.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
 import { BOUNCE, floorImpulse, GRAVITY, MS, ROLL_DECEL, squashFor } from '../src/scenes/sports/ballPhysics.ts';
 import {
@@ -501,25 +504,30 @@ function netMeshes(doc: Document) {
   return out;
 }
 
-/** Run the net along a sequence's ball path (net space, fixed 1/120 s steps), as the scene does. */
-function runNet(lattice: NetLattice, seq: SequenceName, seconds: number, each?: (t: number, sim: NetSim, springs: HoopSprings, ball: Vector3) => void) {
+/** What a net run shows each frame: the time, the sim, the springs, the ball (sim space) and the skin as drawn. */
+type NetFrame = (t: number, sim: NetSim, springs: HoopSprings, ball: Vector3, skin: NetSkin) => void;
+
+/**
+ * Run the net along a sequence's ball path through the scene's own net channel (`net.ts`), as the
+ * controller drives it: the director's sample each frame (the run's time), then the FixedStepper's
+ * equal steps ≤ 1/120 s; past the ball's rest, the ball at rest. `hz` is the display rate.
+ */
+function runNet(lattice: NetLattice, seq: SequenceName, seconds: number, each?: NetFrame, hz = 120, interrupt?: { at: number }) {
   const sim = new NetSim(lattice), springs = new HoopSprings();
-  const dt = 1 / 120, f = newFrame();
-  const toNet = (p: Vector3, out: Vector3) => {
-    const o = recoilPoint(RIM_LOCAL, springs.board, springs.rim);
-    out.copy(p).sub(HOOP_ROOT).sub(o);
-    const a = -(springs.board + springs.rim), c = Math.cos(a), s = Math.sin(a);
-    return out.set(out.x, out.y * c - out.z * s, out.y * s + out.z * c);
-  };
-  const contact = { center: new Vector3(), previous: new Vector3() };
-  for (let t = 0; t < seconds; t += dt) {
-    toNet(sampleTrack(seq, t, f).ballPos, contact.previous);
-    toNet(sampleTrack(seq, t + dt, f).ballPos, contact.center);
-    sim.step(dt, contact);
-    springs.step(dt, sim.settled ? 0 : sim.hookTorqueRim, sim.settled ? 0 : sim.hookTorqueBoard);
-    each?.(t + dt, sim, springs, contact.center);
+  const skin = new NetSkin(new Object3D(), sim, []);
+  const channel = new SportsNetChannel<SequenceName, null>({ net: { sim, skin }, springs, recoil: { set() {} } }, (s, _c, t) => sampleTrack(s, t, f).ballPos);
+  const f = newFrame(), stepper = new FixedStepper(), ball = new Vector3(), local = new Vector3();
+  for (let i = 1; i / hz <= seconds + 1e-9; i++) {
+    const t = i / hz;
+    const run = t <= REST_AT[seq] ? { seq, change: null, t } : null;
+    if (run) channel.follow(run, false);
+    ball.copy(sampleTrack(seq, Math.min(t, REST_AT[seq]), f).ballPos);
+    stepper.advance(1 / hz, (h) => channel.step(h, run, ball));
+    // An interruption carried over (the director's settle, then refresh): the motion goes on as before.
+    if (interrupt && Math.abs(t - interrupt.at) < 0.5 / hz) { channel.settle(); channel.restore(); }
+    each?.(t, sim, springs, local.copy(ball).sub(HOOP_ROOT).sub(RIM_LOCAL), skin);
   }
-  return { sim, springs };
+  return { sim, springs, skin, channel };
 }
 
 describe('Sports runtime GLB and the simulated net', async () => {
@@ -646,84 +654,235 @@ describe('Sports runtime GLB and the simulated net', async () => {
       expect(up.get(k)).toBe(2);
       expect(down.get(k) ?? 0).toBe(r < 5 ? 2 : 0);
     }
-    const bones = lattice.cords.length + lattice.nodes.length;
-    for (const [, bind] of lattice.binding) for (const arr of [bind.bone0, bind.bone1]) for (const b of arr) expect(b).toBeLessThan(bones);
-  });
-
-  it('the net hangs at rest under gravity: the master\'s top, its bottom opened to clear the ball; it stays put without the ball', () => {
-    const sim = new NetSim(lattice);
-    // The rim loops and the top rows hang as the master; the lower rows open (NET_HANG).
-    for (const k of lattice.rows[0]!) expect(lattice.nodes[k]!.distanceTo(sim.restNode(k))).toBeLessThan(0.01);
-    // The bottom ring's inner opening (knot centres less a knot) is ≥ 1.1 × the ball.
-    const bottom = Math.min(...lattice.rows[5]!.map((k) => Math.hypot(sim.restNode(k).x, sim.restNode(k).z)));
-    expect((2 * (bottom - NET_SIM.knotRadius)) / (2 * BALL_R)).toBeGreaterThan(1.1);
-    for (const seq of ['host', 'decline'] as const) {
-      const { sim: s, springs } = runNet(lattice, seq, REST_AT[seq]);
-      expect(s.settled, seq).toBe(true);
-      expect(springs.settled, seq).toBe(true);
-      expect(s.maxDisplacement(), seq).toBe(0);
+    // v1.7: two bones per strand (its halves) and one per node; every vertex's weights sum to one.
+    const bones = 2 * lattice.cords.length + lattice.nodes.length;
+    for (const [, bind] of lattice.binding) {
+      for (const b of bind.index) expect(b).toBeLessThan(bones);
+      for (let v = 0; v < bind.weight.length; v += 4) expect(bind.weight[v]! + bind.weight[v + 1]! + bind.weight[v + 2]! + bind.weight[v + 3]!).toBeCloseTo(1, 5);
     }
   });
 
-  it('the made ball opens the net (no knot ever inside it), drags it down, and the net whips back and settles', () => {
-    let maxOpen = 0, minGap = Infinity, wake = Infinity, lift = 0, settledAt = Infinity, lateSwing = 0;
-    const bottom = lattice.rows[5]!;
-    const p = new Vector3();
-    // Run past the ball's rest: the net keeps swinging after the ball has stopped.
-    const { sim } = runNet(lattice, 'accept', REST_AT.accept + 2, (t, s, _springs, ball) => {
-      if (!s.settled && wake === Infinity) wake = t;
-      if (s.settled && t > CONTACT_AT + 0.2 && settledAt === Infinity) settledAt = t;
-      for (let i = 0; i < s.n; i++) {
-        s.node(i, p);
-        minGap = Math.min(minGap, p.distanceTo(ball) - BALL_R);
-        const r = Math.hypot(p.x, p.z), r0 = Math.hypot(s.restNode(i).x, s.restNode(i).z);
-        maxOpen = Math.max(maxOpen, r - r0);
-      }
-      // The whip: once the ball has left, the bottom row rises above where it hangs.
-      if (t > NET_PASSAGE.exitAt) for (const k of bottom) lift = Math.max(lift, s.node(k, p).y - s.restNode(k).y);
-      if (t > NET_PASSAGE.exitAt + 2) lateSwing = Math.max(lateSwing, s.maxDisplacement());
-    });
+  it('the net hangs slack at rest under gravity: every cord within ±0.5 % of its length, the master\'s top, its bottom opened to clear the ball; it stays put without the ball', () => {
+    const sim = new NetSim(lattice);
+    // Hung slack (rest lengths from the hanging pose × 1.005): its own weight takes the slack up, no pre-stretch.
+    for (const e of sim.restCordStrains()) expect(Math.abs(e)).toBeLessThanOrEqual(0.005);
+    // The rest pose is the substep's own fixed point: a resting net woken without the ball does not creep.
+    const s = sim as unknown as { wake(sp: null): void; substep(h: number, b: null, d: number, c: number, bo: number, r: number): void };
+    s.wake(null);
+    for (let i = 0; i < 480; i++) s.substep(NET_SIM.step, null, NET_SIM.drag, NET_SIM.coupling, 0, 0);
+    expect(sim.maxDisplacement()).toBeLessThan(1e-12);
+    // The rim loops and the top rows hang as the master; the lower rows open (NET_HANG).
+    const fresh = new NetSim(lattice);
+    for (const k of lattice.rows[0]!) expect(lattice.nodes[k]!.distanceTo(fresh.restNode(k))).toBeLessThan(0.01);
+    // The bottom ring's inner opening (knot centres less a knot) is ≥ 1.1 × the ball.
+    const bottom = Math.min(...lattice.rows[5]!.map((k) => Math.hypot(fresh.restNode(k).x, fresh.restNode(k).z)));
+    expect((2 * (bottom - NET_SIM.knotRadius)) / (2 * BALL_R)).toBeGreaterThan(1.1);
+    for (const seq of ['host', 'decline'] as const) {
+      const { sim: r, springs } = runNet(lattice, seq, REST_AT[seq]);
+      expect(r.settled, seq).toBe(true);
+      expect(springs.settled, seq).toBe(true);
+      expect(r.maxDisplacement(), seq).toBe(0);
+    }
+  });
+
+  /** One accept, recorded as drawn: the knots, their frames, the strands, the energy and the ring. */
+  const acceptRun = (() => {
+    let cached: ReturnType<typeof record> | null = null;
+    function record() {
+      const frames: { t: number; knots: Vector3[]; ups: Vector3[]; strand: [number, number]; ke: number; mech: number; settled: boolean; ball: Vector3 }[] = [];
+      let wake = Infinity, maxOpen = 0, minGap = Infinity;
+      const p = new Vector3();
+      const knots = lattice.rows.flat();
+      const { sim } = runNet(lattice, 'accept', REST_AT.accept + 2, (t, s, sp, ball, skin) => {
+        if (!s.settled && wake === Infinity) wake = t;
+        for (let i = 0; i < s.n; i++) {
+          s.node(i, p);
+          minGap = Math.min(minGap, p.distanceTo(ball) - BALL_R);
+          maxOpen = Math.max(maxOpen, Math.hypot(p.x, p.z) - Math.hypot(s.restNode(i).x, s.restNode(i).z));
+        }
+        const S = s as unknown as { invMass: Float64Array; v: Float64Array };
+        let ke = 0;
+        for (const k of knots) ke += (0.5 / S.invMass[k]!) * (S.v[k * 3]! ** 2 + S.v[k * 3 + 1]! ** 2 + S.v[k * 3 + 2]! ** 2);
+        const mech = s.mechanicalEnergy();
+        const scales = skin.strandScales();
+        frames.push({
+          t, knots: knots.map((k) => skin.drawnNode(k)), ups: knots.map((k) => new Vector3(0, 1, 0).applyQuaternion(skin.bones[lattice.cords.length + k]!.quaternion)),
+          strand: [Math.min(...scales), Math.max(...scales)], ke, mech, settled: s.settled && sp.settled, ball: ball.clone(),
+        });
+      });
+      return { frames, wake, maxOpen, minGap, sim, knots };
+    }
+    return () => (cached ??= record());
+  })();
+
+  it('the made ball opens the net (no knot ever inside it), drags it down, and the net whips back as a whole and settles in 1.2–2.5 s', () => {
+    const { frames, wake, maxOpen, minGap, sim, knots } = acceptRun();
+    const exit = NET_PASSAGE.exitAt;
+    const bottom = lattice.rows[5]!.map((k) => knots.indexOf(k));
     // Woken as the ball comes near the net (never before release), at the latest at contact.
     expect(wake).toBeGreaterThan(RELEASE_AT);
     expect(wake).toBeLessThan(CONTACT_AT + 0.02);
     // The knots are pushed round the ball (≥ 2 cm outward), never inside it.
     expect(maxOpen).toBeGreaterThan(0.06);
     expect(minGap).toBeGreaterThan(NET_SIM.knotRadius - 0.006);
+    // The whip: once the ball has left, the bottom row rises above where it hangs.
+    const rest = frames[0]!.knots;
+    const lift = Math.max(...frames.filter((f) => f.t > exit).flatMap((f) => bottom.map((j) => f.knots[j]!.y - rest[j]!.y)));
     expect(lift).toBeGreaterThan(0.02);
-    // It swings for a while, is all but still (every knot within 5.4 mm of rest) 2 s after the
-    // ball has left, and snaps to rest once its last sub-millimetre sway has died.
-    expect(lateSwing).toBeLessThan(0.015);
-    expect(settledAt - NET_PASSAGE.exitAt).toBeGreaterThan(1);
-    expect(settledAt - NET_PASSAGE.exitAt).toBeLessThan(4.5);
+    // It sways for a while, is still (every knot within 1.5 mm of rest) 2 s after the ball has
+    // left, and snaps to rest once its motion has died: 1.2–2.5 s after the exit.
+    const late = Math.max(...frames.filter((f) => f.t >= exit + 2).flatMap((f) => f.knots.map((k, j) => k.distanceTo(rest[j]!))));
+    expect(toCm(late)).toBeLessThanOrEqual(0.15);
+    const settledAt = frames.find((f, i) => f.t > exit && f.settled && frames.slice(i).every((g) => g.settled))!.t;
+    expect(settledAt - exit).toBeGreaterThan(1.2);
+    expect(settledAt - exit).toBeLessThan(2.5);
     expect(sim.settled).toBe(true);
   });
 
-  it('the rim and board answer the net\'s real pull: bounded, the rim stopped by the board, both back at rest', () => {
-    let rimMax = 0, rimMin = 0, boardMax = 0, forceMax = 0;
-    const { springs } = runNet(lattice, 'accept', REST_AT.accept + 2, (_t, s, sp) => {
+  it('it swings as a whole: the bottom ring sways at about a hertz with no buzz, neighbouring knots move together, nothing pumps energy in', () => {
+    const { frames, knots } = acceptRun();
+    const exit = NET_PASSAGE.exitAt, rest = frames[0]!.knots;
+    const bottom = lattice.rows[5]!.map((k) => knots.indexOf(k));
+    const win = frames.filter((f) => f.t > exit + 0.25 && f.t < exit + 2.25);
+    // The ring's mean lateral position: its spectrum (Hann window) peaks at a whole-net sway, not a knot's buzz.
+    const mean = win.map((f) => bottom.reduce((a, j) => a + f.knots[j]!.x - rest[j]!.x, 0) / bottom.length);
+    const N = mean.length, avg = mean.reduce((a, b) => a + b, 0) / N, x = mean.map((v, i) => (v - avg) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1))));
+    const power = (fq: number) => {
+      let re = 0, im = 0;
+      x.forEach((v, i) => { re += v * Math.cos((2 * Math.PI * fq * i) / 120); im -= v * Math.sin((2 * Math.PI * fq * i) / 120); });
+      return re * re + im * im;
+    };
+    const spectrum = Array.from({ length: 1200 }, (_, i) => ({ f: 0.05 * (i + 2), p: power(0.05 * (i + 2)) }));
+    const peak = spectrum.reduce((a, b) => (b.p > a.p ? b : a));
+    expect(peak.f).toBeGreaterThan(0.7);
+    expect(peak.f).toBeLessThan(1.6);
+    const hf = spectrum.filter((q) => q.f >= 8).reduce((a, q) => a + q.p, 0), lf = spectrum.filter((q) => q.f < 8).reduce((a, q) => a + q.p, 0);
+    expect(hf / lf).toBeLessThan(0.05);
+    // Neighbouring bottom knots move together (in-plane displacements correlated; v1.5: −0.15).
+    const corr = (a: number[], b: number[]) => {
+      const ma = a.reduce((s, v) => s + v, 0) / a.length, mb = b.reduce((s, v) => s + v, 0) / b.length;
+      let ab = 0, aa = 0, bb = 0;
+      a.forEach((v, i) => { ab += (v - ma) * (b[i]! - mb); aa += (v - ma) ** 2; bb += (b[i]! - mb) ** 2; });
+      return ab / Math.sqrt(aa * bb);
+    };
+    let adj = 0;
+    bottom.forEach((j, i) => {
+      const k = bottom[(i + 1) % bottom.length]!;
+      adj += corr(win.flatMap((f) => [f.knots[j]!.x - rest[j]!.x, f.knots[j]!.z - rest[j]!.z]), win.flatMap((f) => [f.knots[k]!.x - rest[k]!.x, f.knots[k]!.z - rest[k]!.z])) / bottom.length;
+    });
+    expect(adj).toBeGreaterThan(0.6);
+    // After the exit the net's energy (kinetic, gravitational and elastic, above its rest) only falls: never
+    // more than 5 % up from one frame to the next while it is visible (above 1 % of its peak), and
+    // the motion is below 1 % of its post-exit kinetic peak within 1.5 s.
+    const post = frames.filter((f) => f.t > exit);
+    const kePeak = Math.max(...post.map((f) => f.ke)), mechPeak = Math.max(...post.map((f) => f.mech));
+    for (let i = 1; i < post.length; i++) if (post[i - 1]!.mech > 0.01 * mechPeak) expect(post[i]!.mech / post[i - 1]!.mech).toBeLessThan(1.05);
+    expect(Math.max(...post.filter((f) => f.t > exit + 1.5).map((f) => f.ke))).toBeLessThan(0.01 * kePeak);
+  });
+
+  it('the skin: knots turn with the net, not their own sway; strands keep their length (bowing when slack, never shrinking)', () => {
+    const { frames } = acceptRun();
+    const exit = NET_PASSAGE.exitAt, rest = frames[0]!.ups;
+    for (let i = 1; i < frames.length; i++) {
+      const f = frames[i]!, p = frames[i - 1]!;
+      if (f.t > exit + 0.25) for (const [j, u] of f.ups.entries()) expect((u.angleTo(p.ups[j]!) * 180) / Math.PI / (f.t - p.t)).toBeLessThanOrEqual(300);
+      if (f.t > exit + 1) for (const [j, u] of f.ups.entries()) expect((u.angleTo(rest[j]!) * 180) / Math.PI).toBeLessThanOrEqual(5);
+      if (f.t > exit) {
+        expect(f.strand[0]).toBeGreaterThanOrEqual(0.97);
+        expect(f.strand[1]).toBeLessThanOrEqual(1.06);
+      }
+    }
+  });
+
+  it('no crossing: pressed together the knots bunch, never pass through each other', () => {
+    const { frames, knots } = acceptRun();
+    const rest = frames[0]!.knots, at = (k: number) => knots.indexOf(k);
+    for (const f of frames) {
+      for (const row of lattice.rows) row.forEach((k, i) => {
+        const a = at(k), b = at(row[(i + 1) % row.length]!);
+        expect(f.knots[a]!.distanceTo(f.knots[b]!) / rest[a]!.distanceTo(rest[b]!)).toBeGreaterThan(0.7 - 0.02);
+      });
+      for (let r = 0; r + 2 < 6; r++) for (const k of lattice.rows[r]!) {
+        const a = at(k), b = lattice.rows[r + 2]!.map(at).reduce((x, y) => (rest[a]!.distanceTo(rest[y]!) < rest[a]!.distanceTo(rest[x]!) ? y : x));
+        expect(f.knots[a]!.distanceTo(f.knots[b]!) / rest[a]!.distanceTo(rest[b]!)).toBeGreaterThan(0.55 - 0.02);
+      }
+    }
+  });
+
+  it('every display rate sees the same net: 60, 90, 120 and 144 Hz agree to 1e-9 su at the times they share', () => {
+    const record = (hz: number) => {
+      const out = new Map<number, Float64Array>();
+      runNet(lattice, 'accept', 2.5, (t, s) => out.set(Math.round(t * 1e6), Float64Array.from({ length: s.n * 3 }, (_, i) => s.drawn(Math.floor(i / 3), new Vector3()).getComponent(i % 3))), hz);
+      return out;
+    };
+    const ref = record(120);
+    let shared = 0;
+    for (const hz of [60, 90, 144]) {
+      for (const [k, x] of record(hz)) {
+        const y = ref.get(k);
+        if (!y || (k / 1e6) % (1 / 6) > 1e-6 && (1 / 6) - ((k / 1e6) % (1 / 6)) > 1e-6) continue;
+        shared++;
+        for (let i = 0; i < x.length; i++) expect(Math.abs(x[i]! - y[i]!), `${hz} Hz at ${k / 1e6} s`).toBeLessThan(1e-9);
+      }
+    }
+    expect(shared).toBeGreaterThan(30);
+  });
+
+  it('a change of mind carries the swing over exactly (settle, then restore), and settle() snaps exactly to rest', () => {
+    const a = runNet(lattice, 'accept', 1.6), b = runNet(lattice, 'accept', 1.6, undefined, 120, { at: 1.3 });
+    for (let i = 0; i < a.sim.x.length; i++) expect(Math.abs(a.sim.x[i]! - b.sim.x[i]!)).toBeLessThan(1e-12);
+    expect(a.sim.settled).toBe(false);
+    a.channel.settle();
+    expect(a.channel.settling()).toBe(false);
+    expect(Array.from(a.sim.x)).toEqual(Array.from(a.sim.rest));
+    expect([a.springs.rim, a.springs.board]).toEqual([0, 0]);
+    for (const k of lattice.rows.flat()) expect(a.skin.drawnNode(k).distanceTo(a.sim.restNode(k))).toBe(0);
+  });
+
+  it('the rim and board answer the net\'s real pull: bounded, the rim stopped by the board, its ring damped, both back at rest', () => {
+    let rimMax = 0, rimMin = 0, boardMax = 0, forceMax = 0, rimQuiet = 0;
+    const { springs } = runNet(lattice, 'accept', REST_AT.accept + 2, (t, s, sp) => {
       rimMax = Math.max(rimMax, sp.rim);
       rimMin = Math.min(rimMin, sp.rim);
       boardMax = Math.max(boardMax, Math.abs(sp.board));
       forceMax = Math.max(forceMax, s.hookForce.length());
+      if (Math.abs(sp.rim) * (180 / Math.PI) >= 0.05) rimQuiet = t;
     });
     const deg = 180 / Math.PI;
-    // A swish pulls the hooks with a few newtons (the ball's momentum change in the net).
-    expect(forceMax).toBeGreaterThan(2);
-    expect(forceMax).toBeLessThan(15);
+    // A swish pulls the hooks with a few newtons: the ball's own braking in the net (4–5.6 N on its track).
+    expect(forceMax).toBeGreaterThan(3);
+    expect(forceMax).toBeLessThan(8);
     expect(rimMax * deg).toBeGreaterThan(0.3);
     expect(rimMax * deg).toBeLessThanOrEqual(RECOIL_LIMIT.rimDeg);
     expect(rimMin).toBeGreaterThanOrEqual(RIM_BACKSTOP - 1e-12);
+    // The rim's ring dies within 0.35 s of the contact (v1.5: ≈ 0.5 s, shaking the whole net).
+    expect(rimQuiet - CONTACT_AT).toBeLessThan(0.35);
     // The board on its steel pole barely moves for a swish.
     expect(boardMax * deg).toBeLessThan(0.2);
     expect(springs.settled).toBe(true);
   });
 
-  it('the net simulation is cheap: well under a millisecond per frame (two fixed steps), measured so machine load cannot fail it', () => {
+  it('a strike on the hoop (HoopSprings.kick) stirs a resting net through its loops, which swings and settles', () => {
+    const sim = new NetSim(lattice), springs = new HoopSprings(), skin = new NetSkin(new Object3D(), sim, []);
+    const channel = new SportsNetChannel<SequenceName, null>({ net: { sim, skin }, springs, recoil: { set() {} } }, () => new Vector3());
+    const far = new Vector3(5, 0, 5);
+    springs.kick(1.5, 0.05);
+    let moved = 0, settledAt = Infinity;
+    for (let i = 1; i <= 4 * 120; i++) {
+      channel.step(1 / 120, null, far);
+      moved = Math.max(moved, sim.maxDisplacement());
+      if (!channel.settling() && settledAt === Infinity) settledAt = i / 120;
+    }
+    expect(toCm(moved)).toBeGreaterThan(0.1);
+    expect(settledAt).toBeLessThan(3);
+    expect(sim.settled && springs.settled).toBe(true);
+  });
+
+  it('the net simulation is cheap: well under a millisecond per frame (eight fixed substeps), measured so machine load cannot fail it', () => {
     // Cost per 60 fps frame with the ball in the net, in units of a fixed reference kernel timed in
     // the same process (fastest of interleaved rounds: contention only adds time). On the M2 Pro the
-    // kernel takes 0.26 ms and the net 0.12 ms per frame (ratio 0.45; 0.44–0.71 at load average
-    // 24–33). The bound, 2, is 0.52 ms at that speed. A genuinely slow net fails every attempt; a
-    // contended measurement is retried.
+    // kernel takes ≈ 0.27 ms and the net ≈ 0.14 ms per frame (ratio ≈ 0.5). The bound, 2, is ≈ 0.54
+    // ms at that speed. A genuinely slow net fails every attempt; a contended measurement is retried.
     let best = Infinity, last = { perFrameMs: 0, referenceMs: 0, ratio: Infinity };
     for (let attempt = 0; attempt < 4 && best >= 2; attempt++) {
       last = netCost(lattice);

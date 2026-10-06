@@ -846,6 +846,45 @@ export class NetSim {
   restNode(i: number, out = new Vector3()): Vector3 {
     return out.set(this.rest[i * 3]!, this.rest[i * 3 + 1]!, this.rest[i * 3 + 2]!);
   }
+  /**
+   * The net's mechanical energy above its hanging rest (J): the knots' kinetic energy, their height
+   * and the cords' and diagonals' elastic energy (the hard limits store none). After the ball has
+   * gone it can only fall.
+   */
+  mechanicalEnergy(): number {
+    this.restPotential ??= this.potential(this.rest);
+    const v = this.v, w = this.invMass;
+    let ke = 0;
+    for (let i = 0; i < this.n; i++) if (w[i]! > 0) ke += (0.5 / w[i]!) * (v[i * 3]! ** 2 + v[i * 3 + 1]! ** 2 + v[i * 3 + 2]! ** 2);
+    return (ke + this.potential(this.x) - this.restPotential) * SU_M * SU_M;
+  }
+  private restPotential: number | null = null;
+  private potential(x: Float64Array): number {
+    const w = this.invMass;
+    let pe = 0;
+    for (let i = 0; i < this.n; i++) if (w[i]! > 0) pe += (G / w[i]!) * x[i * 3 + 1]!;
+    for (let c = 0; c < this.ca.length; c++) {
+      const mode = this.mode[c]!, cc = this.cc[c]!;
+      if (mode === 2 || cc === 0) continue;
+      const a = this.ca[c]!, b = this.cb[c]!;
+      const dx = x[b * 3]! - x[a * 3]!, dy = x[b * 3 + 1]! - x[a * 3 + 1]!, dz = x[b * 3 + 2]! - x[a * 3 + 2]!;
+      const C = Math.sqrt(dx * dx + dy * dy + dz * dz) - this.cl[c]!;
+      if (mode === 1 && C <= 0) continue;
+      pe += (0.5 * C * C) / cc;
+    }
+    return pe;
+  }
+  /** Each cord's strain at the hanging rest pose (its rest distance over its length, less one): hung slack, near zero. */
+  restCordStrains(): number[] {
+    const out: number[] = [], r = this.rest;
+    for (let c = 0; c < this.ca.length; c++) {
+      if (this.mode[c] !== 1) continue;
+      const a = this.ca[c]!, b = this.cb[c]!;
+      const dx = r[b * 3]! - r[a * 3]!, dy = r[b * 3 + 1]! - r[a * 3 + 1]!, dz = r[b * 3 + 2]! - r[a * 3 + 2]!;
+      out.push(Math.sqrt(dx * dx + dy * dy + dz * dz) / this.cl[c]! - 1);
+    }
+    return out;
+  }
   /** Largest coordinate displacement from rest (su) — diagnostics. */
   maxDisplacement(): number {
     let d = 0;
