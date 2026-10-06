@@ -3,15 +3,16 @@
  * 16 ms virtual clock (Playwright's fake clock; every frame advances exactly 16 ms), as the guest sees
  * it (the showcase's fullscreen layout), from the tap to `seconds` after it. Also the change of mind
  * from the close-up (`change`): accept, wait, decline.
- *   node --experimental-transform-types evidence/v1.7/dinner-card/strips.ts <base> <out> <laptop|phone> [accept|change] [seconds] [every]
- * Writes f0000.jpg … (every `every`th frame), close.txt (t, close, pull per frame) and sheet.jpg.
+ *   node --experimental-transform-types evidence/v1.7/dinner-card/strips.ts <base> <out> <laptop|phone> [accept|change] [seconds] [every] [from s] [to s]
+ * Writes f0000.jpg … (every `every`th frame between `from` and `to` s after the tap) and close.txt
+ * (t, close, pull, visual state for every frame); sheets are assembled from them.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 
-const [base = 'http://127.0.0.1:5701', out = 'outputs/strips', size = 'laptop', what = 'accept', secs = '5', everyArg = '1'] = process.argv.slice(2);
+const [base = 'http://127.0.0.1:5701', out = 'outputs/strips', size = 'laptop', what = 'accept', secs = '5', everyArg = '1', fromArg = '0', toArg = '99'] = process.argv.slice(2);
 const SIZES = { laptop: { width: 1280, height: 720, dsf: 1 }, phone: { width: 390, height: 844, dsf: 2 } } as const;
 const s = SIZES[size as keyof typeof SIZES];
 const every = Number(everyArg);
@@ -39,7 +40,7 @@ for (let i = 0; i <= total; i++) {
   if (what === 'change' && i === Math.round(5000 / 16)) await page.getByRole('button', { name: 'Decline' }).click();
   const f = await page.evaluate(() => { const c = (window as any).__showcase.controller.framing(); return [c.close, c.pull, (window as any).__showcase.state.visual]; });
   rows.push(`${(i * 0.016).toFixed(3)}\t${(f[0] as number).toFixed(5)}\t${(f[1] as number).toFixed(5)}\t${f[2]}`);
-  if (i % every === 0) await page.screenshot({ path: join(out, `f${String(i).padStart(4, '0')}.jpg`), type: 'jpeg', quality: 80 });
+  if (i % every === 0 && i * 0.016 >= Number(fromArg) - 1e-9 && i * 0.016 <= Number(toArg) + 1e-9) await page.screenshot({ path: join(out, `f${String(i).padStart(4, '0')}.jpg`), type: 'jpeg', quality: 80 });
   await tick(16);
 }
 await writeFile(join(out, 'close.txt'), `t\tclose\tpull\tvisual\n${rows.join('\n')}\n`);
