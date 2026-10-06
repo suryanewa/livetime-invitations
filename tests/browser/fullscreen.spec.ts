@@ -178,6 +178,29 @@ test('a pulled-back declined poster sits over its own backdrop; the other poses 
   }
 });
 
+test('v1.7: Dinner\'s accepted poster (the close-up on the card) sits over its own backdrop, the close-up with the plate in it', async ({ page }) => {
+  for (const [width, height] of [[1440, 900], [390, 844]] as const) {
+    await page.setViewportSize({ width, height });
+    await ready(page, '/?scene=dinner');
+    await page.getByRole('button', { name: 'Guest', exact: true }).click();
+    await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('static'));
+    const backdrop = () => page.locator('.lt-stage__backdrop').evaluate((el) => getComputedStyle(el).backgroundImage);
+    await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /guest-ready/);
+    expect(await backdrop(), `${width}`).toMatch(/backdrop\.webp/);
+    await page.getByRole('button', { name: 'Accept' }).click();
+    await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /shared-accepted/);
+    await expect(page.locator('.lt-stage__poster')).toBeVisible();
+    await expect.poll(backdrop).toMatch(/backdrop-accepted\.webp/);
+    const f = await frame(page);
+    const p = await rect(page, '.lt-stage__poster');
+    expect(p.x).toBeCloseTo(f.x, 0);
+    expect(p.width).toBeCloseTo(f.size, 0);
+    const b = await rect(page, '.lt-stage__backdrop');
+    expect(b.x).toBeLessThanOrEqual(0);
+    expect(b.x + b.width).toBeGreaterThanOrEqual(width);
+  }
+});
+
 test('overlay text sits on a surface dense enough for 4.5:1 over any scene', async ({ page }) => {
   await ready(page);
   for (const sel of ['.sc-top', '.sc-dock']) {
