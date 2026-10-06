@@ -1,14 +1,16 @@
 import { Box3, type Camera, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
-  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netRestRadius, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, SPORTS_WORLD_SCALE, STAND, type BallPreset, type SportsRig,
+  BALL_AT, BALL_MASS_KG, BALL_R, BOARD, BOARD_PIVOT, HOOP_ROOT, HOOP_SPRINGS, NET, netRestRadius, POLE, RIM, RIM_CENTER, RIM_HINGE, rigSports, SPORTS_CM_PER_UNIT, SPORTS_WALL_Z,
+  SPORTS_WORLD_SCALE, STAND, type BallPreset, type SportsRig,
 } from '../../../models/sports.ts';
+import type { Hit } from './ballPhysics.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { disposeImported, gltfLoader, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { silhouettePoints } from '../../render/framing.ts';
 import { finalPose, type SceneInstance, type SceneLoadContext, type SceneModule } from '../../core/sequence.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
-import { DURATIONS, frameFor, newFrame, REST_AT, sampleTrack, type SportsFrame } from './sequences.ts';
+import { DURATIONS, frameFor, HITS, newFrame, REST_AT, sampleTrack, type SportsFrame } from './sequences.ts';
 import { type Change, changeHandover, planChange, type Showing } from './change.ts';
 import { SportsNetChannel } from './net.ts';
 
@@ -21,6 +23,8 @@ const NET_OUTSET = 0.05;
 const NET_SWING = { out: 0.12, down: 0.15 } as const;
 
 const SEQUENCES: readonly SequenceName[] = ['host', 'accept', 'decline'];
+const UP = new Vector3(0, 1, 0);
+const _up = new Vector3();
 
 /** Silhouette samples of every Sports path (tails to rest included): the hoop, the pass, the made shot and the airball. */
 export function sportsFramePoints(sequences: readonly SequenceName[] = SEQUENCES): Vector3[] {
@@ -50,17 +54,16 @@ export function sportsFramePoints(sequences: readonly SequenceName[] = SEQUENCES
       }
     }
   }
-  // Hoop: the board's eight corners (its top-back edge is the silhouette at the 15° elevation),
-  // the rim ring and the base's footprint.
+  // Hoop: the board's eight corners (its top-back edge is the silhouette at the 15° elevation) and
+  // the rim ring. v1.7: not the stand (its base's footprint went with it): the frame is the board,
+  // the rim, the net and the ball, so the stand may be cropped by the frame's bottom and right
+  // edges (#43). SPORTS_BOUNDS, the key light's aim, still covers it.
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const z of [BOARD.front, BOARD.front - BOARD.thickness]) {
     pts.push(new Vector3(HOOP_ROOT.x + (sx * BOARD.width) / 2, BOARD.centerY + (sy * BOARD.height) / 2, HOOP_ROOT.z + z));
   }
   const dirs = Array.from({ length: 16 }, (_, i) => [Math.cos((i / 16) * Math.PI * 2), Math.sin((i / 16) * Math.PI * 2)] as const);
   const ring = RIM.innerRadius + 2 * RIM.tube;
   for (const [cx, sz] of dirs) pts.push(new Vector3(RIM_CENTER.x + cx * ring, RIM_CENTER.y, RIM_CENTER.z + sz * ring));
-  for (const sx of [-1, 1]) for (const z of [STAND.base.front, STAND.base.back]) {
-    pts.push(new Vector3(HOOP_ROOT.x + sx * STAND.base.halfWidth, 0, HOOP_ROOT.z + z), new Vector3(HOOP_ROOT.x + sx * STAND.base.halfWidth, STAND.base.height, HOOP_ROOT.z + z));
-  }
   // The net: its rest envelope and the room its swing can take.
   for (const [cx, sz] of dirs) {
     for (const t of [0.25, 0.5, 0.75, 1]) {
@@ -137,6 +140,27 @@ export function sportsInterruptCut(showing: Showing): boolean {
 }
 
 /**
+ * v1.7: the hoop's answer to a strike (`Hit`), as changes of angular velocity (rad/s) about the
+ * recoil pivots, for `HoopSprings.kick`. The part takes the opposite of the ball's impulse,
+ * J = −m·Δv (BALL_MASS_KG, metres), and turns by its moment about the pivot over its inertia
+ * (HOOP_SPRINGS), signed as the recoil (pitch about +x, positive tips the front down):
+ * L = r_y·J_z − r_z·J_y. A strike on the glass turns the board about BOARD_PIVOT. A strike on the
+ * ring turns the ring about RIM_HINGE, and its hinge pin hands the impulse to the board, which
+ * turns by it about BOARD_PIVOT from the hinge (the ring's own mass neglected).
+ */
+export function hitKick(hit: Pick<Hit, 'surface' | 'contact' | 'impulse'>): { rim: number; board: number } {
+  const toM = SPORTS_CM_PER_UNIT / 100;
+  const J = hit.impulse.clone().multiplyScalar(-BALL_MASS_KG * toM);
+  const at = hit.contact.clone().sub(HOOP_ROOT);
+  const moment = (from: Vector3, pivot: Vector3) => ((from.y - pivot.y) * J.z - (from.z - pivot.z) * J.y) * toM;
+  if (hit.surface === 'board') return { rim: 0, board: moment(at, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia };
+  return { rim: moment(at, RIM_HINGE) / HOOP_SPRINGS.rim.inertia, board: moment(RIM_HINGE, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia };
+}
+
+/** The strikes of a program (a sequence or a change of mind). */
+const hitsOf = (seq: SequenceName, change: Change | null): readonly Hit[] => (change ? change.track.hits : HITS[seq]);
+
+/**
  * Contact-blob falloff height. With the key's shadow map on (Normal/High) the cast shadow already
  * shows an airborne ball's height, so the blob only anchors contact and is gone within a
  * third of a unit; without it (Low) the blob is the only shadow and fades slowly.
@@ -184,6 +208,20 @@ export class SportsScene implements SceneInstance {
    * and carries its motion over the director's settle on an interruption.
    */
   private readonly net: SportsNetChannel<SequenceName, Change | null>;
+  /**
+   * v1.7: how far along the program on screen the strikes on the board and the rim have kicked the
+   * hoop (`hitKick` → `HoopSprings.kick`), like the net's clock: a sample or the tail fires every
+   * hit it passes; a new run starts afresh.
+   */
+  private hitClock: Clock | null = null;
+  /**
+   * v1.7: the springs' motion when the director settles mid-rattle with the net at rest (the net
+   * channel carries the springs only with a moving net): `refresh()` puts it back, so a change of
+   * mind never snaps a shuddering rim. Dropped by the next sample or step.
+   */
+  private springsCarry: ReturnType<SportsRig['springs']['save']> | null = null;
+  private readonly _axisQ = new Quaternion();
+  private readonly _rest = new Quaternion();
 
   constructor(readonly rig: SportsRig, config: Extract<SceneConfig, { category: 'sports' }>) {
     this.root = rig.root;
@@ -225,6 +263,7 @@ export class SportsScene implements SceneInstance {
       return;
     }
     this.tail = null;
+    this.hitClock = null;
     this.net.forget();
     this.apply(frameFor(pose, this.frame));
   }
@@ -239,14 +278,38 @@ export class SportsScene implements SceneInstance {
     this.tail = null;
     this.sampling = { seq: sequence, t, change };
     this.net.follow(this.sampling, afterTail);
+    this.springsCarry = null;
+    this.fireHits(sequence, change, Math.min(t, DURATIONS[sequence]));
     this.apply(sampleProgram(sequence, change, Math.min(t, DURATIONS[sequence]), this.frame));
+  }
+
+  /**
+   * Kick the hoop for every strike the program on screen has passed since the hit clock (v1.7). A
+   * different program or an earlier time is a new run: the clock restarts there, firing nothing
+   * (a strike is never fired twice, nor for a time the ball has not reached).
+   */
+  private fireHits(seq: SequenceName, change: Change | null, t: number): void {
+    const k = this.hitClock;
+    if (!k || k.seq !== seq || k.change !== change || t < k.t - 1e-9) {
+      this.hitClock = { seq, change, t };
+      return;
+    }
+    for (const h of hitsOf(seq, change)) {
+      if (h.at > k.t + 1e-9 && h.at <= t + 1e-9) {
+        const kick = hitKick(h);
+        this.rig.springs.kick(kick.rim, kick.board);
+      }
+    }
+    k.t = t;
   }
 
   /** The continuous channel: the tail, then the net (stepping along the ball's own path) and the hoop springs. */
   simulate(dt: number): void {
+    this.springsCarry = null;
     if (this.tail) {
       const end = restAt(this.tail.seq, this.tail.change);
       this.tail.t = Math.min(this.tail.t + dt, end);
+      this.fireHits(this.tail.seq, this.tail.change, this.tail.t);
       this.apply(sampleProgram(this.tail.seq, this.tail.change, this.tail.t, this.frame));
       if (this.tail.t >= end) this.tail = null;
     }
@@ -262,14 +325,23 @@ export class SportsScene implements SceneInstance {
     if (this.tail) this.apply(sampleProgram(this.tail.seq, this.tail.change, restAt(this.tail.seq, this.tail.change), this.frame));
     this.tail = null;
     this.sampling = null;
+    this.hitClock = null;
+    // A kick ringing down with the net at rest: the net channel would snap it; keep it for refresh().
+    this.springsCarry = this.rig.springs.settled ? null : this.rig.springs.save();
     this.net.settle();
   }
 
   /** Interruptions: the net's motion carries over the director's settle; the shadow follows the drawn ball. */
   refresh(): void {
     this.net.restore();
+    if (this.springsCarry) {
+      this.rig.springs.restore(this.springsCarry);
+      this.rig.recoil.set(this.rig.springs.board, this.rig.springs.rim);
+      this.springsCarry = null;
+    }
     const n = this.rig.nodes;
-    this.updateShadow(n.ball_authored!.position, 1 - n.ball_secondary!.scale.y);
+    const axisUp = _up.copy(UP).applyQuaternion(n.ball_secondary!.quaternion).y;
+    this.updateShadow(n.ball_authored!.position, (1 - n.ball_secondary!.scale.y) * Math.max(0, axisUp));
   }
 
   /** What is on screen: a sequence's (or a change's) physics at its time, or a ball at rest. */
@@ -314,12 +386,16 @@ export class SportsScene implements SceneInstance {
   private apply(f: SportsFrame): void {
     const n = this.rig.nodes;
     n.ball_authored!.position.copy(f.ballPos);
-    // Squash (volume-preserving, along the floor normal) on ball_secondary, which never rotates,
-    // so its scale axis stays the contact normal while the ball spins inside it.
+    // Squash (volume-preserving, along the contact normal) on ball_secondary, whose +y is turned
+    // onto that normal (v1.7: the floor's up, or a hit's normal on the board or the ring) and which
+    // never spins, so its scale axis stays the normal while the ball spins inside it: ball_mesh
+    // carries the spin relative to it.
     const sv = 1 - f.squash, sh = 1 / Math.sqrt(sv);
     n.ball_secondary!.scale.set(sh, sv, sh);
-    n.ball_mesh!.quaternion.multiplyQuaternions(f.ballRot, this.rig.ballRest);
-    this.updateShadow(f.ballPos, f.squash);
+    const q = this._axisQ.setFromUnitVectors(UP, f.squashAxis);
+    n.ball_secondary!.quaternion.copy(q);
+    n.ball_mesh!.quaternion.copy(this._rest.copy(q).invert()).multiply(f.ballRot).multiply(this.rig.ballRest);
+    this.updateShadow(f.ballPos, f.squash * Math.max(0, f.squashAxis.y));
   }
 
   /** Contact blob under the drawn ball: its bottom height, widened with the squash. */

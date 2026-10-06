@@ -65,6 +65,57 @@ export const ROLL_DECEL = (BOUNCE.rollingResistance * GRAVITY) / (1 + BOUNCE.ine
 
 const UP = new Vector3(0, 1, 0);
 
+/**
+ * v1.7: the backboard and the rim (the decline's bank and rattle). The same impulse model as the
+ * floor (`surfaceImpulse`, Cross's grip–slip with angular momentum about the contact point
+ * conserved), with each surface's own constants:
+ * - **Board**: e 0.72. FIBA Official Basketball Rules (Equipment, Level 1) require a ball dropped
+ *   onto the backboard from 1.8 m to rebound at least 50 % of the height: e ≥ √0.5 = 0.707 for
+ *   the ball and board together; Min (arXiv:1606.08145, 2016) uses 0.75 for the bank. A mini
+ *   system's laminate board on a telescoping pole gives a little more than a court's glass, so
+ *   0.72, under the floor's 0.77 (the ball alone). Sliding friction μ 0.6: a rubber ball on the
+ *   laminate, under the ≈ 1.0 static coefficient measured for basketballs on glass (Hubbard et
+ *   al., "Determining friction coefficients for round balls", ISEA) and above the rim's 0.5.
+ * - **Rim**: e 0.6. FIBA requires the ring and its support to absorb 35–50 % of the impact
+ *   energy; the ball's own losses at a rigid contact are its e 0.77 (41 %), so the ball leaves a
+ *   spring-action ring at 0.77 × √(1 − 0.4) ≈ 0.6 of its normal speed (the rest is the ring's
+ *   recoil, drawn by `HoopSprings.kick`). Friction μ 0.5: Okubo & Hubbard's slip tests of a
+ *   basketball on a rim (Procedia Engineering 2, 2010, "Identification of basketball parameters
+ *   for a simulation model").
+ * - Both grip with e_t 0.15, the floor's (the ball is the same; Cross 2002/2005).
+ * A backspinning ball that meets the glass while still rising slides up it, so the friction drives
+ * it down and turns its spin (the bank's "kick", Min 2016: backspin gains downward speed off the
+ * board); one coming down onto the glass slides down it and leaves with overspin.
+ */
+export const SURFACES = {
+  board: { restitution: 0.72, friction: 0.6, tangentialRestitution: 0.15 },
+  rim: { restitution: 0.6, friction: 0.5, tangentialRestitution: 0.15 },
+} as const;
+export type Surface = keyof typeof SURFACES;
+
+/**
+ * A strike on the board or the rim (v1.7), recorded apart from the floor `contacts` so the floor
+ * helpers (carry-on to the next floor contact, the rolling stop) keep working. The scene kicks the
+ * hoop's springs with it and draws its squash along `normal`.
+ */
+export interface Hit {
+  surface: Surface;
+  /** Touch time (s) and the ball centre at the touch (undeformed). */
+  at: number;
+  point: Vector3;
+  /** Contact normal, from the surface to the ball centre (unit). */
+  normal: Vector3;
+  /** The contact point on the surface (point − R·normal). */
+  contact: Vector3;
+  /** Normal impact speed and rebound normal speed (su/s). */
+  speed: number;
+  rebound: number;
+  /** Peak compression (fraction of the diameter), drawn along `normal` over BOUNCE.contactTime. */
+  squash: number;
+  /** The ball's velocity change (su/s, normal and friction): the strike's impulse on the ball is m × this; the part takes the opposite. */
+  impulse: Vector3;
+}
+
 /** One floor contact (diagnostics, tests, the scene's impact hooks). */
 export interface Contact {
   /** Touch-down time (s) and point (ball centre at touch). */
@@ -98,6 +149,8 @@ export class BallTrack {
   readonly s: number[] = [];
   readonly ds: number[] = [];
   readonly contacts: Contact[] = [];
+  /** v1.7: strikes on the board and the rim, in time order (not floor contacts). */
+  readonly hits: Hit[] = [];
   /** False: a dry run (solvers) records contacts but no knots. */
   constructor(readonly record = true) {}
 
@@ -181,6 +234,18 @@ export class BallTrack {
   get lastContactEnd(): number {
     const c = this.contacts[this.contacts.length - 1];
     return c ? c.at + BOUNCE.contactTime : this.end;
+  }
+
+  /** The board or rim hit whose drawn window contains t, or null. */
+  hitAt(t: number): Hit | null {
+    for (const h of this.hits) if (t >= h.at && t < h.at + BOUNCE.contactTime) return h;
+    return null;
+  }
+
+  /** The axis the drawn squash compresses along at t (unit): a hit's normal inside its window, else up (the floor's). */
+  squashAxis(t: number, out: Vector3): Vector3 {
+    const h = this.hitAt(t);
+    return h ? out.copy(h.normal) : out.set(0, 1, 0);
   }
 }
 const _qa = new Quaternion(), _qb = new Quaternion();
@@ -281,6 +346,179 @@ export function floorImpulse(v: Vector3, w: Vector3): number {
   w.z += dx / (alpha * BALL_R);
   return v.y;
 }
+
+/**
+ * v1.7: the impulse of a contact on any surface with outward normal `n` (unit, surface → ball), in
+ * place, generalising `floorImpulse` (which it equals for n = +y on a falling ball): the normal
+ * velocity is reversed with restitution `e`; the contact point's tangential velocity (centre plus
+ * spin, v − R·(ω × n)) is reversed by `et` when the ball grips, else Coulomb friction `mu` × the
+ * normal impulse limits it; the spin takes the friction's moment, so angular momentum about the
+ * contact point is conserved (Cross, Am. J. Phys. 70, 1093, 2002; 73, 914, 2005). Returns the
+ * normal impulse per unit mass (su/s; 0 if the ball is not approaching).
+ */
+export function surfaceImpulse(v: Vector3, w: Vector3, n: Vector3, e: number, mu: number, et: number): number {
+  const alpha = BOUNCE.inertia;
+  const vn = -v.dot(n);
+  if (vn <= 0) return 0;
+  // Contact point velocity: v + ω × (−R n) = v − R (ω × n); its tangential part.
+  _c.crossVectors(w, n).multiplyScalar(-BALL_R).add(v);
+  _c.addScaledVector(n, -_c.dot(n));
+  const jn = (1 + e) * vn;
+  const cl = _c.length();
+  _jt.set(0, 0, 0);
+  if (cl > 1e-12) {
+    let k = ((1 + et) * alpha) / (1 + alpha);
+    if (k * cl > mu * jn) k = (mu * jn) / cl;
+    _jt.copy(_c).multiplyScalar(-k);
+  }
+  v.addScaledVector(n, jn).add(_jt);
+  // Δω = (r × Δv) / (α R²) with r = −R n: −(n × Δv_t) / (α R).
+  w.addScaledVector(_c.crossVectors(n, _jt), -1 / (alpha * BALL_R));
+  return jn;
+}
+const _c = new Vector3(), _jt = new Vector3();
+
+/** A surface the flying ball can strike (v1.7): the board's laminate face and the rim's ring. */
+export interface Collider {
+  surface: Surface;
+  /** Distance the ball centre p still has to travel to touch (≤ 0 in contact; +∞ out of reach). */
+  gap(p: Vector3): number;
+  /** Contact normal (surface → ball, unit) for a ball centre p at or near contact. */
+  normal(p: Vector3, out: Vector3): Vector3;
+}
+
+/** The board's laminate face: the plane z = faceZ (sports_root), within its frame's opening. */
+export function boardCollider(faceZ: number, opening: { x0: number; x1: number; y0: number; y1: number }): Collider {
+  return {
+    surface: 'board',
+    gap: (p) => (p.x >= opening.x0 && p.x <= opening.x1 && p.y >= opening.y0 && p.y <= opening.y1 && p.z > faceZ ? p.z - faceZ - BALL_R : Infinity),
+    normal: (_p, out) => out.set(0, 0, 1),
+  };
+}
+
+/** The rim's ring: a torus about the vertical axis through `center`, `ring` the tube centre's radius, `tube` its radius. */
+export function rimCollider(center: Vector3, ring: number, tube: number): Collider {
+  const nearest = (p: Vector3, out: Vector3) => {
+    const dx = p.x - center.x, dz = p.z - center.z, r = Math.hypot(dx, dz) || 1e-12;
+    return out.set(center.x + (dx / r) * ring, center.y, center.z + (dz / r) * ring);
+  };
+  const q = new Vector3();
+  return {
+    surface: 'rim',
+    gap: (p) => p.distanceTo(nearest(p, q)) - BALL_R - tube,
+    normal: (p, out) => out.subVectors(p, nearest(p, q)).normalize(),
+  };
+}
+
+/** Where a free flight ends (`flyUntil`): the floor, a struck surface, or the time limit. */
+export type FlightEnd = { kind: 'floor' } | { kind: 'hit'; collider: Collider } | { kind: 'until' };
+
+/** Scan step for strikes along a flight (s): 0.25 ms, under a 4 mm advance at the bank's 15 su/s. */
+const SCAN = 1 / 4000;
+
+/**
+ * Free flight from the state until the ball touches the floor, one of `colliders`, or `until`
+ * (v1.7, the bank and the rattle). The parabola is exact; strikes are found by scanning the gap
+ * every 0.25 ms and bisecting the first crossing to 1e-12 s. A collider the ball is leaving (gap ≈
+ * 0 at the start) is armed only once it is clear. The state ends at the touch (centre undeformed).
+ */
+export function flyUntil(track: BallTrack, st: BallState, colliders: readonly Collider[], until = Infinity): FlightEnd {
+  const toFloor = flightTime(st.p.y, st.v.y);
+  const T = Math.min(toFloor, until - st.t);
+  const p0 = st.p.clone(), v0 = st.v.clone();
+  const at = (u: number, out: Vector3) => {
+    out.copy(p0).addScaledVector(v0, u);
+    out.y -= 0.5 * GRAVITY * u * u;
+    return out;
+  };
+  const q = new Vector3();
+  const armed = colliders.map((c) => c.gap(p0) > 1e-7);
+  let hit: Collider | null = null, lo = 0, hi = T;
+  scan: for (let u = SCAN; u < T + SCAN; u += SCAN) {
+    const uu = Math.min(u, T);
+    at(uu, q);
+    for (const [i, c] of colliders.entries()) {
+      const g = c.gap(q);
+      if (!armed[i]) {
+        if (g > 1e-7) armed[i] = true;
+        continue;
+      }
+      if (g <= 0) {
+        hit = c;
+        lo = uu - SCAN;
+        hi = uu;
+        break scan;
+      }
+    }
+    if (uu >= T) break;
+  }
+  if (!hit) return fly(track, st, until) ? { kind: 'floor' } : { kind: 'until' };
+  for (let i = 0; i < 60 && hi - lo > 1e-12; i++) {
+    const m = (lo + hi) / 2;
+    if (hit.gap(at(m, q)) > 0) lo = m;
+    else hi = m;
+  }
+  fly(track, st, st.t + hi);
+  return { kind: 'hit', collider: hit };
+}
+
+/**
+ * A strike on the board or the rim from the touch state (v1.7): `surfaceImpulse` with the
+ * surface's constants, recorded as a `Hit`, and drawn like a floor contact over
+ * BOUNCE.contactTime: the undeformed centre slides along the contact's tangent plane while its
+ * tangential velocity hands over linearly (gravity's tangential part acting throughout, its normal
+ * part carried by the contact), the drawn centre sits in by the compression along the normal (so
+ * the touching side stays on the surface), the spin hands over linearly. Returns the hit.
+ */
+export function surfaceContact(track: BallTrack, st: BallState, collider: Collider): Hit {
+  const k = SURFACES[collider.surface];
+  const n = collider.normal(st.p, new Vector3());
+  const vIn = st.v.clone(), wIn = st.w.clone();
+  const vOut = st.v.clone(), wOut = st.w.clone();
+  const jn = surfaceImpulse(vOut, wOut, n, k.restitution, k.friction, k.tangentialRestitution);
+  const speed = Math.max(0, -vIn.dot(n)), rebound = Math.max(0, vOut.dot(n));
+  const squash = Math.min(0.12, squashForImpulse(jn));
+  const hit: Hit = {
+    surface: collider.surface, at: st.t, point: st.p.clone(), normal: n.clone(), contact: st.p.clone().addScaledVector(n, -BALL_R),
+    speed, rebound, squash, impulse: vOut.clone().sub(vIn),
+  };
+  track.hits.push(hit);
+  const tau = BOUNCE.contactTime;
+  const steps = Math.ceil(tau / FINE);
+  const tIn = vIn.clone().addScaledVector(n, -vIn.dot(n)), tOut = vOut.clone().addScaledVector(n, -vOut.dot(n));
+  const g = new Vector3(0, -GRAVITY, 0);
+  const gt = g.clone().addScaledVector(n, -g.dot(n));
+  const p0 = st.p.clone(), t0 = st.t;
+  const c = new Vector3(), p = new Vector3(), v = new Vector3(), w = new Vector3(), q = st.q.clone();
+  const rate = squash * (Math.PI / tau);
+  // The touch: the drawn centre's velocity jumps from the approach to the compression's.
+  track.push(t0, p0, v.copy(tIn).addScaledVector(n, -BALL_R * rate), q, wIn, 0, rate);
+  let prev = 0;
+  for (let i = 1; i <= steps; i++) {
+    const u = (i / steps) * tau, f = u / tau;
+    c.copy(p0).addScaledVector(tIn, u).addScaledVector(tOut.clone().sub(tIn), (u * u) / (2 * tau)).addScaledVector(gt, 0.5 * u * u);
+    const s = squash * Math.sin(Math.PI * f);
+    p.copy(c).addScaledVector(n, -BALL_R * s);
+    v.copy(tIn).lerp(tOut, f).addScaledVector(gt, u).addScaledVector(n, -BALL_R * rate * Math.cos(Math.PI * f));
+    w.copy(wIn).lerp(wOut, (f + prev) / 2);
+    spin(q, w, u - prev * tau);
+    prev = f;
+    track.push(t0 + u, i === steps ? c : p, v, q, w.copy(wIn).lerp(wOut, f), i === steps ? 0 : s, rate * Math.cos(Math.PI * f));
+  }
+  st.t = t0 + tau;
+  st.p.copy(c);
+  st.v.copy(tOut).addScaledVector(gt, tau).addScaledVector(n, rebound);
+  st.w.copy(wOut);
+  st.q.copy(q);
+  return hit;
+}
+
+/**
+ * Speed u that brings a ball leaving a floor contact with horizontal direction û to rest `dist`
+ * away: it keeps u through its bounces (spin matched: no friction at the contacts) for `time`,
+ * then rolls u²/(2a). Closed form.
+ */
+export const restSpeed = (dist: number, time: number) => ROLL_DECEL * (-time + Math.sqrt(time * time + (2 * dist) / ROLL_DECEL));
 
 /** Peak compression (fraction of the diameter) for a normal impulse per unit mass `j` (su/s). */
 export const squashForImpulse = (j: number) => (BOUNCE.squash * j) / ((1 + BOUNCE.restitution) * BOUNCE.squashSpeed);

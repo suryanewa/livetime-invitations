@@ -1,10 +1,10 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { BALL_AT, BALL_R, BOARD, HOOP_ROOT, POLE, RIM, RIM_CENTER, STAND } from '../../../models/sportsContract.ts';
 import {
-  BallTrack, BOUNCE, bounceTime, bounceToRest, cloneState, contactShift, fly, floorContact, GRAVITY, type NetDrag, ROLL_DECEL, rollingSpin, throughNet, type BallState,
+  BallTrack, BOUNCE, bounceTime, bounceToRest, cloneState, fly, floorContact, GRAVITY, type Hit, type NetDrag, restSpeed, rollingSpin, throughNet, type BallState,
 } from './ballPhysics.ts';
 import {
-  blankFrame, CONTACTS, gatherAngle, gatherAt, gatherAxis, gatherRate, gatherVelocity, type Launch, LAUNCH_LIFT, makeGather, MADE_DRIFT, RELEASE_AT, REST, RISE_FROM,
+  blankFrame, CONTACTS, gatherAngle, gatherAt, gatherAxis, gatherRate, gatherVelocity, HITS, type Launch, LAUNCH_LIFT, makeGather, MADE_DRIFT, RELEASE_AT, REST, RISE_FROM,
   NET_RATE, netEngagement, netExited, rollAxis, sampleTrack, SHOT_APEX_ABOVE_RIM, SHOT_BACKSPIN, TRACKS,
 } from './sequences.ts';
 import type { SequenceName } from '../../core/types.ts';
@@ -69,6 +69,8 @@ export function changeHandover(s: Showing): boolean {
 interface Source {
   sample(t: number, p: Vector3, q: Quaternion, v: Vector3, w: Vector3): number;
   contacts: readonly { at: number }[];
+  /** v1.7: the strikes on the board and the rim (the bank and the rattle). */
+  hits: readonly Hit[];
   /** Time the ball stays down from (the end of its last contact), and the time it is at rest. */
   downAt: number;
   end: number;
@@ -77,7 +79,7 @@ const scratch = blankFrame();
 function sourceOf(s: Extract<Showing, { kind: 'track' }>): Source {
   if (s.change) {
     const tr = s.change.track;
-    return { sample: (t, p, q, v, w) => tr.sample(t, p, q, v, w), contacts: tr.contacts, downAt: tr.lastContactEnd, end: tr.end };
+    return { sample: (t, p, q, v, w) => tr.sample(t, p, q, v, w), contacts: tr.contacts, hits: tr.hits, downAt: tr.lastContactEnd, end: tr.end };
   }
   const seq = s.seq;
   const tr = TRACKS[seq];
@@ -89,6 +91,7 @@ function sourceOf(s: Extract<Showing, { kind: 'track' }>): Source {
       return scratch.squash;
     },
     contacts: CONTACTS[seq],
+    hits: HITS[seq],
     downAt: tr.lastContactEnd,
     end: tr.end,
   };
@@ -119,6 +122,10 @@ function carryOn(track: BallTrack, s: Showing): { st: BallState; atContact: bool
     track.push(i === n ? stop - t0 : t - t0, p, v, q, w, sq);
     if (stop <= t0) break;
   }
+  // The strikes on the board and the rim it passes (the bank, the rattle) go with it: the scene
+  // kicks the hoop at their times on the change's own clock (one already under way keeps its drawn
+  // squash axis; its kick, at a time before the cut, was fired by the sequence it belongs to).
+  for (const h of src.hits) if (h.at + BOUNCE.contactTime > t0 + 1e-9 && h.at < stop) track.hits.push({ ...h, at: h.at - t0 });
   const st: BallState = { t: stop - t0, p: p.clone(), v: v.clone(), w: w.clone(), q: q.clone() };
   if (!next) {
     st.p.y = BALL_R;
@@ -171,13 +178,6 @@ function gatherInto(track: BallTrack, st: BallState, launch: Launch): void {
   st.w.copy(axis).multiplyScalar(launch.spin);
   st.q.copy(q);
 }
-
-/**
- * Speed u that brings a ball leaving (or launched) with horizontal direction û to rest `dist`
- * away: it keeps u through its bounces (spin matched: no friction at the contacts) for `time`,
- * then rolls u²/(2a). Closed form.
- */
-const restSpeed = (dist: number, time: number) => ROLL_DECEL * (-time + Math.sqrt(time * time + (2 * dist) / ROLL_DECEL));
 
 /** To decline: send the ball on to `target`, where it comes to rest. */
 function sendTo(track: BallTrack, st: BallState, atContact: boolean, target: Vector3): void {
