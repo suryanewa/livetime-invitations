@@ -1137,9 +1137,27 @@ and its tears ≈ +0.05. The fine-detail measure counts noise as well as structu
 0.7+), so it and the grain trade: the round's early edge builds reached fine 0.63–0.76 at grain 1.07–1.33.
 
 **Cost** (`bench6.ts`, the judge's in-app bench at the real framing and device scale factor, p10 of steam visible less hidden;
-`cost.txt`): COST_TABLE
+`cost.txt`): the machine throttled for an hour of this session (the
+steam-hidden frame rising from 2.5 to 25 ms within a run, polish 7 alike): those runs are discarded; the table is the quiet
+runs, with polish 7 benched in the same session as a control (a temporary worktree of main on port 5622).
 
-**Pacing** (`pace-scene.ts`, SCENE=dinner, three accepts each, `pacing.txt`): PACING
+| steam cost, p10 (p50) ms | 0.3 | 0.4 | 0.45 | 0.5 | 0.55 | 0.6 | 0.65 | 0.7 | 1.0 | 1.2 | 1.5 | 2.2 | 3.0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| laptop, polish 7 (this session) | – | – | 5.2 (5.6) | – | – | 4.8 (5.0) | – | – | 3.4 (3.7) | – | – | 4.1 (4.6) | – |
+| **laptop, polish 8** | **5.9 (6.1)** | **7.2 (7.6)** | **7.6 (8.3)** | **7.4 (7.5)** | **7.4 (7.6)** | **7.6 (8.0)** | **6.9 (7.3)** | **7.0 (7.5)** | **5.7 (6.0)** | **5.9 (6.4)** | **4.6 (5.4)** | **4.8 (5.5)** | **2.2 (2.2)** |
+| phone, polish 7 (this session) | – | – | 4.3 (4.4) | – | – | 4.5 (4.6) | – | – | 3.4 (3.5) | – | – | – | – |
+| **phone, polish 8** | **5.7 (5.6)** | **6.3 (6.3)** | **6.4 (6.5)** | **6.9 (7.0)** | – | **6.7 (6.9)** | – | **5.7 (5.8)** | **4.5 (4.7)** | **5.7 (5.9)** | **5.5 (5.6)** | **5.0 (5.2)** | **1.5 (1.6)** |
+
+Two clouds (1000:decline, 1450:accept) at 1.7 / 1.8 / 1.9 s: laptop **6.5 / 6.3 / 6.8**, phone **6.0 / 5.3 / 5.6**; the resumed
+reveal (900:decline, 1100:accept) at 1.7 / 1.9 / 2.1 s: laptop **5.0 / 5.9 / 5.0**, phone **4.4 / 4.8 / 5.0**. **Within 9.0 ms
+everywhere (the worst p50 8.3 ms, the laptop at 0.45 s); +2.2–2.8 ms over polish 7** while the edge pass runs (to ≈ 1.2 s),
++0.7–1.5 after (the back light's and the window's light volume, their march terms, the glow). The whole Dinner frame with
+steam p50 ≤ 10.8 ms at the laptop, ≤ 8.8 at the phone (steam hidden 2.5 / 1.9). Zero with no steam (the scene-depth specs).
+
+**Pacing** (`pace-scene.ts`, SCENE=dinner, three accepts each, `pacing.txt`): laptop **p50 16.70, p95 16.70–16.80, max 16.8, no
+frame over 20 ms** (×3, load 6.4); phone **p95 16.70–16.80 in all twelve accepts**, nine clean, three with 3–4 frames of 33–50 ms
+(at 1.8–2.2 s in two, 3.5–5.6 s in one; load 4.5–5.4: Backblaze and Adobe after the machine woke); the polish-7 control in the
+same minutes ×3 clean. Not shown to be the steam (its cost at 1.8–5.6 s is ≤ 5.6 ms of a 16.7 ms frame), not shown not to be.
 
 **The regression list** (every judge's; the final code; `measurements.txt`):
 
@@ -1232,7 +1250,9 @@ edge, no temporal accumulation, luminance-only steam, a subtle spill, a weak cur
   0.48 s 20.9 %; at CSS size a small spill from the gap).
 - **The held dome's own stillness**: ≈ 2.6–2.8 levels a frame at 0.53–0.56 s, the intended slow rise (the seventh judge's
   re-check).
-- **The cost**: see Polish round 8's table (`cost.txt`); the edge pass runs only while a cloud is young (to ≈ 1.2 s).
+- **The cost**: 4.6–7.6 ms at the laptop and 4.5–6.9 at the phone (p10, `bench6.ts`), within the 9 ms budget, +2.2–2.8 ms
+  over polish 7 while the edge pass runs (to ≈ 1.2 s). Phone pacing: 3 of 12 accepts had 3–4 frames of 33–50 ms under load
+  (p95 16.7–16.8 in all; the polish-7 control clean ×3).
 - **No reflection of the steam in the silver** (as v1.5).
 - **The next approach** for the remaining softness (an offline simulation baked into a sparse 4D volume with millimetre
   filaments, or many more samples per pixel) is in `docs/RESUME.md`, a version of its own with its own budget; polish 8's
