@@ -1111,7 +1111,7 @@ resolution, the interior staying as it was.
 | sign over the cove (litfair.py, own colour over the wall) | consistent | 249/235 at 0.90 s, else unmeasurable | 246/210 (0.90 s), 233/210 (0.99 s): lit side over the shade wherever both are measurable; the composite over the wall +26 / +11 / +19 at 0.90 / 0.99 / 1.12 s, −3 at 0.74 s (504 px on the lit side: the thin edge by the cloche); polish 7 −14 at 0.74 s |
 | a rim where the back light grazes the sheets | — | none | a glow on the crown's and the right side's outer layer against the cove, legible from ≈ 0.7 s, strongest on the rising cap's top at 0.9–1.3 s (`guest-laptop-css-p7top-p8bottom.png`) |
 | steam darker than the wall (dark.py) | 0 | 0 at every frame | 0 at 0.48–0.74 s and 1.12–1.25 s; **0.1 k px at 0.90 and 0.99 s** (≈ 300 px, −4…−6 levels, over the lifted cloche's window reflection, N ≈ 234: the fog in the cloche's shadow veiling a highlight, not the cove) |
-| the white plate: centre / side | ≤ +4 / ≥ −10 | +2…+5 / +3…−9 | **+1…+2 / +2…−9** |
+| the white plate: centre / side | ≤ +4 / ≥ −10 | +2…+5 / +3…−9 | **+1…+2 / +2…−8** |
 | far-rim transmittance 0.43–0.74 s | 0.3–0.5 | 0.31–0.44 | **0.29–0.45** (0.29 at 0.61 s: the edge band's sharper boundary; a hair under) |
 | warmth R − B of the bright steam | ≥ +4 | +5.4…+6.1 | **+6.9…+7.6** |
 | the cloche's reflections the only modelling | no | they were | the own colour carries it: lit 247–250, shade 207–232 over the same spans |
