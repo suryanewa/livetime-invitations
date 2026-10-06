@@ -1,4 +1,4 @@
-import { Box3, MathUtils, OrthographicCamera, type PerspectiveCamera, Vector3 } from 'three';
+import { Box3, MathUtils, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three';
 import type { FrameInsets } from '../core/types.ts';
 
 /**
@@ -11,10 +11,16 @@ export const CAMERA_ANGLES = { azimuthDeg: 20, elevationDeg: 15 } as const;
 export const FRAMING_CLEARANCE = 0.08;
 const DISTANCE = 40;
 
-export function cameraDirection(out = new Vector3()): Vector3 {
-  const az = MathUtils.degToRad(CAMERA_ANGLES.azimuthDeg);
-  const el = MathUtils.degToRad(CAMERA_ANGLES.elevationDeg);
+/** The unit vector from an aim towards the camera at `azimuthDeg` round y (from +z) and `elevationDeg` up. */
+export function viewDirection(azimuthDeg: number, elevationDeg: number, out = new Vector3()): Vector3 {
+  const az = MathUtils.degToRad(azimuthDeg);
+  const el = MathUtils.degToRad(elevationDeg);
   return out.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+}
+
+/** The shared direction (CAMERA_ANGLES): every scene's rest, decline and still framing. */
+export function cameraDirection(out = new Vector3()): Vector3 {
+  return viewDirection(CAMERA_ANGLES.azimuthDeg, CAMERA_ANGLES.elevationDeg, out);
 }
 
 export function createStageCamera(): OrthographicCamera {
@@ -256,6 +262,32 @@ export function framingHull(points: readonly Vector3[]): Vector3[] {
 export interface FramingPair {
   rest: HeroFraming;
   decline: HeroFraming;
+  /**
+   * v1.7 (#42, Dinner): the close-up's fit, along its own direction at its own aim (`CloseUp`), for
+   * a scene that has one. Its `heroWidth`/`heroHeight` are the subject's (the card's) fill.
+   */
+  closeUp?: HeroFraming;
+}
+
+/**
+ * v1.7 (spec revision #42, pending Surya): a close-up a scene's accepted pose moves to (Dinner: the
+ * invitation card, head-on). `points` (the subject's silhouette, the content's own space) are fitted
+ * along their own direction, `azimuthDeg`/`elevationDeg`, through the same lens, aimed at their
+ * centre, so that their width fills `widthFill` of the frame (centred). The one exception to the
+ * one-angle rule besides the decline's dolly (#39); the azimuth is kept so the light holds.
+ */
+export interface CloseUp {
+  points: readonly Vector3[];
+  azimuthDeg: number;
+  elevationDeg: number;
+  widthFill: number;
+}
+
+/** A placed view: the camera's position, the point it looks at, and its slide (NDC of the fitted square). */
+export interface ViewPose {
+  position: Vector3;
+  target: Vector3;
+  offset: [number, number];
 }
 
 /**
@@ -263,12 +295,24 @@ export interface FramingPair {
  * view slid by `offset` (NDC of the fitted square, or of the `aspect` frame), and in fullscreen
  * extended from the frame square to the whole stage (v1.4).
  */
-export function placeHeroView(camera: PerspectiveCamera, aim: Vector3, aspect: number, distance: number, offset: readonly [number, number], frame?: FrameRect): void {
+export function placeHeroView(
+  camera: PerspectiveCamera, aim: Vector3, aspect: number, distance: number, offset: readonly [number, number], frame?: FrameRect, dir: Vector3 = cameraDirection(),
+): void {
+  placeView(camera, heroPosition.copy(aim).addScaledVector(dir, distance), aim, aspect, offset, frame);
+}
+const heroPosition = new Vector3();
+
+/**
+ * Place the product camera at `position` looking at `target`, its view slid by `offset` (NDC of the
+ * fitted square, or of the `aspect` frame), and in fullscreen extended from the frame square to the
+ * whole stage (v1.4): what `placeHeroView` does for a fit, for any view (v1.7: the close-up's move).
+ */
+export function placeView(camera: PerspectiveCamera, position: Vector3, target: Vector3, aspect: number, offset: readonly [number, number], frame?: FrameRect): void {
   if (frame) aspect = 1;
   camera.clearViewOffset();
   camera.aspect = aspect;
-  camera.position.copy(aim).addScaledVector(cameraDirection(), distance);
-  camera.lookAt(aim);
+  camera.position.copy(position);
+  camera.lookAt(target);
   camera.updateMatrixWorld();
   const [ox, oy] = offset;
   if (frame) {
@@ -340,10 +384,10 @@ export function solveHeroFits(
   fill: { readonly height: number; readonly width: number },
   clearance: number,
   frame?: FrameRect,
+  dir: Vector3 = cameraDirection(),
 ): HeroFraming[] {
   // Fullscreen (v1.4): fit the frame square exactly as the square stage, then extend the view.
   if (frame) aspect = 1;
-  const dir = cameraDirection();
   camera.clearViewOffset();
   camera.aspect = aspect;
   camera.updateProjectionMatrix();
@@ -413,4 +457,89 @@ export function solveHeroFits(
       pathExtents: [a.x0 - ox, a.x1 - ox, a.y0 - oy, a.y1 - oy],
     } satisfies HeroFraming;
   });
+}
+
+/**
+ * v1.7 (#42): the close-up's fit. The subject's points are the hero, along the close-up's own
+ * direction at their own centre, held by their width (`widthFill`; their height may fill up to
+ * 1 − clearance), centred; nothing else is in it. Exact for any point set (no hull reduction: a
+ * close-up's subject is a handful of corners).
+ */
+export function solveCloseFit(camera: PerspectiveCamera, aim: Vector3, aspect: number, closeUp: CloseUp, points: readonly Vector3[], clearance: number, frame?: FrameRect): HeroFraming {
+  const dir = viewDirection(closeUp.azimuthDeg, closeUp.elevationDeg);
+  return solveHeroFits(camera, aim, aspect, points, [[]], { height: 1 - clearance, width: closeUp.widthFill }, clearance, frame, dir)[0]!;
+}
+
+/** The camera pose a fit places (`placeHeroView`): its position, target and slide. */
+export function fitPose(aim: Vector3, distance: number, offset: readonly [number, number], dir: Vector3 = cameraDirection(), out?: ViewPose): ViewPose {
+  const o = out ?? { position: new Vector3(), target: new Vector3(), offset: [0, 0] };
+  o.position.copy(aim).addScaledVector(dir, distance);
+  o.target.copy(aim);
+  o.offset[0] = offset[0];
+  o.offset[1] = offset[1];
+  return o;
+}
+
+const ndc = new Vector3();
+const arc0 = new Vector3(), arc1 = new Vector3();
+const probe = new PerspectiveCamera();
+/** Where `p` lands (NDC, before the slide) seen from `position` looking at `target`. */
+function sightOf(p: Vector3, position: Vector3, target: Vector3, out: [number, number]): [number, number] {
+  probe.position.copy(position);
+  probe.lookAt(target);
+  probe.updateMatrixWorld();
+  probe.updateProjectionMatrix();
+  ndc.copy(p).project(probe);
+  out[0] = ndc.x;
+  out[1] = ndc.y;
+  return out;
+}
+
+/**
+ * v1.7 (#42): the move from a view `from` (the rest fit, or wherever the decline's pull has it) to
+ * the close-up `to`, both aimed through the same lens, at `k` (0 exactly `from`, 1 exactly `to`).
+ * A boom and push-in about the subject's centre `subject`: the camera travels on an arc round it,
+ * its distance moving geometrically (equal steps of k are equal ratios of size, as the decline's
+ * dolly) and its elevation and azimuth linearly; it turns from `from`'s target to the subject's;
+ * and the slide is set so the subject's centre crosses the screen on a straight line from where
+ * `from` shows it to where `to` does — no swing. Every quantity is smooth in k, so a C1 k(t) is a
+ * C1 move. `fov` and `aspect` are the lens and the fitted frame's aspect (1 in fullscreen), which
+ * the slide is measured in.
+ */
+export function closeUpView(from: ViewPose, to: ViewPose, subject: Vector3, k: number, fov: number, aspect: number, out?: ViewPose): ViewPose {
+  const o = out ?? { position: new Vector3(), target: new Vector3(), offset: [0, 0] };
+  const kk = Math.min(1, Math.max(0, k));
+  if (kk <= 0) return copyPose(from, o);
+  if (kk >= 1) return copyPose(to, o);
+  probe.fov = fov;
+  probe.aspect = aspect;
+  // The arc: spherical coordinates of each camera about the subject.
+  arc0.copy(from.position).sub(subject);
+  arc1.copy(to.position).sub(subject);
+  const r0 = arc0.length(), r1 = arc1.length();
+  const el0 = Math.asin(arc0.y / r0), el1 = Math.asin(arc1.y / r1);
+  const az0 = Math.atan2(arc0.x, arc0.z);
+  let az1 = Math.atan2(arc1.x, arc1.z);
+  if (az1 - az0 > Math.PI) az1 -= 2 * Math.PI;
+  else if (az0 - az1 > Math.PI) az1 += 2 * Math.PI;
+  const r = r0 * Math.pow(r1 / r0, kk), el = el0 + (el1 - el0) * kk, az = az0 + (az1 - az0) * kk;
+  o.position.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(r).add(subject);
+  o.target.lerpVectors(from.target, to.target, kk);
+  // The subject's centre on screen: where each end shows it (after its slide), on a straight line.
+  const q0 = sightOf(subject, from.position, from.target, [0, 0]);
+  const q1 = sightOf(subject, to.position, to.target, [0, 0]);
+  const qx = q0[0] - from.offset[0] + (q1[0] - to.offset[0] - (q0[0] - from.offset[0])) * kk;
+  const qy = q0[1] - from.offset[1] + (q1[1] - to.offset[1] - (q0[1] - from.offset[1])) * kk;
+  const q = sightOf(subject, o.position, o.target, [0, 0]);
+  o.offset[0] = q[0] - qx;
+  o.offset[1] = q[1] - qy;
+  return o;
+}
+
+function copyPose(a: ViewPose, o: ViewPose): ViewPose {
+  o.position.copy(a.position);
+  o.target.copy(a.target);
+  o.offset[0] = a.offset[0];
+  o.offset[1] = a.offset[1];
+  return o;
 }

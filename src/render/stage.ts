@@ -1,7 +1,7 @@
 import { Box3, Color, type Material, Mesh, type MeshStandardMaterial, Object3D, type OrthographicCamera, PCFShadowMap, PerspectiveCamera, Scene, type Texture, Vector3, VSMShadowMap, type WebGLRenderer } from 'three';
 import {
-  createStageCamera, type FrameInsets, type FrameRect, type FramingPair, frameSquare, fitCameraToBounds, fitPerspectiveToBounds, framingHull, PERSPECTIVE_FOV, placeHeroView,
-  pulledView, solveHeroFits,
+  cameraDirection, type CloseUp, closeUpView, createStageCamera, type FrameInsets, type FrameRect, type FramingPair, frameSquare, fitCameraToBounds, fitPerspectiveToBounds,
+  fitPose, framingHull, PERSPECTIVE_FOV, placeHeroView, placeView, pulledView, solveCloseFit, solveHeroFits, viewDirection, type ViewPose,
 } from './camera.ts';
 import { HERO_FILL, PATH_CLEARANCE } from './framing.ts';
 import { Bloom } from './bloom.ts';
@@ -60,6 +60,8 @@ function releaseDfgLUT(renderer: WebGLRenderer, scene: Scene): void {
 export interface FramingReport extends FramingPair {
   /** The live pull (0 rest, 1 decline). */
   pull: number;
+  /** v1.7 (#42): the live close-up channel (0 the pulled view, 1 the close-up; 0 for a scene without one). */
+  close: number;
   /** Hero fits solved since the stage was made (the render loop never solves one). */
   solves: number;
   /** Points the fit works on, after framingHull. */
@@ -206,12 +208,14 @@ export class Stage {
    */
   setContent(
     object: Object3D | null, bounds?: Box3, studio?: { wallZ?: number; scale?: number }, framePoints?: readonly Vector3[], heroPoints?: readonly Vector3[],
-    restFramePoints?: readonly Vector3[],
+    restFramePoints?: readonly Vector3[], closeUp?: CloseUp,
   ): void {
     if (this.content) this.scene.remove(this.content);
     this.content = object;
     this.framePoints = this.heroPoints = this.restPoints = undefined;
+    this.closeUp = this.closePoints = null;
     this.pull = 0;
+    this.close = 0;
     this.fits.clear();
     if (object) {
       this.scene.add(object);
@@ -222,6 +226,15 @@ export class Stage {
       this.framePoints = world(framePoints);
       this.heroPoints = world(heroPoints);
       this.restPoints = world(restFramePoints);
+      if (closeUp?.points.length) {
+        // v1.7: the close-up's subject in the world (a handful of corners: no hull), aimed at its centre.
+        this.closeUp = closeUp;
+        this.closePoints = closeUp.points.map((p) => p.clone().applyMatrix4(toWorld));
+        this.closeAim.set(0, 0, 0);
+        for (const p of this.closePoints) this.closeAim.add(p);
+        this.closeAim.multiplyScalar(1 / this.closePoints.length);
+        viewDirection(closeUp.azimuthDeg, closeUp.elevationDeg, this.closeDir);
+      }
       if (bounds) this.bounds.copy(bounds).applyMatrix4(toWorld);
       this.assignOwnEnvironment(object);
       // v1.4: the set scales with the scene's world scale (rig.ts setWall): the cove and the key's
@@ -318,6 +331,14 @@ export class Stage {
   framing: FramingPair | null = null;
   /** The decline pull-back (v1.5): 0 the rest fit, 1 the decline fit (`setPull`). */
   private pull = 0;
+  /** v1.7 (#42): the close-up channel: 0 the pulled view, 1 the close-up (`setClose`). */
+  private close = 0;
+  /** The content's close-up (null without one): its spec, its subject in the world, its aim and direction. */
+  private closeUp: CloseUp | null = null;
+  private closePoints: Vector3[] | null = null;
+  private readonly closeAim = new Vector3();
+  private readonly closeDir = new Vector3();
+  private readonly poses: [ViewPose, ViewPose, ViewPose] = [0, 1, 2].map(() => ({ position: new Vector3(), target: new Vector3(), offset: [0, 0] as [number, number] })) as [ViewPose, ViewPose, ViewPose];
   /**
    * Solved hero fits by aspect (v1.5). A fit depends on the content and the aspect only (the
    * fullscreen frame square is always fitted square, then placed), so a resize, an inset change,
@@ -350,11 +371,33 @@ export class Stage {
     return this.pull;
   }
 
+  /**
+   * v1.7 (#42): the close-up channel, 0 the (pulled) view, 1 the content's close-up, in between the
+   * boom and push-in of `closeUpView`. Set every frame by the controller from the scene's
+   * `frameClose()`, like the pull; it holds across resizes and stills. No fit is solved.
+   */
+  setClose(k: number): void {
+    const next = this.closeUp ? Math.min(1, Math.max(0, Number.isFinite(k) ? k : 0)) : 0;
+    if (next === this.close) return;
+    this.close = next;
+    this.placeView();
+  }
+
+  get currentClose(): number {
+    return this.close;
+  }
+
   private placeView(): void {
     const f = this.framing, v = this.view;
     if (!f || !v || !(this.camera instanceof PerspectiveCamera)) return;
     const { distance, offset } = pulledView(f.rest, f.decline, this.pull);
-    placeHeroView(this.camera, v.aim, v.aspect, distance, offset, v.frame);
+    if (this.close > 0 && f.closeUp) {
+      const [a, b, c] = this.poses;
+      fitPose(v.aim, distance, offset, cameraDirection(), a);
+      fitPose(this.closeAim, f.closeUp.distance, f.closeUp.offset, this.closeDir, b);
+      closeUpView(a, b, this.closeAim, this.close, this.camera.fov, v.frame ? 1 : v.aspect, c);
+      placeView(this.camera, c.position, c.target, v.aspect, c.offset, v.frame);
+    } else placeHeroView(this.camera, v.aim, v.aspect, distance, offset, v.frame);
   }
 
   /** Fullscreen layout: the overlay insets; null frames the whole canvas (square layout). */
@@ -390,6 +433,8 @@ export class Stage {
           const sets = this.restPoints?.length ? [this.restPoints, paths] : [paths];
           const fits = solveHeroFits(this.camera, aim, aspect, this.heroPoints, sets, HERO_FILL, PATH_CLEARANCE, frame);
           pair = { rest: fits[0]!, decline: fits[fits.length - 1]! };
+          // v1.7: the close-up's fit, in the same solve (a fit is still solved once per content and aspect).
+          if (this.closeUp && this.closePoints) pair.closeUp = solveCloseFit(this.camera, this.closeAim, aspect, this.closeUp, this.closePoints, PATH_CLEARANCE, frame);
           this.fits.set(key, pair);
           this.fitSolves++;
         }

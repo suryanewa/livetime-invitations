@@ -1,4 +1,5 @@
 import type { SequenceName } from '../../core/types.ts';
+import { cubicBezier } from '../../motion/curves.ts';
 import { declinePull } from '../../render/framing.ts';
 import { type AnswerChange, changeTime, REWIND } from './sequences.ts';
 
@@ -117,4 +118,67 @@ function planCameraRewind(c: AnswerChange): { span: number; hold: number; p0: nu
   const plan = found ?? { span: R + TAILS[TAILS.length - 1]!, hold: SHAPES[SHAPES.length - 1]!, p0, v0 };
   planOf.set(c, plan);
   return plan;
+}
+
+// ── v1.7 (spec revision #42, pending Surya): the close-up on the card ─────────────────────────────
+
+/**
+ * The close-up channel (0 the rest view, 1 the card head-on; src/render/camera.ts `closeUpView`) on
+ * the reveal's own clock τ (the steam's: the accept's time, running on past its 1.5 s in
+ * `simulate`). It waits until the cloud has gone (τ 2.8 s, the steam's CLOUD.release + life) and
+ * arrives as the veil's last wisps cross the card (4.4 s, where the plate stops steaming, VEIL.end):
+ * the guest sees the steam clear, then the camera rises over the plate and turns down to read the
+ * card. The accepted pose *is* the close-up (1): reduced motion, a saved accept and the poster.
+ */
+export const CLOSE = { from: 2.8, to: 4.4 } as const;
+/**
+ * The move's ease: a gathered start and a long settle, zero speed at both ends (C1 with the still
+ * camera before and after), as the decline's dolly (PULL_EASE) but symmetric enough for a 1.6 s
+ * boom: cubic-bezier(0.45, 0, 0.25, 1), peak speed ≈ 1.9 × the mean (1.2 close/s).
+ */
+export const CLOSE_EASE = cubicBezier(0.45, 0, 0.25, 1);
+/** The close channel at reveal time τ: 0 to CLOSE.from, 1 from CLOSE.to. */
+export function closeIn(tau: number): number {
+  const u = (tau - CLOSE.from) / (CLOSE.to - CLOSE.from);
+  return u <= 0 ? 0 : u >= 1 ? 1 : CLOSE_EASE(u);
+}
+/** closeIn's rate (1/s) at τ. */
+export const closeRate = (tau: number) => (closeIn(tau + 1e-4) - closeIn(tau - 1e-4)) / 2e-4;
+
+/**
+ * A change of mind away from the close-up: the channel comes home on its own C1 curve (as the
+ * decline's camera does on the way back, `rewindPull`): it leaves at the speed it had (no velocity
+ * jump), lands at rest on 0 (zero speed and acceleration), and is no faster than the decline's own
+ * dolly at its top speed (PULL_TOP_SPEED, 3.4/s): from the close-up at rest, 0.56 s. The decline's
+ * bin waits for it (planAnswerChange's `closeHome`): its pull may start BIN_DELAY before the camera
+ * is home, so the two moves meet in one outward motion, and the bin enters only once it is.
+ */
+export interface CloseHome {
+  c0: number;
+  v0: number;
+  span: number;
+}
+/** The shortest and longest homecoming (s). */
+export const CLOSE_HOME = { min: 0.2, max: 0.7 } as const;
+export function planCloseHome(c0: number, v0: number): CloseHome | null {
+  if (c0 <= 1e-6 && Math.abs(v0) <= 1e-6) return null;
+  const top = PULL_TOP_SPEED * 1.0001;
+  for (let span = CLOSE_HOME.min; span < CLOSE_HOME.max; span += 0.01) {
+    let ok = true, prev = c0;
+    for (let i = 1; i <= N && ok; i++) {
+      const p = homeCurve(i / N, c0, v0 * span);
+      ok = Math.abs(p - prev) / (span / N) <= top;
+      prev = p;
+    }
+    if (ok) return { c0, v0, span: Math.round(span * 100) / 100 };
+  }
+  return { c0, v0, span: CLOSE_HOME.max };
+}
+/** The homecoming at u ∈ [0, 1]: from c0 leaving at m0 (per unit u) to 0, a smootherstep landing. */
+const homeCurve = (u: number, c0: number, m0: number) => rewindCurve(u, c0, m0, 0);
+/** The close channel `t` s into the change (0 from the span on), clamped to [0, 1]. */
+export function closeHome(h: CloseHome | null, t: number): number {
+  if (!h || t >= h.span) return 0;
+  if (t <= 0) return Math.min(1, Math.max(0, h.c0));
+  return Math.min(1, Math.max(0, homeCurve(t / h.span, h.c0, h.v0 * h.span)));
 }
