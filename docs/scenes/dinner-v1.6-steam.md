@@ -1004,6 +1004,209 @@ and clock end, the latched lift never falling, (on the branch) the box containin
 `evidence/v1.6/steam-review-fixes/` (before/after sheets for the accept, the two late declines and the change back,
 `measurements.txt`, `tools/`).
 
+## Polish round 8: the second structural round — a light of its own, a full-resolution edge (`v1.6/steam-polish8`)
+
+The seventh judge left the steam at laptop 7 / phone 7.5 (7.5 / 7.5 at CSS size), **not signed**, on two items that are not
+constants: no light direction in the volume (the own colour 246–251 everywhere, lit − shaded +2 / +3 / +5 at 0.61 / 0.67 /
+0.74 s, target ≥ +15), and soft, combed edges at 2× (on the dome alone edge gradient 0.56–0.99, fine detail 0.43–0.55, the
+crown 1.13–1.41:1 against ≥ 1.2, ≥ 0.6, ≥ 2:1). Budget for the round: **≤ 9.0 ms of steam at the app's real framing, the whole
+Dinner frame pacing at 60 fps, zero with no steam.** Every number below is the judge's own script on the laptop 1240² clip of
+1280 × 720 @2 (WARM 2000, the judge's `frames.ts`), its no-steam twins byte-identical on this build, re-renders
+byte-identical; "before" is polish 7 (main 4e815b7) on the same scripts (its frames byte-identical to the judge's re-check
+frames). All of it is in `evidence/v1.6/steam-polish8/measurements.txt`, `cost.txt`, `pacing.txt`, `prototype.txt`, the crops
+(`guest-laptop-css-…`, `guest-phone-css-…`, `terminator-1to1-…`, `edge-1to1-…`, `edge-css-…`: polish 7 above, polish 8 below) and
+`frames/` (the laptop clip at 0.48 / 0.61 / 0.74 / 0.99 s for both, the full laptop and phone at 0.74 s); the
+scripts in `evidence/v1.6/steam-polish8/tools/` (port 5621; `m8.sh` runs the judge's set on a run directory, `lt.sh` the
+light's, `proto.sh` the edge's, `terms.sh` + `py8/opt.py` + `py8/search.py` the light's balance offline).
+
+**Research.** Film and food photography light steam from behind: steam is white and translucent, so against a lighter or
+equal background it has no edge; it reads when a light behind it (at "10–11 o'clock", behind and to the side) shines through
+it towards the lens against a darker background, its thin edges glowing (expertphotography.com, fstoppers.com "How to
+capture steam and smoke in food photography"). The physics is the droplets' forward scattering (Henyey–Greenstein g ≈ 0.7–0.9:
+the silver lining of a cloud between the viewer and the sun; Schneider & Vos 2015 use a two-lobe HG for exactly that): the
+light behind reaches the camera through the thin parts, the dense body, which it cannot cross, stays dark. Two findings about
+this scene came out of measuring the light transport term by term (DEBUG 16, the own linear radiance, below):
+(1) **with the rig's key alone no balance of the existing terms separates the sides.** The steam is optically thin (the far
+rim seen through it at T 0.3–0.5), and the key, up-left-front and 48° off the camera, lights the dome's visible front through
+its top: over own.py's spans the key's own lit / shaded ratio is 1.35–1.6, the fill flat; an offline search over the terms'
+weights, the exposure and the shoulder (each light's in-scatter is linear in its weight, so the own colour of any balance can
+be composed from renders at unit weight: `terms.sh`, `py8/opt.py`) gave at most +5 levels at 0.61–0.74 s once the shade is
+held over the wall to 1.25 s (it goes under it at 0.9–1.25 s as the cap rises). The key's self-shadow at ×20–×60 shades the
+dome's underside and lower right, not its right side. (2) **The over-composite caps a backlit wisp**: the composite lays the
+steam's tone-mapped own colour over the scene by its coverage, so a wisp of coverage 0.2 over the 191-level cove reaches 203
+at most however bright its light; light adds: the same wisp with three units of radiance on a cove of 0.55 tone maps to ≈ 245.
+
+**The prototype comparison, (a) against (b)** (`prototype.txt`, the dome alone on the judge's `soft.py`, `aniso.py` at DoG 2/8,
+`hfsplit.py`; ≈ an hour on the throwaway branch `proto/steam8-ab`, e67cd6d):
+
+| on the dome alone, 0.48–0.74 s | edge gradient | fine detail | crown | temporal / spatial grain (0.58 / 0.67 / 0.90 s) | cost |
+|---|---|---|---|---|---|
+| polish 7 | 0.59–0.99 | 0.43–0.55 | 1.14–1.42, horizontal | 0.74 / 0.70 / 0.57, 0.87 / 0.61 / 0.48 | 6.1–6.9 ms (that session) |
+| (a1) the whole march at 1 px per CSS px | 0.59–1.04 | 0.49–0.64 | 1.02–1.44 | 0.93 / 0.81 / 0.66, 1.00 / 0.71 / 0.53 | — |
+| (a2) + a sharper boundary with 1.5 mm streaked tears | 0.58–1.03 | 0.52–0.67 | 1.21–1.73, horizontal | 1.01 / 0.83 / 0.68 | — |
+| (a3) + thinner, denser, finer sheets everywhere | **0.69–1.25** | **0.66–0.77** | 1.16–1.49, vertical | 1.19 / 1.14 / 0.99, 1.91 / 0.95 / 0.79 | — |
+| (b) the sheet field advected per frame on 128³ (2.6 mm), curl noise, the present march | 0.53–0.86 | 0.41–0.52 | 1.30–1.55, horizontal | 0.76 / 0.59 / 0.54 | **+5–6 ms** |
+
+**Decision: (a).** (b) is softer than the analytic field it advects (the grid's resampling diffuses the sheets each step; the
+analytic flow already carries the field exactly, so the advection adds only the curl noise's stretching) and costs 128 slice
+draws a frame (+5–6 ms at the laptop, over the budget before anything else); its finest structure is two voxels, 5 mm, where
+fine detail under 1.5 px at 2× is sub-millimetre. (a) reaches the edge and the fine detail only with finer structure *and* a
+finer march, at the price of grain — so the structure goes where the judges asked for it, in the edge band, marched at full
+resolution, the interior staying as it was.
+
+**What was built.**
+
+1. **The steam lit on purpose** (`models/dinnerSteam.ts` `STEAM_LOOK`; the march, the light volume, the composite).
+   - *The window as an area light.* The rig's key is the window's centre (high, in front); its steam share 2.8 → **1.0**,
+     shadowing at ×60 (`keyFall` 6 → 60, `keyFloor` 0.15 → 0); and the window's low spread from its side, **`windowWrap`**
+     (3.0, its own optical depth through the steam's mean at ×20, direction 0.4 / 0.85 / 0.35 towards the camera / left / up
+     in the camera's horizontal frame), a second key direction seen only by the steam: across the dome its light falls from
+     the window's side to the far side — the terminator.
+   - *The room as the ambient it is.* 0.15 → **0.65**, half of it from every side (`roomFloor` 0.5, was 0.3): the shade's floor
+     is the room's light, about the cove's own (a non-absorbing fog lit only by its surroundings has their radiance), so the
+     shade never goes under the wall; its tint #E6D7C0 → **#EEE9E1** (at the old tint the shade read beige, as dust). The
+     octaves 0.6× (0.108 / 0.036).
+   - *A back light of its own* (`backLight`): behind, above and a little right of the camera (0.8 / 0.25 / 0.55 behind /
+     right / up), HG g 0.6, its own light volume (a second 32³ atlas, `light2`, one more pass), only on the condensate's outer
+     5 mm (`rim`: the boundary's signed distance before the edge band's tears, smooth over centimetres, squared), not on the
+     gush, the veil or the seating's puffs. **It is composited as light**: its share of the steam's light rides the march's
+     fourth value through the resolve (the key's share was there: the steam's colour is now a fixed key / room blend,
+     `keyShare` 0.5), and against the cove (beyond 9 su from the camera: not the plate, the cloche or the table) the composite
+     adds what it adds there — the steam's light and the cove's (`radiance.cove`) tone mapped with and without it — so a
+     backlit edge is brighter than its coverage of a white colour. Tried and measured on the way: further right (0.75 / 0.5 /
+     0.3) it lit the shaded side's body (own colour +4 where +15 was aimed); in the own colour (an over-layer) it took the
+     separation +20 → +6…+13; sharpened by two fine taps at ×200 it was a sharp light point-sampled by the march (temporal grain
+     1.5–1.7); a hard rim at the boundary, grain 1.28.
+   - *The own colour off the shoulder*: a tone curve of the steam's own (`steamTone`: the scene's neutral curve — its toe,
+     offset and desaturation — with its shoulder from 0.5 rolling off exponentially, was 0.76 hyperbolic) at an exposure of
+     **0.79**: the scene's curve maps 1.0 → 240 and 2.0 → 251 of 255 (11 levels for a doubling), this one 1.0 → 231, 2.0 → 252
+     before the exposure.
+   - The gush's density 1.72 → **1.35** (`GUSH.density`): the new ambient and the window's spread light the thin puff fully
+     where the dense body shades itself; its share is kept.
+2. **The edge** (`STEAM_LOOK.edge`, `edgeBand`; the march's and the resolve's `uEdgePass`).
+   - *A full-resolution edge pass.* After the half-resolution march and its resolve, the silhouette's band is marched again
+     at **one march pixel per CSS pixel** (0.607 of the laptop's 1.647× buffer, 0.5 of the phone's 2×): a pixel is marched
+     where the half-resolution steam's coverage falls under 0.05 within a 6 CSS px ring (≈ 4.5 mm at the laptop: its outline,
+     its holes, its torn ends), skipped inside (the half-resolution steam taken as it is) and outside; the gush and the veil
+     keep the half-resolution steam; 0.6 of the steps (its rays cross the outer layer). Its own history (reprojected through
+     the flow from the previous frame's state, snapshotted before the half-resolution resolve replaces it; clipped to the
+     neighbourhood's mean ± 1.25 σ; built from four jittered marches where it has none), blended into the half-resolution
+     steam where the band ends (no seam). Only while a cloud is young (0.8 s of its thermal: to ≈ 1.2 s of the reveal), and
+     not on the Low tier.
+   - *Millimetre tears in the band.* The boundary's band 0.25× (the young envelope ≈ 1.5 mm, was 6 mm), displaced by a fine
+     field in the cloud's own frame (carried with its air) — 3.4 mm deep, ≈ 1 mm across, 5× taller than wide, 10× at the crown —
+     fading in over the outer 1 cm. The sheets inside are unchanged: finer, denser sheets everywhere (prototype a3) reach the
+     fine detail but are the interior's grain.
+   - Tried and dropped: the crown's tears taller (5 → 30:1) and stronger (no change to the crown's measure: its band, 3–15 mm
+     inside the outline, is the sheets' and the outline's, not the tears'); a stronger history (blend 0.06, clip 1.6 σ:
+     grain 1.16–1.19, worse, as polish 5 found); more spatial denoise (no change); the body's sheets 0.6× (grain unchanged,
+     the edge gradient down).
+
+**Item 1 against its targets** (laptop clip; before → after):
+
+| | target | polish 7 | polish 8 |
+|---|---|---|---|
+| own colour lit − shaded (own.py) at 0.61 / 0.67 / 0.74 s | 15–25 | +3 / +3 / +5 | **+18 / +18 / +21** (0.48 s +19; 0.90 s +37) |
+| lit / shaded own colour at 0.61 s | room above the shade | 249 / 246 | 250 / 232 |
+| own colour top − underside (owntop.py) at 0.61 / 0.67 / 0.74 / 0.90 s | readable terminator | +5 / +5 / +7 / +8 | **+17 / +15 / +20 / +29**; 0.99 s +13, 1.12 / 1.25 s −3 / −6 |
+| body's own colour p5–p95 at 0.61 / 0.67 / 0.74 s | — | 11 / 13 / 61 | 28 / 33 / 61 |
+| sign over the cove (litfair.py, own colour over the wall) | consistent | 249/235 at 0.90 s, else unmeasurable | 246/210 (0.90 s), 233/210 (0.99 s): lit side over the shade wherever both are measurable; the composite over the wall +26 / +11 / +19 at 0.90 / 0.99 / 1.12 s, −3 at 0.74 s (504 px on the lit side: the thin edge by the cloche); polish 7 −14 at 0.74 s |
+| a rim where the back light grazes the sheets | — | none | a glow on the crown's and the right side's outer layer against the cove, legible from ≈ 0.7 s, strongest on the rising cap's top at 0.9–1.3 s (`guest-laptop-css-p7top-p8bottom.png`) |
+| steam darker than the wall (dark.py) | 0 | 0 at every frame | 0 at 0.48–0.74 s and 1.12–1.25 s; **0.1 k px at 0.90 and 0.99 s** (≈ 300 px, −4…−6 levels, over the lifted cloche's window reflection, N ≈ 234: the fog in the cloche's shadow veiling a highlight, not the cove) |
+| the white plate: centre / side | ≤ +4 / ≥ −10 | +2…+5 / +3…−9 | **+1…+2 / +2…−8** |
+| far-rim transmittance 0.43–0.74 s | 0.3–0.5 | 0.31–0.44 | **0.29–0.45** (0.29 at 0.61 s: the edge band's sharper boundary; a hair under) |
+| warmth R − B of the bright steam | ≥ +4 | +5.4…+6.1 | **+6.9…+7.6** |
+| the cloche's reflections the only modelling | no | they were | the own colour carries it: lit 247–250, shade 207–232 over the same spans |
+
+**Item 2 against its targets** (the dome alone — the gush-off twin, as the judge measured it; the whole frame in
+`measurements.txt`):
+
+| at 0.48 / 0.54 / 0.58 / 0.61 / 0.67 / 0.74 s | target | polish 7 | polish 8 |
+|---|---|---|---|
+| edge band's gradient (soft.py grad) | ≥ 1.2 | 0.59 / 0.97 / 0.99 / 0.96 / 0.70 / 0.56 | 0.94 / 1.02 / 0.95 / 0.95 / 0.74 / 0.68 — **not met** |
+| the outline's gradient (soft.py oedge) | — | 0.75 / 1.14 / 1.20 / 1.38 / 1.35 / 1.27 | **1.97 / 1.99 / 1.89 / 1.80 / 1.91 / 1.70** |
+| fine detail under 1.5 px (soft.py fine) | ≥ 0.6 | 0.48 / 0.46 / 0.43 / 0.44 / 0.55 / 0.52 | 0.64 / 0.51 / 0.47 / 0.48 / 0.60 / 0.57 — **met at 0.48 and 0.67 s only** |
+| crown anisotropy (DoG 2/8) at 0.54 / 0.61 / 0.67 / 0.74 s | ≥ 2:1 | 1.36 / 1.22 / 1.14 / 1.42 (horizontal but the last) | 1.72 / 1.76 / 1.76 / 1.15 — **not met, and horizontal** (gx/gy 0.57–0.59: the crown's lit rim and its crisper outline run along it) |
+| walls (R / L) at 0.54–0.74 s | — | R 1.33–2.59, L 1.47–2.15 | R 1.78–1.98, L 1.41–2.77 |
+| temporal grain over the backdrop at 0.58 / 0.67 / 0.90 s (hfsplit upper T) | ≤ 0.9 | 0.74 / 0.70 / 0.57 | **0.89 / 0.93 / 0.79** |
+| spatial grain (hfsplit upper S) | ≤ 0.9 | 0.87 / 0.61 / 0.48 | **1.03 / 0.75 / 0.64** |
+| march px per CSS px over the silhouette's band, laptop / phone | ≥ 1 | 0.64 / 0.85 | **1.0 / 1.0** (the interior 0.64 / 0.85 as before) |
+
+Where the grain rose and why (each measured): the light alone, with the scene's neutral tone curve, leaves it at
+0.80 / 0.72 / 0.62 and 0.91 / 0.62 / 0.51; the steam's own tone curve, which spends more levels on the shade (the point of
+item 1), shows the march's residual noise more (+15–25 %); the back light's glow adds ≈ +0.1 at 0.58 and 0.67 s; the edge pass
+and its tears ≈ +0.05. The fine-detail measure counts noise as well as structure (with no history this build's dome reaches
+0.7+), so it and the grain trade: the round's early edge builds reached fine 0.63–0.76 at grain 1.07–1.33.
+
+**Cost** (`bench6.ts`, the judge's in-app bench at the real framing and device scale factor, p10 of steam visible less hidden;
+`cost.txt`): the machine throttled for an hour of this session (the
+steam-hidden frame rising from 2.5 to 25 ms within a run, polish 7 alike): those runs are discarded; the table is the quiet
+runs, with polish 7 benched in the same session as a control (a temporary worktree of main on port 5622).
+
+| steam cost, p10 (p50) ms | 0.3 | 0.4 | 0.45 | 0.5 | 0.55 | 0.6 | 0.65 | 0.7 | 1.0 | 1.2 | 1.5 | 2.2 | 3.0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| laptop, polish 7 (this session) | – | – | 5.2 (5.6) | – | – | 4.8 (5.0) | – | – | 3.4 (3.7) | – | – | 4.1 (4.6) | – |
+| **laptop, polish 8** | **5.9 (6.1)** | **7.2 (7.6)** | **7.6 (8.3)** | **7.4 (7.5)** | **7.4 (7.6)** | **7.6 (8.0)** | **6.9 (7.3)** | **7.0 (7.5)** | **5.7 (6.0)** | **5.9 (6.4)** | **4.6 (5.4)** | **4.8 (5.5)** | **2.2 (2.2)** |
+| phone, polish 7 (this session) | – | – | 4.3 (4.4) | – | – | 4.5 (4.6) | – | – | 3.4 (3.5) | – | – | – | – |
+| **phone, polish 8** | **5.7 (5.6)** | **6.3 (6.3)** | **6.4 (6.5)** | **6.9 (7.0)** | – | **6.7 (6.9)** | – | **5.7 (5.8)** | **4.5 (4.7)** | **5.7 (5.9)** | **5.5 (5.6)** | **5.0 (5.2)** | **1.5 (1.6)** |
+
+Two clouds (1000:decline, 1450:accept) at 1.7 / 1.8 / 1.9 s: laptop **6.5 / 6.3 / 6.8**, phone **6.0 / 5.3 / 5.6**; the resumed
+reveal (900:decline, 1100:accept) at 1.7 / 1.9 / 2.1 s: laptop **5.0 / 5.9 / 5.0**, phone **4.4 / 4.8 / 5.0**. **Within 9.0 ms
+everywhere (the worst p50 8.3 ms, the laptop at 0.45 s); +2.2–2.8 ms over polish 7** while the edge pass runs (to ≈ 1.2 s),
++0.7–1.5 after (the back light's and the window's light volume, their march terms, the glow). The whole Dinner frame with
+steam p50 ≤ 10.8 ms at the laptop, ≤ 8.8 at the phone (steam hidden 2.5 / 1.9). Zero with no steam (the scene-depth specs).
+
+**Pacing** (`pace-scene.ts`, SCENE=dinner, three accepts each, `pacing.txt`): laptop **p50 16.70, p95 16.70–16.80, max 16.8, no
+frame over 20 ms** (×3, load 6.4); phone **p95 16.70–16.80 in all twelve accepts**, nine clean, three with 3–4 frames of 33–50 ms
+(at 1.8–2.2 s in two, 3.5–5.6 s in one; load 4.5–5.4: Backblaze and Adobe after the machine woke); the polish-7 control in the
+same minutes ×3 clean. Not shown to be the steam (its cost at 1.8–5.6 s is ≤ 5.6 ms of a 16.7 ms frame), not shown not to be.
+
+**The regression list** (every judge's; the final code; `measurements.txt`):
+
+- The beat and the envelope: dome IoU at 0.48 s **0.69** in the whole frame (polish 7 0.71; target ≥ 0.7: a hair under), **0.79**
+  on the dome alone (0.84); 0.65 / 0.67 at 0.54 / 0.61 s (0.64 / 0.67). Inside / outside the seated outline 86 / 14 / 5.2 /
+  2.5 / 1.8 / **1.6** at 0.45–0.61 s, 1.9 / 1.7 at 0.64 / 0.67 s (≥ 1.6 to 0.61 s: met). The mass (Σ B over B > 8) peaks at
+  0.74 s (4.97 M) and falls at every listed frame but one: **+1 % at 1.12 s** (3.32 M against 3.30 M at 1.06 s; polish 7 fell
+  every frame); **half the peak at ≈ 1.35 s** (0.53 at 1.31 s, 0.49 at 1.38 s; polish 7 1.30 s): the risen cap is lit by the
+  window's spread and rims as it thins. Edge first: the edge band falls to 0.44 / 0.37 of its peak at 0.99 / 1.12 s while the
+  core holds 0.81 / 0.63. Centroid 701 → 531 rows by 1.18 s: **6.3 cm** (≥ 6). The cap 0.66 → 0.52 of the plate's gilt rim at
+  0.99–1.31 s (0.62 → 0.52; target 0.5–0.65: 0.66 at 0.99 s). Lip and the cap's fill: not re-measured (`lip.py` needs the
+  ring's projection; the field and the ring are unchanged; the cap's shade side is now in shade, which the lip measure reads).
+- The gush: share of the visible steam at 0.48 s **20.9 %** (≤ 25; polish 7 22.1), area ≤ 68 k px, p90 21–33, legible 22–39 k
+  px at p90 22–36 at 0.42–0.48 s (31 k at p90 18 at 0.50 s: a hair under polish 7's 22), carried up +1.5 → +4.1 cm by 0.61 s,
+  gone by 0.70 s, no pop.
+- Box clip (`clip.py` in every direction, 0.74–1.50 s): right runs ≤ 23 px (polish 7 ≤ 14; the sharper boundary's straight
+  stretches on the right wall at 0.74 s), the left and bottom runs the cloche's and the plate's far rim's occlusions, the top
+  run at 1.50 s the frame's edge; no vertical cut down the flank.
+- The decline at 0.5 s: the rim puffs −5…−29 % a frame from 0.85 s while they show at ≥ 13 levels, the faint tail (≤ 12 levels)
+  −41…−64 % to nothing by 1.22 s (as polish 5–7); **over the seated crown 4 / 63 px at 0.70 / 0.74 s** (polish 7 0 / 0;
+  p95 0.0, mean +0.04: a few faint pixels of the edge band's tears), 0 from 0.77 s.
+- No pops (motion.py 0.43–0.75 s; the held dome's stillness at 0.53–0.56 s as polish 7's re-check accepted it); no waterline
+  (median step 1.0–1.5, 0 % of columns over 12); reduced motion byte-identical to its no-steam twin (frames 10–200);
+  determinism (re-renders byte-identical); the Low tier (no edge pass; cheaper steps; clip runs as polish 6–7; grain T
+  0.65–0.93, S 0.69–0.71); the tail 2 levels at 5.95 s (as polish 7); the clocks and `STEAM_END` (the unit tests); zero cost
+  with no steam (`scene-depth.spec`, 5/5).
+
+**Tests.** `tests/dinner-steam.test.ts` **30** (new: the steam's own light — the window's spread from its side and falling
+steeply, the back light behind and above on the outer centimetre, the room's floor, the steam's tone curve ≥ 15 levels between
+1 and 2 in linear radiance where the scene's gives ≈ 11, the radiance composite over the cove only; the edge band and its pass
+— millimetre tears, one march pixel per CSS pixel, fewer steps, young clouds only; changed: the room no longer under a tenth of
+the key); `tests/scene-depth.test.ts` 6, `tests/dinner.test.ts` 27; `tests/browser/dinner.spec.ts` 6/6,
+`tests/browser/scene-depth.spec.ts` 5/5, `tests/browser/posters.spec.ts` 5/5 (fresh server); `pnpm typecheck` clean.
+
+**The owner's view.** Item 1 is met on the judge's own-colour measures: the volume now has a lit side and a shade — the window's
+side bright to 247–250, the far side and the underside at 207–232, never under the cove — and a back light's glow on its outer
+layer against the cove, strongest on the rising cap. It is a steam rig, not the scene's: the rig's key alone could not do it on
+this view (measured: ≤ +5), so the steam sees the window as the area light it is and a back light of its own, and its own
+colour has a tone curve of its own; a supervisor may ask whether the shade side, now greyer, still reads as white steam at 1.2
+s (`guest-laptop-css-p7top-p8bottom.png`). Item 2 is **not met**: the outline is crisper (its gradient 1.7–2.0, was 0.75–1.4) and
+the band is marched at one pixel per CSS pixel, but the body's median gradient (0.68–1.02), the fine detail (0.47–0.64) and the
+crown (1.15–1.76, horizontal) do not reach 1.2 / 0.6 / 2:1, and the grain is over 0.9 at 0.58–0.67 s (0.89–1.03). The judges'
+measures pull against each other here: what raises the fine detail and the edge's gradient — finer structure, a finer march, a
+brighter rim — is what the grain measures over the same pixels (the body is translucent, so its edge band is most of its
+B > 15 mask). An eighth judge would see a lit, directional cloud with a glowing edge and a crisper outline, still a soft body
+at 2×, a crown that is not streaked, and a little more grain than polish 7.
+
 ## Decisions
 
 - **A material field, not particles.** Every sample asks where its air came from (the analytic flow's inverse), so
@@ -1015,7 +1218,11 @@ and clock end, the latched lift never falling, (on the branch) the box containin
   footprint and the CSS pixel, and its sharp features are integrated over each step rather than sampled: ≤ 3.0 ms.
   Polish 5: 0.5 of the buffer a side, 0.82–0.85 march pixels per CSS pixel, 34 / 28 / 20 steps: ≤ 6.0 ms. Polish 6: the
   boxes follow the visible, receding cloud and the gush's live parcels, 180 k march pixels, 0.46 a side at most:
-  0.58–0.85 march pixels per CSS pixel, ≤ 5.4 ms at the app's real framing.)
+  0.58–0.85 march pixels per CSS pixel, ≤ 5.4 ms at the app's real framing. Polish 8: the silhouette's band marched again at
+  one pixel per CSS pixel while a cloud is young, with its own history.)
+- **The steam lit on purpose** (polish 8): the window as an area light (the rig's key and its low spread), the room as the
+  ambient, a back light of the steam's own composited as light against the cove, and a tone curve of the steam's own; the
+  rig, the materials and the posters untouched.
 - **Visible-steam physics over brightness.** In this front light, steam over the white plate is nearly invisible;
   the cloud reads against the cove, over the silver and over the table, and by its shade over the plate.
 - **The scene depth is generic** and off unless a client asks: the other scenes' frames are byte-identical.
@@ -1023,28 +1230,35 @@ and clock end, the latched lift never falling, (on the branch) the box containin
 
 ## Known gaps
 
-As merged (7ca077f, polish 7), after the seventh judging (laptop 7, phone 7.5, **not signed**; its re-check of the
-gush, the phone pacing and the dome's stillness pending). The first build's own list (soft young edge, no temporal
-accumulation, luminance-only steam, a subtle spill, a weak curl) was closed by the polish rounds.
+As of polish 8 (`v1.6/steam-polish8`, not merged; the eighth judging pending). Before it, as merged (7ca077f, polish 7), the
+seventh judging: laptop 7, phone 7.5, **not signed**, on the two items polish 8 took up. The first build's own list (soft young
+edge, no temporal accumulation, luminance-only steam, a subtle spill, a weak curl) was closed by the polish rounds.
 
-- **Soft and combed edges at 2×**: edge 0.56–0.99, crown anisotropy 1.13–1.41, the march 0.70 / 0.65 / 0.58 px per CSS
-  px at 0.45 / 1.0 / 2.2 s. The design limit of a half-resolution analytic march; at CSS size the edges read.
-- **No light direction in the volume**: the own colour's lit − shaded +2…+5 at 0.61–0.74 s (polish 6; the seventh
-  judge +2…+11, the own colour within 4–18 levels). A rig decision, not a constant: the key, 44° off the camera, lights
-  the dome's right side through its top, and the own colour sits on the tone curve's shoulder (p95 250–251), so only
-  shade could make a lit side, and a ×20 self-shadow made the shaded steam darker than the wall (polish 6, item 3).
-- **The gush is a structureless soft puff** at 0.42–0.62 s: a limit of the spill parcels. Its size and brightness were
-  cut in polish 7 (22.1 % of the visible steam at 0.48 s, was 50.8 %; ≤ 67 k px), so at CSS size it reads as a small
-  spill from the gap.
-- **The held dome's own stillness**: 2.5 / 2.2 / 2.5 levels a frame at 0.53–0.56 s (the dome alone 2.7–2.9), a freeze by
-  polish 6's test, re-exposed once the large gush's motion no longer counted in.
-- **The laptop steam cost** is 3.9–5.2 ms at the app's real framing (`bench6.ts`, p10), with no margin on the median
-  at 0.45 s (the seventh judge saw p50 touch 6.0 ms in one run); the phone 3.6–4.5, both over 0.3–0.7 s. Two clouds (laptop 4.3–4.5, phone
-  3.7–4.1) and the resumed reveal (laptop 4.4–4.9, phone 4.1–4.2) are within the 6 ms budget (polish 6's bench; the
-  cloud is byte-identical since). The phone's pacing after polish 7 was not measured clean by the owner (load 11–20).
+- **Soft at 2×, the crown not streaked** (polish 8, item 2, not met): on the dome alone the edge band's gradient 0.68–1.02
+  (≥ 1.2), fine detail 0.47–0.64 (≥ 0.6 at 0.48 and 0.67 s only), the crown 1.15–1.76:1 and horizontal (≥ 2:1 vertical);
+  the outline itself is crisper (its gradient 1.7–2.0, was 0.75–1.4) and the silhouette's band is marched at one pixel per
+  CSS pixel. What raises these measures raises the grain over the same pixels (prototype a3: 1.2 / 0.7 at grain 1.0–1.9).
+- **More grain than polish 7**: over the backdrop temporal 0.89 / 0.93 / 0.79, spatial 1.03 / 0.75 / 0.64 at 0.58 / 0.67 /
+  0.90 s (polish 7 0.74 / 0.70 / 0.57 and 0.87 / 0.61 / 0.48; target ≤ 0.9): the steam's own tone curve shows the march's
+  residual noise more (the price of a shade side), the back light's glow and the edge pass add a little.
+- **The light is a steam rig** (polish 8, item 1, met on own colour: +18 / +18 / +21): the rig's key alone gave ≤ +5 on this
+  view, so the steam sees the window's low spread and a back light of its own, composited as light against the cove, with a
+  tone curve of its own. The shaded side is greyer than polish 7's (207–232 of own colour); the rising cap's top is lit less
+  than its underside at 1.1–1.3 s (top − underside −3 / −6); the fog in the lifted cloche's shadow veils its window
+  reflection by 4–6 levels at 0.9–1.0 s (≈ 300 px "darker than what is behind it", not the cove).
+- **The envelope's last tenth**: the mass rises 1 % at 1.12 s and is half its peak at ≈ 1.35 s (polish 7: falling every frame,
+  half by 1.30 s); the dome's IoU at 0.48 s 0.69 (0.71); 63 faint pixels over the seated crown at 0.74 s on a decline (0).
+- **The gush is a structureless soft puff** at 0.42–0.62 s: a limit of the spill parcels (its share of the visible steam at
+  0.48 s 20.9 %; at CSS size a small spill from the gap).
+- **The held dome's own stillness**: ≈ 2.6–2.8 levels a frame at 0.53–0.56 s, the intended slow rise (the seventh judge's
+  re-check).
+- **The cost**: 4.6–7.6 ms at the laptop and 4.5–6.9 at the phone (p10, `bench6.ts`), within the 9 ms budget, +2.2–2.8 ms
+  over polish 7 while the edge pass runs (to ≈ 1.2 s). Phone pacing: 3 of 12 accepts had 3–4 frames of 33–50 ms under load
+  (p95 16.7–16.8 in all; the polish-7 control clean ×3).
 - **No reflection of the steam in the silver** (as v1.5).
-- **The next approach** (a density advected per frame at 1–2 mm or an offline simulation baked into a sparse 4D volume,
-  and the steam lit on purpose) is in `docs/RESUME.md`, a version of its own with its own budget.
+- **The next approach** for the remaining softness (an offline simulation baked into a sparse 4D volume with millimetre
+  filaments, or many more samples per pixel) is in `docs/RESUME.md`, a version of its own with its own budget; polish 8's
+  prototype ruled out a 128³ per-frame advection at this budget (softer, +5–6 ms).
 
 ## Tests
 

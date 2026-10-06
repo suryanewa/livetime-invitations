@@ -1,0 +1,16 @@
+# v1.6 steam polish 8: the prototype comparison, (a) a full-resolution edge band with finer sheets vs (b) a density advected per
+# frame on a 128³ grid (throwaway branch proto/steam8-ab). Laptop 1240² clip, the dome alone (gush-off twin, flag 67108864),
+# the judge's soft.py (grad, oedge, fine), aniso.py at DoG 2/8 (the crown), hfsplit.py (grain over the backdrop, T / S).
+# Targets: grad >= 1.2, fine >= 0.6, crown >= 2:1 (vertical, gx/gy > 1), temporal and spatial grain <= 0.9; cost within 9 ms.
+# times: 0.480 / 0.544 / 0.576 / 0.608 / 0.672 / 0.736 s; crown at 0.544 / 0.608 / 0.672 / 0.736; grain at 0.576 / 0.672 / 0.896.
+base (main, polish 7)        grad 0.59 0.97 0.99 0.96 0.70 0.56 | fine 0.48 0.46 0.43 0.44 0.55 0.52 | crown 1.36h 1.22h 1.14h 1.42v | grain T 0.74 0.70 0.57 S 0.87 0.61 0.48
+A1 march 1 px / CSS px       grad 0.64 1.01 1.04 1.00 0.75 0.59 | fine 0.53 0.49 0.50 0.50 0.64 0.58 | crown 1.40h 1.17h 1.02  1.44v | grain T 0.93 0.81 0.66 S 1.00 0.71 0.53
+F1a sharper boundary band (0.35x) + 1.5 mm streaked tears (2 mm), present march
+                             grad 0.62 0.96 0.98 0.94 0.69 0.56 | fine 0.51 0.47 0.44 0.45 0.57 0.53 | crown 1.73h 1.67h 1.44h 1.45v | grain T 0.77 0.72 0.58 S 0.91 0.62 0.48
+A2 = A1 + F1a                grad 0.66 1.01 1.03 1.00 0.75 0.58 | fine 0.57 0.52 0.52 0.52 0.67 0.59 | crown 1.73h 1.57h 1.21h 1.50v | grain T 1.01 0.83 0.68 S 1.05 0.73 0.54
+A3 = A2 + thinner, contrastier, finer sheets (haze 0.3x, width 0.5x, fold 1.6x, field 1.8x finer)
+                             grad 0.99 1.25 1.24 1.18 0.91 0.69 | fine 0.72 0.68 0.66 0.66 0.77 0.70 | crown 1.46v 1.35v 1.16  1.49v | grain T 1.19 1.14 0.99 S 1.91 0.95 0.79
+B  128³ advected sheet field (2.6 mm voxels over 37 cm, semi-Lagrangian through the analytic flow's map, curl noise 0.003, relaxed 12 %/frame to the analytic field), present march
+                             grad 0.54 0.82 0.83 0.86 0.59 0.53 | fine 0.46 0.44 0.41 0.42 0.52 0.51 | crown 1.55h 1.33h 1.30h 1.33v | grain T 0.76 0.59 0.54 S 0.82 0.53 0.44
+(h: the crown's dominant structure horizontal, gx/gy < 1; v: vertical streaks, gx/gy > 1)
+cost (bench6, laptop real framing, p10 ms, load 5.2; same session): base 6.1 / 6.9 at 0.45 / 0.6 s; B 12.4 / 12.0 (+6 ms: 128 slice draws a frame)

@@ -1,0 +1,38 @@
+# v1.6 steam polish 8: real-time pacing of the whole Dinner accept (the seventh judge's pace-scene.ts, SCENE=dinner: rAF intervals
+# over the accept, no virtual clock; the steam window frames 15-360; three accepts a set, a decline between). Port 5621 = polish 8;
+# the control set on 5622 = polish 7 (main 4e815b7), same session.
+
+22:50  up 3 days,  4:20, 3 users, load averages: 6.36 18.54 16.40
+state before guest-ready | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+laptop run 0: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+laptop run 1: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+laptop run 2: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+22:50  up 3 days,  4:20, 3 users, load averages: 5.14 16.69 15.82
+state before guest-ready | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+phone run 0: frames 418 | all p50 16.70 p95 16.80 max 33.4 | steam window p95 16.70 >20ms 3 at frames 208,217,337
+phone run 1: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+phone run 2: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+# phone, repeat
+22:51  up 3 days,  4:21, 3 users, load averages: 4.55 14.81 15.18
+phone run 0: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+phone run 1: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.70 >20ms 0
+phone run 2: frames 418 | all p50 16.70 p95 16.70 max 49.9 | steam window p95 16.70 >20ms 3 at frames 118,119,134
+# phone, third set
+22:52  up 3 days,  4:22, 3 users, load averages: 4.65 13.44 14.65
+phone run 0: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+phone run 1: frames 418 | all p50 16.70 p95 16.80 max 50.1 | steam window p95 16.70 >20ms 4 at frames 109,111,126,326
+phone run 2: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+# CONTROL: polish 7 (main 4e815b7) on 5622, phone
+22:53  up 3 days,  4:23, 3 users, load averages: 4.98 12.03 14.05
+phone run 0: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+phone run 1: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+phone run 2: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.70 >20ms 0
+# phone, fourth set
+22:54  up 3 days,  4:24, 3 users, load averages: 5.42 11.05 13.57
+phone run 0: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+phone run 1: frames 418 | all p50 16.70 p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+phone run 2: frames 418 | all p50 16.70 p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0

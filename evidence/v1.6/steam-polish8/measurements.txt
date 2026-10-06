@@ -1,0 +1,288 @@
+# v1.6 steam polish 8: measurements on the final code (v1.6/steam-polish8), the seventh judge's views and scripts (tools/: frames.ts,
+# m8.sh, the judges' py/, py6/, tools6/, py7/). Laptop 1240² clip (CLIP=180,100,620,620 of 1280x720 @2), WARM 2000, dev server 5621.
+# The judge's no-steam twins (nos/) byte-identical on this build (frames 38, 70); re-renders byte-identical (38, 70).
+# 'before' = polish 7 (main 4e815b7), the same scripts on its frames (base/, byte-identical to the judge's re-check frames 30/38/46).
+
+########## AFTER (final code) ##########
+## item 1 — the light
+## own (tools6/own.py: own colour lit-shaded, body p5-p95)
+0.480s own: lit 248  shaded 229  lit-shaded +19  body p5 221 p95 252 (p5-p95 31)
+0.608s own: lit 250  shaded 232  lit-shaded +18  body p5 223 p95 251 (p5-p95 28)
+0.672s own: lit 249  shaded 231  lit-shaded +18  body p5 218 p95 251 (p5-p95 33)
+0.736s own: lit 248  shaded 227  lit-shaded +21  body p5 190 p95 251 (p5-p95 61)
+0.896s own: lit 247  shaded 210  lit-shaded +37  body p5 200 p95 250 (p5-p95 50)
+## owntop (top vs underside; body alone)
+0.608s own top 249 underside 232 (+17) | body alone p5 224 p50 240 p95 251 (p5-p95 27)
+0.672s own top 248 underside 233 (+15) | body alone p5 220 p50 239 p95 251 (p5-p95 31)
+0.736s own top 248 underside 228 (+20) | body alone p5 215 p50 235 p95 250 (p5-p95 35)
+0.896s own top 245 underside 216 (+29) | body alone p5 202 p50 229 p95 250 (p5-p95 48)
+0.992s own top 242 underside 229 (+13) | body alone p5 200 p50 233 p95 250 (p5-p95 50)
+1.120s own top 239 underside 242 (-3) | body alone p5 208 p50 241 p95 251 (p5-p95 43)
+1.248s own top 239 underside 245 (-6) | body alone p5 214 p50 242 p95 251 (p5-p95 37)
+## litfair (over the wall only)
+0.544s too few wall px 16 4840
+0.608s too few wall px 45 2210
+0.672s too few wall px 91 8493
+0.736s over the wall only (n 504/12930): A lit 212 shaded 215 (-3) | brightening 22/23 (-1) | own C 8/225 | alpha 9.00/0.70
+0.896s over the wall only (n 975/10231): A lit 230 shaded 204 (+26) | brightening 38/12 (+26) | own C 246/210 | alpha 0.74/0.71
+0.992s over the wall only (n 726/10003): A lit 215 shaded 204 (+11) | brightening 22/12 (+10) | own C 233/210 | alpha 0.55/0.57
+1.120s over the wall only (n 2756/15019): A lit 224 shaded 206 (+19) | brightening 18/12 (+6) | own C 239/19 | alpha 0.46/8.07
+1.248s over the wall only (n 5028/17149): A lit 228 shaded 209 (+20) | brightening 23/12 (+11) | own C 249/67 | alpha 0.61/8.07
+## dark (steam darker than the wall)
+0.480s darker   0.0 k (mean +0.0) of  31.9 k; p5 +4
+0.544s darker   0.0 k (mean +0.0) of  54.9 k; p5 +4
+0.608s darker   0.0 k (mean +0.0) of  61.4 k; p5 +4
+0.672s darker   0.0 k (mean +0.0) of  61.3 k; p5 +7
+0.736s darker   0.0 k (mean -7.0) of  77.8 k; p5 +8
+0.896s darker   0.1 k (mean -5.6) of 115.7 k; p5 +5
+0.992s darker   0.1 k (mean -4.2) of 130.9 k; p5 +5
+1.120s darker   0.0 k (mean +0.0) of 146.9 k; p5 +6
+1.248s darker   0.0 k (mean +0.0) of 166.2 k; p5 +5
+## plate
+0.480s centre 240->242 (+2)  right 243->245 (+2)  left 230->232 (+3)
+0.544s centre 240->242 (+2)  right 243->241 (-1)  left 230->232 (+2)
+0.608s centre 240->242 (+2)  right 243->238 (-5)  left 230->232 (+2)
+0.672s centre 240->241 (+1)  right 243->236 (-7)  left 230->231 (+2)
+0.736s centre 240->241 (+1)  right 243->234 (-8)  left 230->231 (+1)
+0.896s centre 240->241 (+1)  right 243->238 (-5)  left 230->230 (-0)
+0.992s centre 240->242 (+1)  right 243->240 (-2)  left 230->230 (+0)
+1.248s centre 240->242 (+2)  right 243->241 (-2)  left 230->230 (+0)
+## warm
+0.480s bright steam (19277 px, luma 226) R-B +7.1 (median +7, p10 +6, p90 +8);  over the plate centre R-B +3.2
+0.608s bright steam (37041 px, luma 226) R-B +7.0 (median +7, p10 +6, p90 +8);  over the plate centre R-B +3.6
+0.736s bright steam (23839 px, luma 227) R-B +6.9 (median +7, p10 +6, p90 +7);  over the plate centre R-B +3.9
+0.896s bright steam (7626 px, luma 228) R-B +7.6 (median +7, p10 +6, p90 +10);  over the plate centre R-B +2.6
+## alpha (far rim T)
+0.432s far-rim T 0.45 (71 cols)  core T median 1.00 p10 0.83 p90 1.00
+0.480s far-rim T 0.35 (70 cols)  core T median 0.70 p10 0.22 p90 1.00
+0.544s far-rim T 0.35 (75 cols)  core T median 0.35 p10 0.18 p90 1.00
+0.608s far-rim T 0.29 (75 cols)  core T median 0.29 p10 0.16 p90 0.97
+0.672s far-rim T 0.35 (75 cols)  core T median 0.27 p10 0.16 p90 0.48
+0.736s far-rim T 0.42 (73 cols)  core T median 0.27 p10 0.13 p90 0.39
+
+## item 2 — the edge
+## soft (frame)
+0.480s grad 0.42  oedge 0.61  fine 0.52
+0.544s grad 1.03  oedge 0.59  fine 0.42
+0.576s grad 0.95  oedge 1.55  fine 0.47
+0.608s grad 0.95  oedge 1.53  fine 0.47
+0.672s grad 0.75  oedge 1.93  fine 0.60
+0.736s grad 0.68  oedge 1.69  fine 0.57
+## soft (dome alone, g0)
+0.480s grad 0.94  oedge 1.97  fine 0.64
+0.544s grad 1.02  oedge 1.99  fine 0.51
+0.576s grad 0.95  oedge 1.89  fine 0.47
+0.608s grad 0.95  oedge 1.80  fine 0.48
+0.672s grad 0.74  oedge 1.91  fine 0.60
+0.736s grad 0.68  oedge 1.70  fine 0.57
+## aniso (frame, DoG 2/8 as the judge)
+0.544s R wall: 1.98:1 @-51 gx/gy 0.88 (6059 px) | crown: 1.72:1 @-84 gx/gy 0.59 (5336 px) | L wall: 1.41:1 @+23 gx/gy 1.27 (3470 px)
+0.608s R wall: 1.90:1 @-52 gx/gy 0.88 (3798 px) | crown: 1.76:1 @-81 gx/gy 0.59 (5317 px) | L wall: 1.81:1 @+24 gx/gy 1.46 (2695 px)
+0.672s R wall: 1.81:1 @-47 gx/gy 0.96 (4489 px) | crown: 1.76:1 @-89 gx/gy 0.57 (5872 px) | L wall: 2.27:1 @+12 gx/gy 2.06 (997 px)
+0.736s R wall: 1.79:1 @-34 gx/gy 1.21 (5201 px) | crown: 1.15:1 @-50 gx/gy 0.98 (6892 px) | L wall: 2.77:1 @+7 gx/gy 2.61 (1007 px)
+0.896s R wall: 1.65:1 @-25 gx/gy 1.37 (4517 px) | crown: 1.17:1 @-4 gx/gy 1.17 (17191 px) | L wall: 1.72:1 @+5 gx/gy 1.71 (1124 px)
+## aniso (g0, DoG 2/8)
+0.544s R wall: 1.97:1 @-51 gx/gy 0.89 (3412 px) | crown: 1.72:1 @-84 gx/gy 0.59 (5336 px) | L wall: 1.41:1 @+23 gx/gy 1.27 (3470 px)
+0.608s R wall: 1.86:1 @-52 gx/gy 0.88 (3773 px) | crown: 1.76:1 @-81 gx/gy 0.59 (5317 px) | L wall: 1.82:1 @+24 gx/gy 1.46 (2695 px)
+0.672s R wall: 1.78:1 @-47 gx/gy 0.97 (4460 px) | crown: 1.76:1 @-89 gx/gy 0.57 (5872 px) | L wall: 2.26:1 @+12 gx/gy 2.05 (997 px)
+0.736s R wall: 1.78:1 @-35 gx/gy 1.20 (5203 px) | crown: 1.14:1 @-50 gx/gy 0.98 (6891 px) | L wall: 2.77:1 @+7 gx/gy 2.61 (1007 px)
+## grain (hfsplit)
+lap 36: all T 0.81 S 1.50 (12713) | upper T 0.89 S 1.03 (7198) | lower T 0.68 S 1.93 (5515)
+lap 42: all T 0.97 S 1.09 (21797) | upper T 0.93 S 0.75 (9970) | lower T 1.00 S 1.31 (11827)
+lap 56: all T 0.77 S 0.68 (32482) | upper T 0.79 S 0.64 (30273) | lower T 0.55 S 1.00 (2209)
+
+## regression: dome, inside/outside, gush
+## iou (frame)
+0.480s IoU 0.69  steam top row 606  dome top row 562
+0.544s IoU 0.65  steam top row 588  dome top row 562
+0.608s IoU 0.67  steam top row 567  dome top row 562
+0.672s IoU 0.56  steam top row 543  dome top row 562
+0.736s IoU 0.48  steam top row 504  dome top row 562
+## iou (dome alone)
+0.480s IoU 0.79  steam top row 606  dome top row 562
+0.544s IoU 0.75  steam top row 588  dome top row 562
+0.608s IoU 0.67  steam top row 567  dome top row 562
+0.672s IoU 0.56  steam top row 543  dome top row 562
+## domefill (frame)
+0.448s inside mean  50.0 >15 0.95 (3159) | crown half   0.0 >15 0.00 | lower half  52.3 >15 1.00 | outside band mean   0.6 >15 0.01 (6020) | in/out 86.5|0.480s inside mean  56.7 >15 1.00 (8816) | crown half  48.9 >15 0.90 | lower half  56.8 >15 1.00 | outside band mean   4.0 >15 0.09 (5531) | in/out 14.1|0.512s inside mean  58.1 >15 0.95 (18315) | crown half  33.0 >15 0.60 | lower half  62.0 >15 1.00 | outside band mean  11.1 >15 0.24 (7526) | in/out 5.2|0.544s inside mean  55.4 >15 0.91 (22544) | crown half  34.4 >15 0.61 | lower half  61.8 >15 1.00 | outside band mean  22.6 >15 0.45 (10416) | in/out 2.5|0.576s inside mean  56.0 >15 0.92 (23432) | crown half  40.6 >15 0.71 | lower half  61.4 >15 1.00 | outside band mean  30.4 >15 0.56 (12314) | in/out 1.8|0.608s inside mean  59.8 >15 0.96 (23525) | crown half  50.8 >15 0.85 | lower half  63.0 >15 1.00 | outside band mean  36.8 >15 0.65 (12652) | in/out 1.6|0.640s inside mean  54.7 >15 0.97 (19004) | crown half  59.6 >15 0.96 | lower half  52.3 >15 0.98 | outside band mean  29.0 >15 0.64 (10258) | in/out 1.9|0.672s inside mean  51.2 >15 0.99 (19630) | crown half  63.2 >15 1.00 | lower half  45.6 >15 0.98 | outside band mean  29.6 >15 0.74 (10483) | in/out 1.7|
+## gush (gush7: frame vs gush-off twin)
+0.416s area   50.3 k (1.00) mass  0.73 M p90  32.5 | S+  2.19 M share 33.4 % | legible D>8  26.2 k p90  35.9 (B>8  24.4 k p90  36.1) | up +0.00 cm out +0.00 cm
+0.432s area   44.3 k (0.88) mass  0.54 M p90  23.8 | S+  2.37 M share 22.8 % | legible D>8  22.4 k p90  26.1 (B>8  21.9 k p90  26.1) | up +0.85 cm out +0.00 cm
+0.448s area   51.5 k (1.02) mass  0.65 M p90  22.8 | S+  3.04 M share 21.3 % | legible D>8  29.3 k p90  23.9 (B>8  28.4 k p90  23.9) | up +1.55 cm out +0.20 cm
+0.464s area   61.4 k (1.22) mass  0.79 M p90  22.9 | S+  3.64 M share 21.7 % | legible D>8  37.1 k p90  23.1 (B>8  34.8 k p90  23.9) | up +1.60 cm out +0.13 cm
+0.480s area   68.2 k (1.36) mass  0.85 M p90  21.1 | S+  4.06 M share 20.9 % | legible D>8  39.2 k p90  22.1 (B>8  36.8 k p90  22.1) | up +1.47 cm out -0.12 cm
+0.496s area   59.6 k (1.19) mass  0.65 M p90  17.1 | S+  4.06 M share 16.0 % | legible D>8  31.1 k p90  18.1 (B>8  29.6 k p90  18.1) | up +1.40 cm out -0.45 cm
+0.512s area   53.7 k (1.07) mass  0.50 M p90  14.8 | S+  4.09 M share 12.3 % | legible D>8  24.7 k p90  16.1 (B>8  25.3 k p90  17.1) | up +2.59 cm out -0.36 cm
+0.544s area   66.2 k (1.32) mass  0.60 M p90  13.0 | S+  4.41 M share 13.7 % | legible D>8  33.4 k p90  13.1 (B>8  35.7 k p90  16.0) | up +3.36 cm out -0.04 cm
+0.576s area   45.6 k (0.91) mass  0.30 M p90   8.7 | S+  4.34 M share  6.9 % | legible D>8   3.4 k p90  16.1 (B>8   8.6 k p90  61.1) | up +3.11 cm out -1.02 cm
+0.608s area   22.8 k (0.45) mass  0.13 M p90   8.0 | S+  4.68 M share  2.7 % | legible D>8   1.4 k p90  14.5 (B>8   9.8 k p90  65.9) | up +4.08 cm out -1.16 cm
+0.640s area    5.5 k (0.11) mass  0.03 M p90   9.0 | S+  4.98 M share  0.7 % | legible D>8   0.8 k p90  13.0 (B>8  12.3 k p90  61.6) | up +2.91 cm out -3.39 cm
+0.672s area    1.9 k (0.04) mass  0.01 M p90   8.2 | S+  5.24 M share  0.2 % | legible D>8   0.2 k p90  11.8 (B>8  15.8 k p90  48.9) | up +3.24 cm out -3.42 cm
+0.704s area    0.4 k (0.01) mass  0.00 M p90   7.9 | S+  5.40 M share  0.0 % | legible D>8   0.0 k p90   9.0 (B>8  20.7 k p90  39.9) | up +3.93 cm out -3.44 cm
+mass change/frame (M): 0.432 0.19 0.448 0.11 0.464 0.14 0.480 0.06 0.496 0.20 0.512 0.15
+pops []
+
+## regression: envelope, rise, cap width, clip
+## env (Σ B over B > 8)
+0.736s mass  4.97 M (1.00 of peak)  area  109.0 k  edge  44.3 (1.00)  core  39.7 (1.00,  29.6 k)
+0.800s mass  4.44 M (0.89 of peak)  area  116.6 k  edge  36.4 (0.82)  core  30.3 (0.76,  38.3 k)  dm  -11 %  da   +7 %
+0.864s mass  4.10 M (0.82 of peak)  area  124.1 k  edge  28.2 (0.64)  core  28.5 (0.72,  37.6 k)  dm   -8 %  da   +6 %
+0.928s mass  3.47 M (0.70 of peak)  area  119.2 k  edge  23.6 (0.53)  core  27.3 (0.69,  36.2 k)  dm  -15 %  da   -4 %
+0.992s mass  3.36 M (0.68 of peak)  area  127.1 k  edge  19.3 (0.44)  core  32.3 (0.81,  31.3 k)  dm   -3 %  da   +7 %
+1.056s mass  3.30 M (0.66 of peak)  area  134.4 k  edge  17.4 (0.39)  core  27.9 (0.70,  40.4 k)  dm   -2 %  da   +6 %
+1.120s mass  3.32 M (0.67 of peak)  area  147.5 k  edge  16.3 (0.37)  core  25.1 (0.63,  49.8 k)  dm   +1 %  da  +10 %
+1.184s mass  3.15 M (0.63 of peak)  area  157.3 k  edge  16.1 (0.36)  core  20.8 (0.52,  65.0 k)  dm   -5 %  da   +7 %
+1.248s mass  2.88 M (0.58 of peak)  area  162.6 k  edge  14.1 (0.32)  core  19.9 (0.50,  57.7 k)  dm   -8 %  da   +3 %
+1.312s mass  2.64 M (0.53 of peak)  area  165.2 k  edge  12.6 (0.29)  core  17.5 (0.44,  53.0 k)  dm   -8 %  da   +2 %
+1.376s mass  2.44 M (0.49 of peak)  area  169.1 k  edge  12.1 (0.27)  core  15.8 (0.40,  41.3 k)  dm   -8 %  da   +2 %
+1.440s mass  2.24 M (0.45 of peak)  area  166.7 k  edge  12.0 (0.27)  core  14.4 (0.36,  33.6 k)  dm   -8 %  da   -1 %
+1.504s mass  2.07 M (0.42 of peak)  area  157.4 k  edge  12.1 (0.27)  core  13.3 (0.34,  25.2 k)  dm   -8 %  da   -6 %
+1.600s mass  1.67 M (0.34 of peak)  area  123.6 k  edge  11.6 (0.26)  core  22.3 (0.56,   4.8 k)  dm  -19 %  da  -21 %
+1.728s mass  1.18 M (0.24 of peak)  area   76.0 k  edge  12.4 (0.28)  core  28.1 (0.71,   5.5 k)  dm  -29 %  da  -39 %
+1.856s mass  0.96 M (0.19 of peak)  area   62.0 k  edge  12.3 (0.28)  core  24.4 (0.62,   7.5 k)  dm  -19 %  da  -18 %
+1.984s mass  0.66 M (0.13 of peak)  area   48.3 k  edge  11.3 (0.26)  core  20.8 (0.52,   3.2 k)  dm  -31 %  da  -22 %
+2.112s mass  0.49 M (0.10 of peak)  area   39.8 k  edge  11.5 (0.26)  core  17.3 (0.44,   0.5 k)  dm  -26 %  da  -18 %
+2.240s mass  0.36 M (0.07 of peak)  area   30.6 k  edge  10.9 (0.25)  core  16.0 (0.40,   0.0 k)  dm  -26 %  da  -23 %
+## rise
+0.480s centroid   701  top  606  mass  3.58 M  above 760  2.74 M
+0.608s centroid   679  top  566  mass  4.18 M  above 760  3.88 M
+0.736s centroid   652  top  503  mass  4.97 M  above 760  4.76 M
+0.864s centroid   605  top  432  mass  4.10 M  above 760  4.08 M
+0.992s centroid   560  top  366  mass  3.36 M  above 760  3.35 M
+1.120s centroid   542  top  313  mass  3.32 M  above 760  3.32 M
+1.184s centroid   531  top  286  mass  3.15 M  above 760  3.15 M
+1.248s centroid   511  top  257  mass  2.89 M  above 760  2.88 M
+1.376s centroid   461  top  177  mass  2.44 M  above 760  2.44 M
+1.504s centroid   451  top  424  mass  2.07 M  above 760  2.07 M
+1.600s centroid   488  top  453  mass  1.67 M  above 760  1.67 M
+## capw
+0.992s cap width  481 px (0.66 of the plate) x 370-851; p90 row  427 (0.58)
+1.056s cap width  417 px (0.57 of the plate) x 381-798; p90 row  392 (0.54)
+1.120s cap width  412 px (0.56 of the plate) x 383-795; p90 row  391 (0.53)
+1.184s cap width  406 px (0.55 of the plate) x 404-810; p90 row  395 (0.54)
+1.248s cap width  396 px (0.54 of the plate) x 415-811; p90 row  378 (0.52)
+1.312s cap width  379 px (0.52 of the plate) x 431-810; p90 row  358 (0.49)
+## clip
+0.736s R  23@x878y682 | L  18@x354y662 | T  26@y742x333 | Bt  40@y742x521
+0.864s R  10@x887y663 | L  53@x362y637 | T  18@y437x611 | Bt  39@y744x505
+0.992s R  17@x872y575 | L  26@x366y504 | T   8@y754x426 | Bt  55@y742x522
+1.120s R  12@x850y478 | L  23@x379y466 | T  14@y312x518 | Bt 145@y741x532
+1.248s R   4@x831y383 | L  14@x409y465 | T   8@y749x437 | Bt 145@y741x532
+1.376s R   2@x437y632 | L  20@x425y363 | T   9@y748x440 | Bt 145@y741x532
+1.504s R   2@x451y743 | L  11@x429y239 | T 166@y132x521 | Bt 143@y741x535
+
+## regression: motion/pops, waterline
+## motion (consecutive frames 0.416–0.752 s)
+0.432 9.4 | 0.448 9.9 | 0.464 8.0 | 0.480 6.7 | 0.496 5.5 | 0.512 4.3 | 0.528 2.8 | 0.544 2.6 | 0.560 2.8 | 0.576 3.3 | 0.592 3.6 | 0.608 5.2 | 0.624 5.6 | 0.640 6.3 | 0.656 7.3 | 0.672 8.4 | 0.688 9.1 | 0.704 8.7 | 0.720 8.6 | 0.736 8.3 | 0.752 8.2
+freeze runs end at ['0.560']
+pops []
+## waterline
+0.736s median step 1.3  p90 2.5  columns > 12: 0%
+0.800s median step 1.5  p90 2.5  columns > 12: 0%
+0.896s median step 1.2  p90 1.7  columns > 12: 0%
+0.928s median step 1.1  p90 1.7  columns > 12: 0%
+0.992s median step 1.0  p90 1.6  columns > 12: 0%
+
+## regression: the decline at 0.5 s (rim puffs, the return's crown)
+## decline puffs (puffs.py)
+0.704s area>8  40318 max 111.8 | 0.720s area>8  41772 (+4 %) max 116.4 | 0.736s area>8  43503 (+4 %) max 123.4 | 0.752s area>8  44773 (+3 %) max 130.6 | 0.768s area>8  45649 (+2 %) max 131.2 | 0.784s area>8  46862 (+3 %) max 132.4 | 0.800s area>8  48621 (+4 %) max 130.6 | 0.816s area>8  46352 (-5 %) max 118.6 | 0.832s area>8  49550 (+7 %) max  87.7 | 0.848s area>8  51067 (+3 %) max  78.6 | 0.864s area>8  48712 (-5 %) max  71.9 | 0.880s area>8  45299 (-7 %) max  64.9 | 0.896s area>8  40943 (-10 %) max  58.9 | 0.912s area>8  35774 (-13 %) max  54.1 | 0.928s area>8  30715 (-14 %) max  50.1 | 0.944s area>8  27695 (-10 %) max  48.1 | 0.960s area>8  24690 (-11 %) max  45.1 | 0.976s area>8  21845 (-12 %) max  35.1 | 0.992s area>8  19181 (-12 %) max  26.1 | 1.008s area>8  16892 (-12 %) max  24.9 | 1.024s area>8  14177 (-16 %) max  22.9 | 1.040s area>8  11030 (-22 %) max  20.9 | 1.056s area>8   8599 (-22 %) max  19.1 | 1.072s area>8   6391 (-26 %) max  18.1 | 1.088s area>8   4562 (-29 %) max  16.8 | 1.104s area>8   3522 (-23 %) max  15.1 | 1.120s area>8   2946 (-16 %) max  13.8 | 1.136s area>8   2241 (-24 %) max  12.1 | 1.152s area>8   1326 (-41 %) max  11.1 | 1.168s area>8    703 (-47 %) max  10.8 | 1.184s area>8    387 (-45 %) max   9.8 | 1.200s area>8    138 (-64 %) max   9.0 | 1.216s area>8      0 (-100 %) max   8.0 | 1.232s area>8      0 max   7.0 | 1.248s area>8      0 max   6.0 | 1.264s area>8      0 max   4.1 | 1.280s area>8      0 max   3.0
+## crown over the seated dome (cap.py)
+0.704s cap band: area>8   2958 px  p95  11.4  p99  52.4  mean +2.17 | over the crown and shoulders (3 cm above the rim and up): area>8      4 p95   0.0 mean +0.02
+0.736s cap band: area>8   2865 px  p95  11.4  p99  55.9  mean +2.44 | over the crown and shoulders (3 cm above the rim and up): area>8     63 p95   0.0 mean +0.04
+0.768s cap band: area>8   2948 px  p95  12.1  p99  60.9  mean +2.59 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.01
+0.800s cap band: area>8   2254 px  p95   9.1  p99  48.1  mean +1.71 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.01
+0.832s cap band: area>8      0 px  p95   0.0  p99   0.0  mean +0.00 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+0.864s cap band: area>8      0 px  p95   0.0  p99   0.0  mean +0.00 | over the crown and shoulders (3 cm above the rim and up): area>8      0 p95   0.0 mean +0.00
+
+## regression: Low tier (against its own Low-tier no-steam twin)
+## Low tier clip (vs its Low-tier no-steam twin)
+0.480s R   7@x829y713 | L  54@x972y916 | T  31@y616x596 | Bt  38@y745x505
+0.608s R   2@x426y767 | L  10@x349y780 | T  30@y578x631 | Bt  44@y745x505
+0.736s R   4@x843y624 | L  19@x355y696 | T  15@y526x562 | Bt  44@y743x516
+0.896s R  11@x438y618 | L  18@x460y609 | T  11@y413x649 | Bt  35@y747x493
+1.120s R   4@x782y377 | L   9@x461y609 | T  28@y313x507 | Bt 149@y742x532
+## Low tier grain
+low 36: all T 0.85 S 1.11 (14645) | upper T 0.65 S 0.69 (5592) | lower T 0.95 S 1.30 (9053)
+low 42: all T 1.12 S 1.01 (27849) | upper T 0.92 S 0.71 (17561) | lower T 1.40 S 1.37 (10288)
+low 56: all T 0.92 S 0.71 (29186) | upper T 0.93 S 0.69 (27004) | lower T 0.68 S 0.94 (2182)
+
+## regression: the tail
+4.480s tail max B 20 px>8 877 px>4 14993
+5.120s tail max B 18 px>8 5411 px>4 15314
+5.952s tail max B 2 px>8 0 px>4 0
+## regression: reduced motion: frames 10, 30, 46, 60, 100, 200 byte-identical to the reduced-motion no-steam twin (DEBUG 7)
+
+########## BEFORE (polish 7, base/) ##########
+## own (tools6/own.py: own colour lit-shaded, body p5-p95)
+0.480s own: lit 248  shaded 245  lit-shaded +3  body p5 239 p95 252 (p5-p95 13)
+0.608s own: lit 249  shaded 246  lit-shaded +3  body p5 240 p95 251 (p5-p95 11)
+0.672s own: lit 249  shaded 246  lit-shaded +3  body p5 238 p95 251 (p5-p95 13)
+0.736s own: lit 249  shaded 244  lit-shaded +5  body p5 189 p95 250 (p5-p95 61)
+0.896s own: lit 248  shaded 237  lit-shaded +11  body p5 230 p95 250 (p5-p95 20)
+## owntop (top vs underside; body alone)
+0.608s own top 249 underside 244 (+5) | body alone p5 241 p50 247 p95 251 (p5-p95 10)
+0.672s own top 249 underside 244 (+5) | body alone p5 239 p50 247 p95 251 (p5-p95 12)
+0.736s own top 249 underside 242 (+7) | body alone p5 236 p50 246 p95 250 (p5-p95 14)
+0.896s own top 249 underside 241 (+8) | body alone p5 232 p50 243 p95 250 (p5-p95 18)
+0.992s own top 248 underside 245 (+3) | body alone p5 234 p50 246 p95 250 (p5-p95 16)
+1.120s own top 248 underside 249 (-1) | body alone p5 244 p50 249 p95 250 (p5-p95 6)
+1.248s own top 249 underside 249 (+0) | body alone p5 246 p50 249 p95 250 (p5-p95 4)
+## litfair (over the wall only)
+0.736s over the wall only (n 461/12906): A lit 203 shaded 217 (-14) | brightening 13/25 (-12) | own C 0/243 | alpha 10.07/0.59
+0.896s over the wall only (n 898/14269): A lit 233 shaded 216 (+17) | brightening 41/25 (+16) | own C 249/235 | alpha 0.72/0.59
+0.992s over the wall only (n 844/13494): A lit 219 shaded 214 (+5) | brightening 28/22 (+6) | own C 247/235 | alpha 0.51/0.59
+1.120s over the wall only (n 2482/15353): A lit 217 shaded 212 (+5) | brightening 14/16 (-2) | own C 0/0 | alpha 12.07/9.07
+1.248s over the wall only (n 4862/17438): A lit 224 shaded 209 (+15) | brightening 21/15 (+6) | own C 249/0 | alpha 0.54/10.07
+## dark (steam darker than the wall)
+0.480s darker   0.0 k (mean +0.0) of  34.7 k; p5 +4
+0.544s darker   0.0 k (mean +0.0) of  58.4 k; p5 +4
+0.608s darker   0.0 k (mean +0.0) of  68.0 k; p5 +4
+0.672s darker   0.0 k (mean +0.0) of  61.9 k; p5 +6
+0.736s darker   0.0 k (mean +0.0) of  78.3 k; p5 +7
+0.896s darker   0.0 k (mean +0.0) of 108.9 k; p5 +8
+0.992s darker   0.0 k (mean +0.0) of 126.7 k; p5 +7
+1.120s darker   0.0 k (mean +0.0) of 141.5 k; p5 +6
+1.248s darker   0.0 k (mean +0.0) of 156.9 k; p5 +5
+## plate
+0.480s centre 240->244 (+4)  right 243->245 (+3)  left 230->232 (+2)
+0.544s centre 240->244 (+4)  right 243->242 (-1)  left 230->232 (+2)
+0.608s centre 240->244 (+4)  right 243->238 (-5)  left 230->231 (+1)
+0.672s centre 240->245 (+5)  right 243->236 (-7)  left 230->231 (+1)
+0.736s centre 240->244 (+4)  right 243->234 (-9)  left 230->230 (+0)
+0.896s centre 240->243 (+3)  right 243->238 (-5)  left 230->230 (+0)
+0.992s centre 240->242 (+2)  right 243->240 (-2)  left 230->230 (+0)
+1.248s centre 240->242 (+2)  right 243->241 (-2)  left 230->230 (+0)
+## warm
+0.480s bright steam (21778 px, luma 227) R-B +5.7 (median +6, p10 +4, p90 +7);  over the plate centre R-B +1.4
+0.608s bright steam (40420 px, luma 227) R-B +5.4 (median +5, p10 +4, p90 +6);  over the plate centre R-B +1.6
+0.736s bright steam (28517 px, luma 227) R-B +5.4 (median +5, p10 +4, p90 +7);  over the plate centre R-B +1.8
+0.896s bright steam (8650 px, luma 229) R-B +6.1 (median +6, p10 +5, p90 +8);  over the plate centre R-B +1.1
+## soft (frame)
+0.480s grad 0.39  oedge 0.60  fine 0.41
+0.544s grad 0.63  oedge 0.50  fine 0.38
+0.576s grad 1.00  oedge 0.94  fine 0.40
+0.608s grad 0.96  oedge 1.21  fine 0.43
+0.672s grad 0.71  oedge 1.33  fine 0.55
+0.736s grad 0.57  oedge 1.26  fine 0.52
+## soft (dome alone, g0)
+0.480s grad 0.59  oedge 0.75  fine 0.48
+0.544s grad 0.97  oedge 1.14  fine 0.46
+0.576s grad 0.99  oedge 1.20  fine 0.43
+0.608s grad 0.96  oedge 1.38  fine 0.44
+0.672s grad 0.70  oedge 1.35  fine 0.55
+0.736s grad 0.56  oedge 1.27  fine 0.52
+## aniso (frame, DoG 2/8 as the judge)
+0.544s R wall: 1.54:1 @-41 gx/gy 1.05 (7834 px) | crown: 1.36:1 @-87 gx/gy 0.74 (5319 px) | L wall: 1.47:1 @+12 gx/gy 1.42 (3486 px)
+0.608s R wall: 1.32:1 @-36 gx/gy 1.08 (3802 px) | crown: 1.22:1 @-85 gx/gy 0.82 (5283 px) | L wall: 2.08:1 @+7 gx/gy 2.01 (3171 px)
+0.672s R wall: 1.61:1 @-23 gx/gy 1.38 (4559 px) | crown: 1.14:1 @-81 gx/gy 0.88 (5907 px) | L wall: 2.15:1 @+6 gx/gy 2.09 (1028 px)
+0.736s R wall: 2.58:1 @-10 gx/gy 2.34 (5361 px) | crown: 1.42:1 @-9 gx/gy 1.40 (6847 px) | L wall: 1.84:1 @+11 gx/gy 1.75 (995 px)
+0.896s R wall: 2.05:1 @-24 gx/gy 1.55 (5733 px) | crown: 1.29:1 @+9 gx/gy 1.28 (10189 px) | L wall: 1.60:1 @-7 gx/gy 1.58 (1075 px)
+## aniso (g0, DoG 2/8)
+0.544s R wall: 1.52:1 @-42 gx/gy 1.05 (3410 px) | crown: 1.36:1 @-87 gx/gy 0.74 (5319 px) | L wall: 1.47:1 @+12 gx/gy 1.42 (3486 px)
+0.608s R wall: 1.33:1 @-36 gx/gy 1.09 (3780 px) | crown: 1.22:1 @-85 gx/gy 0.82 (5283 px) | L wall: 2.08:1 @+7 gx/gy 2.01 (3171 px)
+0.672s R wall: 1.65:1 @-23 gx/gy 1.39 (4538 px) | crown: 1.14:1 @-81 gx/gy 0.88 (5908 px) | L wall: 2.15:1 @+6 gx/gy 2.09 (1028 px)
+0.736s R wall: 2.59:1 @-11 gx/gy 2.33 (5357 px) | crown: 1.42:1 @-9 gx/gy 1.40 (6847 px) | L wall: 1.85:1 @+11 gx/gy 1.75 (995 px)
+## grain (hfsplit)
+lap 36: all T 0.70 S 1.42 (10640) | upper T 0.74 S 0.87 (6659) | lower T 0.63 S 1.98 (3981)
+lap 42: all T 0.72 S 1.01 (21428) | upper T 0.70 S 0.61 (10148) | lower T 0.73 S 1.25 (11280)
+lap 56: all T 0.57 S 0.54 (69596) | upper T 0.57 S 0.48 (60469) | lower T 0.56 S 0.81 (9127)

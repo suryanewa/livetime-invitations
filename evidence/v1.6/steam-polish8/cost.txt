@@ -1,0 +1,64 @@
+# v1.6 steam polish 8: steam cost at the app's real framing (the judge's bench6.ts: the real app page at its viewport and device
+# scale factor, stage.render() timed with fx_steam visible / hidden interleaved, each synced by a 1-px read-back; p10/p25/p50 of
+# visible less hidden, ms; N 10 x ROUNDS 4; via tools/cost.sh). Laptop 1280x720 @2 (buffer 2108x1185, pixel ratio 1.647), phone 390x844 @3
+# (buffer 780x1688, pixel ratio 2). Port 5621 = polish 8 (final code); port 5622 = polish 7 (main 4e815b7, a temporary worktree),
+# benched in the same session as a control. The load before each run is on its header line. Earlier runs this session (17:41-18:30)
+# were taken while the machine throttled (the steam-hidden frame rising 2.5 -> 25 ms within a run, polish 7 the same): discarded.
+
+## laptop times 0.3,0.6 schedule - port 5622 | load 33.14 29.06 18.96
+laptop t 0.300 {"shown":true,"p10":3.9,"p25":4,"p50":4.1,"onP50":6.7,"offP50":2.6}
+laptop t 0.600 {"shown":true,"p10":4.9,"p25":4.9,"p50":5,"onP50":7.5,"offP50":2.5}
+## laptop times 0.3,0.4,0.45,0.5 schedule - port 5621 | load 27.59 28.03 18.77
+laptop t 0.300 {"shown":true,"p10":5.9,"p25":6.2,"p50":6.1,"onP50":9.2,"offP50":3.1}
+laptop t 0.400 {"shown":true,"p10":7.2,"p25":7.4,"p50":7.6,"onP50":10.1,"offP50":2.5}
+laptop t 0.450 {"shown":true,"p10":7.6,"p25":7.9,"p50":8.3,"onP50":10.8,"offP50":2.5}
+laptop t 0.500 {"shown":true,"p10":7.4,"p25":7.4,"p50":7.5,"onP50":10,"offP50":2.5}
+## laptop times 0.55,0.6,0.65,0.7 schedule - port 5621 | load 22.49 26.88 18.52
+laptop t 0.550 {"shown":true,"p10":7.4,"p25":7.5,"p50":7.6,"onP50":10.1,"offP50":2.5}
+laptop t 0.600 {"shown":true,"p10":7.6,"p25":7.6,"p50":8,"onP50":10.5,"offP50":2.5}
+laptop t 0.650 {"shown":true,"p10":6.9,"p25":7.1,"p50":7.3,"onP50":9.8,"offP50":2.5}
+laptop t 0.700 {"shown":true,"p10":7,"p25":7.2,"p50":7.5,"onP50":10,"offP50":2.5}
+## laptop times 1.0,1.2,1.5,2.2,3.0 schedule - port 5621 | load 18.74 25.84 18.29
+laptop t 1.000 {"shown":true,"p10":5.7,"p25":5.9,"p50":6,"onP50":8.6,"offP50":2.6}
+laptop t 1.200 {"shown":true,"p10":5.9,"p25":6,"p50":6.4,"onP50":9,"offP50":2.6}
+laptop t 1.500 {"shown":true,"p10":4.6,"p25":4.8,"p50":5.4,"onP50":7.9,"offP50":2.5}
+laptop t 2.200 {"shown":true,"p10":4.8,"p25":5.1,"p50":5.5,"onP50":8,"offP50":2.5}
+laptop t 3.000 {"shown":true,"p10":2.2,"p25":2.2,"p50":2.2,"onP50":4.7,"offP50":2.5}
+## phone times 0.3,0.4,0.45,0.5,0.6 schedule - port 5621 | load 15.53 24.79 18.05
+phone t 0.300 {"shown":true,"p10":5.7,"p25":5.7,"p50":5.6,"onP50":7.7,"offP50":2.1}
+phone t 0.400 {"shown":true,"p10":6.3,"p25":6.3,"p50":6.3,"onP50":8.2,"offP50":1.9}
+phone t 0.450 {"shown":true,"p10":6.4,"p25":6.5,"p50":6.5,"onP50":8.4,"offP50":1.9}
+phone t 0.500 {"shown":true,"p10":6.9,"p25":6.9,"p50":7,"onP50":8.8,"offP50":1.8}
+phone t 0.600 {"shown":true,"p10":6.7,"p25":6.9,"p50":6.9,"onP50":8.8,"offP50":1.9}
+## phone times 0.7,1.0,1.2,1.5,2.2,3.0 schedule - port 5621 | load 12.90 23.75 17.80
+phone t 0.700 {"shown":true,"p10":5.7,"p25":5.8,"p50":5.8,"onP50":7.7,"offP50":1.9}
+phone t 1.000 {"shown":true,"p10":4.5,"p25":4.6,"p50":4.7,"onP50":6.5,"offP50":1.8}
+phone t 1.200 {"shown":true,"p10":5.7,"p25":5.8,"p50":5.9,"onP50":7.7,"offP50":1.8}
+phone t 1.500 {"shown":true,"p10":5.5,"p25":5.5,"p50":5.6,"onP50":7.4,"offP50":1.8}
+phone t 2.200 {"shown":true,"p10":5,"p25":5.1,"p50":5.2,"onP50":7,"offP50":1.8}
+phone t 3.000 {"shown":true,"p10":1.5,"p25":1.5,"p50":1.6,"onP50":3.4,"offP50":1.8}
+## laptop times 1.7,1.8,1.9 schedule 1000:decline,1450:accept port 5621 | load 10.03 22.39 17.45
+laptop t 1.700 {"shown":true,"p10":6.5,"p25":6.8,"p50":7.1,"onP50":10.2,"offP50":3.1}
+laptop t 1.800 {"shown":true,"p10":6.3,"p25":6.7,"p50":6.9,"onP50":9.4,"offP50":2.5}
+laptop t 1.900 {"shown":true,"p10":6.8,"p25":7.1,"p50":7.2,"onP50":9.8,"offP50":2.6}
+## laptop times 1.7,1.9,2.1 schedule 900:decline,1100:accept port 5621 | load 9.56 21.88 17.32
+laptop t 1.700 {"shown":true,"p10":5,"p25":5.8,"p50":6.3,"onP50":8.8,"offP50":2.5}
+laptop t 1.900 {"shown":true,"p10":5.9,"p25":6.3,"p50":6.8,"onP50":9.4,"offP50":2.6}
+laptop t 2.100 {"shown":true,"p10":5,"p25":5.3,"p50":5.5,"onP50":8,"offP50":2.5}
+## phone times 1.7,1.8,1.9 schedule 1000:decline,1450:accept port 5621 | load 8.59 21.07 17.11
+phone t 1.700 {"shown":true,"p10":6,"p25":6,"p50":5.9,"onP50":7.9,"offP50":2}
+phone t 1.800 {"shown":true,"p10":5.3,"p25":5.4,"p50":5.4,"onP50":7.3,"offP50":1.9}
+phone t 1.900 {"shown":true,"p10":5.6,"p25":5.7,"p50":5.7,"onP50":7.6,"offP50":1.9}
+## phone times 1.7,1.9,2.1 schedule 900:decline,1100:accept port 5621 | load 8.13 20.56 16.98
+phone t 1.700 {"shown":true,"p10":4.4,"p25":4.4,"p50":4.5,"onP50":6.4,"offP50":1.9}
+phone t 1.900 {"shown":true,"p10":4.8,"p25":4.8,"p50":4.9,"onP50":6.8,"offP50":1.9}
+phone t 2.100 {"shown":true,"p10":5,"p25":5,"p50":5,"onP50":7,"offP50":2}
+## laptop times 0.45,0.6,1.0,2.2 schedule - port 5622 | load 7.21 19.75 16.75
+laptop t 0.450 {"shown":true,"p10":5.2,"p25":5.3,"p50":5.6,"onP50":8.1,"offP50":2.5}
+laptop t 0.600 {"shown":true,"p10":4.8,"p25":4.9,"p50":5,"onP50":7.6,"offP50":2.6}
+laptop t 1.000 {"shown":true,"p10":3.4,"p25":3.5,"p50":3.7,"onP50":6.2,"offP50":2.5}
+laptop t 2.200 {"shown":true,"p10":4.1,"p25":4.3,"p50":4.6,"onP50":7.1,"offP50":2.5}
+## phone times 0.45,0.6,1.0 schedule - port 5622 | load 6.88 19.26 16.61
+phone t 0.450 {"shown":true,"p10":4.3,"p25":4.3,"p50":4.4,"onP50":6.4,"offP50":2}
+phone t 0.600 {"shown":true,"p10":4.5,"p25":4.6,"p50":4.6,"onP50":6.7,"offP50":2.1}
+phone t 1.000 {"shown":true,"p10":3.4,"p25":3.3,"p50":3.5,"onP50":5.3,"offP50":1.8}
