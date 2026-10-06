@@ -57,9 +57,12 @@ export interface NetLattice {
    * Mesh binding: per mesh, per vertex, four (bone, weight) pairs. Bones: a cord's upper half (its
    * index), a node (cords.length + node index), a cord's lower half (cords.length + nodes.length +
    * cord index). A strand blends between its halves across its middle and into its knots near its
-   * ends, so the cord meets its knot without a seam however the two turn.
+   * ends, so the cord meets its knot without a seam however the two turn. v1.7 polish: a tail
+   * (the free end below a bottom knot) on its own bone, 2·cords.length + nodes.length + its index.
    */
   binding: Map<BufferGeometry, { index: Uint16Array; weight: Float32Array }>;
+  /** v1.7 polish: the node each tail hangs from (a bottom-row knot), in tail order. */
+  tails: number[];
 }
 
 const TAU = Math.PI * 2;
@@ -220,7 +223,7 @@ export function analyseNet(meshes: { geometry: BufferGeometry; kind: 'strands' |
   // and its lower half (from its middle to its lower node), so a slack cord bows at its true length
   // instead of shrinking; the halves blend across the middle fifth, and each end blends into its
   // knot's bone over KNOT_BLEND (pinned ends stay on the cord). Knot and tail vertices: their knot.
-  // Bones: [upper halves (cords.length), nodes (nodes.length), lower halves (cords.length)].
+  // Bones: [upper halves (cords.length), nodes (nodes.length), lower halves (cords.length), tails].
   const binding: NetLattice['binding'] = new Map();
   const nodeBone = (i: number) => cords.length + i, lowerBone = (k: number) => cords.length + nodes.length + k;
   const nv = sPos.length / 3;
@@ -243,17 +246,28 @@ export function analyseNet(meshes: { geometry: BufferGeometry; kind: 'strands' |
       w.forEach(([bone, x], j) => { sb.index[v * 4 + j] = bone; sb.weight[v * 4 + j] = x / sum; });
     }
   });
-  for (const t of tails) for (const v of t.comp.verts) { sb.index[v * 4] = nodeBone(knotNode.get(t.knot)!); sb.weight[v * 4] = 1; }
+  // v1.7 polish: each tail on its own bone (it hangs from its knot, lagging it: NetSkin).
+  const tailBone = (j: number) => 2 * cords.length + nodes.length + j;
+  tails.forEach((t, j) => { for (const v of t.comp.verts) { sb.index[v * 4] = tailBone(j); sb.weight[v * 4] = 1; } });
   binding.set(strandMesh.geometry, sb);
   const nk = kPos.length / 3;
   const kb = { index: new Uint16Array(nk * 4), weight: new Float32Array(nk * 4) };
   knots.forEach((k, ki) => { for (const comp of k.comps) for (const v of comp.verts) { kb.index[v * 4] = nodeBone(knotNode.get(ki)!); kb.weight[v * 4] = 1; } });
   binding.set(knotMesh.geometry, kb);
-  return { nodes, pinned, rows, loops, cords, binding };
+  return { nodes, pinned, rows, loops, cords, binding, tails: tails.map((t) => knotNode.get(t.knot)!) };
 }
 
 /** How far from a knot's centre a strand blends into the knot's bone (su; ≈ 1.4 cm, past the knot's own size). */
 const KNOT_BLEND = 0.04;
+
+/**
+ * v1.7 polish: how a tail (the 5 cm free end of cord below a bottom knot) follows its knot
+ * (NetSkin): `lag` the first-order follow's time constant (s; a 5 cm cord end's own swing, √(L/g)/2π
+ * ≈ 0.07 s, damped by the air and its stiffness, settles its direction in a few tens of ms),
+ * `gravity` the share of the knot's turn it does not take (it hangs), `maxStep` the longest gap
+ * between draws it is followed across (past it, and at rest, it snaps to its knot).
+ */
+export const TAIL = { lag: 0.05, gravity: 0.45, maxStep: 0.1 } as const;
 
 /** Deterministic PRNG (mulberry32). */
 function rng(seed: number) {
@@ -1111,6 +1125,15 @@ export class NetSkin {
   private readonly ups: Float64Array;
   private readonly ringNext: Int16Array;
   private readonly ringPrev: Int16Array;
+  /**
+   * v1.7 polish: each tail's drawn orientation (x, y, z, w per tail), its knot's rest frame, and the
+   * net's time it was last drawn at. A tail follows its knot's frame (TAIL), not welded to it.
+   */
+  private readonly tailQ: Float64Array;
+  private readonly tailRest: Quaternion[];
+  private tailTime = NaN;
+  private readonly qa = new Quaternion();
+  private readonly qb = new Quaternion();
 
   constructor(net: Object3D, private readonly sim: NetSim, meshes: Mesh[]) {
     const L = sim.lattice;
@@ -1125,7 +1148,8 @@ export class NetSkin {
     this.strand = new Float64Array(L.cords.length).fill(1);
     this.drawnPos = new Float64Array(L.nodes.length * 3);
     this.ups = new Float64Array(L.nodes.length * 3);
-    const count = 2 * L.cords.length + L.nodes.length;
+    this.tailQ = new Float64Array(L.tails.length * 4);
+    const count = 2 * L.cords.length + L.nodes.length + L.tails.length;
     for (let i = 0; i < count; i++) {
       const bone = new Bone();
       bone.name = `net_bone_${i}`;
@@ -1158,6 +1182,8 @@ export class NetSkin {
       skinned.bind(skeleton);
     }
     this.update();
+    // The knots' rest frames (the net hanging still): what a tail settles back towards.
+    this.tailRest = L.tails.map((k) => this.bones[L.cords.length + k]!.quaternion.clone());
   }
 
   private at(i: number, out: Vector3): Vector3 {
@@ -1207,6 +1233,44 @@ export class NetSkin {
       bone.position.copy(a);
       bone.scale.set(1, 1, 1);
     }
+    this.poseTails(bind);
+  }
+
+  /**
+   * v1.7 polish: the tails. Each hangs from its knot (the knot's position) and follows the knot's
+   * frame pulled TAIL.gravity of the way back towards the knot's rest frame (a free end hangs under
+   * gravity more than it turns with its knot), with a first-order lag of TAIL.lag on the net's own
+   * clock: a knot's quick turn as the bottom ring whips (≈ 380°/s for a tenth of a second after the
+   * ball's exit) becomes a sway of its tail instead of a flick. At rest (and in the bind pose) a tail
+   * is exactly its knot's frame, so the hanging net is drawn as before.
+   */
+  private poseTails(bind: boolean): void {
+    const L = this.sim.lattice, nc = L.cords.length, nn = L.nodes.length, q = this.qa, target = this.qb;
+    const time = this.sim.drawnTime, dt = time - this.tailTime;
+    const snap = bind || this.sim.settled || !(dt >= 0 && dt <= TAIL.maxStep);
+    const follow = snap ? 1 : 1 - Math.exp(-dt / TAIL.lag);
+    L.tails.forEach((node, j) => {
+      const knot = this.bones[nc + node]!, bone = this.bones[2 * nc + nn + j]!;
+      if (snap) q.copy(knot.quaternion);
+      else {
+        target.copy(knot.quaternion).slerp(this.tailRest[j]!, TAIL.gravity);
+        q.fromArray(this.tailQ, j * 4).slerp(target, follow);
+      }
+      q.toArray(this.tailQ, j * 4);
+      bone.quaternion.copy(q);
+      bone.position.copy(knot.position);
+      bone.scale.set(1, 1, 1);
+    });
+    this.tailTime = time;
+  }
+
+  /** v1.7 polish: the tails' drawn state (their lag), to carry it across an interruption with the net's own. */
+  saveTails(): number[] {
+    return [...this.tailQ, this.tailTime];
+  }
+  restoreTails(state: readonly number[]): void {
+    this.tailQ.set(state.slice(0, this.tailQ.length));
+    this.tailTime = state[this.tailQ.length]!;
   }
 
   /** A strand half from p to e (bind length `half`): frame along it, radial, binormal; stretched along it. */

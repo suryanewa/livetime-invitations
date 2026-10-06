@@ -52,7 +52,7 @@ export class SportsNetChannel<S, C> {
    * swinging through a change of mind. Reduced motion, a replay or a reset never restore, so there
    * the net stays snapped to rest. Dropped by the next `follow` or `step`.
    */
-  private carry: { net: NetState; springs: ReturnType<HoopSprings['save']> } | null = null;
+  private carry: { net: NetState; springs: ReturnType<HoopSprings['save']>; tails: number[] } | null = null;
   /** The sampler's program for this step, and the drawn ball when there is none. */
   private on: { seq: S; change: C; offset: number } | null = null;
   private readonly still = new Vector3();
@@ -143,7 +143,7 @@ export class SportsNetChannel<S, C> {
   settle(): void {
     this.clock = null;
     const net = this.rig.net, springs = this.rig.springs;
-    this.carry = net && (!net.sim.settled || !springs.settled) ? { net: net.sim.save(), springs: springs.save() } : null;
+    this.carry = net && (!net.sim.settled || !springs.settled) ? { net: net.sim.save(), springs: springs.save(), tails: net.skin.saveTails() } : null;
     if (net) {
       net.sim.settle();
       net.skin.update();
@@ -160,6 +160,8 @@ export class SportsNetChannel<S, C> {
       net.sim.restore(this.carry.net);
       springs.restore(this.carry.springs);
       this.rig.recoil.set(springs.board, springs.rim, springs.stand);
+      // v1.7 polish: the tails' lag too, so they carry on swinging rather than snapping to their knots.
+      net.skin.restoreTails(this.carry.tails);
       net.skin.update(springs.board, springs.rim, springs.stand);
     }
     this.shown.alpha = NaN;
