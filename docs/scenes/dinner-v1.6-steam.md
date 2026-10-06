@@ -1013,7 +1013,9 @@ crown 1.13–1.41:1 against ≥ 1.2, ≥ 0.6, ≥ 2:1). Budget for the round: **
 Dinner frame pacing at 60 fps, zero with no steam.** Every number below is the judge's own script on the laptop 1240² clip of
 1280 × 720 @2 (WARM 2000, the judge's `frames.ts`), its no-steam twins byte-identical on this build, re-renders
 byte-identical; "before" is polish 7 (main 4e815b7) on the same scripts (its frames byte-identical to the judge's re-check
-frames). All of it is in `evidence/v1.6/steam-polish8/measurements.txt`, `cost.txt`, `pacing.txt`, `prototype.txt`; the
+frames). All of it is in `evidence/v1.6/steam-polish8/measurements.txt`, `cost.txt`, `pacing.txt`, `prototype.txt`, the crops
+(`guest-laptop-css-…`, `guest-phone-css-…`, `terminator-1to1-…`, `edge-1to1-…`, `edge-css-…`: polish 7 above, polish 8 below) and
+`frames/` (the laptop clip at 0.48 / 0.61 / 0.74 / 0.99 s for both, the full laptop and phone at 0.74 s); the
 scripts in `evidence/v1.6/steam-polish8/tools/` (port 5621; `m8.sh` runs the judge's set on a run directory, `lt.sh` the
 light's, `proto.sh` the edge's, `terms.sh` + `py8/opt.py` + `py8/search.py` the light's balance offline).
 
