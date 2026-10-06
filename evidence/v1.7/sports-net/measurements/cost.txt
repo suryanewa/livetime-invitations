@@ -1,0 +1,5 @@
+# Cost per 60 fps frame (8 substeps, the ball in the net) against tests/netCost.ts's reference kernel, best of 4 attempts × 15 rounds; load averages: 7.44 8.14 17.26
+before (a157690): net 0.113 ms per 60 fps frame; reference 0.253 ms; ratio 0.45 (bound 2)
+after:             net 0.137 ms per 60 fps frame; reference 0.271 ms; ratio 0.51 (bound 2)
+before (a157690): net 0.113 ms per 60 fps frame; reference 0.253 ms; ratio 0.45 (bound 2)
+after:             net 0.136 ms per 60 fps frame; reference 0.252 ms; ratio 0.54 (bound 2)

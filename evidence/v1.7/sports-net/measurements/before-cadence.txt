@@ -1,0 +1,10 @@
+# BEFORE per display rate
+60 Hz: default | settle 4.34 | sway x 5Hz 0.29mm hf 0.004 z 7.15Hz 0.20mm | rigid 0.81 rel 7.18 {"breathe":2.13,"twist":0.14,"n1":1.21,"n2":1.84,"n3":4.7,"n4":4.2,"n5":1.76} ratio 0.11 adj -0.13/-0.15 | KE1% 1.20 mechRise 0.000@0.00 | late 5.38 | tilt 1383dps 22.71deg | scale 0.902-1.014 | open 0.135 gap 0.0172 lift 0.063 | frame +0.063/-0.207 | F 3.98N rim 0.59/-0.41 quiet 0.47 | dy [16.87,3.35,2.49,1.74,1.12,0.55,0.29,0.11,0.02]
+90 Hz: default | settle 4.35 | sway x 1.15Hz 0.26mm hf 0.003 z 0.9Hz 0.21mm | rigid 0.80 rel 7.27 {"breathe":2.15,"twist":0.15,"n1":1.16,"n2":1.93,"n3":4.82,"n4":4.01,"n5":2.12} ratio 0.11 adj -0.13/-0.16 | KE1% 1.17 mechRise 0.000@0.00 | late 5.60 | tilt 1418dps 26.56deg | scale 0.903-1.016 | open 0.136 gap 0.0115 lift 0.065 | frame +0.063/-0.207 | F 4.22N rim 0.60/-0.42 quiet 0.46 | dy [16.82,3.33,2.82,1.84,1.12,0.67,0.41,0.1,0.03]
+144 Hz: default | settle 4.34 | sway x 4.8Hz 0.27mm hf 0.005 z 7.1Hz 0.20mm | rigid 0.83 rel 7.37 {"breathe":2.19,"twist":0.16,"n1":1.23,"n2":1.89,"n3":4.94,"n4":4.13,"n5":1.9} ratio 0.11 adj -0.13/-0.14 | KE1% 1.19 mechRise 0.000@0.00 | late 5.91 | tilt 1229dps 24.30deg | scale 0.900-1.016 | open 0.137 gap 0.0100 lift 0.064 | frame +0.065/-0.207 | F 4.25N rim 0.60/-0.42 quiet 0.46 | dy [17.12,3.07,2.58,1.73,1.25,0.66,0.34,0.1,0.03]
+
+# BEFORE determinism
+60 Hz vs 120 Hz: 23 common run times, max knot difference 3.93e-3 su
+90 Hz vs 120 Hz: 23 common run times, max knot difference 1.33e-2 su
+120 Hz vs 120 Hz: 23 common run times, max knot difference 0.00e+0 su
+144 Hz vs 120 Hz: 23 common run times, max knot difference 7.63e-3 su

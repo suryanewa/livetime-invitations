@@ -10,7 +10,7 @@ const { Vector3, Matrix4, BufferGeometry, BufferAttribute, Object3D, Quaternion 
 const NETMOD = await import(P + '/models/sportsNet.ts');
 const { analyseNet, HoopSprings, NET_SIM, NetSim, NetSkin, netMeshKind } = NETMOD;
 const { createIO, findNode } = await import(P + '/scripts/masters/compose.ts');
-const { HOOP_ROOT, RIM_LOCAL, recoilPoint, RIM_BACKSTOP, BALL_R } = await import(P + '/models/sportsContract.ts');
+const { HOOP_ROOT, RIM_LOCAL, recoilPoint, RIM_BACKSTOP, BALL_R, NET, netRestRadius } = await import(P + '/models/sportsContract.ts');
 const { CONTACT_AT, DURATIONS, NET_PASSAGE, RELEASE_AT, newFrame, REST_AT, sampleTrack } = await import(P + '/src/scenes/sports/sequences.ts');
 const { SportsNetChannel } = await import(P + '/src/scenes/sports/net.ts');
 const { FixedStepper } = await import(P + '/src/motion/spring.ts');
@@ -120,6 +120,7 @@ function potential(S: any, x: Float64Array): number {
   return pe;
 }
 function simEnergy(S: any): number {
+  if (!S.v) return NaN; // v1.5's sim keeps no velocities (Verlet)
   if (restPotential === null) restPotential = potential(S, S.rest);
   let ke = 0;
   for (let i = 0; i < S.n; i++) if (S.invMass[i] > 0) ke += 0.5 * (1 / S.invMass[i]) * (S.v[i * 3] ** 2 + S.v[i * 3 + 1] ** 2 + S.v[i * 3 + 2] ** 2);
@@ -345,6 +346,17 @@ function analyse(hz: number) {
     }
   }
   out.ringNeighbourMin = ringMin; out.twoRowsMin = vertMin;
+  // The framing allowance (src/scenes/sports/index.ts: NET_OUTSET 0.05, NET_SWING { out 0.12, down 0.15 }):
+  // how far any drawn knot centre comes past the envelope r ≤ netRestRadius(t) + 0.05 + 0.12 t
+  // (t its depth fraction) and y ≥ −depth − 0.15 (positive: past it, su).
+  let outPast = -Infinity, downPast = -Infinity;
+  for (const s of snaps) for (let j = 0; j < KNOTS.length; j++) {
+    const x = s.knots[j * 3]! - RIM_LOCAL.x, y = s.knots[j * 3 + 1]! - RIM_LOCAL.y, z = s.knots[j * 3 + 2]! - RIM_LOCAL.z;
+    const t = Math.min(1, Math.max(0, -y / NET.depth));
+    outPast = Math.max(outPast, Math.hypot(x, z) - (netRestRadius(t) + 0.05 + 0.12 * t));
+    downPast = Math.max(downPast, -NET.depth - 0.15 - y);
+  }
+  out.framingOutPast_su = outPast; out.framingDownPast_su = downPast;
   // Hoop
   out.rimMax_deg = Math.max(...snaps.map((s) => s.rim)) * DEG;
   out.rimMin_deg = Math.min(...snaps.map((s) => s.rim)) * DEG;
@@ -406,7 +418,7 @@ if (args.includes('--series')) {
   const r = analyse(HZ);
   if (args.includes('--brief')) {
     const f = (x: number, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : String(x));
-    console.log(`${SET ?? 'default'} | settle ${f(r.settleAfterExit)} | sway x ${r.swayX.peakHz}Hz ${f(r.swayX.ampl_mm)}mm hf ${f(r.swayX.hfOverLf, 3)} z ${r.swayZ.peakHz}Hz ${f(r.swayZ.ampl_mm)}mm | rigid ${f(r.ringRigidRms_mm)} rel ${f(r.ringRelativeRms_mm)} ${JSON.stringify(r.ringModes_mm)} ratio ${f(r.ringRigidOverRelative)} adj ${f(r.adjTangentialCorr)}/${f(r.adjInPlaneCorr)} | KE1% ${f(r.keBelow1pctAfterExit)} mechRise ${f(r.mechMaxFrameRise, 3)}@${f(r.mechMaxFrameRiseAt)} | late ${f(r.lateSwingAtExit2_mm)} | tilt ${f(r.tiltRateAfterExit025_degps, 0)}dps ${f(r.tiltDevAfterExit1_deg)}deg | scale ${f(r.strandScaleAfterExit[0], 3)}-${f(r.strandScaleAfterExit[1], 3)} | open ${f(r.maxOpen_su, 3)} gap ${f(r.minGap_su, 4)} lift ${f(r.lift_su, 3)} | F ${f(r.hookForceMax_N)}N rim ${f(r.rimMax_deg)}/${f(r.rimMin_deg)} quiet ${f(r.rimQuietAfterContact)} | dy ${JSON.stringify(r.bottomMeanDy_mm)}`);
+    console.log(`${SET ?? 'default'} | settle ${f(r.settleAfterExit)} | sway x ${r.swayX.peakHz}Hz ${f(r.swayX.ampl_mm)}mm hf ${f(r.swayX.hfOverLf, 3)} z ${r.swayZ.peakHz}Hz ${f(r.swayZ.ampl_mm)}mm | rigid ${f(r.ringRigidRms_mm)} rel ${f(r.ringRelativeRms_mm)} ${JSON.stringify(r.ringModes_mm)} ratio ${f(r.ringRigidOverRelative)} adj ${f(r.adjTangentialCorr)}/${f(r.adjInPlaneCorr)} | KE1% ${f(r.keBelow1pctAfterExit)} mechRise ${f(r.mechMaxFrameRise, 3)}@${f(r.mechMaxFrameRiseAt)} | late ${f(r.lateSwingAtExit2_mm)} | tilt ${f(r.tiltRateAfterExit025_degps, 0)}dps ${f(r.tiltDevAfterExit1_deg)}deg | scale ${f(r.strandScaleAfterExit[0], 3)}-${f(r.strandScaleAfterExit[1], 3)} | open ${f(r.maxOpen_su, 3)} gap ${f(r.minGap_su, 4)} lift ${f(r.lift_su, 3)} | frame +${f(r.framingOutPast_su, 3)}/${f(r.framingDownPast_su, 3)} | F ${f(r.hookForceMax_N)}N rim ${f(r.rimMax_deg)}/${f(r.rimMin_deg)} quiet ${f(r.rimQuietAfterContact)} | dy ${JSON.stringify(r.bottomMeanDy_mm)}`);
   } else if (args.includes('--json')) console.log(JSON.stringify(r));
   else for (const [k, v] of Object.entries(r)) console.log(k.padEnd(28), typeof v === 'number' ? +v.toPrecision(4) : JSON.stringify(v));
 }

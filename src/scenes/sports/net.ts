@@ -117,14 +117,21 @@ export class SportsNetChannel<S, C> {
       this.on = null;
       this.still.copy(drawn);
     }
-    const wasSettled = sim.settled;
+    const wasSettled = sim.settled, tick = sim.tick;
     sim.advance(until, this.sample, springs);
     this.on = null;
     const a = sim.alpha;
     const board = springs.prevBoard + (springs.board - springs.prevBoard) * a, rim = springs.prevRim + (springs.rim - springs.prevRim) * a;
     this.rig.recoil.set(board, rim);
-    if (!(wasSettled && sim.settled)) net.skin.update(board, rim);
+    // The skin is drawn at the director's time: redraw it unless the net rests or this step moved nothing (a frame's second step).
+    const shown = this.shown;
+    if (!(wasSettled && sim.settled) && !(tick === sim.tick && a === shown.alpha && board === shown.board && rim === shown.rim)) {
+      net.skin.update(board, rim);
+      shown.alpha = a; shown.board = board; shown.rim = rim;
+    }
   }
+  /** What the skin last drew (the net's interpolation and the recoil). */
+  private readonly shown = { alpha: NaN, board: NaN, rim: NaN };
 
   /** The net or the hoop springs are still moving. */
   settling(): boolean {
@@ -140,6 +147,7 @@ export class SportsNetChannel<S, C> {
       net.sim.settle();
       net.skin.update();
     }
+    this.shown.alpha = NaN;
     springs.settle();
     this.rig.recoil.set(0, 0);
   }
@@ -153,6 +161,7 @@ export class SportsNetChannel<S, C> {
       this.rig.recoil.set(springs.board, springs.rim);
       net.skin.update(springs.board, springs.rim);
     }
+    this.shown.alpha = NaN;
     this.carry = null;
   }
 
