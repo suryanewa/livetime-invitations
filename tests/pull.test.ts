@@ -14,8 +14,11 @@ import { DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW } from '../models/dinn
 import { birthdayDeclineFramePoints, birthdayRestFramePoints } from '../src/scenes/birthday/framing.ts';
 import { ACROSS_FROM, BIN_DELAY as BIRTHDAY_BIN_DELAY, BIN_FROM } from '../src/scenes/birthday/poses.ts';
 import { newFrame as birthdayFrame, sampleSequence as birthdaySample } from '../src/scenes/birthday/sequences.ts';
-import { dinnerFramePoints } from '../src/scenes/dinner/index.ts';
-import { cameraClock, dinnerPull } from '../src/scenes/dinner/pull.ts';
+import { DinnerScene, dinnerFramePoints } from '../src/scenes/dinner/index.ts';
+import { cameraClock, CLOSE, CLOSE_HOME, closeHome, closeIn, dinnerPull, planCloseHome } from '../src/scenes/dinner/pull.ts';
+import { VisualDirector } from '../src/core/visualDirector.ts';
+import type { DinnerRig } from '../models/dinner.ts';
+import { dinnerBounds } from '../models/dinnerContract.ts';
 import {
   BIN_DELAY as DINNER_BIN_DELAY, changeTime, CONTENT_END, DURATIONS as DINNER_DURATIONS, newFrame as dinnerFrame, planAnswerChange, sampleSequence as dinnerSample,
 } from '../src/scenes/dinner/sequences.ts';
@@ -391,3 +394,197 @@ describe('Dinner\'s pull on a change of mind rides the change\'s own timeline', 
     }
   });
 });
+
+// ── v1.7 (spec revision #42): the close-up on the card ────────────────────────────────────────────
+
+/** Dinner on a stub rig, through the real director, stepped as the controller's loop steps it. */
+function dinnerStage() {
+  const bin = buildDisposalBin({ lib: plainLibrary() });
+  const plate = new Group(); plate.name = 'plate_authored';
+  const cover = new Group(); cover.name = 'cover_authored';
+  const root = new Group().add(plate, cover, bin);
+  const stub = { setFootprint() {}, setHeight() {}, visible: false };
+  const rig = {
+    root, nodes: { plate_authored: plate, cover_authored: cover, bin_root: bin }, shadows: [], dishShadow: stub, coverShadow: stub,
+    flapL: bin.getObjectByName('bin_flap_l')!, flapR: bin.getObjectByName('bin_flap_r')!, bounds: dinnerBounds(), setPreset() {}, dispose() {},
+  } as unknown as DinnerRig;
+  const scene = new DinnerScene(rig, { category: 'dinner', dish: 'pasta' });
+  const director = new VisualDirector({ complete() {} }, 'guest', null);
+  director.attach(scene);
+  let now = 0;
+  const log: { t: number; close: number; pull: number; bin: number; state: string }[] = [];
+  /** Frames at 120 Hz: the director, then simulate; the camera's channels as the controller reads them. */
+  const run = (seconds: number) => {
+    const end = now + seconds;
+    while (now < end - 1e-9) {
+      now += 1 / 120;
+      director.update(now);
+      scene.simulate(1 / 120);
+      // The bin's entrance: how far it has come in from its start (0 until it moves).
+      log.push({ t: now, close: scene.frameClose(), pull: scene.framePull(), bin: bin.visible ? bin.position.x - DINNER_BIN_START.x : 0, state: director.state });
+    }
+  };
+  director.update(0);
+  return { scene, director, run, log, get now() { return now; } };
+}
+
+/** Speed steps (1/s) between consecutive samples h apart, and kinks as in the pull's checks above. */
+function kinksOf(p: number[], h: number): number[] {
+  const v = p.map((x, i) => (i ? (x - p[i - 1]!) / h : 0));
+  const dv = v.map((x, i) => (i > 1 ? Math.abs(x - v[i - 1]!) : 0));
+  const out: number[] = [];
+  for (let i = 3; i < dv.length - 1; i++) if (dv[i]! > 0.05 + 3 * Math.max(dv[i - 1]!, dv[i + 1]!)) out.push(i * h);
+  return out;
+}
+
+describe('v1.7: Dinner\'s close-up channel (the camera moves to face the card)', () => {
+  it('waits for the cloud to go (τ 2.8 s), arrives as the veil\'s last wisps cross the card (4.4 s): monotone and C1', () => {
+    expect(CLOSE).toEqual({ from: 2.8, to: 4.4 });
+    const h = 1 / 960, p: number[] = [];
+    for (let i = 0; i * h <= 6; i++) p.push(closeIn(i * h));
+    p.forEach((x, i) => {
+      const t = i * h;
+      if (t <= CLOSE.from) expect(x).toBe(0);
+      if (t >= CLOSE.to) expect(x).toBe(1);
+      if (i) expect(x).toBeGreaterThanOrEqual(p[i - 1]!);
+    });
+    expect(kinksOf(p, h)).toEqual([]);
+    // Zero speed at both ends (C1 with the still camera before and after it).
+    expect((closeIn(CLOSE.from + 1e-3) - closeIn(CLOSE.from)) / 1e-3).toBeLessThan(0.02);
+    expect((closeIn(CLOSE.to) - closeIn(CLOSE.to - 1e-3)) / 1e-3).toBeLessThan(0.02);
+    // A calm boom: its top speed about twice the mean (2.04 ×).
+    let top = 0;
+    for (let i = 1; i < p.length; i++) top = Math.max(top, (p[i]! - p[i - 1]!) / h);
+    expect(top * (CLOSE.to - CLOSE.from)).toBeLessThan(2.1);
+  });
+
+  it('through the scene: 0 for host, guest-ready, the reveal\'s 1.5 s and the decline; then the move; 1 at the accepted pose (settled, reduced motion, a saved accept)', () => {
+    const s = dinnerStage();
+    expect(s.scene.frameClose()).toBe(0);
+    s.director.setIntent('accept');
+    const start = s.now;
+    s.run(6.5);
+    for (const r of s.log) {
+      const tau = r.t - start;
+      // Before the move (the reveal and its first 1.3 s after): 0. The move on the reveal's clock (±1 frame).
+      if (tau < CLOSE.from - 1e-6) expect(r.close, `τ ${tau}`).toBe(0);
+      else expect(Math.abs(r.close - closeIn(tau)), `τ ${tau}`).toBeLessThan(closeIn(tau + 1 / 120) - closeIn(tau - 1 / 120) + 1e-9);
+      expect(r.pull).toBe(0);
+    }
+    expect(s.log.find((r) => r.t - start > DURATIONS_ACCEPT + 0.05)!.state).toBe('accepted-pose');
+    expect(s.scene.frameClose()).toBe(1);
+    // The move has landed: nothing keeps the loop drawing for the camera (the steam's own end aside).
+    s.run(1);
+    expect(s.scene.settling()).toBe(false);
+    expect(s.scene.frameClose()).toBe(1);
+    expect(kinksOf(s.log.map((r) => r.close), 1 / 120)).toEqual([]);
+    // Mid-move, reduced motion (the director settles the scene): straight to the close-up.
+    const m = dinnerStage();
+    m.director.setIntent('accept');
+    m.run(3.4);
+    expect(m.scene.frameClose()).toBeGreaterThan(0);
+    expect(m.scene.frameClose()).toBeLessThan(1);
+    m.director.setReducedMotion(true);
+    expect(m.scene.frameClose()).toBe(1);
+    // A saved accept (the pose, no reveal) and the declined pose.
+    const p = dinnerStage();
+    p.scene.pose('accepted');
+    expect(p.scene.frameClose()).toBe(1);
+    p.scene.pose('declined');
+    expect(p.scene.frameClose()).toBe(0);
+    p.scene.pose('host-ready');
+    expect(p.scene.frameClose()).toBe(0);
+    // The decline never moves it.
+    const d = dinnerStage();
+    d.director.setIntent('decline');
+    d.run(2);
+    expect(d.log.every((r) => r.close === 0)).toBe(true);
+    // A replay of the accept starts from the rest view (the pose cut, as the decline's replay cuts the pull).
+    s.director.replay();
+    expect(s.scene.frameClose()).toBe(0);
+  });
+
+  it('the homecoming: from c0 at its own speed, C1, landing at rest, no faster than the decline\'s dolly', () => {
+    for (const [c0, v0] of [[1, 0], [0.5, 1.4], [0.1, 0.5], [0.97, 0.15]] as const) {
+      const h = planCloseHome(c0, v0)!;
+      expect(h.span).toBeGreaterThanOrEqual(CLOSE_HOME.min);
+      expect(h.span).toBeLessThanOrEqual(CLOSE_HOME.max);
+      expect(closeHome(h, 0)).toBeCloseTo(c0, 9);
+      expect((closeHome(h, 1e-6) - closeHome(h, 0)) / 1e-6).toBeCloseTo(c0 >= 1 ? 0 : v0, 2);
+      expect(closeHome(h, h.span)).toBe(0);
+      expect((closeHome(h, h.span - 1e-3)) / 1e-3).toBeLessThan(0.01);
+      const p: number[] = [];
+      for (let t = 0; t <= h.span + 0.1; t += 1 / 960) p.push(closeHome(h, t));
+      expect(kinksOf(p, 1 / 960)).toEqual([]);
+      for (let i = 1; i < p.length; i++) expect(Math.abs(p[i]! - p[i - 1]!) * 960).toBeLessThanOrEqual(3.4);
+    }
+    // From the close-up at rest: 0.56 s.
+    expect(planCloseHome(1, 0)!.span).toBeCloseTo(0.56, 2);
+    expect(planCloseHome(0, 0)).toBeNull();
+  });
+
+  it('accept → decline from the close-up: the camera comes home first; the pull starts BIN_DELAY before it is home and the bin only enters once it is', () => {
+    // From the accepted pose at rest, and from the middle of the move (moving in).
+    for (const wait of [6.5, 3.6]) {
+      const s = dinnerStage();
+      s.director.setIntent('accept');
+      s.run(wait);
+      const c0 = s.scene.frameClose();
+      const at = s.log.length;
+      s.director.setIntent('decline');
+      s.run(2.2);
+      const after = s.log.slice(at);
+      const label = `after ${wait} s (close ${c0.toFixed(3)})`;
+      // No jump at the change, and C1 through it.
+      expect(Math.abs(after[0]!.close - c0), label).toBeLessThan(0.02);
+      expect(kinksOf(s.log.map((r) => r.close), 1 / 120), label).toEqual([]);
+      const homeAt = after.findIndex((r) => r.close === 0);
+      expect(homeAt, label).toBeGreaterThan(0);
+      for (const r of after.slice(homeAt)) expect(r.close, label).toBe(0);
+      const pullAt = after.findIndex((r) => r.pull > 0);
+      const binAt = after.findIndex((r) => r.bin > 1e-6);
+      expect((homeAt - pullAt) / 120, label).toBeLessThanOrEqual(DINNER_BIN_DELAY + 1 / 120 + 1e-9);
+      expect(binAt, label).toBeGreaterThanOrEqual(homeAt);
+      expect(kinksOf(after.map((r) => r.pull), 1 / 120), label).toEqual([]);
+      expect(after[after.length - 1]!.state, label).toBe('declined-pose');
+      expect(after[after.length - 1]!.pull, label).toBe(1);
+      // The decline's own pace from the close-up: k ≤ 1.35 (from rest: 1.34).
+      const c = planAnswerChange('accept', CONTENT_END.accept, 0, 'decline', planCloseHome(1, 0)!.span);
+      expect(c.k).toBeLessThan(1.35);
+      expect(c.start).toBe(0);
+    }
+  });
+
+  it('decline → accept replays the move from its planned start; accept → decline → accept mid-homecoming never jumps', () => {
+    const s = dinnerStage();
+    s.director.setIntent('decline');
+    s.run(1.0);
+    s.director.setIntent('accept');
+    const start = s.log.length;
+    s.run(7);
+    const rows = s.log.slice(start);
+    // The camera stays on the rest/pulled view until the reveal's clock reaches CLOSE.from, then lands on 1.
+    const first = rows.findIndex((r) => r.close > 0);
+    expect(first).toBeGreaterThan(Math.round(2.4 * 120));
+    expect(rows[rows.length - 1]!.close).toBe(1);
+    expect(kinksOf(rows.map((r) => r.close), 1 / 120)).toEqual([]);
+    // Into the homecoming and straight back.
+    const b = dinnerStage();
+    b.director.setIntent('accept');
+    b.run(6.5);
+    b.director.setIntent('decline');
+    b.run(0.25);
+    const mid = b.scene.frameClose();
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(1);
+    const i0 = b.log.length;
+    b.director.setIntent('accept');
+    b.run(7);
+    const back = b.log.slice(i0 - 1);
+    expect(Math.abs(back[1]!.close - back[0]!.close)).toBeLessThan(0.05);
+    expect(kinksOf(b.log.map((r) => r.close), 1 / 120)).toEqual([]);
+    expect(back[back.length - 1]!.close).toBe(1);
+    expect(back[back.length - 1]!.state).toBe('accepted-pose');
+  });
+});
+const DURATIONS_ACCEPT = DINNER_DURATIONS.accept;

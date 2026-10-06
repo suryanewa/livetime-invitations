@@ -20,11 +20,14 @@ export function posterUrl(category: Category, preset: string, pose: CanonicalPos
  * Fullscreen backdrop stills (bare studio, BACKDROP_FIELD = 7 × the frame): assets/scenes/<category>/backdrop.webp
  * at the scene's rest framing, and (v1.5 decline pull-back) backdrop-declined.webp at its decline
  * framing for the scenes whose declined pose is pulled back (Birthday, Dinner). A scene without one
- * has one framing, so its declined poster takes the rest backdrop.
+ * has one framing, so its declined poster takes the rest backdrop. v1.7 (#42): Dinner's accepted
+ * pose is the close-up on the card, so its accepted poster melts into backdrop-accepted.webp, the
+ * close-up at the same field *with* the scene in it (the plate runs past the poster's edges on
+ * every side, so a bare-studio still would cut it off at the feather).
  */
 const backdrops = import.meta.glob('../../assets/scenes/*/backdrop*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
 export function backdropUrl(category: Category, pose: CanonicalPose = 'guest-ready'): string | null {
   const find = (file: string) => Object.entries(backdrops).find(([path]) => path.endsWith(`/scenes/${category}/${file}`))?.[1] ?? null;
-  return (pose === 'declined' ? find('backdrop-declined.webp') : null) ?? find('backdrop.webp');
+  return (pose === 'declined' ? find('backdrop-declined.webp') : pose === 'accepted' ? find('backdrop-accepted.webp') : null) ?? find('backdrop.webp');
 }

@@ -16,6 +16,23 @@ export const EVENTS: Record<Category, EventFixture> = {
   business: { title: 'Partner Summit — Welcome Reception', when: 'Thu, Nov 12 · 6:30 PM', where: 'Hudson Yards, New York' },
 };
 
+/**
+ * v1.7 (Dinner, spec revision #41): the invitation card's print in the showcase. The eyebrow and
+ * the event's title for everyone; a sample invitee's name in guest mode only (the host previews
+ * an invitation before it has a guest). Every poster shows sample content: the accepted poster's
+ * card carries this name; an integrating app passes its own guest's (docs/integration.md).
+ */
+export const SAMPLE_INVITEE = 'Alex Rivera';
+export const CARD_EYEBROW = 'You\u2019re invited';
+export function dinnerCard(mode: 'host' | 'guest'): { eyebrow: string; title: string; name?: string } {
+  return mode === 'guest' ? { eyebrow: CARD_EYEBROW, title: EVENTS.dinner.title, name: SAMPLE_INVITEE } : { eyebrow: CARD_EYEBROW, title: EVENTS.dinner.title };
+}
+/** A Dinner config with the showcase's card for `mode` (a config that brings its own card keeps it). */
+export function withCard(config: SceneConfig, mode: 'host' | 'guest', replace = false): SceneConfig {
+  if (config.category !== 'dinner' || (config.card && !replace)) return config;
+  return { ...config, card: dinnerCard(mode) };
+}
+
 export const CATEGORY_LABEL: Record<Category, string> = {
   party: 'Party',
   birthday: 'Birthday',
@@ -122,9 +139,9 @@ export const POSE_TEXT: Record<Category, Record<'host-ready' | 'guest-ready' | '
     declined: 'The ball rests to the side of the hoop.',
   },
   dinner: {
-    'host-ready': 'An empty plate with a silver cover poised above it.',
+    'host-ready': 'An invitation card on a plate, with a silver cover poised above it.',
     'guest-ready': 'A covered dish.',
-    accepted: 'The cover is lifted and set down beside the plate.',
+    accepted: 'The cover is set down beside the plate; the invitation card on the plate, seen close up.',
     declined: 'The covered dish is in the bin.',
   },
 };

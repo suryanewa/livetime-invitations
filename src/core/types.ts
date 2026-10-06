@@ -11,8 +11,23 @@ export type SceneConfig =
   | { category: 'party'; songId: string; label: 'coral' | 'cobalt' }
   | { category: 'birthday'; cake: 'vanilla' | 'cocoa' }
   | { category: 'sports'; ball: 'orange' | 'cream' }
-  | { category: 'dinner'; dish: 'pasta' | 'vegetables' }
+  | { category: 'dinner'; dish: 'pasta' | 'vegetables'; card?: InvitationCard }
   | { category: 'business'; template: 'light' | 'dark' };
+
+/**
+ * v1.7 (Dinner, spec revision #41): the text printed on the invitation card the reveal uncovers.
+ * Every line is optional and plain text; `resolveConfig` trims it, strips control characters and
+ * clamps it (eyebrow 60, title 80, name 48 characters). Omitted, the eyebrow reads "You're invited"
+ * and the other lines are not printed. The page's HTML stays authoritative: the card is decorative.
+ */
+export interface InvitationCard {
+  /** A short line over the title (printed in letter-spaced capitals). */
+  eyebrow?: string;
+  /** The event's name (one or two lines, shrunk to fit). */
+  title?: string;
+  /** The invitee's name; leave it out where there is no invitee (the host's preview). */
+  name?: string;
+}
 
 export type ResponseRequest = { requestId: string; response: Response };
 
