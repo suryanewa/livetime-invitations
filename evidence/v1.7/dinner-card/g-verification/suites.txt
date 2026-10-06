@@ -1,0 +1,28 @@
+== verification on 49327e7, Tue Oct  6 01:47:45 EDT 2026
+ 1:47  up 3 days,  7:17, 3 users, load averages: 21.63 14.29 16.57
+typecheck: clean
+unit: pnpm vitest run --testTimeout=1800000: 33 files, 492/492 passed (91 s); per file: config 9, dinner 33, scene-depth 7, stage-framing 13, framing 11, pull 18
+browser (fresh 5701 server, one spec per call):
+  a11y          8 passed (13.0s) 
+  bin           8 passed (24.9s) 
+  birthday      7 passed (53.4s) 
+  bloom         1 failed  2 passed (15.6s) 
+  business      14 passed (50.9s) 
+  collection    3 passed (1.0m) 
+  dinner        8 passed (32.8s) 
+  framing       9 passed (25.2s) 
+  fullscreen    14 passed (25.2s) 
+  gallery       4 passed (21.2s) 
+  idle          4 passed (31.6s) 
+  party         9 passed (32.0s) 
+  posters       5 passed (16.5s) 
+  resilience    14 passed (1.3m) 
+  scene-depth   5 passed (17.9s) 
+  sports        6 passed (33.0s) 
+  bloom: the known Birthday flake (its last assertion, two consecutive stills byte-identical; docs/RESUME.md 'Still open'): re-run 3 times: 1 passed, 2 failed, same line 79
+posters (dinner):
+  ok    assets/scenes/dinner/posters/shared-host-ready.webp: 0.00 % of pixels changed by > 24/255 (mean 1.17, max 12)
+  ok    assets/scenes/dinner/posters/shared-guest-ready.webp: 0.00 % of pixels changed by > 24/255 (mean 1.06, max 11)
+  ok    assets/ui/collection/dinner.webp: 0.00 % of pixels changed by > 24/255 (mean 1.27, max 9)
+  ok    assets/scenes/dinner/posters/shared-accepted.webp: 0.00 % of pixels changed by > 24/255 (mean 1.17, max 8)
+  ok    assets/scenes/dinner/posters/shared-declined.webp: 0.00 % of pixels changed by > 24/255 (mean 1.00, max 6)
