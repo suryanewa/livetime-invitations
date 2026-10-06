@@ -1,5 +1,5 @@
 import {
-  BoxGeometry, CanvasTexture, Color, Group, LinearFilter, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, SRGBColorSpace, type Texture,
+  BoxGeometry, CanvasTexture, Color, Group, LinearFilter, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, SRGBColorSpace, type Texture,
 } from 'three';
 import { type CardText, CARD_INK, createCardPrint } from '../src/render/cardPrint.ts';
 import { keepPixels } from '../src/render/textures.ts';
@@ -34,7 +34,7 @@ export class DinnerCard {
   /** Anisotropy for the print (the renderer's maximum, set by the scene once it knows it). */
   private anisotropy = 1;
 
-  constructor(shadow: { color: string; opacity: number } = { color: '#3a2f24', opacity: 0.45 }) {
+  constructor(shadow: { color: string; opacity: number } = { color: '#3a2f24', opacity: CARD_SHADOW_OPACITY }) {
     this.object.name = 'card_authored';
     this.object.position.set(0, CARD_BOTTOM, 0);
     this.object.rotation.y = CARD.yaw;
@@ -80,7 +80,7 @@ export class DinnerCard {
   }
 
   private redraw(): void {
-    const next = createCardPrint(this.text, this.low ? 'low' : 'full');
+    const next = createCardPrint(this.text, this.low ? 'low' : 'full', { from: CARD_KEY, falloff: CARD_LIGHT_FALLOFF });
     if (!next) return;
     next.anisotropy = this.anisotropy;
     this.print?.dispose();
@@ -105,8 +105,33 @@ export class DinnerCard {
   }
 }
 
-/** How far the shadow's quad reaches past the card (su; ≈ 9 mm), and its two falloffs (mm). */
-const SHADOW = { reach: 0.053, contact: 1.1, skirt: 3.2, skirtShare: 0.16 } as const;
+/**
+ * v1.7 polish: where the production key comes from, in the card's own plane. The neutral-room rig's
+ * key (src/render/rigs/neutral-room.ts: room θ 2°, turned by 120°, so world θ = atan2(z, x) 118°,
+ * elevation 40°: camera-left and a little towards the camera), turned into the card's frame (its
+ * yaw, CARD.yaw): x along the card's long side (the print's right), y along its short side towards
+ * the camera (the print's down). Unit.
+ */
+export const KEY_THETA_DEG = 118;
+export const CARD_KEY: readonly [number, number] = (() => {
+  const t = MathUtils.degToRad(KEY_THETA_DEG), x = Math.cos(t), z = Math.sin(t);
+  // World (x, z) into the card's frame: the inverse of its turn about y by CARD.yaw.
+  const c = Math.cos(CARD.yaw), s = Math.sin(CARD.yaw);
+  const lx = x * c - z * s, lz = x * s + z * c, n = Math.hypot(lx, lz);
+  return [lx / n, lz / n] as const;
+})();
+/** The stock's light falloff across the card, from the key's side to the far side (a fraction of its value). */
+export const CARD_LIGHT_FALLOFF = 0.05;
+
+/**
+ * How far the shadow's quad reaches past the card (su; ≈ 9 mm), its two falloffs (mm) and (v1.7
+ * polish) its offset away from the key (mm): a 0.6 mm card under a key 40° up casts its edge ≈ 0.8 mm
+ * out, so the shadow shows on the far sides and tucks under the key's (it read as a symmetric drop
+ * shadow, 27–34 % darker at the outline on all four sides, at opacity 0.5 and no offset).
+ */
+const SHADOW = { reach: 0.053, contact: 1.1, skirt: 3.2, skirtShare: 0.16, offset: 1 } as const;
+/** v1.7 polish: the contact shadow's opacity (the rig passes it; was 0.5). */
+export const CARD_SHADOW_OPACITY = 0.3;
 
 /**
  * The card's contact shadow: a quad CARD + 2·reach on the porcelain, its alpha drawn from the
@@ -145,8 +170,9 @@ function cardShadow(color: string, opacity: number): Mesh<PlaneGeometry, MeshBas
   const mesh = new Mesh(new PlaneGeometry(w, d), mat);
   mesh.name = 'card_shadow';
   mesh.rotation.x = -Math.PI / 2;
-  // Just over the porcelain (the card's underside is CARD.gap above it).
-  mesh.position.y = -CARD.gap + 0.0001;
+  // Just over the porcelain (the card's underside is CARD.gap above it), and (v1.7 polish) cast
+  // SHADOW.offset mm away from the key: the card's frame x is its long side, z its short side.
+  mesh.position.set(-CARD_KEY[0] * SHADOW.offset / mmPerSu, -CARD.gap + 0.0001, -CARD_KEY[1] * SHADOW.offset / mmPerSu);
   mesh.renderOrder = -2;
   mesh.userData.noShadowCast = true;
   return mesh;

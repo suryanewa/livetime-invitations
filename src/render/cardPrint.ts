@@ -65,6 +65,12 @@ export interface CardText {
   name?: string;
 }
 
+/** v1.7 polish: the key's side of the card (unit, x the print's right, y its down) and the stock's falloff away from it. */
+export interface CardLight {
+  from: readonly [number, number];
+  falloff: number;
+}
+
 /** The card's size in millimetres (models/dinnerContract.ts CARD: 10 × 7 cm, landscape). */
 export const CARD_MM = { width: 100, height: 70 } as const;
 /** Texture sizes: Normal/High, and Low (the Low tier halves it). */
@@ -275,7 +281,7 @@ function grainTile(): HTMLCanvasElement {
  * `canvas` is CARD_PRINT_SIZE (landscape, 10:7). Returns the block's extent (mm from the card's
  * top, for tests and the legibility check) or null when nothing is printed.
  */
-export function drawCardPrint(canvas: HTMLCanvasElement, text: CardText): { top: number; bottom: number } | null {
+export function drawCardPrint(canvas: HTMLCanvasElement, text: CardText, light?: CardLight): { top: number; bottom: number } | null {
   const ctx = canvas.getContext('2d')!;
   const W = canvas.width, H = canvas.height;
   const mm = W / CARD_MM.width;
@@ -300,6 +306,18 @@ export function drawCardPrint(canvas: HTMLCanvasElement, text: CardText): { top:
     ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
   }
   ctx.globalAlpha = 1;
+  // v1.7 polish: a gentle light falloff across the stock, from the key's side (`light.from`, unit,
+  // in the card's frame: x the print's right, y its down) to the far side, so the paper is not dead
+  // flat (the judge measured 235.0–235.4 luma corner to corner). Linear over the card's extent along it.
+  if (light && light.falloff > 0) {
+    const [fx, fy] = light.from;
+    const reach = (Math.abs(fx) * W + Math.abs(fy) * H) / 2;
+    const g = ctx.createLinearGradient(W / 2 + fx * reach, H / 2 + fy * reach, W / 2 - fx * reach, H / 2 - fy * reach);
+    g.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    g.addColorStop(1, `rgba(0, 0, 0, ${light.falloff})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
 
   const eyebrow = text.eyebrow?.trim() ?? '', title = text.title?.trim() ?? '', name = text.name?.trim() ?? '';
   if (!eyebrow && !title && !name) {
@@ -380,13 +398,13 @@ export function drawCardPrint(canvas: HTMLCanvasElement, text: CardText): { top:
  * The card's print as a texture (world-space detail: sRGB, mipmapped, the renderer's maximum
  * anisotropy set by the card), or null where there is no canvas (unit tests).
  */
-export function createCardPrint(text: CardText, size: keyof typeof CARD_PRINT_SIZE = 'full'): CanvasTexture | null {
+export function createCardPrint(text: CardText, size: keyof typeof CARD_PRINT_SIZE = 'full', light?: CardLight): CanvasTexture | null {
   if (typeof document === 'undefined') return null;
   const [w, h] = CARD_PRINT_SIZE[size];
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  drawCardPrint(canvas, text);
+  drawCardPrint(canvas, text, light);
   const tex = new CanvasTexture(keepPixels(canvas));
   tex.name = 'card_print';
   tex.colorSpace = SRGBColorSpace;
