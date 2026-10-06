@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { Box3, Color, Euler, Group, Matrix4, Mesh, MeshStandardMaterial, type Object3D, OrthographicCamera, Vector3 } from 'three';
+import { Box3, Color, Euler, Group, MathUtils, Matrix4, Mesh, MeshStandardMaterial, type Object3D, OrthographicCamera, Vector3 } from 'three';
 import * as dinnerModel from '../models/dinner.ts';
 import type { DinnerRig } from '../models/dinner.ts';
 import { VisualDirector } from '../src/core/visualDirector.ts';
@@ -10,9 +10,13 @@ import { fitCameraToBounds } from '../src/render/camera.ts';
 import { DinnerScene, dinnerFramePoints } from '../src/scenes/dinner/index.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import {
-  COVER, COVER_BESIDE, COVER_SEATED, COVER_TOP, DINNER_BIN, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_GLB_NODES, DINNER_NODES, DINNER_RIM_CLEARANCE, DISH_HEIGHT,
-  DISH_SCALE, PLATE, plateTop, dinnerBounds,
+  CARD, CARD_BOTTOM, CARD_TOP, cardCorners, COVER, COVER_BESIDE, COVER_SEATED, COVER_TOP, DINNER_BIN, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_GLB_NODES, DINNER_NODES,
+  DINNER_RIM_CLEARANCE, DINNER_WORLD_SCALE, DISH_HEIGHT, DISH_SCALE, PLATE, plateTop, dinnerBounds,
 } from '../models/dinnerContract.ts';
+import { DinnerCard } from '../models/dinnerCard.ts';
+import { cameraDirection, CAMERA_ANGLES } from '../src/render/camera.ts';
+import { CLOUD, cloudDensity, cloudState } from '../src/scenes/dinner/steam.ts';
+import { WORLD_UNIT_CM } from '../models/worldScale.ts';
 import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
@@ -338,6 +342,94 @@ describe('Dinner runtime GLB matches the contract (plate and cloche masters, no 
       expect(t.getMimeType()).toBe('image/webp');
       expect(listTextureSlots(t)).toContain('metallicRoughnessTexture');
     }
+  });
+});
+
+describe('Dinner invitation card (v1.7, spec revision #41)', () => {
+  const corners = cardCorners();
+  const top = corners.filter((p) => p.y > CARD_BOTTOM + 1e-9);
+  /** su → cm. */
+  const cmOf = (su: number) => su * DINNER_WORLD_SCALE * WORLD_UNIT_CM;
+
+  it('is a 10 × 7 cm landscape card, 0.6 mm thick', () => {
+    expect(cmOf(CARD.width)).toBeCloseTo(10, 6);
+    expect(cmOf(CARD.depth)).toBeCloseTo(7, 6);
+    expect(cmOf(CARD.thickness)).toBeCloseTo(0.06, 6);
+    expect(corners).toHaveLength(8);
+    expect(top).toHaveLength(4);
+  });
+
+  it('lies centred in the flat well: on the porcelain, never on the coupe\'s rise, never pierced by it', () => {
+    const c = top.reduce((a, p) => a.add(p), new Vector3()).multiplyScalar(1 / 4);
+    expect(Math.hypot(c.x, c.z)).toBeLessThan(1e-9);
+    // Its corners 1.6 cm inside the well (r 0.455 su = 7.7 cm), where the plate is flat.
+    const reach = Math.max(...top.map((p) => Math.hypot(p.x, p.z)));
+    expect(cmOf(PLATE.wellRadius - reach)).toBeGreaterThan(1.5);
+    for (let r = 0; r <= reach + 0.02; r += 0.01) expect(plateSurface(r), `r ${r}`).toBeCloseTo(PLATE.well, 3);
+    // The master's porcelain under its footprint (+2 mm) stays under its underside, by at most 0.15 mm.
+    const inv = new Matrix4().makeRotationY(-CARD.yaw);
+    const q = new Vector3();
+    let highest = -Infinity;
+    for (const v of plateVerts) {
+      q.copy(v).applyMatrix4(inv);
+      if (Math.abs(q.x) <= CARD.width / 2 + 0.012 && Math.abs(q.z) <= CARD.depth / 2 + 0.012) highest = Math.max(highest, v.y);
+    }
+    expect(highest).toBeLessThan(CARD_BOTTOM);
+    expect(cmOf(CARD_BOTTOM - highest)).toBeLessThan(0.015);
+  });
+
+  it('is turned to the showcase\'s azimuth: its long side runs across the frame, its print\'s top away from the camera', () => {
+    expect(CARD.yaw).toBeCloseTo(MathUtils.degToRad(CAMERA_ANGLES.azimuthDeg), 12);
+    const back = cameraDirection().setY(0).normalize();
+    const long = top[1]!.clone().sub(top[0]!).normalize();
+    expect(Math.abs(long.dot(back))).toBeLessThan(1e-9);
+    // The far edge (−z in the card's own frame, where the print's top is) is away from the camera.
+    const far = top[0]!.clone().add(top[1]!).multiplyScalar(0.5);
+    expect(far.dot(back)).toBeLessThan(0);
+    expect(cmOf(-far.dot(back))).toBeCloseTo(3.5, 6);
+  });
+
+  it('is under the seated cloche, inside the steam\'s clear layer: the cloche and the steam field are untouched', () => {
+    // Under the seated dome's rim plane by more than the clear layer, inside its cavity.
+    expect(CARD_TOP).toBeLessThan(COVER_SEATED.y - CLOUD.floor);
+    expect(Math.max(...top.map((p) => Math.hypot(p.x, p.z)))).toBeLessThan(CLOUD.radius - 0.2);
+    // Every vertex of the seated cloche over the card's reach is far above it.
+    const reach = Math.max(...top.map((p) => Math.hypot(p.x, p.z))) + 0.02;
+    const over = coverVerts.filter((v) => Math.hypot(v.x, v.z) <= reach).map((v) => v.y + COVER_SEATED.y);
+    expect(Math.min(...over) - CARD_TOP).toBeGreaterThan(0.4);
+    // The closed field's density at the card's top while the dome is on it and lifting (τ 0–0.3 s):
+    // under 0.5 % of the dome's (the clear layer is a smoothstep from the porcelain, measured 0.28–0.29 %),
+    // 0 from τ 0.6 s (the layer has grown past it), and 0 in the porcelain under it at every τ.
+    for (const tau of [0, 0.1, 0.2, 0.3, 0.6, 1, 2]) {
+      const s = cloudState(tau);
+      let peak = 0;
+      for (let y = 0.03; y < 0.7; y += 0.01) peak = Math.max(peak, cloudDensity(new Vector3(0, y, 0), s));
+      for (const p of [new Vector3(0, CARD_TOP, 0), ...top.map((t) => t.clone().setY(CARD_TOP))]) {
+        const d = cloudDensity(p, s);
+        expect(d, `τ ${tau}`).toBeLessThan(0.005 * Math.max(peak, 1e-9) + 1e-12);
+        if (tau >= 0.6) expect(d, `τ ${tau}`).toBe(0);
+        expect(cloudDensity(p.clone().setY(PLATE.well - 1e-4), s)).toBe(0);
+      }
+    }
+  });
+
+  it('is built as one opaque body (its printed face on top) and a contact shadow, the shadow left out where there is no canvas', () => {
+    const card = new DinnerCard();
+    expect(card.object.name).toBe('card_authored');
+    expect(card.object.position.y).toBeCloseTo(CARD_BOTTOM, 12);
+    expect(card.object.rotation.y).toBeCloseTo(CARD.yaw, 12);
+    card.body.geometry.computeBoundingBox();
+    const b = card.body.geometry.boundingBox!;
+    expect(b.min.y).toBeCloseTo(0, 7);
+    expect(b.max.y).toBeCloseTo(CARD.thickness, 7);
+    expect(b.max.x - b.min.x).toBeCloseTo(CARD.width, 7);
+    expect(b.max.z - b.min.z).toBeCloseTo(CARD.depth, 7);
+    expect(card.body.material[2]!.name).toBe('mat_card_face');
+    expect(card.body.material.every((m) => !m.transparent)).toBe(true);
+    // Node tests: no canvas, so no print and no shadow texture (the browser builds both).
+    expect(card.shadow).toBeNull();
+    expect(card.printTexture).toBeNull();
+    card.dispose();
   });
 });
 

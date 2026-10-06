@@ -6,6 +6,7 @@ import {
 } from '../../../models/dinner.ts';
 import { binEntranceStart, binPlaceholder, flapAngles, openBinSilhouette } from '../../../models/disposalBin.ts';
 import { DinnerSteam, STEAM_LAYERS } from '../../../models/dinnerSteam.ts';
+import { type CardText, loadCardFont } from '../../render/cardPrint.ts';
 import { disposeImported, gltfLoader, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { silhouettePoints } from '../../render/framing.ts';
@@ -104,8 +105,10 @@ export class DinnerScene implements SceneInstance {
   /** v1.6: the bin's meshes are on the scene depth's layer (once it has arrived). */
   private binOccludes = false;
 
-  constructor(readonly rig: DinnerRig, _config: Extract<SceneConfig, { category: 'dinner' }>, library?: MaterialLibrary) {
+  constructor(readonly rig: DinnerRig, config: Extract<SceneConfig, { category: 'dinner' }>, library?: MaterialLibrary) {
     this.root = rig.root;
+    // v1.7: the invitation card's print (the rig hangs the card in the plate's well).
+    rig.card?.setText(cardText(config));
     this.bounds = rig.bounds.clone();
     rig.root.add(this.steam.object);
     this.steam.setSeated(frameFor('guest-ready', newFrame()).coverPos);
@@ -121,8 +124,13 @@ export class DinnerScene implements SceneInstance {
     this.heroPoints = silhouettePoints(this.root);
   }
 
-  /** v1.2 has no food: `dish` stays in SceneConfig for integration compatibility and selects nothing. */
-  setConfig(_config: SceneConfig): void {}
+  /**
+   * v1.2 has no food: `dish` stays in SceneConfig for integration compatibility and selects nothing.
+   * v1.7: the card's text is printed again (only when it changed; nothing else moves).
+   */
+  setConfig(config: SceneConfig): void {
+    if (config.category === 'dinner') this.rig.card?.setText(cardText(config));
+  }
 
   /** What is showing: the last outcome sampled (or posed) and its time, for a change of mind. */
   private shown: { seq: SequenceName; t: number; rate: number } | null = null;
@@ -261,9 +269,12 @@ export class DinnerScene implements SceneInstance {
   setLowDetail(enabled: boolean): void {
     setImportedLowDetail(this.root, enabled);
     this.steam.setLowDetail(enabled);
+    this.rig.card?.setLowDetail(enabled);
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
+    // The card's print is world-space detail seen at a grazing 15° and head-on in the close-up.
+    this.rig.card?.setAnisotropy(renderer.capabilities.getMaxAnisotropy());
     // The steam is shown for the compile only; the bin warms itself once it has arrived (DeferredBin).
     const scene = this.root.parent ?? this.root;
     this.steam.showForCompile();
@@ -381,6 +392,14 @@ export class DinnerScene implements SceneInstance {
   }
 }
 
+/** v1.7 (#41): the card's eyebrow when the config gives none. */
+export const CARD_EYEBROW = 'You\u2019re invited';
+/** What the card prints for a Dinner config (resolveConfig has sanitised it). */
+export function cardText(config: Extract<SceneConfig, { category: 'dinner' }>): CardText {
+  const c = config.card;
+  return { eyebrow: c?.eyebrow ?? CARD_EYEBROW, title: c?.title, name: c?.name };
+}
+
 /**
  * Steam time on a change of mind's reveal: the accept's own time while its motion plays (it may be
  * sped up by k), real time after CONTENT_END (where changeTime holds), continuous at the switch.
@@ -404,8 +423,11 @@ export const dinnerScene: SceneModule = {
     // v1.5: the dish only; the bin (6.6 MB, only the decline shows it) loads after ready. Its
     // framing silhouette is computed from its design while the dish downloads.
     const dishFetch = fetchGlb(glbUrl, signal);
+    // v1.7: the card's bundled face loads beside the dish, so its first print is in it (posters are deterministic).
+    const font = loadCardFont();
     openBinSilhouette(DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE);
     const dish = await gltfLoader().parseAsync(await dishFetch, '');
+    await font;
     const root = dish.scene.getObjectByName('dinner_root');
     if (!root) throw Object.assign(new Error('missing dinner nodes'), { reason: 'asset-failure' as const });
     root.removeFromParent();

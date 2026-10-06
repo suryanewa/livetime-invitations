@@ -1,4 +1,5 @@
-import { Box3, Vector3 } from 'three';
+import { Box3, MathUtils, Vector3 } from 'three';
+import { CAMERA_ANGLES } from '../src/render/camera.ts';
 import { BIN_BOUNDS, binIn } from './disposalBin.ts';
 import { cm, REFERENCE_CM } from './worldScale.ts';
 
@@ -82,6 +83,49 @@ export function plateTop(r: number): number {
     }
   }
   return PLATE.rimHeight;
+}
+
+/**
+ * v1.7 (Surya: "the steam under the cloche should reveal an invitation card … flat on the plate";
+ * spec revision #41, pending): a heavyweight landscape card, 10 × 7 cm and 0.6 mm thick, lying
+ * centred in the plate's flat well. It is built at runtime (models/dinnerCard.ts, no GLB change)
+ * under `plate_authored`, so it rides with the plate (the decline bins it with the dish).
+ * - Its half-diagonal (6.1 cm) leaves 1.6 cm of the well (7.7 cm) round its corners, so it lies on
+ *   the flat porcelain, never on the coupe's rise.
+ * - Its top (4.7 mm + 0.05 mm + 0.6 mm over the table) is inside the steam's clear layer over the
+ *   porcelain (CLOUD.floor, 5.9 mm) and 6.6 cm under the seated dome's rim plane: the steam field
+ *   and the cloche are untouched.
+ * - It is turned about y by the shared azimuth, so its long side runs across the showcase frame
+ *   and its print reads upright from the camera (the text's top is the side away from it).
+ * Every number in scene units (su: 16.875 cm).
+ */
+export const CARD = {
+  width: cm(10) / DINNER_WORLD_SCALE,
+  depth: cm(7) / DINNER_WORLD_SCALE,
+  thickness: cm(0.06) / DINNER_WORLD_SCALE,
+  /** Its underside over the well's highest vertex (su; 0.05 mm): the porcelain never pokes through. */
+  gap: 0.0003,
+  yaw: MathUtils.degToRad(CAMERA_ANGLES.azimuthDeg),
+} as const;
+/** The card's underside and its printed top, over the table (su), with the plate at rest. */
+export const CARD_BOTTOM = PLATE.well + CARD.gap;
+export const CARD_TOP = CARD_BOTTOM + CARD.thickness;
+
+/**
+ * The card's eight corners in plate space (the plate's underside centre; scene space while the plate
+ * is at rest), turned by its yaw: the close-up's fit (v1.7 #42) frames these.
+ */
+export function cardCorners(): Vector3[] {
+  const out: Vector3[] = [];
+  const c = Math.cos(CARD.yaw), s = Math.sin(CARD.yaw);
+  for (const y of [CARD_BOTTOM, CARD_TOP]) {
+    for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+      const x = (u * CARD.width) / 2, z = (v * CARD.depth) / 2;
+      // A turn about y by `yaw` (three's rotation.y): x' = x cos + z sin, z' = −x sin + z cos.
+      out.push(new Vector3(x * c + z * s, y, -x * s + z * c));
+    }
+  }
+  return out;
 }
 
 /**

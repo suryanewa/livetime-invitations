@@ -1,6 +1,7 @@
 import type { Object3D } from 'three';
 import { ContactShadow } from '../src/render/contactShadow.ts';
 import { COVER, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_NODES, dinnerBounds, PLATE, type DishPreset } from './dinnerContract.ts';
+import { DinnerCard } from './dinnerCard.ts';
 import { buildDinnerGeometry } from './dinnerPremium.ts';
 import { attachBin, BIN_CONTACT, buildDisposalBin, detachBin } from './disposalBin.ts';
 import { applyShadowProxies, disposeShadowProxies } from './shadowProxy.ts';
@@ -22,6 +23,8 @@ export interface DinnerRig {
   dishShadow: ContactShadow;
   /** The cloche's own floor shadow once it is set down beside the plate. */
   coverShadow: ContactShadow;
+  /** v1.7 (#41): the invitation card in the plate's well (under `plate_authored`). */
+  card: DinnerCard;
   flapL: Object3D;
   flapR: Object3D;
   bounds: ReturnType<typeof dinnerBounds>;
@@ -56,6 +59,9 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
   });
   coverShadow.visible = false;
   dishShadow.parent!.add(coverShadow);
+  // v1.7: the card lies in the well and rides with the plate (after the proxies: it casts nothing).
+  const card = new DinnerCard({ color: dir.shadow.color, opacity: 0.5 });
+  nodes.plate_authored!.add(card.object);
 
   return {
     root,
@@ -63,6 +69,7 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
     shadows: [dishShadow, coverShadow, binShadow],
     dishShadow,
     coverShadow,
+    card,
     flapL: root.getObjectByName('bin_flap_l')!,
     flapR: root.getObjectByName('bin_flap_r')!,
     bounds: dinnerBounds(),
@@ -71,6 +78,7 @@ export function rigDinner(root: Object3D, binRoot: Object3D, lib: ModelContext['
       dishShadow.dispose();
       coverShadow.dispose();
       binShadow.dispose();
+      card.dispose();
       detachBin(binRoot);
       disposeShadowProxies(root);
     },

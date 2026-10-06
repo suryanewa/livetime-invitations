@@ -23,7 +23,7 @@ import { DEFAULT_CONFIGS } from '../core/types.ts';
 import { createGuestControls, ICONS } from '../ui/guestControls.ts';
 import type { Tier } from '../render/quality.ts';
 import { MockResponseAdapter, type MockMode, MOCK_DELAYS } from './mockAdapter.ts';
-import { CATEGORY_LABEL, EVENTS, HOST_ACTION, LIVE_CATEGORIES, OBJECT_LABEL, POSE_TEXT, PRESET_LEGEND, PRESETS, SONGS, songTitle } from './fixtures.ts';
+import { CATEGORY_LABEL, EVENTS, HOST_ACTION, LIVE_CATEGORIES, OBJECT_LABEL, POSE_TEXT, PRESET_LEGEND, PRESETS, SONGS, songTitle, withCard } from './fixtures.ts';
 import { backdropUrl, posterUrl } from './posters.ts';
 import { collectionThumb } from './collection.ts';
 import { DEFAULT_RIG, RIGS, rigNames } from '../render/rigRegistry.ts';
@@ -194,6 +194,8 @@ let mockMode: MockMode = 'normal';
 let controller: InvitationHandle | null = null;
 let adapter: MockResponseAdapter | null = null;
 let hostPrepared = false;
+/** v1.7: whether the showcase prints Dinner's card (its sample text by mode) or a config brought its own. */
+let ownCard = true;
 /** Dev/test: ?saved=accept|decline simulates an authoritative response loaded from the app. */
 const savedParam = new URLSearchParams(location.search).get('saved');
 /**
@@ -249,6 +251,8 @@ function mount() {
   });
   adapter.mode = mockMode;
   if (initialResponse) adapter.stored = initialResponse;
+  // v1.7: Dinner's card prints the event and, in guest mode, a sample invitee (fixtures.ts).
+  config = withCard(config, mode, ownCard);
   controller = createInvitation({
     mount: stage,
     layout: 'fullscreen',
@@ -395,6 +399,13 @@ function posterShown(): boolean {
 
 function render(state: InvitationState) {
   mode = state.mode;
+  // v1.7: the card follows the mode (the host's has no name line): a print-only change, which
+  // reprints the card where it lies and resets nothing (controller.setConfig).
+  const card = ownCard ? withCard(config, mode, true) : config;
+  if (card !== config && JSON.stringify(card) !== JSON.stringify(config)) {
+    config = card;
+    controller?.setConfig(config);
+  }
   $$<HTMLButtonElement>('.sc-mode button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
   ($('[data-panel="host"]') as HTMLElement).hidden = mode !== 'host';
   ($('[data-panel="guest"]') as HTMLElement).hidden = mode !== 'guest';
@@ -512,9 +523,12 @@ if (import.meta.env.DEV) {
     rig,
     setConfig(next: SceneConfig) {
       const switched = next.category !== category;
-      config = next;
+      // A Dinner config without a card takes the showcase's (capture and tests pass the preset only);
+      // one with its own card keeps it, and the showcase stops reprinting it on mode changes.
+      ownCard = next.category !== 'dinner' || !next.card;
+      config = withCard(next, mode);
       category = next.category;
-      controller?.setConfig(next);
+      controller?.setConfig(config);
       if (switched) renderStatic();
       else syncPresets();
     },

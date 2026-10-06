@@ -1,4 +1,4 @@
-import { presetOf, resolveConfig, sameConfig } from './config.ts';
+import { presetOf, printOnlyChange, resolveConfig, sameConfig } from './config.ts';
 import { PlaybackClock } from './clock.ts';
 import { ResponseState, type ResponseSnapshot } from './responseState.ts';
 import type { DeferredContext, SceneInstance, SceneModule } from './sequence.ts';
@@ -918,7 +918,17 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       }
       if (sameConfig(resolved.config, config)) return;
       const categoryChanged = resolved.config.category !== config.category;
+      const printOnly = printOnlyChange(config, resolved.config);
       config = resolved.config;
+      if (printOnly) {
+        // v1.7: only the Dinner card's text changed: it is printed again where it lies; nothing
+        // that is playing is reset (the preset, and so the poster, is the same).
+        scene?.setConfig(config);
+        redraw();
+        requestFrame();
+        emit();
+        return;
+      }
       endPointer(true);
       if (categoryChanged) {
         director.reset();
