@@ -317,7 +317,7 @@ is airborne. So the camera leans in on it (`src/scenes/sports/focus.ts`):
 
 **What it shows** (the real stage, `controller.framing()`, `tools/focus-stage.ts`, `measurements/focus-stage-*.csv`):
 
-| | 1:1, 3:2 (and every fullscreen frame square) | 3:4 |
+| | 1:1, 3:2 (and every fullscreen frame square) | 3:4 (a per-aspect fit: `framing(0.75)`; a 3:4 mount now frames the square, below) |
 | --- | --- | --- |
 | Zoom (rest distance / focus distance) | **1.68×** (33.86 → 20.20 world units) | 1.60× (the width binds at 0.8) |
 | The hoop's height in the frame | 0.80 | 0.745 |
@@ -386,7 +386,8 @@ than the ones around it would make the one guided bounce read as guided, the ris
   `strips/after-decline-*-0.4-2.4s-every4.jpg`; `strips/after-push-in-laptop-0.4-1.0s-every16ms.jpg`,
   `strips/after-pull-back-laptop-1.55-2.2s-every16ms.jpg`; `strips/change-decline-to-accept-at-1.25s-laptop-every3.jpg`;
   `strips/impact-accent-1x1-0.944-0.976-physics-vs-x2.2-not-adopted.jpg`.
-- `stills/poses-{3x4,1x1,3x2}.jpg` (an embed stage: every pose and the decline at the strike),
+- `stills/poses-{3x4,1x1,3x2}.jpg` (a square-layout mount of that aspect, after the poster layer: every pose and the
+  decline at the strike),
   `stills/poses-{laptop-1280x720,phone-390x844}.jpg`, `stills/focus-1x1-at-the-strike-0.96s.png`.
 - `motion/decline-*.mp4`; `pacing-decline.txt`; `measurements/` (the sway and the focus per 16 ms frame on the stage,
   the loop's idle, the tails); `tools/` (`sway-stage.ts`, `focus-stage.ts`, `framing-probe.ts`, `idle.ts`,
@@ -399,5 +400,13 @@ than the ones around it would make the one guided bounce read as guided, the ris
 - The sway is a rigid pitch about the pole's foot (no bending shape, no twist from the bank's 20 cm offset).
 - The ball is drawn on its track, so it sits ≤ 2.2 mm (≤ 0.9 px at laptop) off the swaying ring during a clang, on
   top of the rim-dip gap.
+- **A portrait square-layout mount (3:4).** The poster layer (cea22a6, merged before the captures) frames a
+  square-layout mount of another aspect like fullscreen: the frame square, the rest of the mount extending the same
+  view. The focus is fitted on that square, so in a 3:4 mount, which shows a sixth of the square more below it, the
+  base's top is back in the bottom **54 of 720 px (7.5 %)** at the strike (`stills/poses-3x4.jpg`, the last cell);
+  landscape (3:2) and 1:1 mounts and the showcase's laptop and phone frames hide it. This follows Surya's pending
+  decision on non-square mounts (RESUME, v1.7 decision 5): if the square framing stays, fit the focus to the mount's
+  free area in the square layout (a window fit in `Stage.fit`, the dolly unchanged); if per-aspect fits come back,
+  the per-aspect focus at 3:4 already hides the base (2 % of the frame below its bottom: the table above).
 - The focus is fitted on the frame square; a fullscreen layout that shows much more below the square than the laptop
   (16 px) or the phone (under the dock) would show the base's top again.
