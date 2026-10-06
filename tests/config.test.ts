@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_LIMITS, cardLine, presetOf, printOnlyChange, resolveConfig, sameConfig } from '../src/core/config.ts';
 import type { SceneConfig } from '../src/core/types.ts';
-import { dinnerCard, EVENTS, SAMPLE_INVITEE, withCard } from '../src/demo/fixtures.ts';
+import { CARD_LAYOUT, CARD_MM, CARD_PRINT_SIZE, layoutEyebrow, layoutName, layoutTitle } from '../src/render/cardPrint.ts';
+import { dinnerCard, EVENTS, POSTER_CARD, posterConfig, SAMPLE_INVITEE, withCard } from '../src/demo/fixtures.ts';
 
 /**
  * v1.7 (spec revision #41): the Dinner config's optional card text. resolveConfig keeps it,
@@ -82,6 +83,34 @@ describe('sameConfig and the poster key', () => {
   });
 });
 
+describe('the clamps are what the card holds (v1.7 polish)', () => {
+  it('a card at every clamp prints whole: no ellipsis on the eyebrow, title or name', () => {
+    // Glyphs 0.55 em wide (Inter's lower case averages ≈ 0.5 em at these weights; the bundled face
+    // itself is checked in tests/browser/dinner.spec.ts).
+    let px = 10;
+    const ctx = {
+      set font(f: string) { px = Number(/ ([\d.]+)px/.exec(f)![1]); },
+      get font() { return ''; },
+      measureText: (t: string) => ({ width: [...t].length * 0.55 * px }),
+    } as unknown as CanvasRenderingContext2D;
+    const mm = CARD_PRINT_SIZE.full[0] / CARD_MM.width;
+    const max = (CARD_MM.width - 2 * CARD_LAYOUT.margin) * mm;
+    const long = 'x'.repeat(400);
+    const c = ok(dinner({
+      eyebrow: 'You’re invited to a very special evening with friends and family, ' + long,
+      title: 'A long table under the orchard lights: five courses, natural wines and slow talk, ' + long,
+      name: 'Anne-Sophie Vandenberghe-Østergaard de la Fuente ' + long,
+    }));
+    const card = c.category === 'dinner' ? c.card! : {};
+    expect([...card.eyebrow!].length).toBeLessThanOrEqual(CARD_LIMITS.eyebrow);
+    expect([...card.title!].length).toBeLessThanOrEqual(CARD_LIMITS.title);
+    expect([...card.name!].length).toBeLessThanOrEqual(CARD_LIMITS.name);
+    for (const r of [layoutEyebrow(ctx, card.eyebrow!.toUpperCase(), max, mm), layoutTitle(ctx, card.title!, max, mm), layoutName(ctx, card.name!, max, mm)]) {
+      expect(r.lines.join(' ')).not.toContain('…');
+    }
+  });
+});
+
 describe('the showcase\'s card (fixtures)', () => {
   it('prints the event\'s title for everyone and the sample invitee in guest mode only', () => {
     expect(dinnerCard('host')).toEqual({ eyebrow: 'You’re invited', title: EVENTS.dinner.title });
@@ -95,5 +124,25 @@ describe('the showcase\'s card (fixtures)', () => {
     expect(withCard({ category: 'sports', ball: 'cream' }, 'guest')).toEqual({ category: 'sports', ball: 'cream' });
     // What the showcase passes survives resolveConfig unchanged.
     expect(ok(resolveConfig(withCard(base, 'guest')))).toEqual(withCard(base, 'guest'));
+  });
+
+  it('v1.7 polish: the shipped posters print the eyebrow only (no sample title or name), and the showcase keeps it', () => {
+    // A poster is what a real guest sees before the scene is live, on Static, after a context
+    // loss or a load failure: it must never name someone else's event or guest.
+    expect(POSTER_CARD).toEqual({ eyebrow: 'You’re invited' });
+    const base: SceneConfig = { category: 'dinner', dish: 'pasta' };
+    const poster = posterConfig(withCard(base, 'guest'));
+    expect(poster).toEqual({ ...base, card: { eyebrow: 'You’re invited' } });
+    expect(poster.category === 'dinner' && (poster.card?.title ?? poster.card?.name)).toBeUndefined();
+    // It brings its own card, so the showcase keeps it through every mode change (withCard).
+    expect(withCard(poster, 'guest')).toBe(poster);
+    expect(withCard(poster, 'host')).toBe(poster);
+    expect(ok(resolveConfig(poster))).toEqual(poster);
+    // Same preset: the four shared posters stay four, and the change is print-only.
+    expect(presetOf(poster)).toBe(presetOf(withCard(base, 'guest')));
+    expect(printOnlyChange(withCard(base, 'guest'), poster)).toBe(true);
+    // Every other scene's config is untouched.
+    const sports: SceneConfig = { category: 'sports', ball: 'cream' };
+    expect(posterConfig(sports)).toBe(sports);
   });
 });

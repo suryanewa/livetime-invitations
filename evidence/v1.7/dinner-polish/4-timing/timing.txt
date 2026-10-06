@@ -1,0 +1,53 @@
+# CLOSE 2.8->4.4 (before) vs 2.4->4.4 (after): the judge's fdiff.py per 0.25 s on 16 ms frames of the accept
+## laptop BEFORE (judge measurements.txt, frame diffs (accept) -- laptop, 2.5-4.75 s)
+2.50-2.75 s: mean 0.05 max 0.05
+2.75-3.00 s: mean 0.95 max 2.62
+3.00-3.25 s: mean 4.83 max 6.80
+3.25-3.50 s: mean 7.18 max 7.53
+3.50-3.75 s: mean 5.65 max 6.99
+3.75-4.00 s: mean 2.93 max 3.92
+4.00-4.25 s: mean 1.59 max 2.05
+4.25-4.50 s: mean 0.42 max 1.13
+4.50-4.75 s: mean 0.06 max 0.06
+4.75-5.00 s: mean 0.05 max 0.06
+## laptop AFTER (box: the frame square's column, clip 184,0,528,720 @2x)
+2.25-2.50 s: mean 0.17 max 0.72
+2.50-2.75 s: mean 2.05 max 3.28
+2.75-3.00 s: mean 4.84 max 6.14
+3.00-3.25 s: mean 6.08 max 6.37
+3.25-3.50 s: mean 5.21 max 5.96
+3.50-3.75 s: mean 3.18 max 4.17
+3.75-4.00 s: mean 1.81 max 2.20
+4.00-4.25 s: mean 1.12 max 1.43
+4.25-4.50 s: mean 0.28 max 0.72
+4.50-4.75 s: mean 0.06 max 0.06
+spikes (>2.5x local median, >0.3): none
+## phone BEFORE (judge)
+2.50-2.75 s: mean 0.05 max 0.05
+2.75-3.00 s: mean 1.06 max 2.91
+3.00-3.25 s: mean 5.40 max 7.61
+3.25-3.50 s: mean 7.93 max 8.21
+3.50-3.75 s: mean 6.21 max 7.65
+3.75-4.00 s: mean 2.72 max 4.28
+4.00-4.25 s: mean 1.18 max 1.69
+4.25-4.50 s: mean 0.25 max 0.64
+4.50-4.75 s: mean 0.06 max 0.06
+4.75-5.00 s: mean 0.05 max 0.06
+## phone AFTER (clip 0,150,390,440 @3x)
+2.25-2.50 s: mean 0.20 max 0.86
+2.50-2.75 s: mean 2.43 max 3.89
+2.75-3.00 s: mean 5.76 max 7.29
+3.00-3.25 s: mean 7.25 max 7.57
+3.25-3.50 s: mean 6.13 max 6.95
+3.50-3.75 s: mean 3.49 max 4.88
+3.75-4.00 s: mean 1.45 max 2.03
+4.00-4.25 s: mean 0.73 max 0.99
+4.25-4.50 s: mean 0.18 max 0.44
+4.50-4.75 s: mean 0.06 max 0.07
+spikes (>2.5x local median, >0.3): none
+## peak turn of the line of sight (elevation 15 -> 80 deg is linear in close)
+peak close rate 1.276 /s at 3.440 s -> 82.9 deg/s
+peak close rate 1.021 /s at 3.200 s -> 66.3 deg/s
+(first: before, the judge's strip; second: after)
+## landing: close reaches 1 at
+4.416 s

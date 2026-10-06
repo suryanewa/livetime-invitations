@@ -34,7 +34,7 @@ for (const scene of SCENES) {
     const rows = await page.evaluate(async ({ scene, poses, delta }) => {
       // The showcase's own modules, from the dev server (paths, not types: this runs in the page).
       const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
-      const { PRESETS } = await load('/src/demo/fixtures.ts');
+      const { PRESETS, posterConfig } = await load('/src/demo/fixtures.ts');
       const { posterUrl } = await load('/src/demo/posters.ts');
       const { presetOf } = await load('/src/core/config.ts');
       const sc = (window as any).__showcase;
@@ -92,7 +92,8 @@ for (const scene of SCENES) {
         (document.querySelector('[data-action="reset"]') as HTMLButtonElement).click();
         await new Promise((r) => setTimeout(r, 50));
         await ready();
-        sc.setConfig(option.config);
+        // v1.7 polish (#41): rendered as the capture renders them (posterConfig: Dinner's card neutral).
+        sc.setConfig(posterConfig(option.config));
         await ready();
         c().setReducedMotion(true);
         for (const pose of poses) {

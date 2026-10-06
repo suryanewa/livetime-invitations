@@ -101,12 +101,13 @@ for (const scene of ['birthday', 'dinner'] as const) {
     expect(pulls.length).toBeGreaterThan(20);
     for (let i = 1; i < pulls.length; i++) expect(pulls[i]!).toBeGreaterThanOrEqual(pulls[i - 1]! - 1e-9);
     expect(Math.max(...pulls)).toBe(1);
-    expect((await report(page)).pull).toBe(1);
+    // The channels are placed by the next frame's prepareFrame, so poll rather than read once after a state poll.
+    await expect.poll(async () => (await report(page)).pull, { timeout: 2000 }).toBe(1);
     // A change of mind: the camera is home (the rest fit) once the accept has played.
     await page.getByRole('button', { name: 'Accept' }).click();
     await expect.poll(() => visual(page), { timeout: 6000 }).toBe('accepted-pose');
+    await expect.poll(async () => (await report(page)).pull, { timeout: 2000 }).toBe(0);
     const after = await report(page);
-    expect(after.pull).toBe(0);
     // Not one fit solved through guest mode, the decline, the change of mind and the accept.
     expect(after.solves).toBe(before.solves);
   });
@@ -114,11 +115,11 @@ for (const scene of ['birthday', 'dinner'] as const) {
 
 test('dinner (v1.7 #42): the accepted pose\'s live camera is the close-up on the card; host, guest-ready and the decline stay off it; no fit is solved', async ({ page }) => {
   await ready(page, '/?scene=dinner');
-  // The close-up's fit: the card 65 % of the frame's width, centred, at every aspect.
+  // The close-up's fit: the card 55 % of the frame's width (v1.7 polish; was 65 %), centred, at every aspect.
   for (const a of [0.75, 1, 1.5]) {
     const f = (await report(page, a)).closeUp!;
     expect(f, `${a}`).toBeDefined();
-    expect(f.heroWidth, `${a}`).toBeCloseTo(0.65, 2);
+    expect(f.heroWidth, `${a}`).toBeCloseTo(0.55, 2);
     expect(Math.abs(f.heroCenter[0]) + Math.abs(f.heroCenter[1]), `${a}`).toBeLessThan(0.01);
   }
   // (Measuring other aspects solved and cached them; from here nothing may solve.)
@@ -126,7 +127,7 @@ test('dinner (v1.7 #42): the accepted pose\'s live camera is the close-up on the
   expect(start.close).toBe(0);
   await page.getByRole('button', { name: 'Guest', exact: true }).click();
   await expect.poll(() => visual(page)).toBe('guest-ready');
-  expect((await report(page)).close).toBe(0);
+  await expect.poll(async () => (await report(page)).close, { timeout: 2000 }).toBe(0);
   // The channel every animation frame through the accept and the move.
   await page.evaluate(() => {
     const w = window as any;
@@ -147,13 +148,13 @@ test('dinner (v1.7 #42): the accepted pose\'s live camera is the close-up on the
   expect(k.filter((c) => c > 0 && c < 1).length).toBeGreaterThan(20);
   // The live camera now is the canonical accepted pose's (reduced motion lands there too).
   await page.evaluate(() => (window as any).__showcase.controller.setReducedMotion(true));
-  expect((await report(page)).close).toBe(1);
+  await expect.poll(async () => (await report(page)).close, { timeout: 2000 }).toBe(1);
   await page.getByRole('button', { name: 'Decline' }).click();
   await expect.poll(() => visual(page), { timeout: 6000 }).toBe('declined-pose');
   // (Reduced motion: the pose is drawn on the next frame.)
   await expect.poll(async () => (await report(page)).close).toBe(0);
+  await expect.poll(async () => (await report(page)).pull, { timeout: 2000 }).toBe(1);
   const d = await report(page);
-  expect(d.pull).toBe(1);
   expect(d.solves).toBe(start.solves);
 });
 

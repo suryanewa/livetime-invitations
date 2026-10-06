@@ -15,7 +15,7 @@ import { birthdayDeclineFramePoints, birthdayRestFramePoints } from '../src/scen
 import { ACROSS_FROM, BIN_DELAY as BIRTHDAY_BIN_DELAY, BIN_FROM } from '../src/scenes/birthday/poses.ts';
 import { newFrame as birthdayFrame, sampleSequence as birthdaySample } from '../src/scenes/birthday/sequences.ts';
 import { DinnerScene, dinnerFramePoints } from '../src/scenes/dinner/index.ts';
-import { cameraClock, CLOSE, CLOSE_HOME, closeHome, closeIn, dinnerPull, planCloseHome } from '../src/scenes/dinner/pull.ts';
+import { cameraClock, CLOSE, CLOSE_CLEAR, CLOSE_HOME, closeClearAt, closeHome, closeIn, dinnerPull, planCloseHome } from '../src/scenes/dinner/pull.ts';
 import { VisualDirector } from '../src/core/visualDirector.ts';
 import type { DinnerRig } from '../models/dinner.ts';
 import { dinnerBounds } from '../models/dinnerContract.ts';
@@ -412,7 +412,7 @@ function dinnerStage() {
   const director = new VisualDirector({ complete() {} }, 'guest', null);
   director.attach(scene);
   let now = 0;
-  const log: { t: number; close: number; pull: number; bin: number; state: string }[] = [];
+  const log: { t: number; close: number; pull: number; bin: number; state: string; cover: Vector3 }[] = [];
   /** Frames at 120 Hz: the director, then simulate; the camera's channels as the controller reads them. */
   const run = (seconds: number) => {
     const end = now + seconds;
@@ -421,7 +421,7 @@ function dinnerStage() {
       director.update(now);
       scene.simulate(1 / 120);
       // The bin's entrance: how far it has come in from its start (0 until it moves).
-      log.push({ t: now, close: scene.frameClose(), pull: scene.framePull(), bin: bin.visible ? bin.position.x - DINNER_BIN_START.x : 0, state: director.state });
+      log.push({ t: now, close: scene.frameClose(), pull: scene.framePull(), bin: bin.visible ? bin.position.x - DINNER_BIN_START.x : 0, state: director.state, cover: cover.position.clone() });
     }
   };
   director.update(0);
@@ -438,8 +438,8 @@ function kinksOf(p: number[], h: number): number[] {
 }
 
 describe('v1.7: Dinner\'s close-up channel (the camera moves to face the card)', () => {
-  it('waits for the cloud to go (τ 2.8 s), arrives as the veil\'s last wisps cross the card (4.4 s): monotone and C1', () => {
-    expect(CLOSE).toEqual({ from: 2.8, to: 4.4 });
+  it('sets off as the cloud thins out (τ 2.4 s), arrives as the veil\'s last wisps cross the card (4.4 s): monotone and C1', () => {
+    expect(CLOSE).toEqual({ from: 2.4, to: 4.4 });
     const h = 1 / 960, p: number[] = [];
     for (let i = 0; i * h <= 6; i++) p.push(closeIn(i * h));
     p.forEach((x, i) => {
@@ -548,11 +548,45 @@ describe('v1.7: Dinner\'s close-up channel (the camera moves to face the card)',
       expect(kinksOf(after.map((r) => r.pull), 1 / 120), label).toEqual([]);
       expect(after[after.length - 1]!.state, label).toBe('declined-pose');
       expect(after[after.length - 1]!.pull, label).toBe(1);
-      // The decline's own pace from the close-up: k ≤ 1.35 (from rest: 1.34).
-      const c = planAnswerChange('accept', CONTENT_END.accept, 0, 'decline', planCloseHome(1, 0)!.span);
-      expect(c.k).toBeLessThan(1.35);
-      expect(c.start).toBe(0);
+      // v1.7 polish: the cover holds still beside the plate until the camera has left the close-up
+      // (from rest: the close channel ≤ CLOSE_CLEAR; moving in, as long as the pull can still start
+      // within HOLD_SLACK of its earliest), then comes back.
+      const moved = after.findIndex((r) => r.cover.distanceTo(after[0]!.cover) > 1e-6);
+      expect(moved, label).toBeGreaterThan(0);
+      if (wait > 6) expect(after[moved]!.close, label).toBeLessThanOrEqual(CLOSE_CLEAR + 0.01);
+      else expect(after[moved]!.close, label).toBeLessThan(c0);
+      // The camera's two moves still meet: the pull starts ≥ 0.09 s before the camera is home.
+      expect((homeAt - pullAt) / 120, label).toBeGreaterThanOrEqual(0.09);
+      // The playback grows by the hold, so the decline keeps its own pace; it ends on the declined pose without a hitch.
+      const ended = after.findIndex((r) => r.state === 'declined-pose');
+      expect(ended / 120, label).toBeGreaterThan(DINNER_DURATIONS.decline + moved / 120 - 0.4);
+      expect(kinksOf(after.slice(0, ended + 30).map((r) => r.pull), 1 / 120), label).toEqual([]);
     }
+    // The plans: from the close-up at rest the cover waits 0.34 s (the camera at 0.3), comes back in
+    // 0.36 s, and the decline plays at 1.03 × its pace (was 1.34 ×) over a 1.84 s playback.
+    const h = planCloseHome(1, 0)!;
+    const c = planAnswerChange('accept', CONTENT_END.accept, 0, 'decline', h.span, closeClearAt(h));
+    expect(c.hold).toBeCloseTo(closeClearAt(h), 3);
+    expect(closeHome(h, c.hold)).toBeLessThanOrEqual(CLOSE_CLEAR);
+    expect(closeHome(h, c.hold - 0.01)).toBeGreaterThan(CLOSE_CLEAR);
+    expect(c.rewind - c.hold).toBeCloseTo(0.36, 2);
+    expect(c.k).toBeLessThan(1.05);
+    expect(c.span).toBeCloseTo(DINNER_DURATIONS.decline + c.hold, 9);
+    // The bin still enters only once the camera is home; the pull starts before it is.
+    expect(c.rewind - c.start + DINNER_BIN_DELAY).toBeGreaterThanOrEqual(h.span - 1e-9);
+    expect(c.rewind - c.start).toBeLessThan(h.span - 0.09);
+    // Moving in at τ 3.5 s (close 0.51, 1.27/s): home in 0.32 s, the cover waits 0.10 s.
+    const m = planCloseHome(0.51, 1.27)!;
+    expect(m.span).toBeCloseTo(0.32, 2);
+    const cm = planAnswerChange('accept', CONTENT_END.accept, 0, 'decline', m.span, closeClearAt(m));
+    expect(cm.hold).toBeGreaterThan(0.05);
+    expect(cm.hold).toBeLessThan(closeClearAt(m));
+    expect(cm.k).toBeLessThan(1.05);
+    // A change with no close-up out (during the reveal) is planned exactly as before: no hold, 1.5 s.
+    const plain = planAnswerChange('accept', 0.7, 1, 'decline', 0, 0);
+    expect(plain.hold).toBe(0);
+    expect(plain.span).toBe(DINNER_DURATIONS.decline);
+    expect(planAnswerChange('accept', 0.7, 1, 'decline', 0, 0.3)).toEqual(plain);
   });
 
   it('decline → accept replays the move from its planned start; accept → decline → accept mid-homecoming never jumps', () => {

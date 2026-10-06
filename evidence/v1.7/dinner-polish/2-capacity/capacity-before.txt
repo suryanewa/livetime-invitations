@@ -1,0 +1,10 @@
+name 11ch "Alex Rivera" -> "Alex Rivera"
+name 24ch "Anne-Sophie Vandenberghe" -> "Anne-Sophie Vandenberghe"
+name 27ch "María José Fernández-Ocampo" -> "María José Fernández-Ocampo"
+name 35ch "Anne-Sophie Vandenberghe-Østergaard" -> "Anne-Sophie Vandenberghe-Østerga…"
+name 40ch "Dr. Christopher Montgomery-Whitfield III" -> "Dr. Christopher Montgomery-Whitfiel…"
+name 36ch "Siobhán Ní Mhaoldomhnaigh-Fitzgerald" -> "Siobhán Ní Mhaoldomhnaigh-Fitzgerald"
+title 24ch -> ["Supper club:","autumn menu"]
+title 45ch -> ["Harvest supper at the","old mill: seven courses"]
+title 63ch -> ["Harvest supper at the old mill:","seven courses with paired…"]
+title 80ch -> ["A long table under the orchard","lights: five courses, natural…"]

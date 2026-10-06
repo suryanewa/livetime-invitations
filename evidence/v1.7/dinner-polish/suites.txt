@@ -1,0 +1,10 @@
+# v1.7/dinner-polish verification (fresh 5704 dev server after the capture; load 3.5-6.5)
+pnpm typecheck: clean
+Unit files touched, one per call: config 11/11, pull 18/18, dinner 35/35, framing 11/11, stage-framing 13/13, scene-depth 7/7, visual-director 15/15
+pnpm vitest run --testTimeout=1800000: 34 files, 506/506
+Browser (BASE_URL=http://127.0.0.1:5704, one spec per call):
+  dinner 10/10 (2 new: the clamps in the bundled face; the eyebrow's capitals) - close-up ink 3,885 px inside / 0 outside / 73 rows, grey-type rows 84
+  posters 5/5 (Dinner: host-ready mean 1.19 max 11, guest-ready 1.06/11, thumbnail 1.27/9, accepted 1.14/5, declined 1.00/6; 0.00 % over 24/255)
+  framing 9/9, fullscreen 14/14, scene-depth 5/5
+  a11y 8/8, collection 3/3, gallery 4/4, idle 4/4, resilience 14/14, bin 8/8, party 9/9, birthday 7/7, business 14/14, sports 6/6, bloom 3/3
+  total 123/123
