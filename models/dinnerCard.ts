@@ -13,8 +13,9 @@ import { CARD, CARD_BOTTOM } from './dinnerContract.ts';
  * - **The stock:** a heavyweight cream card (#F2ECE0) with a matte finish (roughness 0.78, a hint of
  *   sheen), its print on the top face; the edges are the same stock a shade deeper (a cut edge
  *   catches less light than the face), so the 0.6 mm edge reads as a line at the showcase's 15°.
- * - **The contact shadow:** a tight occlusion under its edges on the porcelain (a 2–3 mm falloff
- *   drawn from the card's own outline, plus a faint wider skirt), so it lies on the plate, not over it.
+ * - **The contact shadow:** a tight occlusion under its edges on the porcelain (a ≈ 1 mm falloff
+ *   drawn from the card's own outline, plus a faint ≈ 3 mm skirt windowed to nothing by 9 mm), so it
+ *   lies on the plate, not over it.
  * - **The depth:** an opaque mesh, so the scene depth marks it an occluder with the plate (the steam
  *   stops at it; it sits inside the steam's clear layer, so the field needs no change).
  * It casts no shadow-map shadow (0.6 mm: the stage's caster filter skips it) and receives the key's.
@@ -104,8 +105,8 @@ export class DinnerCard {
   }
 }
 
-/** How far the shadow's quad reaches past the card (su; ≈ 6 mm), and its two falloffs (mm). */
-const SHADOW = { reach: 0.036, contact: 1.1, skirt: 4.5, skirtShare: 0.22 } as const;
+/** How far the shadow's quad reaches past the card (su; ≈ 9 mm), and its two falloffs (mm). */
+const SHADOW = { reach: 0.053, contact: 1.1, skirt: 3.2, skirtShare: 0.16 } as const;
 
 /**
  * The card's contact shadow: a quad CARD + 2·reach on the porcelain, its alpha drawn from the
@@ -126,10 +127,13 @@ function cardShadow(color: string, opacity: number): Mesh<PlaneGeometry, MeshBas
       const x = ((i + 0.5) / px - 0.5) * w, z = ((j + 0.5) / py - 0.5) * d;
       const dx = Math.max(0, Math.abs(x) - CARD.width / 2), dz = Math.max(0, Math.abs(z) - CARD.depth / 2);
       const out = Math.hypot(dx, dz) * mmPerSu;
-      const a = (1 - SHADOW.skirtShare) * Math.exp(-out / SHADOW.contact) + SHADOW.skirtShare * Math.exp(-out / SHADOW.skirt);
+      // The skirt is windowed to nothing at the quad's reach (a smoothstep over its distance), so the
+      // quad never shows its own edge.
+      const f = Math.min(1, out / (SHADOW.reach * mmPerSu)), win = 1 - f * f * (3 - 2 * f);
+      const a = (1 - SHADOW.skirtShare) * Math.exp(-out / SHADOW.contact) + SHADOW.skirtShare * Math.exp(-out / SHADOW.skirt) * win;
       const k = (j * px + i) * 4;
       img.data[k] = img.data[k + 1] = img.data[k + 2] = 255;
-      img.data[k + 3] = Math.round(255 * Math.min(1, a) * Math.min(1, (SHADOW.reach * mmPerSu - Math.max(Math.abs(x) - CARD.width / 2, Math.abs(z) - CARD.depth / 2) * mmPerSu) / 1.5));
+      img.data[k + 3] = Math.round(255 * Math.min(1, a) * win);
     }
   }
   ctx.putImageData(img, 0, 0);
