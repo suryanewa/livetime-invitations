@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { Box3, Color, MeshStandardMaterial, OrthographicCamera, PerspectiveCamera, Sphere, Vector3 } from 'three';
-import { cameraDirection, FRAMING_CLEARANCE, fitCameraToBounds, fitPerspectiveToBounds, PERSPECTIVE_FOV } from '../src/render/camera.ts';
+import { Box3, Color, Group, Mesh, MeshStandardMaterial, NeutralToneMapping, OrthographicCamera, PerspectiveCamera, PlaneGeometry, Sphere, Texture, Vector3, type WebGLRenderer } from 'three';
+import { cameraDirection, FRAMING_CLEARANCE, fitCameraToBounds, fitPerspectiveToBounds, PERSPECTIVE_FOV, viewDirection } from '../src/render/camera.ts';
+import { defineRig, type Rig } from '../src/render/rig.ts';
+import { Stage } from '../src/render/stage.ts';
+import { cardCorners, DINNER_WORLD_SCALE } from '../models/dinnerContract.ts';
+import { CARD_VIEW } from '../src/scenes/dinner/index.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { BUSINESS_BOUNDS } from '../models/businessContract.ts';
 import { PARTY_BOUNDS } from '../models/recordContract.ts';
@@ -101,5 +105,73 @@ describe('Bounds fit through the perspective lens (study, lookdev, fallback)', (
       const r = scene.bounds.getBoundingSphere(new Sphere());
       expect(camera.position.distanceTo(r.center), name).toBeGreaterThan(4 * r.radius);
     }
+  });
+});
+
+describe('v1.7: the stage\'s close-up (Dinner\'s accepted pose is the card view)', () => {
+  function stage(): Stage {
+    const renderer = { shadowMap: {}, toneMapping: 0, toneMappingExposure: 1, setPixelRatio() {}, setSize() {} } as unknown as WebGLRenderer;
+    const rig: Rig = { ...defineRig({
+      label: 'test', stageColor: '#808080', exposure: 1, toneMapping: NeutralToneMapping, environmentIntensity: 1, gobo: false,
+      backdrop: { kind: 'none' }, shadows: null, build: () => ({ environment: new Texture(), objects: [], dispose() {} }),
+    }), name: 'test' };
+    const Ctor = Stage as unknown as new (r: WebGLRenderer, o: { rig: Rig }) => Stage;
+    return new Ctor(renderer, { rig });
+  }
+  const scene = SCENES.dinner!;
+  const content = () => {
+    const g = new Group();
+    g.add(new Mesh(new PlaneGeometry(1, 1), new MeshStandardMaterial()));
+    // The scene's root carries its world scale (v1.4): the stage carries every point set through it.
+    g.scale.setScalar(DINNER_WORLD_SCALE);
+    return g;
+  };
+  const hero = dinnerFramePoints('rest').slice(0, 64);
+  const closeUp = { points: cardCorners(), ...CARD_VIEW };
+
+  it('fits the close-up in the same solve, and setClose(1) puts the live camera on it, without a solve', () => {
+    const s = stage();
+    s.resize(800, 800);
+    s.setContent(content(), scene.bounds, undefined, scene.points, hero, dinnerFramePoints('rest'), closeUp);
+    expect(s.fitSolves).toBe(1);
+    const f = s.framing!.closeUp!;
+    expect(f).toBeDefined();
+    const rest = s.camera.position.clone();
+    // The card's centre in the world, and the close-up's direction.
+    const aim = cardCorners().reduce((a, p) => a.add(p), new Vector3()).multiplyScalar(DINNER_WORLD_SCALE / 8);
+    s.setClose(1);
+    expect(s.currentClose).toBe(1);
+    expect(s.camera.position.distanceTo(aim.clone().addScaledVector(viewDirection(CARD_VIEW.azimuthDeg, CARD_VIEW.elevationDeg), f.distance))).toBeLessThan(1e-9);
+    const look = (s.camera as PerspectiveCamera).getWorldDirection(new Vector3());
+    expect(look.dot(viewDirection(CARD_VIEW.azimuthDeg, CARD_VIEW.elevationDeg).negate())).toBeGreaterThan(1 - 1e-9);
+    // Half-way: between the two; home again exactly.
+    s.setClose(0.5);
+    expect(s.camera.position.distanceTo(rest)).toBeGreaterThan(0.1);
+    s.setClose(0);
+    expect(s.camera.position.distanceTo(rest)).toBeLessThan(1e-9);
+    // Resizes, insets and other aspects only place it (still one solve for this aspect), and it holds.
+    s.setClose(1);
+    const close = s.camera.position.clone();
+    s.resize(400, 400);
+    expect(s.camera.position.distanceTo(close)).toBeLessThan(1e-9);
+    s.setFrameInsets({ top: 180, right: 0, bottom: 330, left: 0 });
+    s.resize(390, 844);
+    expect(s.fitSolves).toBe(1);
+    expect(s.currentClose).toBe(1);
+    expect(s.measureFraming(1.5)!.closeUp).toBeDefined();
+    // New content: back at rest.
+    s.setContent(content(), scene.bounds, undefined, scene.points, hero, dinnerFramePoints('rest'), closeUp);
+    expect(s.currentClose).toBe(0);
+  });
+
+  it('content without a close-up ignores the channel', () => {
+    const s = stage();
+    s.resize(800, 800);
+    s.setContent(content(), scene.bounds, undefined, scene.points, hero, dinnerFramePoints('rest'));
+    const p = s.camera.position.clone();
+    s.setClose(1);
+    expect(s.currentClose).toBe(0);
+    expect(s.framing!.closeUp).toBeUndefined();
+    expect(s.camera.position.distanceTo(p)).toBeLessThan(1e-12);
   });
 });
