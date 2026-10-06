@@ -122,6 +122,33 @@ print; per-event posters would need a runtime still); the Sports owners' touch p
 `models/sportsContract.ts` :209–242 read by both; the net's swing allowances `NET_OUTSET/NET_SWING/NET_SHELL` in
 `src/scenes/sports/index.ts`). The two flaky browser specs from v1.6 are settled in-test on this branch (below).
 
+### Decisions for Surya (v1.7)
+
+Everything this version asks the owner to decide or confirm, in one place (each with what changes if yes):
+
+1. **#41, the card and its print as built** — a 10 × 7 cm cream card in the well, Inter bundled as the one printed
+   typeface, `SceneConfig.dinner.card`; the shared posters carry a neutral print ("YOU'RE INVITED" only) so no guest
+   sees another's invitation before the scene is live; per-event posters would need a runtime still. If yes: the
+   v1.2 "clean plate, no food" decision is superseded by the card; the integration guide's `card` option is public.
+2. **#42, the close-up as the accepted pose** — an 80° view at the shared azimuth and lens, the move from τ 2.4 s to
+   4.4 s (after the polish round), the card at 55 % of the frame's width; reduced motion, a saved accept and the poster
+   land on it; `onVisualComplete('accept')` stays at 1.5 s while the camera lands at 4.4 s (documented). If yes: the
+   one-angle rule gains its second exception after #39.
+3. **#43, the bank and the frame, with the owner's eight departures** — a 0.525 s wind-up instead of the shared 0.2 s
+   gather (a 0.2 s release reaches the glass at 0.53 m/s, a kiss that drops through); "hard" is 0.94 m/s into the
+   glass (a flatter shot hits the ring from below); the **hand trap** on the carom's first bounce (no honest carom
+   rests in frame in a 40 000-run sweep; one unphysical frame where the spin jumps); the first floor contact at 2.13 s
+   and the rest at 6.6 s; the rest spot (−1.6, 0.3); the bank 20 cm left of the rim's axis; the board's shudder
+   invisible (a softer board mode would be the net's springs); the frame at the rule's limit (0.92 / 0.76; ≈ 0.85 would
+   give air back for 8 % of the gain) — the decline judge's rulings on each are in `docs/qualification.md` v1.7. If yes:
+   the Sports sub-spec's decline is "a bank off the glass that rattles out" and the stand may be cropped.
+4. **#44, the net rebuilt** — ship as built (judged 8.6 / 8.5 against 4.5); the follow-ups a tail lag in the skin
+   (the bottom-right tail's 0.1 s flick), baking or caching the rest pose (NetSim 65–71 ms at scene load through the
+   controller, likely 3–5× on a phone CPU), the sub-pixel settle snap. If yes: the v1.5 net record is superseded.
+5. **The v1.6 items that still stand** (the steam's 9 ms budget on the guests' hardware, the rig's cake ask, the
+   steam's next approach, the close-up tiers, the bloom wiring, the §9 ceiling, the v1.5 revisions — approved on
+   2026-10-05; their mechanical follow-ups remain for a working session).
+
 ## Hollywood pass (v1.6)
 
 Written 2026-10-03. Surya, on v1.5: the cake "still has a plasticky, too perfect and geometric shape / texture",
