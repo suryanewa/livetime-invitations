@@ -92,9 +92,9 @@ export function plateTop(r: number): number {
  * under `plate_authored`, so it rides with the plate (the decline bins it with the dish).
  * - Its half-diagonal (6.1 cm) leaves 1.6 cm of the well (7.7 cm) round its corners, so it lies on
  *   the flat porcelain, never on the coupe's rise.
- * - Its top (4.7 mm + 0.05 mm + 0.6 mm over the table) is inside the steam's clear layer over the
- *   porcelain (CLOUD.floor, 5.9 mm) and 6.6 cm under the seated dome's rim plane: the steam field
- *   and the cloche are untouched.
+ * - Its top (4.7 mm + 0.05 mm + 0.6 mm = 5.4 mm over the table) is inside the steam's clear layer
+ *   over the porcelain (CLOUD.floor, 5.9 mm), 1.1 cm under the seated dome's rim plane and more than
+ *   6.7 cm under its shell: the steam field and the cloche are untouched.
  * - It is turned about y by the shared azimuth, so its long side runs across the showcase frame
  *   and its print reads upright from the camera (the text's top is the side away from it).
  * Every number in scene units (su: 16.875 cm).

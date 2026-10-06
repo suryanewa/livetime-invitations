@@ -548,7 +548,7 @@ describe('v1.7: Dinner\'s close-up channel (the camera moves to face the card)',
       expect(kinksOf(after.map((r) => r.pull), 1 / 120), label).toEqual([]);
       expect(after[after.length - 1]!.state, label).toBe('declined-pose');
       expect(after[after.length - 1]!.pull, label).toBe(1);
-      // The decline's own pace from the close-up: k ≤ 1.35 (from rest: 1.33).
+      // The decline's own pace from the close-up: k ≤ 1.35 (from rest: 1.34).
       const c = planAnswerChange('accept', CONTENT_END.accept, 0, 'decline', planCloseHome(1, 0)!.span);
       expect(c.k).toBeLessThan(1.35);
       expect(c.start).toBe(0);

@@ -152,7 +152,8 @@ test('The accepted close-up prints the card legibly; a text change reprints it w
   const ink = await inkOf(page, before);
   console.log('dinner close-up ink (720 px still):', JSON.stringify(ink));
   // Ink only on the card (the porcelain round it is clean), in several lines of type: measured
-  // ≈ 2.9 % of the card's area across ≈ 120 pixel rows (eyebrow, two title lines, the name).
+  // 5,843 ink pixels (luma ≤ 90) inside the card's print area and none outside, across 86 pixel rows
+  // (two title lines and the name; the Sage Graphite eyebrow is lighter than the threshold).
   expect(ink.inside).toBeGreaterThan(3000);
   expect(ink.outside).toBeLessThan(ink.inside / 50);
   expect(ink.rows).toBeGreaterThan(60);

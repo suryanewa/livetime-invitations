@@ -549,7 +549,7 @@ export function rewindDuration(from: Outcome, L0: number, v0: number, max: numbe
  * no sooner than BIN_DELAY before the camera is home, so the bin never sweeps into the close-up.
  * The reveal's rewind is stretched to that start if it is shorter (a gentler return of the cover)
  * and the decline's lead is cut to fit; the decline then plays up to (CONTENT_END − lead) /
- * (1.5 − rewind) faster (from the close-up at rest: the rewind 0.43 s, 1.33×).
+ * (1.5 − rewind) faster (from the close-up at rest: the rewind 0.44 s, 1.34×).
  */
 export function planAnswerChange(from: Outcome, at: number, rate: number, next: Outcome, closeHome = 0): AnswerChange {
   const a = Math.min(Math.max(at, 0), CONTENT_END[from]);
