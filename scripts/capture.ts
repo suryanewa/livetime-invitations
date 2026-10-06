@@ -162,7 +162,8 @@ const SCENE_CAPTURE = {
     sharedAll: true,
     // v1.5/v1.6: the accept clip runs on through the steam: the cloud standing in the dome's shape,
     // mushrooming and tearing into wisps (gone by ≈ 3.2 s), and the start of the plate's thin veil.
-    clips: { host: 1.5, accept: 3.8, decline: 1.8, change: 2.6 },
+    // v1.7: and through the close-up on the card (τ 2.8–4.4 s), landing on it.
+    clips: { host: 1.5, accept: 5.0, decline: 1.8, change: 2.6 },
   },
 } as const;
 
@@ -414,7 +415,8 @@ async function captureUi() {
  * assets/scenes/<scene>/backdrop.webp. Re-run after any change to bounds, rig or framing.
  * v1.5 decline pull-back: a scene whose decline fit differs from its rest fit (Birthday, Dinner)
  * shows its declined poster at the wider framing, so it also gets backdrop-declined.webp, the bare
- * studio at the declined pose (pull 1); posters.ts serves it for that pose only.
+ * studio at the declined pose (pull 1); posters.ts serves it for that pose only. v1.7: a scene whose
+ * accepted pose is a close-up (Dinner) also gets backdrop-accepted.webp, the close-up with its content.
  */
 async function captureBackdrops() {
   await mkdir(outDir, { recursive: true });
@@ -423,6 +425,7 @@ async function captureBackdrops() {
   page.on('console', (m) => m.type() === 'error' && console.error('[page]', m.text()));
   const { cp, rm } = await import('node:fs/promises');
   const pulled = new Set<string>();
+  const closeUps = new Set<string>();
   const still = () => page.evaluate(() => (window as any).__showcase.controller.captureStill(2000, 1, 'image/webp', 0.92, { empty: true, field: 7 })) as Promise<string>;
   for (const scene of ['business', 'party', 'birthday', 'sports', 'dinner']) {
     await page.goto(`${base}/?scene=${scene}`);
@@ -449,6 +452,24 @@ async function captureBackdrops() {
       pulled.add(scene);
       console.log('backdrop', scene, 'declined');
     }
+    if (fit.closeUp) {
+      // v1.7 (#42): a scene whose accepted pose is a close-up (Dinner's card): its own backdrop, the
+      // close-up at the same field with the scene in it (the plate runs past the poster's edges).
+      await page.evaluate(() => {
+        const c = (window as any).__showcase.controller;
+        c.setReducedMotion(true);
+        c.setMode('guest');
+        c.chooseResponse('accept');
+      });
+      await page.waitForFunction(() => (window as any).__showcase.state.visual === 'accepted-pose');
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      const close = await page.evaluate(() => (window as any).__showcase.controller.framing().close);
+      if (close !== 1) throw new Error(`${scene}: the accepted backdrop must be taken on the close-up (got ${close})`);
+      const full = await page.evaluate(() => (window as any).__showcase.controller.captureStill(2000, 1, 'image/webp', 0.92, { field: 7 })) as string;
+      await saveDataUrl(join(outDir, `${scene}-accepted.webp`), full);
+      closeUps.add(scene);
+      console.log('backdrop', scene, 'accepted (close-up)');
+    }
   }
   await browser.close();
   // Copied last: writing into assets/ makes a running dev server reload its pages.
@@ -457,6 +478,8 @@ async function captureBackdrops() {
     await cp(join(outDir, `${scene}.webp`), join(dir, 'backdrop.webp'));
     if (pulled.has(scene)) await cp(join(outDir, `${scene}-declined.webp`), join(dir, 'backdrop-declined.webp'));
     else await rm(join(dir, 'backdrop-declined.webp'), { force: true });
+    if (closeUps.has(scene)) await cp(join(outDir, `${scene}-accepted.webp`), join(dir, 'backdrop-accepted.webp'));
+    else await rm(join(dir, 'backdrop-accepted.webp'), { force: true });
   }
 }
 

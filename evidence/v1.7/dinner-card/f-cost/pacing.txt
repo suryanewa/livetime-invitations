@@ -1,0 +1,29 @@
+== pacing on 56d5ca3, Tue Oct  6 01:29:06 EDT 2026
+ 1:29  up 3 days,  6:58, 3 users, load averages: 9.18 12.29 30.24
+-- dinner laptop
+state before guest-ready | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+laptop run 0: frames 416 | all p50 16.70 p95 16.80 max 66.6 | move window p95 16.80 max 16.8 | steam window p95 16.80 >20ms 15 at frames 30,35,38,39,42,47,52,55,61,71,85,88,97,104,108
+laptop run 1: frames 418 | all p50 16.70 p95 16.70 max 16.8 | move window p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+laptop run 2: frames 418 | all p50 16.70 p95 16.70 max 16.8 | move window p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+-- dinner laptop (repeat: the first run's 15 long frames at 0.5-1.8 s did not reproduce)
+ 1:30  up 3 days, 7 hrs, 3 users, load averages: 11.89 12.19 28.28
+state before guest-ready | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+laptop run 0: frames 418 | all p50 16.70 p95 16.70 max 16.8 | move window p95 16.80 max 16.8 | steam window p95 16.70 >20ms 0
+laptop run 1: frames 418 | all p50 16.70 p95 16.80 max 16.8 | move window p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+laptop run 2: frames 418 | all p50 16.70 p95 16.70 max 16.8 | move window p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0
+-- dinner phone
+ 1:31  up 3 days,  7:01, 3 users, load averages: 10.29 11.76 27.39
+state before guest-ready | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+state before declined-pose | 0.6 s after accept accept-playing | end accepted-pose
+phone run 0: frames 418 | all p50 16.70 p95 16.80 max 16.8 | move window p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
+phone run 1: frames 418 | all p50 16.70 p95 16.80 max 16.8 | move window p95 16.80 max 16.8 | steam window p95 16.70 >20ms 0
+phone run 2: frames 418 | all p50 16.70 p95 16.80 max 16.8 | move window p95 16.70 max 16.8 | steam window p95 16.80 >20ms 0
+-- note: between the first set and the recorded repeat, an unrecorded laptop set (1:29, load 8.3) printed:
+laptop run 0: frames 418 | all p50 16.70 p95 16.80 max 33.2 | move window p95 16.70 max 16.8 | steam window p95 16.80 >20ms 1 at frames 71
+laptop run 1: frames 418 | all p50 16.70 p95 16.70 max 16.8 | move window p95 16.80 max 16.8 | steam window p95 16.70 >20ms 0
+laptop run 2: frames 418 | all p50 16.70 p95 16.70 max 16.8 | move window p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0

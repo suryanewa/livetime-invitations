@@ -1,11 +1,13 @@
 import { Box3, type Camera, Euler, type Object3D, Vector3, type WebGLRenderer } from 'three';
 import glbUrl from '../../../assets/scenes/dinner/dinner.glb?url';
 import {
-  COVER, COVER_PROFILE, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_START, DINNER_BIN_YAW, DINNER_WORLD_SCALE, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
+  cardCorners, COVER, COVER_PROFILE, COVER_TOP, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_START, DINNER_BIN_YAW, DINNER_WORLD_SCALE, DINNER_WALL_Z, DISH_HEIGHT, PLATE, rigDinner,
   type DinnerRig,
 } from '../../../models/dinner.ts';
+import { CAMERA_ANGLES, type CloseUp } from '../../render/camera.ts';
 import { binEntranceStart, binPlaceholder, flapAngles, openBinSilhouette } from '../../../models/disposalBin.ts';
 import { DinnerSteam, STEAM_LAYERS } from '../../../models/dinnerSteam.ts';
+import { type CardText, loadCardFont } from '../../render/cardPrint.ts';
 import { disposeImported, gltfLoader, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { silhouettePoints } from '../../render/framing.ts';
@@ -20,7 +22,7 @@ import {
   type DinnerFrame,
 } from './sequences.ts';
 import { leftSteamEnd, leftSteamFade, STEAM_END, STEAM_REST } from './steam.ts';
-import { dinnerPull } from './pull.ts';
+import { CLOSE, type CloseHome, closeHome, closeIn, closeRate, dinnerPull, planCloseHome } from './pull.ts';
 
 /**
  * Silhouette samples of every Dinner path: the plate, the cover along the host and accept paths
@@ -78,6 +80,8 @@ export class DinnerScene implements SceneInstance {
   readonly framePoints: Vector3[];
   /** v1.5 decline pull-back: at rest the frame holds the dish and the cover's host and accept paths. */
   readonly restFramePoints = dinnerFramePoints('rest');
+  /** v1.7 (#42): the accepted pose's close-up on the card (CARD_VIEW). */
+  readonly closeUp: CloseUp = { points: cardCorners(), ...CARD_VIEW };
 
   private readonly frame = newFrame();
   /** v1.6: the steam under the cloche, a raymarched volume (src/scenes/dinner/steam.ts, models/dinnerSteam.ts). */
@@ -89,6 +93,16 @@ export class DinnerScene implements SceneInstance {
    */
   private steamT: number | null = null;
   private steamFree = false;
+  /**
+   * v1.7 (#42): the reveal's own clock τ for the close-up (the steam's: the accept's time, k× during
+   * a change of mind's reveal, real time after it), or null when no reveal is under way (at the
+   * accepted pose that means the close-up, at rest). After the reveal (`revealFree`) `simulate`
+   * carries it on until the move has landed (CLOSE.to); settle() snaps it to rest.
+   */
+  private revealT: number | null = null;
+  private revealFree = false;
+  /** v1.7: the close-up's homecoming on the change of mind in progress (null: none). */
+  private home: CloseHome | null = null;
   /** A reveal resumed part-way (a change of mind and back) releases steam from here on. */
   private steamEmitStart = -Infinity;
   private steamFade = 1;
@@ -104,8 +118,10 @@ export class DinnerScene implements SceneInstance {
   /** v1.6: the bin's meshes are on the scene depth's layer (once it has arrived). */
   private binOccludes = false;
 
-  constructor(readonly rig: DinnerRig, _config: Extract<SceneConfig, { category: 'dinner' }>, library?: MaterialLibrary) {
+  constructor(readonly rig: DinnerRig, config: Extract<SceneConfig, { category: 'dinner' }>, library?: MaterialLibrary) {
     this.root = rig.root;
+    // v1.7: the invitation card's print (the rig hangs the card in the plate's well).
+    rig.card?.setText(cardText(config));
     this.bounds = rig.bounds.clone();
     rig.root.add(this.steam.object);
     this.steam.setSeated(frameFor('guest-ready', newFrame()).coverPos);
@@ -121,8 +137,13 @@ export class DinnerScene implements SceneInstance {
     this.heroPoints = silhouettePoints(this.root);
   }
 
-  /** v1.2 has no food: `dish` stays in SceneConfig for integration compatibility and selects nothing. */
-  setConfig(_config: SceneConfig): void {}
+  /**
+   * v1.2 has no food: `dish` stays in SceneConfig for integration compatibility and selects nothing.
+   * v1.7: the card's text is printed again (only when it changed; nothing else moves).
+   */
+  setConfig(config: SceneConfig): void {
+    if (config.category === 'dinner') this.rig.card?.setText(cardText(config));
+  }
 
   /** What is showing: the last outcome sampled (or posed) and its time, for a change of mind. */
   private shown: { seq: SequenceName; t: number; rate: number } | null = null;
@@ -134,21 +155,31 @@ export class DinnerScene implements SceneInstance {
   pose(pose: CanonicalPose): void {
     const cutOfChange = this.changeArmed;
     if (this.changeArmed) this.changeArmed = false;
-    else this.change = null;
+    else {
+      this.change = null;
+      this.home = null;
+    }
     // The reveal has just played to its end: its steam carries on (simulate) until it has gone.
     const revealEnded = pose === 'accepted' && this.shown?.seq === 'accept' && this.shown.rate > 0 && this.steamT !== null && !this.steamFree;
+    // v1.7: and so does its clock for the close-up, which moves in after the steam has cleared.
+    const closeOn = pose === 'accepted' && this.shown?.seq === 'accept' && this.shown.rate > 0 && this.revealT !== null && !this.revealFree;
     this.shown = pose === 'accepted' ? { seq: 'accept', t: DURATIONS.accept, rate: 0 }
       : pose === 'declined' ? { seq: 'decline', t: DURATIONS.decline, rate: 0 } : null;
     if (revealEnded) {
       // Carry on from the last sample (within a frame of the reveal's end): never a jump.
       this.steamFree = true;
     } else if (!cutOfChange) this.steamRest();
+    if (closeOn) this.revealFree = true;
+    else if (!cutOfChange) this.revealRest();
     this.apply(frameFor(pose, this.frame));
   }
 
   sample(sequence: SequenceName, t: number): void {
     this.changeArmed = false;
-    if (this.change && sequence !== this.change.next) this.change = null;
+    if (this.change && sequence !== this.change.next) {
+      this.change = null;
+      this.home = null;
+    }
     this.shown = { seq: sequence, t, rate: 1 };
     // The reveal playing forwards drives the steam clock; anything else shows only steam that a
     // change of mind left behind (it rises on and disperses on its own clocks, simulate).
@@ -165,7 +196,13 @@ export class DinnerScene implements SceneInstance {
       this.steamEmitStart = c && c.start > 0 ? c.start : -Infinity;
       this.steamFree = false;
       this.steamFade = 1;
-    } else this.steamT = null;
+      this.revealT = this.steamT;
+      this.revealFree = false;
+    } else {
+      this.steamT = null;
+      this.revealT = null;
+      this.revealFree = false;
+    }
     this.apply(c ? sampleAnswerChange(c, t, this.frame) : sampleSequence(sequence, t, this.frame));
   }
 
@@ -178,7 +215,18 @@ export class DinnerScene implements SceneInstance {
     this.steamEmitStart = -Infinity;
   }
 
+  /** v1.7: no reveal clock: at the accepted pose the camera is on the close-up. */
+  private revealRest(): void {
+    this.revealT = null;
+    this.revealFree = false;
+  }
+
   simulate(dt: number): void {
+    if (this.revealFree && this.revealT !== null) {
+      this.revealT += dt;
+      // Landed: the accepted pose's close-up at rest.
+      if (this.revealT >= CLOSE.to) this.revealRest();
+    }
     let live = false;
     if (this.steamFree && this.steamT !== null) {
       this.steamT += dt;
@@ -200,7 +248,7 @@ export class DinnerScene implements SceneInstance {
 
   /** True while released steam is still rising (the loop keeps drawing until it has gone). */
   settling(): boolean {
-    return (this.steamFree && this.steamT !== null) || this.leftSteam.some((g) => g.t !== null);
+    return (this.steamFree && this.steamT !== null) || this.leftSteam.some((g) => g.t !== null) || (this.revealFree && this.revealT !== null);
   }
 
   /**
@@ -211,6 +259,7 @@ export class DinnerScene implements SceneInstance {
   settle(): void {
     if (this.changeArmed) return;
     this.steamRest();
+    this.revealRest();
     for (const g of this.leftSteam) g.t = null;
     this.syncSteam();
   }
@@ -229,8 +278,11 @@ export class DinnerScene implements SceneInstance {
     }
     const [from, at, rate] = this.change && s.seq === this.change.next ? changeTime(this.change, s.t) : [s.seq, s.t, s.rate];
     const next = s.seq === 'accept' ? 'decline' : 'accept';
-    const plan = (this.change = planAnswerChange(from, at, rate, next));
+    // v1.7: the close-up comes home from where it is, at the speed it had; the bin waits for it.
+    const home = (this.home = planCloseHome(this.frameClose(), this.closeSpeed()));
+    const plan = (this.change = planAnswerChange(from, at, rate, next, home?.span ?? 0));
     this.changeArmed = true;
+    this.revealRest();
     // Steam already released is left behind: it rises on, on its own clock, and disperses over
     // its own life (the column's source dies away, its base detaches and rises off); nothing
     // more of it is released. A new reveal releases its own beside it.
@@ -257,13 +309,48 @@ export class DinnerScene implements SceneInstance {
     return dinnerPull(this.shown, this.change);
   }
 
+  /**
+   * v1.7 (#42): the close-up channel (pull.ts). On the reveal's clock while it plays and runs on
+   * (0 until the cloud has gone, CLOSE); 1 at the accepted pose at rest; on a change of mind its own
+   * homecoming (`closeHome`) and, back to the accept, the reveal's move again from its planned start;
+   * 0 everywhere else (host, guest-ready, the decline, the declined pose).
+   */
+  frameClose(): number {
+    const s = this.shown;
+    if (!s) return 0;
+    const c = this.change;
+    if (c && s.seq === c.next) {
+      const back = c.next === 'accept' && this.revealT !== null ? closeIn(this.revealT) : 0;
+      return Math.min(1, closeHome(this.home, s.t) + back);
+    }
+    if (s.seq !== 'accept') return 0;
+    if (s.rate > 0) return this.revealT !== null ? closeIn(this.revealT) : 0;
+    return this.revealT !== null ? closeIn(this.revealT) : 1;
+  }
+
+  /** The close channel's rate now (1/s), for a change of mind's homecoming to leave at. */
+  private closeSpeed(): number {
+    const s = this.shown, c = this.change;
+    if (!s) return 0;
+    const live = this.revealT !== null && (s.rate > 0 || this.revealFree) ? closeRate(this.revealT) : 0;
+    if (c && s.seq === c.next) {
+      const h = 1e-4;
+      const home = this.home ? (closeHome(this.home, s.t + h) - closeHome(this.home, Math.max(0, s.t - h))) / (s.t + h - Math.max(0, s.t - h)) : 0;
+      return home + (c.next === 'accept' ? live : 0);
+    }
+    return s.seq === 'accept' ? live : 0;
+  }
+
   /** Low tier for the imported plate and cloche materials (the library handles the bin). */
   setLowDetail(enabled: boolean): void {
     setImportedLowDetail(this.root, enabled);
     this.steam.setLowDetail(enabled);
+    this.rig.card?.setLowDetail(enabled);
   }
 
   async precompile(renderer: WebGLRenderer, camera: Camera): Promise<void> {
+    // The card's print is world-space detail seen at a grazing 15° and head-on in the close-up.
+    this.rig.card?.setAnisotropy(renderer.capabilities.getMaxAnisotropy());
     // The steam is shown for the compile only; the bin warms itself once it has arrived (DeferredBin).
     const scene = this.root.parent ?? this.root;
     this.steam.showForCompile();
@@ -382,6 +469,21 @@ export class DinnerScene implements SceneInstance {
 }
 
 /**
+ * v1.7 (#42): the close-up on the card. Near plan (80°: the card head-on with a hint of perspective,
+ * the plate's porcelain round it), the shared azimuth kept so the key light holds, the same lens; the
+ * card's width fills 65 % of the frame's (≈ 470 px of a 720 px poster, ≈ 700–900 device px of a phone).
+ */
+export const CARD_VIEW = { azimuthDeg: CAMERA_ANGLES.azimuthDeg, elevationDeg: 80, widthFill: 0.65 } as const;
+
+/** v1.7 (#41): the card's eyebrow when the config gives none. */
+export const CARD_EYEBROW = 'You\u2019re invited';
+/** What the card prints for a Dinner config (resolveConfig has sanitised it). */
+export function cardText(config: Extract<SceneConfig, { category: 'dinner' }>): CardText {
+  const c = config.card;
+  return { eyebrow: c?.eyebrow ?? CARD_EYEBROW, title: c?.title, name: c?.name };
+}
+
+/**
  * Steam time on a change of mind's reveal: the accept's own time while its motion plays (it may be
  * sped up by k), real time after CONTENT_END (where changeTime holds), continuous at the switch.
  */
@@ -404,8 +506,11 @@ export const dinnerScene: SceneModule = {
     // v1.5: the dish only; the bin (6.6 MB, only the decline shows it) loads after ready. Its
     // framing silhouette is computed from its design while the dish downloads.
     const dishFetch = fetchGlb(glbUrl, signal);
+    // v1.7: the card's bundled face loads beside the dish, so its first print is in it (posters are deterministic).
+    const font = loadCardFont();
     openBinSilhouette(DINNER_BIN_POS, DINNER_BIN_YAW, DINNER_BIN_SCALE);
     const dish = await gltfLoader().parseAsync(await dishFetch, '');
+    await font;
     const root = dish.scene.getObjectByName('dinner_root');
     if (!root) throw Object.assign(new Error('missing dinner nodes'), { reason: 'asset-failure' as const });
     root.removeFromParent();

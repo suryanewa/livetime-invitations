@@ -542,18 +542,35 @@ export function rewindDuration(from: Outcome, L0: number, v0: number, max: numbe
   return max;
 }
 
-export function planAnswerChange(from: Outcome, at: number, rate: number, next: Outcome): AnswerChange {
+/**
+ * `closeHome` (v1.7, #42): on the way from the accept's close-up to the bin, how long the camera
+ * takes to come home from the card (src/scenes/dinner/pull.ts `planCloseHome`; 0 when it is at
+ * rest). The bin waits for it: the decline's clock (its pull, then BIN_DELAY later the bin) starts
+ * no sooner than BIN_DELAY before the camera is home, so the bin never sweeps into the close-up.
+ * The reveal's rewind is stretched to that start if it is shorter (a gentler return of the cover)
+ * and the decline's lead is cut to fit; the decline then plays up to (CONTENT_END − lead) /
+ * (1.5 − rewind) faster (from the close-up at rest: the rewind 0.44 s, 1.34×).
+ */
+export function planAnswerChange(from: Outcome, at: number, rate: number, next: Outcome, closeHome = 0): AnswerChange {
   const a = Math.min(Math.max(at, 0), CONTENT_END[from]);
   const r = a < CONTENT_END[from] ? rate : 0;
   // Changing back to the outcome being rewound: it simply plays on from where it is.
   if (from === next) return { from, at: a, rate: r, length: 0, speed: 0, rewind: 0, next, start: a, k: 1 };
   const length = lengthAt(from, a), speed = r * speedAt(from, a);
-  const rewind = rewindDuration(from, length, speed, REWIND.max[next]);
-  // A decline's lead (the bin coming in) runs during the end of the rewind, as much of it as
-  // keeps the bin clear of the returning cover (the bin sweeps in past the reveal's landing
-  // spot); an accept starts after the rewind.
-  const start = next === 'decline' ? declineLead(from, length, speed, rewind) : 0;
-  const k = Math.max(1, (CONTENT_END[next] - start) / (DURATIONS[next] - rewind));
+  const minRewind = rewindDuration(from, length, speed, REWIND.max[next]);
+  // The earliest the decline's clock may start: its bin enters BIN_DELAY of that clock later, which
+  // the decline's own speed-up k shortens; so that is BIN_DELAY / k before the camera is home (a
+  // fixed point in k, three steps are exact to a microsecond).
+  let wait = 0, rewind = minRewind, start = 0, k = 1;
+  for (let i = 0; i < (next === 'decline' && closeHome > 0 ? 3 : 1); i++) {
+    if (next === 'decline' && closeHome > 0) wait = Math.min(REWIND.max.decline, Math.max(0, closeHome - BIN_DELAY / k));
+    rewind = Math.max(minRewind, wait);
+    // A decline's lead (the bin coming in) runs during the end of the rewind, as much of it as
+    // keeps the bin clear of the returning cover (the bin sweeps in past the reveal's landing
+    // spot) and does not start before `wait`; an accept starts after the rewind.
+    start = next === 'decline' ? Math.max(0, Math.min(declineLead(from, length, speed, rewind), rewind - wait)) : 0;
+    k = Math.max(1, (CONTENT_END[next] - start) / (DURATIONS[next] - rewind));
+  }
   return { from, at: a, rate: r, length, speed, rewind, next, start, k };
 }
 

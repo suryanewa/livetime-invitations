@@ -157,6 +157,16 @@ async function reachable(page: Page) {
   return counts;
 }
 
+/**
+ * `reachable`, polled until it reads `expected` (a short timeout). A released stage's renderer can
+ * stay reachable for a moment through work already under way when it went: the deferred bin's
+ * prefetch (src/scenes/deferredBin.ts `warm`, whose suspended frame holds its context's renderer)
+ * caught mid-parse — `dispose()` aborts its fetch, but a parse under way runs to its end before the
+ * frame lets go (≈ 0.1 s here; heap snapshot, 2026-10-06). A leak never settles, and still fails.
+ */
+const settledReachable = (page: Page, expected: { renderers: number; contexts: number }, message: string) =>
+  expect.poll(() => reachable(page), { message, timeout: 5_000 }).toEqual(expected);
+
 test('30 stage re-creations (remount, loss + retry, Static and back) leave one canvas and one renderer in every scene', async ({ page }) => {
   test.setTimeout(300_000);
   // Every scene: each draws its own shared resources (Birthday and Dinner the shadow-proxy material).
@@ -170,12 +180,12 @@ test('30 stage re-creations (remount, loss + retry, Static and back) leave one c
       await click(page, 'retry-3d');
       await expect.poll(() => resource(page), { timeout: 30_000 }).toBe('ready');
       await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('static'));
-      if (i === 0) expect(await reachable(page), `${scene}: Static`).toEqual({ renderers: 0, contexts: 0 });
+      if (i === 0) await settledReachable(page, { renderers: 0, contexts: 0 }, `${scene}: Static`);
       await page.evaluate(() => (window as any).__showcase.controller.setQualityTier('normal'));
       await expect.poll(() => resource(page), { timeout: 30_000 }).toBe('ready');
     }
     expect(await page.locator('canvas').count(), scene).toBe(1);
-    expect(await reachable(page), scene).toEqual({ renderers: 1, contexts: 1 });
+    await settledReachable(page, { renderers: 1, contexts: 1 }, scene);
   }
 });
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, type WebGLRenderer } from 'three';
 import { markDepthOccluders, requestSceneDepth, SCENE_DEPTH_LAYER, SceneDepth, type SceneDepthClient } from '../src/render/sceneDepth.ts';
 import { Stage } from '../src/render/stage.ts';
+import { DinnerCard } from '../models/dinnerCard.ts';
 
 /**
  * v1.6 scene depth (src/render/sceneDepth.ts): off for every scene that does not ask for it. With
@@ -122,6 +123,20 @@ describe('Scene depth (v1.6)', () => {
     expect(solid.layers.isEnabled(SCENE_DEPTH_LAYER)).toBe(true);
     expect(solid.layers.isEnabled(0)).toBe(true);
     for (const m of [glass, proxy, fx]) expect(m.layers.isEnabled(SCENE_DEPTH_LAYER)).toBe(false);
+  });
+
+  it('v1.7: Dinner\'s invitation card is an occluder (the steam stops at its face), its contact shadow is not', () => {
+    const plate = new Group();
+    const card = new DinnerCard();
+    plate.add(card.object);
+    const shadow = new Mesh(new BoxGeometry(), new MeshBasicMaterial({ transparent: true }));
+    shadow.name = 'card_shadow';
+    card.object.add(shadow);
+    // The scene marks the plate's subtree (src/scenes/dinner/index.ts), the card's with it.
+    markDepthOccluders(plate);
+    expect(card.body.layers.isEnabled(SCENE_DEPTH_LAYER)).toBe(true);
+    expect(shadow.layers.isEnabled(SCENE_DEPTH_LAYER)).toBe(false);
+    card.dispose();
   });
 
   it('the stage calls the hook once per render, before its own render', () => {

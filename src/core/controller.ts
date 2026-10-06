@@ -1,4 +1,4 @@
-import { presetOf, resolveConfig, sameConfig } from './config.ts';
+import { presetOf, printOnlyChange, resolveConfig, sameConfig } from './config.ts';
 import { PlaybackClock } from './clock.ts';
 import { ResponseState, type ResponseSnapshot } from './responseState.ts';
 import type { DeferredContext, SceneInstance, SceneModule } from './sequence.ts';
@@ -90,9 +90,10 @@ export interface InvitationHandle extends InvitationController {
   renderInfo(): { geometries: number; textures: number; programs: number; pixelRatio: number; buffer: [number, number] } | null;
   /**
    * Tooling only (framing checks): the hero fits at `aspect` (width / height), or null: `rest`
-   * (pull 0: host-ready, guest-ready, accepted) and `decline` (pull 1: the declined pose), the same
-   * fit for a scene that does not pull back; the live `pull`; and the fit's cost guards (`solves`
-   * so far, the reduced `points`).
+   * (pull 0: host-ready, guest-ready) and `decline` (pull 1: the declined pose), the same fit for a
+   * scene that does not pull back; v1.7 `closeUp`, the close-up's fit where a scene has one (Dinner's
+   * accepted pose, close 1); the live `pull` and `close`; and the fit's cost guards (`solves` so far,
+   * the reduced `points`).
    */
   framing(aspect?: number): FramingReport | null;
   /**
@@ -414,7 +415,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       scene = instance;
       // A preset chosen while the asset was loading wins over the one the load started with.
       instance.setConfig(config);
-      s.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints, instance.heroPoints, instance.restFramePoints, instance.heroFill);
+      s.setContent(instance.root, instance.bounds, instance.studio, instance.framePoints, instance.heroPoints, instance.restFramePoints, instance.closeUp, instance.heroFill);
       resize();
       applyTierDetail(quality.tier);
       let shaderError = false;
@@ -605,6 +606,8 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   function prepareFrame(s: Stage, instance: SceneInstance) {
     instance.beforeRender?.();
     s.setPull(instance.framePull?.() ?? 0);
+    // v1.7 (#42): the close-up (Dinner's card), 0 for a scene without one.
+    s.setClose(instance.frameClose?.() ?? 0);
   }
 
   /**
@@ -918,7 +921,17 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       }
       if (sameConfig(resolved.config, config)) return;
       const categoryChanged = resolved.config.category !== config.category;
+      const printOnly = printOnlyChange(config, resolved.config);
       config = resolved.config;
+      if (printOnly) {
+        // v1.7: only the Dinner card's text changed: it is printed again where it lies; nothing
+        // that is playing is reset (the preset, and so the poster, is the same).
+        scene?.setConfig(config);
+        redraw();
+        requestFrame();
+        emit();
+        return;
+      }
       endPointer(true);
       if (categoryChanged) {
         director.reset();
@@ -1062,7 +1075,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     framing(aspect = 1) {
       if (!stage || !scene || resource !== 'ready') return null;
       const pair = stage.measureFraming(aspect);
-      return pair && { ...pair, pull: stage.currentPull, solves: stage.fitSolves, points: stage.framingPointCounts };
+      return pair && { ...pair, pull: stage.currentPull, close: stage.currentClose, solves: stage.fitSolves, points: stage.framingPointCounts };
     },
 
     captureStill(size: number, dpr = 2, type = 'image/png', quality?: number, captureOptions?: { empty?: boolean; field?: number }) {

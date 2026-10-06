@@ -35,7 +35,19 @@ async function withAndWithout(page: Page, size: number, options?: { empty?: bool
     b.bloomTooling.enabled = false;
     const off = c.captureStill(size, 1, 'image/png', undefined, options) as string;
     b.bloomTooling.enabled = true;
-    return { same: on === off, passes: p1 - p0 };
+    // When the two stills differ, how much: the count of differing pixels and the largest channel difference.
+    let differing = 0, maxLevel = 0;
+    if (on !== off) {
+      const load = (src: string) => new Promise<HTMLImageElement>((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = src; });
+      const [a, b2] = await Promise.all([load(on), load(off)]);
+      const read = (img: HTMLImageElement) => { const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; const ctx = cv.getContext('2d')!; ctx.drawImage(img, 0, 0); return ctx.getImageData(0, 0, cv.width, cv.height).data; };
+      const pa = read(a), pb = read(b2);
+      for (let i = 0; i < pa.length; i += 4) {
+        const d = Math.max(Math.abs(pa[i]! - pb[i]!), Math.abs(pa[i + 1]! - pb[i + 1]!), Math.abs(pa[i + 2]! - pb[i + 2]!));
+        if (d > 0) { differing++; if (d > maxLevel) maxLevel = d; }
+      }
+    }
+    return { same: on === off, passes: p1 - p0, differing, maxLevel };
   }, { size, options, MODULE });
 }
 
@@ -76,7 +88,13 @@ test('Birthday: the lit candles bloom (and the empty stage under them does not)'
   await expect.poll(() => page.evaluate(() => (window as any).__showcase.state.visual), { timeout: 5000 }).toBe('accepted-pose');
   const out = await withAndWithout(page, 720);
   expect(out.passes).toBe(0);
-  expect(out.same).toBe(true);
+  // The Birthday frame itself is not bit-stable on this GPU: the buttercream's normal map builds its tangent frame
+  // from screen-space derivatives (the GLB carries no tangents), and ANGLE on Metal renders one or two of those pixels
+  // differently from one still to the next, by a few levels, with or without the bloom (docs/RESUME.md, the bloom
+  // flake). So this still proves the bloom did not run and bounds the difference to that noise, rather than demanding
+  // byte identity as the deterministic Party and empty-stage stills above do.
+  expect(out.differing).toBeLessThanOrEqual(8);
+  expect(out.maxLevel).toBeLessThanOrEqual(12);
 });
 
 test('Birthday: the heat haze shimmers while the flames are live, never under reduced motion', async ({ page }) => {

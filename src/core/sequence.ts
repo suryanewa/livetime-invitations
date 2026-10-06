@@ -1,4 +1,5 @@
 import type { Box3, Object3D, Scene, WebGLRenderer, Camera, Vector3 } from 'three';
+import type { CloseUp } from '../render/camera.ts';
 import type { MaterialLibrary } from '../render/materials.ts';
 import type { CanonicalPose, Category, SceneConfig, SequenceName } from './types.ts';
 
@@ -93,6 +94,19 @@ export interface SceneInstance {
    * under reduced motion (which shows poses only: the camera cuts with the pose). Omitted: 0.
    */
   framePull?(): number;
+
+  /**
+   * v1.7 (spec revision #42, Dinner): a close-up the camera moves to after the accept (the invitation
+   * card, head-on). The stage fits it once per content and aspect beside the rest and decline fits.
+   */
+  readonly closeUp?: CloseUp;
+  /**
+   * v1.7: where the camera is between the (pulled) view (0) and the close-up (1), read by the
+   * controller every frame before drawing, like `framePull`: a pure function of what the scene shows
+   * (and of the reveal's own clock, which runs on past the accept in `simulate`); 1 at the accepted
+   * pose, 0 at every other pose. Omitted: 0.
+   */
+  frameClose?(): number;
 
   /** Swap preset materials/visibility. Called only at canonical poses. */
   setConfig(config: SceneConfig): void;
