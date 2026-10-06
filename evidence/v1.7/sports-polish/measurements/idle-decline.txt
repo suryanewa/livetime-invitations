@@ -1,0 +1,2 @@
+reducedMotion false: rAF per 0.5 s from the tap: 32 30 30 30 30 30 30 30 30 30 30 30 30 6 0 0 0 0 0 | last rAF at 6.59 s | state declined-pose
+reducedMotion true: rAF per 0.5 s from the tap: 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 | last rAF at 0.00 s | state declined-pose
