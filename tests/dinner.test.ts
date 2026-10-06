@@ -13,7 +13,7 @@ import {
   CARD, CARD_BOTTOM, CARD_TOP, cardCorners, COVER, COVER_BESIDE, COVER_SEATED, COVER_TOP, DINNER_BIN, DINNER_BIN_POS, DINNER_BIN_SCALE, DINNER_BIN_YAW, DINNER_GLB_NODES, DINNER_NODES,
   DINNER_RIM_CLEARANCE, DINNER_WORLD_SCALE, DISH_HEIGHT, DISH_SCALE, PLATE, plateTop, dinnerBounds,
 } from '../models/dinnerContract.ts';
-import { DinnerCard } from '../models/dinnerCard.ts';
+import { CARD_KEY, CARD_LIGHT_FALLOFF, CARD_SHADOW_OPACITY, DinnerCard, KEY_THETA_DEG } from '../models/dinnerCard.ts';
 import { cameraDirection, CAMERA_ANGLES } from '../src/render/camera.ts';
 import { CLOUD, cloudDensity, cloudState } from '../src/scenes/dinner/steam.ts';
 import { WORLD_UNIT_CM } from '../models/worldScale.ts';
@@ -494,6 +494,22 @@ describe('Dinner invitation card (v1.7, spec revision #41)', () => {
     expect(eb.lines).toHaveLength(2);
     expect(eb.lines.join(' ')).toBe(sixty);
     expect(eb.px).toBeCloseTo(CARD_LAYOUT.eyebrow.min * mm, 6);
+  });
+
+  it('v1.7 polish: its contact shadow is cast 1 mm away from the production key, at 0.3; the stock falls off 5 % away from it', () => {
+    // The neutral-room key: world θ = atan2(z, x) 118°, camera-left and a little towards the camera.
+    expect(KEY_THETA_DEG).toBe(118);
+    expect(Math.hypot(CARD_KEY[0], CARD_KEY[1])).toBeCloseTo(1, 12);
+    // In the card's frame (x the print's right, y towards the camera): camera-left, front.
+    expect(CARD_KEY[0]).toBeLessThan(-0.7);
+    expect(CARD_KEY[1]).toBeGreaterThan(0.6);
+    // Back to the world by the card's yaw: the key's own direction.
+    const c = Math.cos(CARD.yaw), s = Math.sin(CARD.yaw);
+    const wx = CARD_KEY[0] * c + CARD_KEY[1] * s, wz = -CARD_KEY[0] * s + CARD_KEY[1] * c;
+    expect(Math.atan2(wz, wx) * 180 / Math.PI).toBeCloseTo(118, 9);
+    expect(CARD_SHADOW_OPACITY).toBe(0.3);
+    expect(CARD_LIGHT_FALLOFF).toBeGreaterThan(0.02);
+    expect(CARD_LIGHT_FALLOFF).toBeLessThanOrEqual(0.06);
   });
 
   it('is built as one opaque body (its printed face on top) and a contact shadow, the shadow left out where there is no canvas', () => {

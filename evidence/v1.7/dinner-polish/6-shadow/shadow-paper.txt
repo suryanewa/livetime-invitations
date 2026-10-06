@@ -1,0 +1,16 @@
+# The card's contact shadow and the stock's light (accepted close-up, reduced motion, fill 0.55 both)
+# Darkest luma just outside each side of the outline (first 25 px) vs the porcelain 55-68 px out
+# (mean over the middle 120-160 px of the side); paper luma in 40 px patches 10 px in from each corner.
+# Before: opacity 0.5 (the rig's; the class default said 0.45), centred on the card.
+# After: opacity 0.3 (CARD_SHADOW_OPACITY, the rig passes it), the quad 1 mm away from the key
+#        (neutral-room key, world theta 118 deg, el 40 deg: camera-left, a little towards the camera),
+#        and a 5 % linear falloff of the stock from the key's side (CARD_LIGHT_FALLOFF).
+laptop before: shadow left 30%, right 30%, top 28%, bottom 33% | paper corners TL 235.6 TR 235.4 BL 235.4 BR 235.3 (span 0.1 %)
+laptop after:  shadow left 10%, right 24%, top 24%, bottom 12% | paper corners TL 233.6 TR 229.4 BL 235.3 BR 232.7 (span 2.5 %)
+phone before:  shadow left 29%, right 29%, top 27%, bottom 32% | paper corners TL 235.7 TR 235.4 BL 235.4 BR 235.3 (span 0.2 %)
+phone after:   shadow left  9%, right 24%, top 23%, bottom 12% | paper corners TL 233.8 TR 229.4 BL 235.4 BR 232.7 (span 2.5 %)
+# Reads as a cast shadow: under the key's sides (left, near) it tucks under the card (9-12 %, the card
+# lifted 0.05 mm), on the far sides (right, far) a soft 24 % edge; the paper key corner (BL) to far corner (TR) 2.5 %.
+# Edge profile, laptop, right side (luma per device px from the outline):
+#   before: 222 173 168 174 184 192 198 205 210 214 218 221
+#   after:  225 196 186 184 185 188 193 200 206 211 215 218
