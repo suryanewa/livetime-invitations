@@ -23,3 +23,7 @@ state before declined-pose | 0.6 s after accept accept-playing | end accepted-po
 phone run 0: frames 418 | all p50 16.70 p95 16.80 max 16.8 | move window p95 16.80 max 16.8 | steam window p95 16.80 >20ms 0
 phone run 1: frames 418 | all p50 16.70 p95 16.80 max 16.8 | move window p95 16.80 max 16.8 | steam window p95 16.70 >20ms 0
 phone run 2: frames 418 | all p50 16.70 p95 16.80 max 16.8 | move window p95 16.70 max 16.8 | steam window p95 16.80 >20ms 0
+-- note: between the first set and the recorded repeat, an unrecorded laptop set (1:29, load 8.3) printed:
+laptop run 0: frames 418 | all p50 16.70 p95 16.80 max 33.2 | move window p95 16.70 max 16.8 | steam window p95 16.80 >20ms 1 at frames 71
+laptop run 1: frames 418 | all p50 16.70 p95 16.70 max 16.8 | move window p95 16.80 max 16.8 | steam window p95 16.70 >20ms 0
+laptop run 2: frames 418 | all p50 16.70 p95 16.70 max 16.8 | move window p95 16.70 max 16.8 | steam window p95 16.70 >20ms 0

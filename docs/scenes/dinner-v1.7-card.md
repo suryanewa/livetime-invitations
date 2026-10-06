@@ -179,10 +179,11 @@ pull-back (#39), the bin, the rig, the lens.
   centre travels straight to the middle of the frame square (the strips).
 - **Pacing** (real time, three accepts with a change of mind back from the close-up between them, `RUNS=3`): laptop
   and phone p50 16.70 ms, **p95 16.70–16.80 ms**, the move's window p95 ≤ 16.80 ms, max 16.8 ms, no frame over 20 ms
-  (the budget, ≤ 16.8 ms p95, holds at both sizes). One laptop set taken while the machine was at load ≈ 340 earlier in
-  the session had 15 long frames at 0.5–1.8 s of its first accept (inside the v1.6 steam's reveal, before the move);
-  repeated twice on a quieter machine they did not recur (one 33 ms frame in one first run, as the v1.6 baseline
-  `evidence/v1.6/verification/pacing-final.txt` has). All three sets are in `pacing.txt`.
+  (the budget, ≤ 16.8 ms p95, holds at both sizes). The first laptop set (load average 9, half an hour after the
+  machine had peaked above 400 with other sessions) had 15 long frames at 0.5–1.8 s of its first accept (inside the
+  v1.6 steam's reveal, before the move; p95 still 16.80); two repeats at load 8–12 did not reproduce them (one 33 ms
+  frame in one first run, as the v1.6 baseline `evidence/v1.6/verification/pacing-final.txt` has, then none). Every set
+  is in `pacing.txt`.
 - **What the card costs:** two draw calls (the card's two materials) and the shadow quad on every Dinner frame; one
   2048 × 1434 texture (16 MiB with mips; 4 MiB on Low) and the 130 KiB face on load. The close channel's per-frame work
   is three projections (microseconds); no fit is solved in the loop.
