@@ -23,6 +23,22 @@ const NET_OUTSET = 0.05;
 const NET_SWING = { out: 0.12, down: 0.15 } as const;
 
 const SEQUENCES: readonly SequenceName[] = ['host', 'accept', 'decline'];
+
+/**
+ * v1.7 (#43, "bigger … more focused on the backboard and ball"): the hero is the board, the rim,
+ * the net and the ball at guest-ready; the stand (`hoop_stand` the base, `hoop_pole` the pole,
+ * sleeve and arms, `hoop_hardware` the back plate, bolts and hubs) is left out of it, so it may be
+ * cropped by the frame's bottom and right edges.
+ */
+export const SPORTS_HERO_EXCLUDE = /^hoop_(stand|pole|hardware)$/;
+/**
+ * v1.7: the Sports hero fill, the largest that keeps every path PATH_CLEARANCE inside the frame
+ * (the solver, `tests/sports.test.ts`): the hero's height 0.92 of the frame at 1:1 and 3:2 (the
+ * paths' own height allows 0.927: the made ball's rest, nearest the camera, sets the bottom), its
+ * width at most 0.76 of the frame at 3:4, where the paths' width (the host spot right, the declined
+ * rest left) binds. v1.4–v1.6: the shared 0.6 / 0.75 with the whole stand in the hero.
+ */
+export const SPORTS_HERO_FILL = { height: 0.92, width: 0.76 } as const;
 const UP = new Vector3(0, 1, 0);
 const _up = new Vector3();
 
@@ -186,12 +202,13 @@ export class SportsScene implements SceneInstance {
   readonly category = 'sports' as const;
   readonly root: Object3D;
   readonly bounds: Box3;
-  /** Silhouette of the objects on stage at guest-ready: the v1.4 framing rule's hero. */
+  /** Silhouette of the objects on stage at guest-ready but the stand (v1.7): the framing rule's hero. */
   readonly heroPoints: Vector3[];
   readonly durations = DURATIONS;
   readonly animatedNodes: Object3D[];
   readonly studio = { wallZ: SPORTS_WALL_Z };
   readonly framePoints = sportsFramePoints();
+  readonly heroFill = SPORTS_HERO_FILL;
 
   private readonly frame = newFrame();
   private preset: BallPreset;
@@ -238,7 +255,7 @@ export class SportsScene implements SceneInstance {
       if (renderer.shadowMap.enabled) this.shadeBlob(BLOB_FALLOFF.withKeyShadow);
     };
     this.pose('guest-ready');
-    this.heroPoints = silhouettePoints(this.root);
+    this.heroPoints = silhouettePoints(this.root, (o) => SPORTS_HERO_EXCLUDE.test(o.name));
   }
 
   setConfig(config: SceneConfig): void {

@@ -72,6 +72,12 @@ export interface SceneInstance {
    */
   readonly heroPoints?: readonly Vector3[];
   /**
+   * v1.7: this scene's hero fill (src/render/framing.ts), when it differs from the shared
+   * HERO_FILL: Sports frames its board, rim, net and ball at the largest fill that keeps every path
+   * inside PATH_CLEARANCE (#43). Omitted: HERO_FILL.
+   */
+  readonly heroFill?: { readonly height: number; readonly width: number };
+  /**
    * v1.5 decline pull-back (docs/style-reference.md): the subset of `framePoints` that must be in
    * frame at rest, the host and accept paths. A scene whose decline needs more room (the carry
    * over the bin) gives it, and the stage keeps two fits: `rest` (hero + these) and `decline`
