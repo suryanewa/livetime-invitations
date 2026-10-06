@@ -109,8 +109,15 @@ rebuilt in place: slack hang, damped XPBD, smoothed skin, render interpolation);
 5703); integration on `v1.7/integration` (worktree `.claude/worktrees/v16-int`, port 5508) merging net → decline → dinner;
 then one judge per revision and a guest-experience judge through the real controller, polish rounds, the docs, `main`.
 
-State at the last write: the three owners are building (no merges yet); the brief and the pre-split are on
-`v1.7/integration` (c97793c, a157690). Open: Surya's confirmation of #41–#44 (the posters carry the showcase's sample
+State at the last write (2026-10-06): the Dinner card (`v1.7/dinner-card` 6f7dabb — a runtime-built 10 × 7 cm cream
+card in the well, an Inter print, `SceneConfig.dinner.card`, the `close` camera channel 2.8 → 4.4 s to an 80° close-up
+as the accepted pose; posters recaptured; 492 unit / 120 of 121 browser on its branch) and the net rebuild
+(`v1.7/sports-net` 36b5ee5 — settle 4.33 → 1.62 s, a whole-net sway at 1.15 Hz, knot tilt 1334 → 185°/s, strands
+1.000–1.005, identical at 60/90/120/144 Hz, 0.21 ms a frame, 56 ms once at load) are merged on `v1.7/integration`
+(f2f2d05, 836b448); their judges are running; the Sports decline-and-frame owner is building (WIP: board and rim
+contacts, the bank with a three-hit rattle, a per-scene hero fill 0.92 / 0.76 without the stand) and will merge the
+net before recalibrating its kicks (the rim's ζ 0.15 → 0.4 makes a kick's first swing 0.60 × Δω/ω). The brief, the
+pre-split and the two flaky specs' in-test fixes are on the branch too (c97793c, a157690, 89e9355, 8b22970). Open: Surya's confirmation of #41–#44 (the posters carry the showcase's sample
 print; per-event posters would need a runtime still); the Sports owners' touch points (the recoil block in
 `models/sportsContract.ts` :209–242 read by both; the net's swing allowances `NET_OUTSET/NET_SWING/NET_SHELL` in
 `src/scenes/sports/index.ts`). The two flaky browser specs from v1.6 are settled in-test on this branch (below).
