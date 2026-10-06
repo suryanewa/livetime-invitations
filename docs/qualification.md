@@ -143,6 +143,12 @@ unit tests (the Party clearance test, the Sports planning test) timed out under 
   `setQualityTier('static')`; recorded in `docs/RESUME.md`).
   The full suites at 7ca077f: `pnpm typecheck` clean, unit **461/461**, browser **116/117** with the one failure the
   known flaky bloom assertion below (the spec passed 3/3 when re-run on the same server).
+- **At 004e95d** (steam polish 8 merged — the steam-only light and the full-resolution edge pass): `pnpm typecheck` clean;
+  `dinner-steam` 32, `scene-depth` 6, `dinner` 27; the Dinner, scene-depth and posters specs 16/16 on a fresh server, the
+  Dinner posters byte-identical; the full suites unit **465/465**, browser **116/117** with the one failure the known
+  bloom flake (the spec re-run alone on the same server: 3passed(10.4s)). The eighth judge's pacing of this build on a quiet
+  machine: laptop 6 of 6 and phone 9 of 9 accepts at p50 16.70, p95 16.70–16.80, max 16.8, no frame over 20 ms; steam
+  cost 6.5–9.4 ms at the laptop's real framing in that session (the owner's quieter session 4.6–7.6), within the 9 ms budget.
 - **Dinner pacing, from the judges' own `pace.ts`** (real-time rAF intervals over three whole accepts each, laptop
   1280 × 720 @2 and phone 390 × 844 @3): fifth judging p95 16.7–16.8 ms, no frame over 20 ms; sixth and seventh
   p95 16.7–16.8, max 16.8, no frame over 20 ms at either size. After polish 7 the owner measured the laptop at p95

@@ -154,6 +154,8 @@ merged 004e95d, the v1.6 steam. The judge's prescription for a signature is a ve
 the lift baked into a sparse 4D volume (1–2 mm bricks at the boundary) with motion-vector accumulation, a precomputed
 multiple-scattering light volume per frame, lighting from the scene's real environment (the window as an area light),
 8–12 ms validated on the guests' hardware.
+Final verification on 004e95d: typecheck clean, unit 465/465, browser 116/117 (the known bloom flake only), the eighth
+judge's pacing clean at both sizes on a quiet machine; `main` fast-forwarded to it and pushed.
 
 Still open at the time of writing (updated when the pass closes):
 - `tests/party.test.ts › a change of mind never cuts the cover through the arm` takes ~19 minutes of wall-clock for
