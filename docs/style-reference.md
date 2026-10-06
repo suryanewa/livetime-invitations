@@ -1,4 +1,48 @@
-# Style reference — v1.6 · the Hollywood pass
+# Style reference — v1.7 · the revisions
+
+## v1.7 (2026-10-06): the revisions
+
+Surya, after approving v1.6: three revisions (`docs/revisions-v1.7-brief.md`, verbatim). What each is now, and what
+its judge said (`docs/qualification.md` v1.7 has every number; the decisions #41–#44 are in `docs/spec-revisions.md`,
+pending Surya):
+
+- **The card under the cloche (Dinner).** The reveal uncovers an invitation card lying flat in the plate's well: a
+  10 × 7 cm landscape heavyweight card in cream (#F2ECE0) with darker cut edges, 0.6 mm thick, built at runtime under
+  the plate (no GLB change), turned 20° to the camera's azimuth so its print reads upright, a depth occluder with a
+  contact shadow drawn from its own outline, inside the steam's clear layer so the steam field is untouched. The print
+  — "YOU'RE INVITED" in Sage Graphite letter-spaced capitals, the event title in ink at display weight (two balanced
+  lines), a perforation-dot rule, the invitee's name — is drawn on a 2048 × 1434 canvas texture in **Inter** (OFL; the
+  one bundled typeface, so posters are deterministic; the interface stays system sans and HTML stays authoritative),
+  from `SceneConfig.dinner.card { eyebrow, title, name }`, sanitised and clamped, reprinting on a text change without a
+  director reset; the showcase prints the event title and a sample guest in guest mode and no name line in host mode.
+  Once the cloud has gone the camera **turns down to the card**: a second camera channel `close` (0…1) on the reveal's
+  clock, `cubic-bezier(0.4, 0, 0.4, 1)` to an 80° elevation at the same azimuth and lens, the card centred and filling
+  the frame's width — the accepted pose *is* the close-up (reduced motion, a saved accept and the poster land on it), the
+  camera 49 cm from the card and never inside the steam's box; on a change of mind the close channel comes home first
+  and the bin waits for it. The exception to the one-angle rule is #42, like #39's dolly. The shared posters are
+  captured with a neutral print so no guest sees another's invitation before the scene is live.
+- **The decline as a bank off the glass (Sports).** The ball winds up, leaves at 5.25 m/s with 2 rev/s of backspin
+  and strikes the backboard 28 cm above the rim at 0.95 s (0.94 m/s into the glass; restitution 0.72 and friction 0.6
+  from FIBA's rebound rule and Hubbard's ball-on-glass data), the backspin kicking it down onto the ring, where it
+  rattles three times on the ring's top (rim restitution 0.6, friction 0.5 after Okubo & Hubbard; the first clang
+  bottoms the rim on its 3° stop, the ring's front dropping 2 cm) and falls off front-left to the floor 61 cm in front
+  of the board, never inside the ring; the hoop reacts through `HoopSprings.kick` with impulses derived from the
+  mini ball's 0.298 kg. Strikes are real contacts (`surfaceImpulse` on any normal, the laminate face and the rim torus
+  as colliders, `flyUntil` bisecting to 1e-12 s, a squash along the strike's normal), recorded apart from the floor
+  contacts so a change of mind carries them. **The frame** is built on board, rim, net and ball — the stand excluded
+  from the hero — at the largest fill that keeps every path inside the frame (0.92 of the height, 0.76 of the width):
+  everything 1.5× larger, the ball 8.9 % of the frame's height; at the shared 15° elevation the pole and base project
+  above the ball's floor line, so the stand is cropped at the frame's edges rather than hidden (#43 records why).
+- **The net (Sports).** Rebuilt in place behind the same interface: hung slack (cord rest lengths from the hanging
+  pose, the 1.13× opening kept), the diamond diagonals preloaded so the shape holds while the net swings on gravity, XPBD
+  at 1/480 s with two ordered passes, air drag and knot-to-knot friction, an inelastic ball contact with grip and
+  Coulomb friction, the loops riding the rim's recoil, two bones per strand so slack cords bow at their true length,
+  knot frames from all their cords, the net on its own clock interpolated to the director's time, the rim's damping
+  raised. It no longer vibrates: the ball pushes it open and it wraps the ball, cinches over it and lets go, whips back
+  as one body, swings once at 1.15 Hz and hangs still 1.6 s after the ball leaves (was 4.3 s of per-knot buzz at 5–7 Hz),
+  identically at 60, 90, 120 and 144 Hz, at 0.21 ms a frame. Judged 8.6 / 8.5 against the old net's 4.5: ship as built.
+
+JUDGING_SUMMARY_PLACEHOLDER
 
 ## v1.6 (2026-10-03 → 05): the Hollywood pass
 
