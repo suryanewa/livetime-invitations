@@ -132,9 +132,53 @@ layer matching live at 3:2 / 3:4 / the laptop frame within 0.5 %, the 1:1 mount 
 backdrop, the per-edge feather, the backdrop only under its poster. It surfaced one Dinner bug — a saved accept's live
 close-up showed the cloche's old contact shadow across the plate's near well — fixed separately (below).
 
+### The guest-experience judging (v1.7, at 5934bc1)
+
+One judge watched the integrated build as a guest would (the showcase page fullscreen at laptop 1280 × 720 @2 and phone
+390 × 844 @3, the 3:4 embed, the gallery), clause by clause against Surya's ask, on the 16 ms virtual clock (the Mac was
+on battery at 4–8 %, so frame pacing was not measured). Verdicts: the card revealed by the steam — **done** (it reads by
+≈ 1.2–1.6 s); the event name — **done**; "You're invited" — **done, with a caveat** (a small light tracked eyebrow, cap
+height ≈ 6 CSS px on laptop); the invitee's name — **done** (none in host mode); flat on the plate — **done**; the camera
+moves — **done** (close 0 at 2.4 s, 0.78 at 3.6 s, 1 at 4.4 s, smooth); head-on — **done** (the keystone ≈ 2 %); a
+close-up — **done on the phone** (the card ≈ 55 % of the screen's width), **done with a caveat on the laptop** (55 % of the
+528 px frame square is ≈ 23 % of a 1280 px window: "looking down at the plate, card centred"); bounces off the backboard
+and does not go in — **done**; more dramatic — **done** (the push-in puts the strike and the rattle full-frame with a
+visible stand sway); bigger / the bottom of the board cut / focused on the backboard and ball — **done with a caveat**
+(1.40× bigger; the stand's bottom is cut during the ≈ 1 s push-in, whole at rest and in the posters); the net no longer
+vibrates weirdly — **done** (it swings back with the ball, sways about twice and hangs still ≈ 1.6 s after the swish;
+motion coherence 1.43–1.84 at every sample, where a vibrating net falls toward 1). No regression in Party, Birthday or
+Business; a saved accept matches a chosen one; reduced motion lands on the close-up; the gallery loads. What a guest
+would notice: the neutral print on the Static tier and the posters reads as a blank card on a weak device (#41); the
+Sports stand whole at rest (#43); the laptop close-up's scale and a sliver of the cloche under the header card; the
+"Accepted ✓" (≈ 0.4 s) and "Declined" (≈ 0.5 s, before the glass at 0.96 s) text arriving before the payoff; a change
+of mind during the close-up's move snapping home in ≈ 0.27 s. **"Is v1.7 ready for main? Yes. Nothing I saw blocks
+it"**; the two caveats are decisions for Surya, not bugs.
+
 ### Known limitations (v1.7)
 
-To be written at the close of the pass.
+1. The shared Dinner posters, the gallery cell and the Static tier show the card with "YOU'RE INVITED" only (the
+   neutral print, #41); the event title and the guest's name exist only in the live render. Per-event posters would need
+   a runtime still.
+2. The laptop close-up puts the card at 55 % of the frame square, ≈ 23 % of a 1280 px window (≈ 55 % of a phone's
+   width); a sliver of the cloche's edge enters the top-left corner under the header card. A tighter close-up on wide
+   windows would break the poster's parity with the live view (the card judge chose 55 % so the plate's ring circles the
+   card in the square poster) — a decision for Surya.
+3. The close-up lands at 4.4 s while `onVisualComplete('accept')` fires at 1.5 s and "Accepted ✓" shows at ≈ 0.4 s;
+   "Declined" shows at ≈ 0.5 s, before the Sports glass strike at 0.96 s (the save-driven UI).
+4. A change of mind during the close-up's move brings the camera home in ≈ 0.27 s before the decline's pull-back.
+5. The Sports stand is cropped only during the decline's push-in (≈ 0.7–1.8 s); at rest and in every poster the pole
+   and base are whole, because at the shared 15° elevation the base projects above the ball's floor line (#43). A 3:4
+   square-layout mount shows the base's top in its bottom 7.5 % at the strike (the poster layer's framing, decision 5).
+6. The hand trap on the carom's first bounce (one unphysical frame where the spin jumps), the rest at 6.6 s and the bank
+   20 cm left of the rim's axis are as recorded in #43; the board's own shudder stays invisible, the stand's 3 Hz sway
+   carries the strike (≈ 1.4–1.9 CSS px at laptop).
+7. The net settles ≈ 1.6 s after the swish with a sub-pixel final snap; its rest-pose solve costs 65–71 ms at scene load
+   on this Mac, likely 3–5× on a phone CPU (bake or cache it later, #44).
+8. A square-layout mount at a non-square aspect frames like fullscreen (the poster layer): objects 7–25 % smaller at 3:4
+   than the old per-aspect fit (decision 5).
+9. Frame pacing on the fully integrated build is to be re-measured on mains power (the per-branch measurements: p95
+   16.7–16.8 ms, no frame over 20 ms, at both sizes; the guest judge's session ran on a battery that throttled the
+   browser to 30 fps).
 
 ## v1.6: the Hollywood pass (2026-10-03 → 05), first judging (2026-10-03)
 

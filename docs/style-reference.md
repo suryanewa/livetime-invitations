@@ -42,7 +42,15 @@ pending Surya):
   as one body, swings once at 1.15 Hz and hangs still 1.6 s after the ball leaves (was 4.3 s of per-knot buzz at 5–7 Hz),
   identically at 60, 90, 120 and 144 Hz, at 0.21 ms a frame. Judged 8.6 / 8.5 against the old net's 4.5: ship as built.
 
-JUDGING_SUMMARY_PLACEHOLDER
+**Where the revisions stand.** Each revision had its own judge and a polish round from that judge's ranked tells;
+a guest-experience judge then watched the integrated build clause by clause against Surya's ask: every clause
+visibly delivered, two with caveats for Surya — on a laptop the close-up's card is 55 % of the frame square (≈ 23 % of
+a wide window; the phone's is a true close-up), and the Sports stand's bottom is cut during the decline's push-in but
+whole at rest (the base projects above the ball's floor line at the shared elevation). The net judged 8.6 / 8.5 against
+the old net's 4.5; the decline ≈ 7 against v1.6's 5 before its polish (the fill, the stand's sway, the push-in); the
+card 7.5 / 7.5 / 7 before its polish (neutral posters, capacity, the lurch, the move's timing, the fill, the shadow).
+A shared fix put the poster on the frame square in every layout with a 2 % feather and backdrops that carry the scene,
+and a saved accept's close-up now matches a chosen one. Known limitations: `docs/qualification.md` v1.7.
 
 ## v1.6 (2026-10-03 → 05): the Hollywood pass
 
