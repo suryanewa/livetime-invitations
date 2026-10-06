@@ -109,15 +109,20 @@ rebuilt in place: slack hang, damped XPBD, smoothed skin, render interpolation);
 5703); integration on `v1.7/integration` (worktree `.claude/worktrees/v16-int`, port 5508) merging net → decline → dinner;
 then one judge per revision and a guest-experience judge through the real controller, polish rounds, the docs, `main`.
 
-State at the last write (2026-10-06): the Dinner card (`v1.7/dinner-card` 6f7dabb — a runtime-built 10 × 7 cm cream
-card in the well, an Inter print, `SceneConfig.dinner.card`, the `close` camera channel 2.8 → 4.4 s to an 80° close-up
-as the accepted pose; posters recaptured; 492 unit / 120 of 121 browser on its branch) and the net rebuild
-(`v1.7/sports-net` 36b5ee5 — settle 4.33 → 1.62 s, a whole-net sway at 1.15 Hz, knot tilt 1334 → 185°/s, strands
-1.000–1.005, identical at 60/90/120/144 Hz, 0.21 ms a frame, 56 ms once at load) are merged on `v1.7/integration`
-(f2f2d05, 836b448); their judges are running; the Sports decline-and-frame owner is building (WIP: board and rim
-contacts, the bank with a three-hit rattle, a per-scene hero fill 0.92 / 0.76 without the stand) and will merge the
-net before recalibrating its kicks (the rim's ζ 0.15 → 0.4 makes a kick's first swing 0.60 × Δω/ω). The brief, the
-pre-split and the two flaky specs' in-test fixes are on the branch too (c97793c, a157690, 89e9355, 8b22970). Open: Surya's confirmation of #41–#44 (the posters carry the showcase's sample
+State at the last write (2026-10-06, 16:45): **everything built is merged on `v1.7/integration` and pushed (35aa7a6)** —
+the Dinner card (f2f2d05) and its polish (43105ab: neutral-print posters, capacity at the clamps, no lurch on a change of
+mind from the close-up, the move from 2.4 s, the card at 55 %, a cast shadow), the net (836b448; judged 8.6 / 8.5 against
+4.5, ship as built), the decline (dbe2234; judged ≈ 7 against 5) and its polish (fdf1d99: the fill 0.85 / 0.70, a 3 Hz
+stand sway on the strike, the tails lagging their knots, the push-in on the board and ball during the bank that crops
+the stand's bottom), the shared poster layer (cea22a6: the poster on the frame square in every layout, a 2 % feather,
+backdrops with the scene per pose) and the saved-accept fix (35aa7a6: the dish's bin-light term was reading the bin's
+warm-up uniforms from behind the close-up camera). Every judgment, polish number and decision is in
+`docs/qualification.md` v1.7 and the scene records. **Next:** on mains power (the Mac was on battery at 8 % here, which
+throttles the browser to 30 fps), a guest-experience judge over all three revisions on the integrated build, the full
+suites on a fresh server (the last full runs: 535 unit on the Sports polish branch; 123 browser on the Dinner polish
+branch; the idle spec's Party case is environmental on battery), the style reference's judging summary and the README's
+status line (two placeholders), the qualification's Known limitations (v1.7), then `main` fast-forwarded and pushed.
+The brief, the pre-split and the two flaky specs' in-test fixes are on the branch too (c97793c, a157690, 89e9355, 8b22970). Open: Surya's confirmation of #41–#44 (the posters carry the showcase's sample
 print; per-event posters would need a runtime still); the Sports owners' touch points (the recoil block in
 `models/sportsContract.ts` :209–242 read by both; the net's swing allowances `NET_OUTSET/NET_SWING/NET_SHELL` in
 `src/scenes/sports/index.ts`). The two flaky browser specs from v1.6 are settled in-test on this branch (below).
