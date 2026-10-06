@@ -286,3 +286,77 @@ test('Graphics loss shows the shared declined Dinner poster and responses still 
   await expect.poll(async () => (await state(page)).response.persistence).toBe('saved');
   await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /shared-declined/);
 });
+
+/**
+ * v1.7 (the poster layer's measurements): a saved accept's live close-up is a chosen accept's. The
+ * saved accept lands on the close-up at load, so the shared bin warms there: its warm-up draws it
+ * once behind the camera (src/scenes/deferredBin.ts), which behind the close-up's camera is straight
+ * above the plate's near half, and the dish's bin light (always on) darkened the near well until the
+ * bin drew again (a band across the near well, 35 % of the pixels outside the frame square at 3:4).
+ * A chosen accept warms the bin at guest-ready and never showed it. A bare mount (no showcase UI),
+ * 3:4, reduced motion: the saved accept once its bin is warm, against an accept chosen once live.
+ */
+const SAVED_HARNESS = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;background:#fff}#s{position:relative;width:540px;height:720px}</style></head><body><div id="s"></div>
+<script type="module">
+import '/src/ui/shell.css';
+import { createInvitation } from '/src/core/controller.ts';
+import { DEFAULT_CONFIGS } from '/src/core/types.ts';
+const q = new URLSearchParams(location.search);
+const handle = createInvitation({
+  mount: document.getElementById('s'), config: DEFAULT_CONFIGS.dinner, mode: 'guest', initialResponse: q.get('resp') || undefined, reducedMotion: true,
+  scenes: { dinner: () => import('/src/scenes/dinner/index.ts').then((m) => m.dinnerScene) },
+  onResponseRequested: (r) => queueMicrotask(() => handle.applyResponseResult({ requestId: r.requestId, status: 'saved', response: r.response })),
+});
+window.__showcase = { controller: handle, get state() { return handle.getState(); } };
+</script></body></html>`;
+
+test('v1.7: a saved accept\'s live close-up is a chosen accept\'s (no band across the near well once the bin has warmed at the close-up)', async ({ page }) => {
+  await page.setViewportSize({ width: 540, height: 720 });
+  await page.route(/\/__dinner\/saved\.html/, (route) => route.fulfill({ body: SAVED_HARNESS, contentType: 'text/html' }));
+  const settled = async (resp: string) => {
+    await page.goto(`/__dinner/saved.html${resp ? `?resp=${resp}` : ''}`);
+    const sc = (fn: string) => page.waitForFunction(new Function(`return (${fn})(window.__showcase);`) as () => boolean, null, { timeout: 30_000 });
+    await sc('(s) => s?.state?.resource === "ready"');
+    // The bin loaded and warmed (for the saved accept: at the close-up, where the band came from).
+    await sc('(s) => s.controller.deferredReady()');
+    if (!resp) await page.evaluate(() => (window as any).__showcase.controller.chooseResponse('accept'));
+    await sc('(s) => s.state.visual === "accepted-pose" && s.controller.framing().close === 1');
+    await sc('() => document.querySelector(".lt-stage__canvas")?.classList.contains("is-visible")');
+    await page.waitForTimeout(400);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const live = `data:image/png;base64,${(await page.locator('#s').screenshot()).toString('base64')}`;
+    const still = await page.evaluate(() => (window as any).__showcase.controller.captureStill(512, 1) as string);
+    return { live, still };
+  };
+  const saved = await settled('accept');
+  const chosen = await settled('');
+  const compare = (a: string, b: string) => page.evaluate(async ([ua, ub]) => {
+    const pixels = async (u: string) => {
+      const img = new Image();
+      img.src = u;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const x = c.getContext('2d')!;
+      x.drawImage(img, 0, 0);
+      return x.getImageData(0, 0, img.width, img.height).data;
+    };
+    const [A, B] = await Promise.all([pixels(ua!), pixels(ub!)]);
+    let over = 0, max = 0, sum = 0;
+    for (let i = 0; i < A.length; i += 4) {
+      const d = Math.max(Math.abs(A[i]! - B[i]!), Math.abs(A[i + 1]! - B[i + 1]!), Math.abs(A[i + 2]! - B[i + 2]!));
+      sum += d; max = Math.max(max, d); if (d > 24) over++;
+    }
+    return { share: over / (A.length / 4), max, mean: sum / (A.length / 4) };
+  }, [a, b] as const);
+  const live = await compare(saved.live, chosen.live);
+  const still = await compare(saved.still, chosen.still);
+  console.log('dinner saved vs chosen accept, live 3:4:', JSON.stringify(live), 'still 512:', JSON.stringify(still));
+  // Byte-identical on this build (before the fix: the live stage 12 % of its pixels over 24/255, max 129;
+  // the square still 0.2 %, max 35). Within GPU noise: no pixel over 24/255 beyond 0.05 %.
+  for (const r of [live, still]) {
+    expect(r.share).toBeLessThan(0.0005);
+    expect(r.mean).toBeLessThan(0.1);
+  }
+});
