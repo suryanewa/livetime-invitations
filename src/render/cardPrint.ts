@@ -193,17 +193,17 @@ export function drawCardPrint(canvas: HTMLCanvasElement, text: CardText): { top:
   ctx.save();
   ctx.fillStyle = CARD_INK.paper;
   ctx.fillRect(0, 0, W, H);
-  // The stock's tooth (≈ 0.05 mm grain) and a soft mottle (≈ 1 cm): a level or two, never a pattern.
+  // The stock's tooth (≈ 0.05 mm grain) and a soft mottle (≈ 2–3 cm): under a level or two, never a pattern.
   ctx.globalAlpha = 0.03;
   ctx.globalCompositeOperation = 'overlay';
   ctx.fillStyle = ctx.createPattern(grainTile(), 'repeat')!;
   ctx.fillRect(0, 0, W, H);
   ctx.globalCompositeOperation = 'source-over';
-  for (let i = 0; i < 40; i++) {
-    const x = hash(i, 7) * W, y = hash(i, 11) * H, r = (6 + 10 * hash(i, 13)) * mm;
+  for (let i = 0; i < 28; i++) {
+    const x = hash(i, 7) * W, y = hash(i, 11) * H, r = (12 + 16 * hash(i, 13)) * mm;
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
     const dark = hash(i, 17) < 0.5;
-    g.addColorStop(0, dark ? 'rgba(120, 100, 70, 0.018)' : 'rgba(255, 252, 244, 0.03)');
+    g.addColorStop(0, dark ? 'rgba(120, 100, 70, 0.007)' : 'rgba(255, 252, 244, 0.014)');
     g.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.globalAlpha = 1;
     ctx.fillStyle = g;

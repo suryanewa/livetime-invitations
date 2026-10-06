@@ -17,6 +17,7 @@ import { DinnerCard } from '../models/dinnerCard.ts';
 import { cameraDirection, CAMERA_ANGLES } from '../src/render/camera.ts';
 import { CLOUD, cloudDensity, cloudState } from '../src/scenes/dinner/steam.ts';
 import { WORLD_UNIT_CM } from '../models/worldScale.ts';
+import { CARD_LAYOUT, CARD_MM, CARD_PRINT_SIZE, layoutTitle } from '../src/render/cardPrint.ts';
 import { buildDinnerGeometry } from '../models/dinnerPremium.ts';
 import { buildDisposalBin, openBinFramePoints } from '../models/disposalBin.ts';
 import { boxIn, createIO, findNode } from '../scripts/masters/compose.ts';
@@ -411,6 +412,37 @@ describe('Dinner invitation card (v1.7, spec revision #41)', () => {
         expect(cloudDensity(p.clone().setY(PLATE.well - 1e-4), s)).toBe(0);
       }
     }
+  });
+
+  it('prints its title on one line, else two balanced lines, shrinking to fit, and cuts it only at the smallest size', () => {
+    // A measuring context whose glyphs are 0.55 em wide (letter spacing ignored): the layout's logic, not the face's metrics.
+    let px = 10;
+    const ctx = {
+      set font(f: string) { px = Number(/ ([\d.]+)px/.exec(f)![1]); },
+      get font() { return ''; },
+      measureText: (t: string) => ({ width: [...t].length * 0.55 * px }),
+    } as unknown as CanvasRenderingContext2D;
+    const mm = CARD_PRINT_SIZE.full[0] / CARD_MM.width;
+    const max = (CARD_MM.width - 2 * CARD_LAYOUT.margin) * mm;
+    const one = layoutTitle(ctx, 'Dinner', max, mm);
+    expect(one.lines).toEqual(['Dinner']);
+    expect(one.px).toBeCloseTo(CARD_LAYOUT.title.size * mm, 6);
+    // 24 characters: two lines at the largest size, broken where the longer line is shortest.
+    const two = layoutTitle(ctx, 'Supper club: autumn menu', max, mm);
+    expect(two.lines).toEqual(['Supper club:', 'autumn menu']);
+    expect(two.px).toBeCloseTo(CARD_LAYOUT.title.size * mm, 6);
+    // Longer: smaller, still two whole lines.
+    const smaller = layoutTitle(ctx, 'The harvest supper club and winter menu tasting', max, mm);
+    expect(smaller.lines).toHaveLength(2);
+    expect(smaller.px).toBeLessThan(CARD_LAYOUT.title.size * mm);
+    expect(smaller.lines.join(' ')).toBe('The harvest supper club and winter menu tasting');
+    for (const l of smaller.lines) expect([...l].length * 0.55 * smaller.px).toBeLessThanOrEqual(max + 1e-6);
+    // Too long for two lines at the smallest size: cut with an ellipsis, never wider than the card's measure.
+    const cut = layoutTitle(ctx, 'The twentieth annual harvest supper club and winter menu tasting evening at the studio kitchen', max, mm);
+    expect(cut.px).toBeCloseTo(CARD_LAYOUT.title.min * mm, 6);
+    expect(cut.lines).toHaveLength(2);
+    expect(cut.lines[1]!.endsWith('…')).toBe(true);
+    for (const l of cut.lines) expect([...l].length * 0.55 * cut.px).toBeLessThanOrEqual(max + 1e-6);
   });
 
   it('is built as one opaque body (its printed face on top) and a contact shadow, the shadow left out where there is no canvas', () => {
