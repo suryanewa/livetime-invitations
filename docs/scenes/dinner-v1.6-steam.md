@@ -1106,14 +1106,14 @@ resolution, the interior staying as it was.
 |---|---|---|---|
 | own colour lit − shaded (own.py) at 0.61 / 0.67 / 0.74 s | 15–25 | +3 / +3 / +5 | **+18 / +18 / +21** (0.48 s +19; 0.90 s +37) |
 | lit / shaded own colour at 0.61 s | room above the shade | 249 / 246 | 250 / 232 |
-| own colour top − underside (owntop.py) at 0.61 / 0.67 / 0.74 / 0.90 s | readable terminator | +5 / +5 / +7 / +8 | **+17 / +15 / +20 / +29**; 0.99 s +13, 1.12 / 1.25 s −6 / −7 |
+| own colour top − underside (owntop.py) at 0.61 / 0.67 / 0.74 / 0.90 s | readable terminator | +5 / +5 / +7 / +8 | **+17 / +15 / +20 / +29**; 0.99 s +13, 1.12 / 1.25 s −3 / −6 |
 | body's own colour p5–p95 at 0.61 / 0.67 / 0.74 s | — | 11 / 13 / 61 | 28 / 33 / 61 |
-| sign over the cove (litfair.py, own colour over the wall) | consistent | 249/235 at 0.90 s, else unmeasurable | 246/208 (0.90 s), 233/210 (0.99 s), 234/– (1.12 s): lit side over the shade wherever both are measurable; the composite over the wall +27 / +12 / +15 / +18 at 0.90–1.25 s, −4 at 0.74 s (762 px on the lit side: the thin edge by the cloche) |
+| sign over the cove (litfair.py, own colour over the wall) | consistent | 249/235 at 0.90 s, else unmeasurable | 246/210 (0.90 s), 233/210 (0.99 s): lit side over the shade wherever both are measurable; the composite over the wall +26 / +11 / +19 at 0.90 / 0.99 / 1.12 s, −3 at 0.74 s (504 px on the lit side: the thin edge by the cloche); polish 7 −14 at 0.74 s |
 | a rim where the back light grazes the sheets | — | none | a glow on the crown's and the right side's outer layer against the cove, legible from ≈ 0.7 s, strongest on the rising cap's top at 0.9–1.3 s (`guest-laptop-css-p7top-p8bottom.png`) |
 | steam darker than the wall (dark.py) | 0 | 0 at every frame | 0 at 0.48–0.74 s and 1.12–1.25 s; **0.1 k px at 0.90 and 0.99 s** (≈ 300 px, −4…−6 levels, over the lifted cloche's window reflection, N ≈ 234: the fog in the cloche's shadow veiling a highlight, not the cove) |
 | the white plate: centre / side | ≤ +4 / ≥ −10 | +2…+5 / +3…−9 | **+1…+2 / +2…−9** |
-| far-rim transmittance 0.43–0.74 s | 0.3–0.5 | 0.31–0.44 | **0.31–0.44** (coverage is the field's, unchanged) |
-| warmth R − B of the bright steam | ≥ +4 | +5.4…+6.1 | **+6.9…+7.7** |
+| far-rim transmittance 0.43–0.74 s | 0.3–0.5 | 0.31–0.44 | **0.29–0.45** (0.29 at 0.61 s: the edge band's sharper boundary; a hair under) |
+| warmth R − B of the bright steam | ≥ +4 | +5.4…+6.1 | **+6.9…+7.6** |
 | the cloche's reflections the only modelling | no | they were | the own colour carries it: lit 247–250, shade 207–232 over the same spans |
 
 **Item 2 against its targets** (the dome alone — the gush-off twin, as the judge measured it; the whole frame in
@@ -1224,7 +1224,7 @@ edge, no temporal accumulation, luminance-only steam, a subtle spill, a weak cur
 - **The light is a steam rig** (polish 8, item 1, met on own colour: +18 / +18 / +21): the rig's key alone gave ≤ +5 on this
   view, so the steam sees the window's low spread and a back light of its own, composited as light against the cove, with a
   tone curve of its own. The shaded side is greyer than polish 7's (207–232 of own colour); the rising cap's top is lit less
-  than its underside at 1.1–1.3 s (top − underside −6 / −7); the fog in the lifted cloche's shadow veils its window
+  than its underside at 1.1–1.3 s (top − underside −3 / −6); the fog in the lifted cloche's shadow veils its window
   reflection by 4–6 levels at 0.9–1.0 s (≈ 300 px "darker than what is behind it", not the cove).
 - **The envelope's last tenth**: the mass rises 1 % at 1.12 s and is half its peak at ≈ 1.35 s (polish 7: falling every frame,
   half by 1.30 s); the dome's IoU at 0.48 s 0.69 (0.71); 63 faint pixels over the seated crown at 0.74 s on a decline (0).
