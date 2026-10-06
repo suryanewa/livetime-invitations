@@ -210,7 +210,8 @@ export function netRestRadius(t: number): number {
  * bottom ring's inner opening is 1.14 × the ball (a real net's bottom clears the ball; the ball
  * spreads the cords as it passes and they slide on it, rather than the net hugging it like a sock).
  * The simulation hangs the master's knots on this envelope (`sportsNet.ts`) and the made ball's net
- * drag engages against it.
+ * drag engages against it. v1.7: the cords' rest lengths come from this hang (× 1.005: hung slack),
+ * so the opened rows are no longer pre-stretched; gravity settles the net a few millimetres from it.
  */
 export const NET_HANG = { inner: 0.285, from: 0.42, to: 0.62 } as const;
 export function netHangRadius(t: number): number {

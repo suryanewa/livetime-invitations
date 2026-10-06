@@ -1,0 +1,8 @@
+# Baseline determinism (before): drawn knots at common run times vs the 120 Hz run
+60 Hz vs 120 Hz: 23 common run times, max knot difference 3.93e-3 su
+90 Hz vs 120 Hz: 23 common run times, max knot difference 1.33e-2 su
+144 Hz vs 120 Hz: 23 common run times, max knot difference 7.63e-3 su
+
+# Baseline settle after exit per cadence: 60 Hz 4.337 s, 90 Hz 4.348 s, 120 Hz 4.328 s, 144 Hz 4.342 s; late swing at exit+2 s: 5.38 / 5.60 / 5.38 / 5.91 mm
+
+# Baseline cost (cost-probe.ts, load average ≈ 57–360): net 0.382 ms per 60 fps frame; reference 0.736 ms; ratio 0.52 (bound 2)

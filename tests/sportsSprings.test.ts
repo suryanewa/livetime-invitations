@@ -21,6 +21,11 @@ function ringDown(s: HoopSprings, seconds = 4) {
 
 /** Undamped natural frequency (rad/s) of a spring in HOOP_SPRINGS. */
 const omega = (p: { inertia: number; stiffness: number }) => Math.sqrt(p.stiffness / p.inertia);
+/** First swing of a damped spring struck from rest with Δω: (Δω/ω)·e^(−ζφ/√(1−ζ²)), φ = atan(√(1−ζ²)/ζ). */
+const firstPeak = (dw: number, p: { inertia: number; stiffness: number; zeta: number }) => {
+  const r = Math.sqrt(1 - p.zeta * p.zeta);
+  return (dw / omega(p)) * Math.exp((-p.zeta * Math.atan(r / p.zeta)) / r);
+};
 
 describe('Hoop springs: the ball\'s strike (HoopSprings.kick)', () => {
   it('BALL_MASS_KG is a 7" rubber mini (size 3) basketball\'s: 0.28–0.32 kg', () => {
@@ -38,11 +43,22 @@ describe('Hoop springs: the ball\'s strike (HoopSprings.kick)', () => {
     expect(s.rim).toBeGreaterThan(0);
     expect(s.board).toBeGreaterThan(0);
     const r = ringDown(s);
-    // The first swing is the impulse's: Δω / ω, less the damping over its first quarter period.
+    // The first swing is the impulse's: Δω / ω, less the damping over its first quarter period
+    // (v1.7: the rim's ζ 0.4 takes it to 0.60 of that; sampled at the frames, within 10 %).
     for (const [peak, dw, p] of [[r.rimMax, dRim, HOOP_SPRINGS.rim], [r.boardMax, dBoard, HOOP_SPRINGS.board]] as const) {
-      expect(peak).toBeGreaterThan(0.6 * (dw / omega(p)));
-      expect(peak).toBeLessThan(dw / omega(p));
+      expect(peak).toBeGreaterThan(0.9 * firstPeak(dw, p));
+      expect(peak).toBeLessThan(1.02 * firstPeak(dw, p));
     }
+    // The rim's 7 Hz ring is damped (ζ 0.4; v1.5 0.15 rang for half a second): under 5 % of its
+    // first swing from a fifth of a second on.
+    const ring = new HoopSprings();
+    ring.kick(dRim, 0);
+    let late = 0;
+    for (let t = DT; t <= 1 + 1e-9; t += DT) {
+      ring.step(DT, 0, 0);
+      if (t >= 0.2) late = Math.max(late, Math.abs(ring.rim));
+    }
+    expect(late).toBeLessThan(0.05 * r.rimMax);
     // A strike this size stays well inside the stops and rings out within a couple of seconds.
     expect(r.rimMax).toBeLessThan(RIM_LIMIT);
     expect(r.rimMin).toBeGreaterThanOrEqual(RIM_BACKSTOP);
@@ -57,8 +73,9 @@ describe('Hoop springs: the ball\'s strike (HoopSprings.kick)', () => {
       const s = new HoopSprings();
       s.kick(dRim, dBoard);
       let rimMax = -Infinity, rimMin = Infinity, boardMax = 0;
-      for (let t = 0; t < 5; t += DT) {
-        s.step(DT, 0, 0);
+      // Fine steps: a part held on a stop leaves it within the frame it reached it (the damping pulls it back).
+      for (let t = 0; t < 5; t += DT / 8) {
+        s.step(DT / 8, 0, 0);
         rimMax = Math.max(rimMax, s.rim);
         rimMin = Math.min(rimMin, s.rim);
         boardMax = Math.max(boardMax, Math.abs(s.board));

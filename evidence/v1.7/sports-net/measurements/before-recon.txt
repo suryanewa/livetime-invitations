@@ -1,0 +1,67 @@
+# Reconnaissance probe 2 (before)
+master cord lengths (cm): min 4.74 max 11.56 mean 6.16
+row 0: rest strain mean 0.16 % (min 0.12, max 0.22) → tension ≈ 0.12 N per cord at 1.4 %/N
+row 1: rest strain mean 0.10 % (min 0.04, max 0.14) → tension ≈ 0.07 N per cord at 1.4 %/N
+row 2: rest strain mean 0.06 % (min 0.03, max 0.09) → tension ≈ 0.04 N per cord at 1.4 %/N
+row 3: rest strain mean 0.73 % (min 0.67, max 0.80) → tension ≈ 0.52 N per cord at 1.4 %/N
+row 4: rest strain mean 1.38 % (min 1.28, max 1.45) → tension ≈ 0.99 N per cord at 1.4 %/N
+row 5: rest strain mean 0.31 % (min 0.23, max 0.37) → tension ≈ 0.22 N per cord at 1.4 %/N
+row 0: master radius 13.56 cm → hanging rest 13.61 cm, y -11.2 cm
+row 1: master radius 11.87 cm → hanging rest 11.90 cm, y -14.9 cm
+row 2: master radius 10.54 cm → hanging rest 10.93 cm, y -18.7 cm
+row 3: master radius 9.83 cm → hanging rest 10.91 cm, y -22.2 cm
+row 4: master radius 9.50 cm → hanging rest 11.02 cm, y -25.7 cm
+row 5: master radius 9.75 cm → hanging rest 11.21 cm, y -29.0 cm
+knot mass ≈ 0.644 g; cord stiffness 1/(0.002 su/N) = 500 N/su = 1389 N/m; single-knot cord mode ≈ 331 Hz; shear spring 1/(0.4 su/N) = 6.9 N/m → knot-on-diagonals mode ≈ 23.4 Hz; 5 cm pendulum 2.23 Hz; whole-net pendulum (31.5 cm) 0.89 Hz
+bottom ring, 0.25–2.25 s after exit: mean correlation of adjacent knots' tangential motion -0.14, of opposite knots -0.19 (a rigid sway would give +1 adjacent, −1 opposite)
+ring in-plane motion: rigid sway RMS 0.52 mm, knot-relative (incoherent) RMS 5.83 mm, radial deviation (ring out-of-round) RMS 5.58 mm
+max |tangential| of any bottom knot, 0–0.5 s after exit: 14.2 mm
+max |tangential| of any bottom knot, 0.5–1 s after exit: 3.5 mm
+max |tangential| of any bottom knot, 1–1.5 s after exit: 2.1 mm
+max |tangential| of any bottom knot, 1.5–2 s after exit: 1.2 mm
+max |tangential| of any bottom knot, 2–2.5 s after exit: 0.6 mm
+max |tangential| of any bottom knot, 2.5–3 s after exit: 0.5 mm
+max |tangential| of any bottom knot, 3–3.5 s after exit: 0.3 mm
+max |tangential| of any bottom knot, 3.5–4 s after exit: 0.2 mm
+60 Hz frames: substeps per frame {"8":37} (frame = 16.67 ms = 8.00 substeps)
+90 Hz frames: substeps per frame {"5":36,"6":18} (frame = 11.11 ms = 5.33 substeps)
+120 Hz frames: substeps per frame {"4":72} (frame = 8.33 ms = 4.00 substeps)
+144 Hz frames: substeps per frame {"3":58,"4":28} (frame = 6.94 ms = 3.33 substeps)
+
+# Reconnaissance probe 3 (before)
+   t   maxTiltDev(deg) maxTiltRate(deg/s) cordLen/rest min  max  slack(<99.5%) rim(deg)
+   0.958     0.00        0    1.000    1.000      0   -0.000
+   0.992     0.00        0    1.000    1.000      0   -0.000
+   1.025     6.33      804    0.972    1.084      7    0.078
+   1.058    11.92      438    0.877    1.105     23    0.435
+   1.092    26.32      826    0.795    1.031     46    0.544
+   1.125    28.53     1439    0.881    1.010     32   -0.066
+   1.158    22.25     1378    0.926    1.016     19   -0.422
+   1.192    23.46      990    0.916    1.010     21   -0.070
+   1.225    24.66      662    0.955    1.008     18    0.243
+   1.258    27.20      965    0.930    1.012     13    0.118
+   1.292    34.18     1256    0.922    1.007     14   -0.100
+   1.325    40.80      766    0.985    1.008      7   -0.102
+   1.358    15.89     1112    0.974    1.006      6    0.028
+   1.392    22.99     1040    0.950    1.005      9    0.070
+   1.425    17.77      790    0.986    1.006      2    0.004
+   1.458    23.09      594    0.967    1.005      7   -0.039
+   1.492    21.81      451    0.965    1.006      7   -0.017
+   1.525    21.53      509    0.968    1.004      5    0.018
+   1.775     8.79      592    0.993    1.002      1   -0.003
+   2.025    10.48      248    0.991    1.002      2   -0.002
+   2.275     4.93      282    0.999    1.001      0   -0.004
+   2.525    11.14      160    0.999    1.001      0   -0.001
+   2.775     6.30      175    0.999    1.001      0    0.001
+   3.025     6.92       81    0.999    1.001      0   -0.000
+   3.275     7.51       53    0.999    1.001      0    0.000
+   3.525     2.54       88    1.000    1.000      0    0.000
+   3.775     2.05       68    1.000    1.000      0    0.000
+   4.025     3.12       23    0.999    1.001      0    0.000
+   4.275     2.36       24    1.000    1.000      0    0.000
+   4.525     0.98       41    1.000    1.000      0   -0.000
+   4.775     0.99       27    1.000    1.000      0    0.000
+   5.025     1.21       10    1.000    1.000      0   -0.000
+   5.275     1.06       14    1.000    1.000      0    0.000
+0.25–1.25 s after exit: bottom-knot tilt deviation from rest: mean of per-frame max 13.9°, peak 24.2°; tilt rate peak 1040°/s; cords slack (drawn shortened) per frame mean 2.2 of 120, shortest 95.0 % of rest
+rim: zero crossings after contact 69, back-stop hits 0, |rim| < 0.05° for good from t = 1.41 s (0.46 s after contact); peak 0.59°, trough -0.42° (stop -0.42°)
