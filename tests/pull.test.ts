@@ -438,8 +438,8 @@ function kinksOf(p: number[], h: number): number[] {
 }
 
 describe('v1.7: Dinner\'s close-up channel (the camera moves to face the card)', () => {
-  it('waits for the cloud to go (τ 2.8 s), arrives as the veil\'s last wisps cross the card (4.4 s): monotone and C1', () => {
-    expect(CLOSE).toEqual({ from: 2.8, to: 4.4 });
+  it('sets off as the cloud thins out (τ 2.4 s), arrives as the veil\'s last wisps cross the card (4.4 s): monotone and C1', () => {
+    expect(CLOSE).toEqual({ from: 2.4, to: 4.4 });
     const h = 1 / 960, p: number[] = [];
     for (let i = 0; i * h <= 6; i++) p.push(closeIn(i * h));
     p.forEach((x, i) => {

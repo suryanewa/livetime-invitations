@@ -63,7 +63,7 @@ test('Accept reveals the dish; Decline bins the covered dish; one request each',
 
 test('Accept releases steam that rises on after the reveal, then the camera moves in to the card; the loop idles on the canonical close-up', async ({ page }) => {
   // v1.5: the steam lives in simulate past the reveal (settling() while it rises); count frames.
-  // v1.7 (#42): the close-up moves in on the reveal's clock (τ 2.8–4.4 s), inside the steam's life.
+  // v1.7 (#42): the close-up moves in on the reveal's clock (τ 2.4–4.4 s since the polish round), inside the steam's life.
   await page.addInitScript(() => {
     const raf = window.requestAnimationFrame.bind(window);
     (window as any).__rafCalls = 0;
@@ -86,9 +86,9 @@ test('Accept releases steam that rises on after the reveal, then the camera move
   const a = await calls();
   await page.waitForTimeout(300);
   expect(await calls()).toBeGreaterThan(a + 5);
-  // The cloud has gone (τ ≈ 2.3–2.6 s), the camera not yet moved (or barely: polling is not frame-exact):
-  // the steam has visibly changed the still.
-  await page.waitForTimeout(450);
+  // The cloud is thinning (τ ≈ 2.1–2.3 s), the camera not yet moved (it sets off at τ 2.4 s; polling is
+  // not frame-exact): the steam has visibly changed the still.
+  await page.waitForTimeout(300);
   expect(await close()).toBeLessThan(0.01);
   expect(await stillDiff(page, steaming, await still())).toBeGreaterThan(STEAM_VISIBLE);
   // The move, then the close-up (τ 4.4 s, ≈ 2.9 s after the accepted pose), the thin tail still rising.

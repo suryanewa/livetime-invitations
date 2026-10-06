@@ -125,12 +125,17 @@ function planCameraRewind(c: AnswerChange): { span: number; hold: number; p0: nu
 /**
  * The close-up channel (0 the rest view, 1 the card head-on; src/render/camera.ts `closeUpView`) on
  * the reveal's own clock τ (the steam's: the accept's time, running on past its 1.5 s in
- * `simulate`). It waits until the cloud has gone (τ 2.8 s, the steam's CLOUD.release + life) and
- * arrives as the veil's last wisps cross the card (4.4 s, where the plate stops steaming, VEIL.end):
- * the guest sees the steam clear, then the camera rises over the plate and turns down to read the
- * card. The accepted pose *is* the close-up (1): reduced motion, a saved accept and the poster.
+ * `simulate`). It sets off as the cloud's last tatters thin out (τ 2.4 s; the cloud is gone by
+ * 2.8 s, the steam's CLOUD.release + life) and arrives as the veil's last wisps cross the card
+ * (4.4 s, where the plate stops steaming, VEIL.end): the guest sees the steam clear, then the
+ * camera rises over the plate and turns down to read the card. The accepted pose *is* the close-up
+ * (1): reduced motion, a saved accept and the poster.
+ *
+ * v1.7 polish (the judge's constant, tested in place): from 2.4 s, not 2.8 s. The still hold after
+ * the reveal shortens by 0.4 s and the 2.0 s move turns the line of sight at ≤ 66°/s (was 83°/s
+ * over 1.6 s); it lands at the same 4.4 s (earlier, at 3.6 s, the veil still clouds the title).
  */
-export const CLOSE = { from: 2.8, to: 4.4 } as const;
+export const CLOSE = { from: 2.4, to: 4.4 } as const;
 /**
  * The move's ease: zero speed at both ends (C1 with the still camera before and after), a gathered
  * start and a slightly longer settle than its rise, so the card lands softly under the eye:
