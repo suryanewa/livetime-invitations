@@ -14,7 +14,7 @@ type Fit = {
   heroHeight: number; heroWidth: number; binding: 'height' | 'width'; pathLimited: boolean; heroCenter: [number, number]; distance: number;
   offset: [number, number]; pathExtents: [number, number, number, number];
 };
-type Report = { rest: Fit; decline: Fit; closeUp?: Fit; pull: number; close: number; solves: number; points: { hero: number; rest: number; decline: number } };
+type Report = { rest: Fit; decline: Fit; closeUp?: Fit; focusFit?: Fit; pull: number; close: number; focus: number; solves: number; points: { hero: number; rest: number; decline: number } };
 
 const SCENES = ['party', 'birthday', 'sports', 'dinner', 'business'] as const;
 const PULLS = new Set(['birthday', 'dinner']);
@@ -156,6 +156,61 @@ test('dinner (v1.7 #42): the accepted pose\'s live camera is the close-up on the
   await expect.poll(async () => (await report(page)).pull, { timeout: 2000 }).toBe(1);
   const d = await report(page);
   expect(d.solves).toBe(start.solves);
+});
+
+test('sports (v1.7 polish, #43): the decline pushes in on the bank and back before the ball lands; every pose, reduced motion and a decline from the accept stay off it; no fit is solved', async ({ page }) => {
+  await ready(page, '/?scene=sports');
+  // The focus fit: the board, the rim and the net at 0.8 of the frame's height (at 3:4 the width binds), closer than the rest fit.
+  for (const a of [0.75, 1, 1.5]) {
+    const r = await report(page, a);
+    const f = r.focusFit!;
+    expect(f, `${a}`).toBeDefined();
+    expect(r.closeUp, `${a}`).toBeUndefined();
+    expect(f.pathLimited, `${a}`).toBe(false);
+    expect(r.rest.distance / f.distance, `${a}`).toBeGreaterThan(1.5);
+    if (a >= 1) expect(f.heroHeight, `${a}`).toBeCloseTo(0.8, 2);
+    for (const v of f.pathExtents) expect(Math.abs(v), `${a}`).toBeLessThanOrEqual(CLEAR);
+  }
+  const start = await report(page);
+  expect(start.focus).toBe(0);
+  await page.getByRole('button', { name: 'Guest', exact: true }).click();
+  await expect.poll(() => visual(page)).toBe('guest-ready');
+  await expect.poll(async () => (await report(page)).focus, { timeout: 2000 }).toBe(0);
+  // The channel every animation frame through the decline: up to 1, held, back to 0, never a step.
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__focus = [];
+    const t0 = performance.now();
+    const loop = (now: number) => {
+      w.__focus.push([now - t0, w.__showcase.state.visual, w.__showcase.controller.framing().focus]);
+      if (w.__focus.length < 420) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+  await page.getByRole('button', { name: 'Decline' }).click();
+  await expect.poll(() => visual(page), { timeout: 5000 }).toBe('declined-pose');
+  await expect.poll(async () => (await page.evaluate(() => (window as any).__focus.length)) as number, { timeout: 10_000 }).toBeGreaterThanOrEqual(420);
+  const k = (await page.evaluate(() => (window as any).__focus as [number, string, number][])).map(([, , c]) => c);
+  expect(Math.max(...k)).toBe(1);
+  expect(k.filter((c) => c === 1).length).toBeGreaterThan(20);
+  expect(k.filter((c) => c > 0 && c < 1).length).toBeGreaterThan(20);
+  const peak = k.indexOf(1), last = k.lastIndexOf(1);
+  for (let i = 1; i <= peak; i++) expect(k[i]!).toBeGreaterThanOrEqual(k[i - 1]! - 1e-9);
+  for (let i = last + 1; i < k.length; i++) expect(k[i]!).toBeLessThanOrEqual(k[i - 1]! + 1e-9);
+  expect(k.at(-1)).toBe(0);
+  // Declined: off it. Reduced motion: the camera cuts with the pose (a decline after an accept never pushes in).
+  await expect.poll(async () => (await report(page)).focus, { timeout: 2000 }).toBe(0);
+  await page.evaluate(() => (window as any).__showcase.controller.setReducedMotion(true));
+  await page.getByRole('button', { name: 'Accept' }).click();
+  await expect.poll(() => visual(page), { timeout: 6000 }).toBe('accepted-pose');
+  await expect.poll(async () => (await report(page)).focus).toBe(0);
+  await page.evaluate(() => (window as any).__showcase.controller.setReducedMotion(false));
+  await page.getByRole('button', { name: 'Decline' }).click();
+  for (let i = 0; i < 20; i++) {
+    expect((await report(page)).focus).toBe(0);
+    await page.waitForTimeout(100);
+  }
+  expect((await report(page)).solves).toBe(start.solves);
 });
 
 test('phone: the dock changing size (mode switch, an answer) only places the camera, never refits', async ({ page }) => {
