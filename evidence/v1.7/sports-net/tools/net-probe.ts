@@ -346,6 +346,13 @@ if (args.includes('--series')) {
       for (let j = 0; j < s.knots.length; j++) maxD = Math.max(maxD, Math.abs(s.knots[j]! - q.knots[j]!));
     }
     console.log(`${r.hz} Hz vs 120 Hz: ${n} common run times, max knot difference ${maxD.toExponential(2)} su`);
+    if (args.includes('--verbose')) for (const s of r.snaps) {
+      const q = ref.get(key(s));
+      if (!q || Math.abs(q.run - s.run) > 1e-9 || !runs.every((o) => o.snaps.some((x) => Math.abs(x.run - s.run) < 1e-9))) continue;
+      let d = 0;
+      for (let j = 0; j < s.knots.length; j++) d = Math.max(d, Math.abs(s.knots[j]! - q.knots[j]!));
+      console.log(`   run ${s.run.toFixed(4)}  diff ${d.toExponential(2)}`);
+    }
   }
 } else {
   const r = analyse(HZ);

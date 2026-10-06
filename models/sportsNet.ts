@@ -420,6 +420,11 @@ export class NetSim {
   private readonly _b = new Vector3();
   private readonly _vb = new Vector3();
   private readonly _p = new Vector3();
+  /** The rest relaxation's last quasi-static iteration and its residual (su), for diagnostics. */
+  relaxed: [number, number] = [0, 0];
+  relaxedShape: number[] = [];
+  shapeRest: Float64Array | null = null;
+  relaxSteps: number[] = [];
 
   constructor(readonly lattice: NetLattice, seed = 7) {
     const L = lattice;
@@ -512,27 +517,39 @@ export class NetSim {
     // standstill (the substep's own fixed point), then read the hanging net's steady pull on the rim.
     this.xLast.set(this.x);
     const h = NET_SIM.step;
-    const relax = (heavy: number) => {
-      for (let i = 0; i < heavy; i++) this.substep(h, null, 40, 0, 0, 0);
-      for (let i = 0; i < 20000; i++) {
+    const moved = () => {
+      let d = 0;
+      for (let j = 0; j < this.x.length; j++) d = Math.max(d, Math.abs(this.x[j]! - this.xLast[j]!));
+      return d;
+    };
+    const relax = (heavy: number, still: number, drag: number) => {
+      for (let i = 0; i < heavy; i++) {
+        this.substep(h, null, drag, 0, 0, 0);
+        if (i % 50 === 49 && moved() < 1e-15) { this.relaxSteps.push(i + 1); break; }
+        if (i === heavy - 1) this.relaxSteps.push(heavy);
+      }
+      for (let i = 0; i < still; i++) {
         this.v.fill(0);
         this.substep(h, null, 0, 0, 0, 0);
-        let d = 0;
-        for (let j = 0; j < this.x.length; j++) d = Math.max(d, Math.abs(this.x[j]! - this.xLast[j]!));
+        const d = moved();
+        this.relaxed = [i, d];
         if (d < 1e-15) break;
       }
     };
-    relax(2400);
-    // Preload the diagonals: the same force at this pose (C/α kept) with the softer compliance.
+    relax(Number(process.env.NET_RELAX1 ?? 3000), 400, 40);
+    this.relaxedShape = [...this.relaxed];
+    // Preload the diagonals: the multiplier each applied at this pose (its force, λ/h²), now from
+    // the softer compliance: rest length d + α̃·λ, so the soft spring pushes the same at this pose.
     const soft = NET_SIM.shearCompliance * SU_M;
+    this.shapeRest = this.x.slice();
     for (let c = 0; c < m; c++) {
       if (this.mode[c] !== MODE.spring) continue;
       const a = this.ca[c]!, b = this.cb[c]!;
       const d = Math.hypot(this.x[b * 3]! - this.x[a * 3]!, this.x[b * 3 + 1]! - this.x[a * 3 + 1]!, this.x[b * 3 + 2]! - this.x[a * 3 + 2]!);
-      this.cl[c] = d - (soft / this.cc[c]!) * (d - this.cl[c]!);
+      this.cl[c] = d + (soft / (h * h)) * this.lambda[c]!;
       this.cc[c] = soft;
     }
-    relax(0);
+    relax(Number(process.env.NET_RELAX2 ?? 3000), 400, Number(process.env.NET_RELAX2_DRAG ?? 8));
     this.v.fill(0);
     this.substep(h, null, 0, 0, 0, 0);
     this.restTorqueRim = this.stepRim;
@@ -590,35 +607,36 @@ export class NetSim {
     const h = NET_SIM.step;
     const target = Math.ceil(until / h - 1e-9);
     const b = this._b;
-    if (this.settled) {
-      const near = ball !== null && ball(Math.max(target, this.tick) * h, b) !== null && this.near(b);
-      if (!near && !(springs?.active() ?? false)) {
-        // Asleep: the clock moves on, the springs (if still ringing below waking) ring down on it.
-        for (; this.tick < target; this.tick++) if (springs && !springs.settled) springs.substep(h, 0, 0);
-        this.tick = Math.max(this.tick, target);
-        this.drawnTime = until;
-        this.alpha = 1;
-        return;
-      }
-      this.wake(springs);
+    // Asleep with the ball out of reach this frame and the springs quiet: the clock moves on (the
+    // springs, if still ringing below waking, ring down on it).
+    if (this.settled && !(springs?.active() ?? false) && !(ball !== null && ball(Math.max(target, this.tick) * h, b) !== null && this.near(b, NET_SIM.wakeMargin + 0.35))) {
+      for (; this.tick < target; this.tick++) if (springs && !springs.settled) springs.substep(h, 0, 0);
+      this.tick = Math.max(this.tick, target);
+      this.drawnTime = until;
+      this.alpha = 1;
+      return;
     }
     let fx = 0, fy = 0, fz = 0, tr = 0, tb = 0, count = 0;
     const vb = this._vb;
     while (this.tick < target) {
       this.tick++;
-      if (this.settled) {
-        if (springs && !springs.settled) springs.substep(h, 0, 0);
-        continue;
-      }
       const t = this.tick * h;
       const c = ball ? ball(t, b) : null;
+      const near = c !== null && this.near(c);
+      if (this.settled) {
+        // Asleep: wake on the substep the ball comes near or the springs are struck (the same substep at every display rate).
+        if (!near && !(springs?.active() ?? false)) {
+          if (springs && !springs.settled) springs.substep(h, 0, 0);
+          continue;
+        }
+        this.wake(springs);
+      }
       if (c && this.ballPrevValid) vb.subVectors(c, this.ballPrev).divideScalar(h);
       else if (c && ball) {
         const p = ball(t - h, this._p);
         vb.set(0, 0, 0);
         if (p) vb.subVectors(c, p).divideScalar(h);
       } else vb.set(0, 0, 0);
-      const near = c !== null && this.near(c);
       this.substep(h, near ? c : null, NET_SIM.drag, NET_SIM.coupling, springs?.board ?? 0, springs?.rim ?? 0);
       fx += this.hookForce.x; fy += this.hookForce.y; fz += this.hookForce.z;
       tr += this.stepRim; tb += this.stepBoard; count++;
@@ -645,9 +663,9 @@ export class NetSim {
     this.advance(t0 + dt, sampler, null);
   }
 
-  /** The ball is near the net's volume (sim space). */
-  near(c: Vector3): boolean {
-    const r = BALL_R + NET_SIM.wakeMargin;
+  /** The ball is within `margin` of the net's volume (sim space). */
+  near(c: Vector3, margin: number = NET_SIM.wakeMargin): boolean {
+    const r = BALL_R + margin;
     return c.y < r && c.y > -NET.depth - r && Math.hypot(c.x, c.z) < RIM.innerRadius + 2 * RIM.tube + r;
   }
 
@@ -699,8 +717,8 @@ export class NetSim {
     for (let i = 0; i < n; i++) {
       if (w[i] === 0) continue;
       const j = i * 3;
-      v[j + 1] = v[j + 1]! - gh;
-      v[j] = v[j]! * damp; v[j + 1] = v[j + 1]! * damp; v[j + 2] = v[j + 2]! * damp;
+      // Drag, then gravity: the resting net (v = 0) sees the same step whatever the drag, so its rest pose is the substep's fixed point.
+      v[j] = v[j]! * damp; v[j + 1] = v[j + 1]! * damp - gh; v[j + 2] = v[j + 2]! * damp;
       x[j] = x[j]! + v[j]! * h; x[j + 1] = x[j + 1]! + v[j + 1]! * h; x[j + 2] = x[j + 2]! + v[j + 2]! * h;
     }
     this.lambda.fill(0);
@@ -729,7 +747,7 @@ export class NetSim {
         const rn = rx * nx + ry * ny + rz * nz;
         const rnNew = Math.min(rn, Math.max(0, rnPre));
         const tx = rx - rn * nx, ty = ry - rn * ny, tz = rz - rn * nz;
-        const tl = Math.hypot(tx, ty, tz);
+        const tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
         const keep = tl > 1e-12 ? 1 - Math.min(1, (mu * Math.max(0, rnNew - rnPre)) / tl) : 1;
         nvx = vbx + rnNew * nx + tx * keep; nvy = vby + rnNew * ny + ty * keep; nvz = vbz + rnNew * nz + tz * keep;
       }
@@ -756,7 +774,7 @@ export class NetSim {
     const x = this.x, w = this.invMass;
     const a = this.ca[c]!, b = this.cb[c]!;
     const dx = x[b * 3]! - x[a * 3]!, dy = x[b * 3 + 1]! - x[a * 3 + 1]!, dz = x[b * 3 + 2]! - x[a * 3 + 2]!;
-    const d = Math.hypot(dx, dy, dz);
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (d < 1e-9) return;
     const C = d - this.cl[c]!;
     const mode = this.mode[c]!;
@@ -795,7 +813,7 @@ export class NetSim {
         if (w[i] === 0) continue;
         const j = i * 3;
         const dx = x[j]! - ball.x, dy = x[j + 1]! - ball.y, dz = x[j + 2]! - ball.z;
-        const d = Math.hypot(dx, dy, dz);
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (d >= R || d < 1e-9) continue;
         const nx = dx / d, ny = dy / d, nz = dz / d;
         x[j] = ball.x + nx * R; x[j + 1] = ball.y + ny * R; x[j + 2] = ball.z + nz * R;
