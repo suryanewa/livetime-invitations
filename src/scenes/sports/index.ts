@@ -1,7 +1,7 @@
 import { Box3, type Camera, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
-  BALL_AT, BALL_MASS_KG, BALL_R, BOARD, BOARD_PIVOT, HOOP_ROOT, HOOP_SPRINGS, NET, netRestRadius, POLE, RIM, RIM_CENTER, RIM_HINGE, rigSports, SPORTS_CM_PER_UNIT, SPORTS_WALL_Z,
+  BALL_AT, BALL_MASS_KG, BALL_R, BOARD, BOARD_PIVOT, HOOP_ROOT, HOOP_SPRINGS, NET, netRestRadius, POLE, RIM, RIM_CENTER, RIM_HINGE, rigSports, SPORTS_CM_PER_UNIT, SPORTS_WALL_Z, STAND_PIVOT,
   SPORTS_WORLD_SCALE, STAND, type BallPreset, type SportsRig,
 } from '../../../models/sports.ts';
 import type { Hit } from './ballPhysics.ts';
@@ -28,9 +28,10 @@ const SEQUENCES: readonly SequenceName[] = ['host', 'accept', 'decline'];
  * v1.7 (#43, "bigger … more focused on the backboard and ball"): the hero is the board, the rim,
  * the net and the ball at guest-ready; the stand (`hoop_stand` the base, `hoop_pole` the pole,
  * sleeve and arms, `hoop_hardware` the back plate, bolts and hubs) is left out of it, so it may be
- * cropped by the frame's bottom and right edges.
+ * cropped by the frame's bottom and right edges. v1.7 polish: with the swaying parts the rig cuts from
+ * the base and the hardware (`hoop_stand_sway`, `hoop_hardware_sway`, `standSwayParts`).
  */
-export const SPORTS_HERO_EXCLUDE = /^hoop_(stand|pole|hardware)$/;
+export const SPORTS_HERO_EXCLUDE = /^hoop_(stand|pole|hardware)(_sway)?$/;
 /**
  * v1.7: the Sports hero fill. #43 built it at the largest that keeps every path PATH_CLEARANCE
  * inside the frame ({0.92, 0.76}: the board's top 2.5 % under the frame's top, the declined ball
@@ -165,14 +166,22 @@ export function sportsInterruptCut(showing: Showing): boolean {
  * L = r_y·J_z − r_z·J_y. A strike on the glass turns the board about BOARD_PIVOT. A strike on the
  * ring turns the ring about RIM_HINGE, and its hinge pin hands the impulse to the board, which
  * turns by it about BOARD_PIVOT from the hinge (the ring's own mass neglected).
+ * v1.7 polish: the board's mount hands the same impulse to the pole, and the whole hoop sways about
+ * STAND_PIVOT by its moment from where it enters the board (the glass's contact, or the ring's hinge)
+ * over the stand's inertia (`stand`). The glass's strike sways the top back (−0.071 rad/s), the
+ * rattle's clangs push it forward (+0.058, 0.024, 0.012).
  */
-export function hitKick(hit: Pick<Hit, 'surface' | 'contact' | 'impulse'>): { rim: number; board: number } {
+export function hitKick(hit: Pick<Hit, 'surface' | 'contact' | 'impulse'>): { rim: number; board: number; stand: number } {
   const toM = SPORTS_CM_PER_UNIT / 100;
   const J = hit.impulse.clone().multiplyScalar(-BALL_MASS_KG * toM);
   const at = hit.contact.clone().sub(HOOP_ROOT);
   const moment = (from: Vector3, pivot: Vector3) => ((from.y - pivot.y) * J.z - (from.z - pivot.z) * J.y) * toM;
-  if (hit.surface === 'board') return { rim: 0, board: moment(at, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia };
-  return { rim: moment(at, RIM_HINGE) / HOOP_SPRINGS.rim.inertia, board: moment(RIM_HINGE, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia };
+  if (hit.surface === 'board') return { rim: 0, board: moment(at, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia, stand: moment(at, STAND_PIVOT) / HOOP_SPRINGS.stand.inertia };
+  return {
+    rim: moment(at, RIM_HINGE) / HOOP_SPRINGS.rim.inertia,
+    board: moment(RIM_HINGE, BOARD_PIVOT) / HOOP_SPRINGS.board.inertia,
+    stand: moment(RIM_HINGE, STAND_PIVOT) / HOOP_SPRINGS.stand.inertia,
+  };
 }
 
 /** The strikes of a program (a sequence or a change of mind). */
@@ -317,7 +326,7 @@ export class SportsScene implements SceneInstance {
     for (const h of hitsOf(seq, change)) {
       if (h.at > k.t + 1e-9 && h.at <= t + 1e-9) {
         const kick = hitKick(h);
-        this.rig.springs.kick(kick.rim, kick.board);
+        this.rig.springs.kick(kick.rim, kick.board, kick.stand);
       }
     }
     k.t = t;
@@ -356,7 +365,7 @@ export class SportsScene implements SceneInstance {
     this.net.restore();
     if (this.springsCarry) {
       this.rig.springs.restore(this.springsCarry);
-      this.rig.recoil.set(this.rig.springs.board, this.rig.springs.rim);
+      this.rig.recoil.set(this.rig.springs.board, this.rig.springs.rim, this.rig.springs.stand);
       this.springsCarry = null;
     }
     const n = this.rig.nodes;

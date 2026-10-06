@@ -122,16 +122,17 @@ export class SportsNetChannel<S, C> {
     this.on = null;
     const a = sim.alpha;
     const board = springs.prevBoard + (springs.board - springs.prevBoard) * a, rim = springs.prevRim + (springs.rim - springs.prevRim) * a;
-    this.rig.recoil.set(board, rim);
+    const stand = springs.prevStand + (springs.stand - springs.prevStand) * a;
+    this.rig.recoil.set(board, rim, stand);
     // The skin is drawn at the director's time: redraw it unless the net rests or this step moved nothing (a frame's second step).
     const shown = this.shown;
-    if (!(wasSettled && sim.settled) && !(tick === sim.tick && a === shown.alpha && board === shown.board && rim === shown.rim)) {
-      net.skin.update(board, rim);
-      shown.alpha = a; shown.board = board; shown.rim = rim;
+    if (!(wasSettled && sim.settled) && !(tick === sim.tick && a === shown.alpha && board === shown.board && rim === shown.rim && stand === shown.stand)) {
+      net.skin.update(board, rim, stand);
+      shown.alpha = a; shown.board = board; shown.rim = rim; shown.stand = stand;
     }
   }
-  /** What the skin last drew (the net's interpolation and the recoil). */
-  private readonly shown = { alpha: NaN, board: NaN, rim: NaN };
+  /** What the skin last drew (the net's interpolation and the recoil, v1.7 polish: the stand's sway). */
+  private readonly shown = { alpha: NaN, board: NaN, rim: NaN, stand: NaN };
 
   /** The net or the hoop springs are still moving. */
   settling(): boolean {
@@ -149,7 +150,7 @@ export class SportsNetChannel<S, C> {
     }
     this.shown.alpha = NaN;
     springs.settle();
-    this.rig.recoil.set(0, 0);
+    this.rig.recoil.set(0, 0, 0);
   }
 
   /** Interruptions: the motion the last `settle()` snapped carries over (the net keeps swinging through a change of mind). */
@@ -158,8 +159,8 @@ export class SportsNetChannel<S, C> {
     if (this.carry && net) {
       net.sim.restore(this.carry.net);
       springs.restore(this.carry.springs);
-      this.rig.recoil.set(springs.board, springs.rim);
-      net.skin.update(springs.board, springs.rim);
+      this.rig.recoil.set(springs.board, springs.rim, springs.stand);
+      net.skin.update(springs.board, springs.rim, springs.stand);
     }
     this.shown.alpha = NaN;
     this.carry = null;

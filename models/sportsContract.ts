@@ -229,8 +229,18 @@ export function netHangRadius(t: number): number {
  */
 export const RIM_HINGE = hoopFromMaster(0, HOOP_MASTER.bracket.bottom, HOOP_MASTER.bracket.back);
 export const BOARD_PIVOT = hoopFromMaster(0, HOOP_MASTER.backCenterY, HOOP_MASTER.frame.back);
-/** Recoil limits (degrees): the spring-action rim's travel before it bottoms out, the board's play on its arms. */
-export const RECOIL_LIMIT = { rimDeg: 3, boardDeg: 0.8 } as const;
+/**
+ * v1.7 polish: the stand's sway pivot (hoop space), the pole's foot in the base's socket. The whole
+ * hoop above the base (the pole, the collar, the arms, the board, the rim and the net) pitches about
+ * it on the pole's bending (`HoopSprings.stand`); the base stays on the floor.
+ */
+export const STAND_PIVOT = POLE.foot.clone();
+/**
+ * Recoil limits (degrees): the spring-action rim's travel before it bottoms out, the board's play on
+ * its arms, and (v1.7 polish) the stand's sway: a guard only (the decline's strikes reach 0.27°;
+ * past ≈ 0.75° a weighted mini base would start to rock off its front edge, which is not modelled).
+ */
+export const RECOIL_LIMIT = { rimDeg: 3, boardDeg: 0.8, standDeg: 0.75 } as const;
 /**
  * The rim's back stop (radians, < 0): tipping back about its hinge, the bracket plate's top edge
  * meets the board face (the plate stands 2 mm proud of the face, 27.6 cm tall: −0.42°).
@@ -243,14 +253,23 @@ export const RIM_BACKSTOP = -Math.atan2(
 const _q = new Vector3();
 /**
  * Hoop-space point p carried by the recoil: the rim's hinge pitch, then the board's (the rim is
- * mounted on the board face). Pure; used by the rig (nodes) and the scene (net space).
+ * mounted on the board face), then (v1.7 polish) the stand's sway about STAND_PIVOT (the board is
+ * mounted on the pole). Pure; used by the rig (nodes) and the scene (net space).
  */
-export function recoilPoint(p: Vector3, boardPitch: number, rimPitch: number, out = new Vector3()): Vector3 {
+export function recoilPoint(p: Vector3, boardPitch: number, rimPitch: number, out = new Vector3(), standPitch = 0): Vector3 {
   _q.copy(p).sub(RIM_HINGE);
   const c1 = Math.cos(rimPitch), s1 = Math.sin(rimPitch);
   out.set(_q.x, _q.y * c1 - _q.z * s1, _q.y * s1 + _q.z * c1).add(RIM_HINGE).sub(BOARD_PIVOT);
   const c2 = Math.cos(boardPitch), s2 = Math.sin(boardPitch);
-  return out.set(out.x, out.y * c2 - out.z * s2, out.y * s2 + out.z * c2).add(BOARD_PIVOT);
+  out.set(out.x, out.y * c2 - out.z * s2, out.y * s2 + out.z * c2).add(BOARD_PIVOT);
+  return standPitch === 0 ? out : standPoint(out, standPitch, out);
+}
+
+/** v1.7 polish: hoop-space point p carried by the stand's sway (a pitch about STAND_PIVOT, positive tips the front down). */
+export function standPoint(p: Vector3, standPitch: number, out = new Vector3()): Vector3 {
+  _q.copy(p).sub(STAND_PIVOT);
+  const c = Math.cos(standPitch), sn = Math.sin(standPitch);
+  return out.set(_q.x, _q.y * c - _q.z * sn, _q.y * sn + _q.z * c).add(STAND_PIVOT);
 }
 
 /** Ball rest positions the choreography aims for (ball centre, sports_root space). */
