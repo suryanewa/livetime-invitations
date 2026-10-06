@@ -198,26 +198,35 @@ Still open at the time of writing (updated when the pass closes):
   rather than computes (a real-time dependence in its stepping is the suspect). Run it with a long `--testTimeout`
   until it is diagnosed. (On 2026-10-05, with the machine quiet — load average 3.7, one judge reading — the whole unit
   suite, this test included, ran in 85 s, so the wall time tracks the machine's load, which fits that suspect.)
-- `tests/browser/bloom.spec.ts › Birthday: the lit candles bloom…` is flaky in its last assertion (two stills of the
-  just-accepted pose, bloom on and off, must be byte-identical), and the flake predates v1.6's steam merge: a script that
-  repeats the test's steps and takes three consecutive `captureStill(720)` calls found consecutive stills differing on
-  **both** the merged build and the pre-merge build (5 of 5 runs on the pre-merge build). The difference is two pixels
-  by 1–7 levels, inside the smoke's region: GPU-level nondeterminism in the live smoke march (the poll for
-  `accepted-pose` returns before the fire has settled, so the smoke tail is still drawn), not a logic change. Fix in the
-  test: wait for the settled still (no smoke, as `scene-depth.spec › birthday` does) before the last `withAndWithout`,
-  or compare with a tolerance of a few pixels. Script and still pairs: the session scratchpad's `bloomflake/`.
+- `tests/browser/bloom.spec.ts › Birthday: the lit candles bloom…` is flaky in its last assertion (two 720 px stills of
+  the accepted pose, bloom on and off, must be byte-identical); it predates v1.6's steam merge. **Re-diagnosed
+  2026-10-06 at ddbd6f3 — the smoke-tail cause above was wrong, and no wait in the test fixes it.** At the differing
+  stills the scene draws no smoke (reduced motion settles at once: no tail, no pending fire, the smoke volume hidden).
+  Consecutive 720 px Birthday stills differ by 1–2 pixels of 1–7 levels in *every* pose (host-ready, lit, accepted),
+  with the bloom and the haze switched off, 1.5 s after the accept as often as at once (2–6 distinct images in 8–20
+  stills); Party and Dinner stills are byte-stable. The pixels are on the buttercream, and its shading is the source:
+  with its normal map removed, or with vertex tangents computed for it (`geometry.computeTangents()`, so the normal map
+  no longer builds its tangent frame from screen-space derivatives), 20 of 20 stills are identical (also with its AO
+  map removed, which changes the program; AO intensity 0 does not help). So Birthday stills are not bit-reproducible
+  on this GPU (ANGLE/Metal); at 320 px (`scene-depth.spec`'s pairs) 24 of 24 pairs were identical. The owner's call:
+  tangents for the buttercream (an asset/scene change; posters move by a level here and there), or a tolerance of a
+  few pixels in this assertion. Scripts: the session scratchpad's `flake17/` (`bloom.mjs`, `seq.mjs`, `poses.mjs`,
+  `bisect2.mjs`).
 - **the steam's next approach** (the sixth judge and the polish-5 owner agree the softness cannot be reached with the
   present half-resolution analytic march in 6 ms): a density advected per frame at 1–2 mm (a 128³–256³ volume stepped on
   the GPU, or a sparse grid), a full-resolution filament/sheet pass over it, more samples a pixel and multiple scattering;
   or — since the reveal is a pure function of time and deterministic — an offline fluid simulation baked into a sparse 4D
   volume texture that the runtime only marches (the cheapest route to film-quality filaments; the asset's size and the
   change-of-mind cases are the design questions). Either is a version of its own, with its own budget decision;
-- `tests/browser/resilience.spec.ts › 30 stage re-creations…` failed once in five full-suite runs this session (2026-10-05,
-  at 5ac3518): `dinner: Static` found one `WebGLRenderer` and one `WebGL2RenderingContext` still reachable after two
-  forced collections, then passed 4/4 alone. The check runs right after `setQualityTier('static')` resolves, so a
-  renderer still referenced by an in-flight task (a pending frame or disposal) can survive the collection: a GC-timing
-  race in the test, not a leak (every other run found zero). Fix in the test: wait a frame (or poll the count) before the
-  Static reachability check.
+- ~~`tests/browser/resilience.spec.ts › 30 stage re-creations…` failed once in five full-suite runs (2026-10-05, at
+  5ac3518): `dinner: Static` found one `WebGLRenderer` still reachable right after `setQualityTier('static')`~~ — fixed
+  in the test 2026-10-06 at 89e9355. A heap snapshot at that moment names the retainer: the deferred bin's prefetch
+  (`src/scenes/deferredBin.ts` `warm`), suspended mid-parse of the bin's GLB (the fetch body / ImageBitmap decode
+  promise chain), holds its context and with it the released stage's renderer; `dispose()` aborts the fetch, but a parse
+  under way runs to its end. Stressed (the spec's cycle, count read at once): 1 hit in 40 Dinner cycles, 0 in 40
+  Birthday, and every hit read zero at the next poll (~0.1 s) — not a leak. The spec now polls the count
+  (`expect.poll`, 5 s) to the expected value, for the Static check and the end-of-scene one; a renderer that stays
+  reachable still fails it. 10/10 (`--repeat-each=5`, twice, on a dev server of this worktree).
 - ~~a second full `pnpm models birthday` to confirm the compressed export is deterministic~~ — done 2026-10-05 at
   7ca077f: two consecutive runs byte-identical to each other and to the committed GLB (`docs/qualification.md`,
   Verification on the integrated build);
