@@ -140,3 +140,101 @@ pull-back (#39), the bin, the rig, the lens.
   reversed reveal — then the pull-back and the bin.
 - **`onVisualComplete('accept')` stays at 1.5 s** (the answer is saved when the dish is uncovered; the camera is a
   flourish after it).
+
+### E. Posters, backdrops, thumbnail, clips (`pnpm capture dinner`, `pnpm capture backdrops`, fresh 5701 server)
+
+- **The four shared posters stay four** (`tests/dinner.test.ts`). Changed: `shared-host-ready.webp` (the card on the
+  plate, no name; the cover poised) and `shared-accepted.webp` (the close-up on the card with the showcase's sample
+  print: "Supper club: autumn menu", "Alex Rivera"). `shared-guest-ready.webp`, `shared-declined.webp` and the collection
+  thumbnail (guest-ready, the card under the cloche) re-encode byte-identical. Per-event posters (the guest's own name
+  on the accepted poster) would need a runtime still (`captureStill`), not a shipped file: every poster already shows
+  sample content.
+- **`backdrop-accepted.webp`** (new; 2000², q0.92, 43 KiB): the accepted poster is a different framing, so it melts
+  into its own backdrop (`backdropUrl(category, 'accepted')`, as v1.5's `backdrop-declined.webp`). Unlike the others it
+  is rendered **with the scene in it** (`captureStill(…, { field: 7 })`, content visible): the plate runs past the
+  poster's edges on every side, and a bare-studio still would cut it off at the poster's feather. Every other scene's
+  backdrop (and Dinner's rest and declined ones) re-renders byte-identical. `scripts/capture.ts` writes it for any scene
+  whose framing has a close-up.
+- **The accept clip** grows from 3.8 to 5.0 s, through the move (`evidence/v1.7/dinner-card/e-capture/accept.mp4`;
+  `change.mp4` is the capture plan's accept → decline at 0.5 s, mid-reveal, unchanged in behaviour).
+- `tests/browser/posters.spec.ts` (dinner) on the fresh server: all five stills 0.00 % of pixels over 24/255 (mean
+  1.00–1.27, max 6–12).
+
+### F. Evidence and cost (`evidence/v1.7/dinner-card/`)
+
+| What | Where |
+| --- | --- |
+| The card at 15° (host-ready), laptop 1280 × 720 @2 and phone 390 × 844 @3, and a 3× crop | `a-card/` |
+| The print: 2048 px, and box-reduced to 430 and 860 px, five texts | `b-print/` |
+| Clips (accept 5.0 s, change), the 540 @2 accepted review still | `e-capture/` |
+| 16 ms frame strips of the move (24 consecutive frames through its fastest part, and every third frame of it) at laptop and phone; the channels per frame (`close-*.txt`); frame-to-frame differences (`frame-diff-*.txt`); the change of mind from the close-up | `f-strips/` |
+| Stills at laptop and phone: host-ready, accepted (the close-up), declined | `f-stills/` |
+| Pacing (the judges' `pace-scene.ts`, BASE and the move's window added) | `f-cost/pacing.txt`, `pace-scene.ts` |
+| The suites | `g-verification/suites.txt` |
+| Scripts: stills, print, strips | `stills.ts`, `print.ts`, `strips.ts` |
+
+- **Smoothness:** on the 16 ms virtual clock the channel follows `closeIn(τ)` frame by frame (`close-*.txt`); the
+  frame-to-frame mean luma difference through the move has no spike (largest step 3.4 levels at laptop, 6.8 on the
+  phone, both at the move's fastest frames, each within 2.5 × its neighbours); the card's long edges stay level and its
+  centre travels straight to the middle of the frame square (the strips).
+- **Pacing** (real time, three accepts with a change of mind back from the close-up between them, `RUNS=3`): laptop
+  and phone p50 16.70 ms, **p95 16.70–16.80 ms**, the move's window p95 ≤ 16.80 ms, max 16.8 ms, no frame over 20 ms
+  (the budget, ≤ 16.8 ms p95, holds at both sizes). One laptop set taken while the machine was at load ≈ 340 earlier in
+  the session had 15 long frames at 0.5–1.8 s of its first accept (inside the v1.6 steam's reveal, before the move);
+  repeated twice on a quieter machine they did not recur (one 33 ms frame in one first run, as the v1.6 baseline
+  `evidence/v1.6/verification/pacing-final.txt` has). All three sets are in `pacing.txt`.
+- **What the card costs:** two draw calls (the card's two materials) and the shadow quad on every Dinner frame; one
+  2048 × 1434 texture (16 MiB with mips; 4 MiB on Low) and the 130 KiB face on load. The close channel's per-frame work
+  is three projections (microseconds); no fit is solved in the loop.
+
+## Tests
+
+| File | What it holds | Count |
+| --- | --- | --- |
+| `tests/dinner.test.ts` (new describe) | the card's size; centred in the flat well, never pierced by the master's porcelain; turned to the azimuth, print upright; under the seated cloche and inside the steam's clear layer (`cloudDensity` ≤ 0.5 % of the dome's at its top at τ 0–0.3, 0 from 0.6, 0 under it); the title's layout (one line, two balanced, shrink, cut); the card's body and its node-test fallbacks; the four shared posters | 33 (7 new) |
+| `tests/config.test.ts` (new) | sanitising (trim, control/format characters, white space, clamps by whole characters, dropped lines), Dinner only, `sameConfig`/`printOnlyChange`, `presetOf` unchanged, the showcase's card by mode | 9 |
+| `tests/pull.test.ts` (new describe) | `closeIn`: 0 to 2.8 s, 1 from 4.4 s, monotone, C1, calm; through the scene and the director: 0 for host, guest-ready, the reveal and the decline, then the move, 1 settled, under reduced motion, for a saved accept; the homecoming (C1, from its own speed, ≤ the dolly's top speed, 0.56 s from rest); accept → decline from rest and mid-move (the bin waits for the camera, k < 1.35); decline → accept replays the move; accept → decline → accept mid-homecoming without a jump | 18 (5 new) |
+| `tests/framing.test.ts` (new describe) | the card 65 % of the width, centred, level, upright at 3:4, 1:1, 3:2, 45–52 cm away; the move exact at both ends, the card's centre on a straight line, growing all the way; nothing within the 10 cm near plane and the camera outside every steam box at every τ; the fullscreen frame rect as the square stage through the move | 11 (4 new) |
+| `tests/stage-framing.test.ts` (new describe) | the stage fits the close-up in the same solve; `setClose(1)` puts the live camera on it, 0 brings it home exactly; resizes, insets and other aspects only place it; content without a close-up ignores the channel | 13 (2 new) |
+| `tests/scene-depth.test.ts` | the card is a marked occluder, its shadow is not | 7 (1 new) |
+| `tests/browser/dinner.spec.ts` | the steam visibly changes the still before the move; the camera moves in, lands on the close-up, and the loop idles after the move and STEAM_END on the canonical close-up; the close-up's print is legible (ink only on the card, in lines of type); a text change reprints it without resetting, also mid-reveal | 8 (2 new, 1 rewritten) |
+| `tests/browser/framing.spec.ts` | every scene at rest is off any close-up; Dinner's accepted pose's live camera is the close-up, 0 while the reveal plays, monotone up, 1 under reduced motion, 0 at the declined pose; no fit solved | 9 (1 new) |
+| `tests/browser/fullscreen.spec.ts` | the accepted poster sits over `backdrop-accepted.webp` at 1440 × 900 and 390 × 844 | 14 (1 new) |
+
+Final verification (`g-verification/suites.txt`, on `v1.7/dinner-card`, a fresh 5701 server): typecheck clean; the
+unit suite **492/492** (33 files, 91 s, `--testTimeout=1800000`); the browser suite one spec per call **120/121**, the one
+failure the known Birthday bloom flake (`bloom.spec.ts` line 79, two consecutive stills of the just-accepted pose
+byte-identical; `docs/RESUME.md`, "Still open"; 1 of 3 re-runs passed, the other two failed on the same line).
+
+## Known gaps
+
+- **Per-event posters.** The accepted poster carries the showcase's sample print; an integrating app that shows the
+  poster (before load, on Static, on failure) shows "Alex Rivera" and the sample title, not its guest's. The HTML stays
+  authoritative, and the pose's text fallback describes the card without naming anyone. A runtime still (render the
+  accepted close-up once the scene is ready and cache it) would fix it; not built.
+- **The accepted backdrop is 286 px per frame square** (a 2000 px still at 7× the field), so on a wide screen the plate's
+  rim and the cloche around the poster are an upscaled, soft image until the scene is live. The rest backdrops are the
+  same resolution, but they show only the smooth cove.
+- **In the square poster the close-up shows the card and the porcelain only**: at 65 % of the width the frame is
+  15.4 cm across, inside the 27 cm plate (the gilt rim is 13 cm from the centre; the frame's corners reach 10.9 cm).
+  "A hint of the plate's rim and the cloche's edge" appears only in the fullscreen layout's extended view on wider
+  screens. A smaller fill (≈ 55 %) would bring the coupe's rise into the square corners; the brief's 65 % is kept.
+- **The eyebrow is lighter than the legibility check's ink threshold** (Sage Graphite, luma ≈ 91): the browser check
+  counts the title and the name; the eyebrow's legibility is shown by the print reductions and the stills only.
+- **The close-up while a decline is mid-pull** (a change accept → decline → accept inside the homecoming, then back
+  again) composes the two channels (the close-up blended over the pulled view); it is continuous and C1 but was judged
+  only in unit tests, not in frames.
+- **The change of mind from the close-up plays the decline 1.34 × its pace** (within the v1.5 change of mind's 1.46 ×
+  for the accept); keeping it at 1 × would need a longer decline (`durations` is fixed per sequence by the director).
+
+## Open questions for Surya
+
+1. **#41 and #42 as built** (`docs/spec-revisions.md`): the card (10 × 7 cm cream, 0.6 mm, centred, upright to the
+   camera), its three-line print in Inter (the one bundled face: the printed-text exception), the `card` config option
+   and the sample print on the shared posters; the close-up (τ 2.8 → 4.4 s, 80°, 65 %, the accepted pose).
+2. **The eyebrow's case:** printed as letter-spaced capitals ("YOU’RE INVITED"); the config's text is passed as given
+   and upper-cased by the print. Keep, or print as written?
+3. **The fill:** 65 % (the card and porcelain only in the square poster), or ≈ 55 % so the plate's coupe frames it?
+4. **The timing:** the move waits for the cloud to clear (2.8 s) and lands as the plate stops steaming (4.4 s), 2.9 s
+   after the answer is saved. Shorter (e.g. 2.2 → 3.6 s, through the veil's last wisps) is a two-number change.
+5. **Per-event posters** (a runtime still), or the sample print as is.
