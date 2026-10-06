@@ -1,0 +1,27 @@
+[
+ {
+  "view": "3x2",
+  "scene": "dinner",
+  "pose": "accepted",
+  "frame": {
+   "max": 4,
+   "over": 0.0,
+   "mean": 1.09
+  },
+  "core": {
+   "max": 4,
+   "over": 0.0,
+   "mean": 1.11
+  },
+  "band": {
+   "max": 4,
+   "over": 0.0,
+   "mean": 1.06
+  },
+  "outside": {
+   "max": 39,
+   "over": 0.981,
+   "mean": 2.66
+  }
+ }
+]

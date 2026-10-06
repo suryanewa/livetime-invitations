@@ -23,7 +23,7 @@ import { QualityMonitor, type Tier } from '../render/quality.ts';
 import { DEFAULT_RIG } from '../render/rigRegistry.ts';
 import { type FramingReport, Stage, type StageOptions } from '../render/stage.ts';
 import { type FrameRect, frameSquare, NO_INSETS } from '../render/camera.ts';
-import { PULL_EASE } from '../render/framing.ts';
+import { PATH_CLEARANCE, PULL_EASE } from '../render/framing.ts';
 
 /**
  * Embeddable invitation controller (Master §7). Three independent dimensions — resource,
@@ -45,12 +45,14 @@ export interface InvitationOptions extends CreateInvitationOptions {
   stage?: Omit<StageOptions, 'canvas' | 'preserveDrawingBuffer'>;
   posterFor?: PosterResolver;
   /**
-   * Fullscreen layout: a still of the bare studio at BACKDROP_FIELD × the frame field, centred on
-   * the same framing (`pnpm capture backdrops`). It extends the square poster to the whole stage,
-   * so a poster covers any aspect with the canvas's framing. Omitted, the stage colour does.
+   * A still of the studio at BACKDROP_FIELD × the frame field, centred on the same framing (`pnpm
+   * capture backdrops`). It extends the square poster to the whole stage, so a poster covers any
+   * aspect with the canvas's framing (fullscreen; v1.7 posters, also a square-layout mount of another
+   * aspect; never fetched while the frame square is the whole stage). Omitted, the stage colour does.
    * v1.5: asked for the pose of the poster it surrounds, since a scene that pulls back for its
    * decline (Birthday, Dinner) shows its declined poster at a wider framing and needs that
-   * framing's backdrop (`backdrop-declined.webp`).
+   * framing's backdrop (`backdrop-declined.webp`). v1.7 posters: the showcase's stills have the
+   * scene in them at that pose (`backdropUrl`), so what lies outside the frame square is there.
    */
   backdropFor?: (category: Category, pose: CanonicalPose) => string | null;
   /** Human-readable description of each pose for the text fallback when a poster fails. */
@@ -106,6 +108,15 @@ export interface InvitationHandle extends InvitationController {
 export const LOAD_TIMEOUT_MS = 6000;
 /** The backdrop still's field, in frame squares (it is this many frame sizes wide and tall). */
 export const BACKDROP_FIELD = 7;
+/**
+ * The poster's edge feather, as a fraction of the frame square (v1.7 posters): the framing rule's
+ * clearance (every hero and path sample stays PATH_CLEARANCE inside the frame in NDC, i.e. half of
+ * it of the frame's size from each edge), so the feather only ever crosses the set's static parts
+ * and the studio, never what moves. v1.4–v1.6: 9 %, which faded content once a scene's frame was
+ * filled (Sports' board top and balls at fill 0.85–0.92). Only the edges where the poster meets the
+ * backdrop are feathered, never one lying on the stage's own edge.
+ */
+export const POSTER_FEATHER = PATH_CLEARANCE / 2;
 const ENTRANCE_MS = 220;
 /** How long the frame square takes to follow a change of the overlay insets (v1.5). */
 export const INSET_EASE_MS = 250;
@@ -182,6 +193,8 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   let shownInsets: FrameInsets = { ...insets };
   let insetTween: { from: FrameInsets; to: FrameInsets; start: number } | null = null;
   let frameRect: FrameRect | null = null;
+  /** Whether the stage shows more than the frame square (an edge of the square inside the stage). */
+  let frameInside = false;
   root.classList.add('lt-stage');
   root.classList.toggle('lt-stage--fullscreen', fullscreen);
   root.dataset.resource = resource;
@@ -197,22 +210,31 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   const canvasHost = document.createElement('div');
   canvasHost.className = 'lt-stage__canvas';
   canvasHost.setAttribute('aria-hidden', 'true');
-  /** Fullscreen: the bare studio around the square poster, at the canvas's framing. */
+  /**
+   * The studio around the square poster, at the canvas's framing: wherever the stage is larger than
+   * the frame square (fullscreen; v1.7 posters: also a square-layout mount sized to another aspect).
+   * v1.7 posters: the still has the scene in it, so what the live view shows outside the frame
+   * square (the set's cast shadows, Business's lanyard, Dinner's plate) is there before it is live,
+   * and the poster's feather blends like with like. Shown only under a poster that has loaded: never
+   * alone (its content is a still of one pose, at a seventh of the poster's resolution), never under
+   * the text fallback.
+   */
   const backdrop = document.createElement('div');
-  backdrop.className = 'lt-stage__backdrop';
+  backdrop.className = 'lt-stage__backdrop is-waiting';
   backdrop.setAttribute('aria-hidden', 'true');
   backdrop.style.setProperty('--lt-backdrop-field', String(BACKDROP_FIELD));
-  if (fullscreen) root.append(backdrop);
-  root.append(poster, posterText, canvasHost);
+  root.append(backdrop, poster, posterText, canvasHost);
 
   poster.addEventListener('error', () => {
     posterFailed = true;
     poster.hidden = true;
+    backdrop.classList.add('is-waiting');
     if (resource !== 'ready') posterText.hidden = false;
   });
   poster.addEventListener('load', () => {
     posterFailed = false;
     posterText.hidden = true;
+    backdrop.classList.remove('is-waiting');
   });
 
   // ── State dimensions ──────────────────────────────────────────────────────
@@ -325,12 +347,17 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       posterText.hidden = !posterText.textContent;
     }
     if (!showPoster) posterText.hidden = true;
-    if (fullscreen) {
-      const bg = options.backdropFor?.(config.category, pose) ?? null;
-      const css = bg ? `url("${bg}")` : 'none';
-      if (backdrop.style.backgroundImage !== css) backdrop.style.backgroundImage = css;
-      backdrop.classList.toggle('is-hidden', !showPoster);
+    // Only where the stage shows more than the frame square (a square embed fetches no backdrop).
+    const bg = frameInside ? options.backdropFor?.(config.category, pose) ?? null : null;
+    const css = bg ? `url("${bg}")` : 'none';
+    if (backdrop.style.backgroundImage !== css) {
+      backdrop.style.backgroundImage = css;
+      // A new backdrop (another scene's, another framing's) waits for its poster, so it never
+      // shows around the poster it does not belong to.
+      if (!(poster.complete && poster.naturalWidth > 0)) backdrop.classList.add('is-waiting');
     }
+    if (!url || posterFailed) backdrop.classList.add('is-waiting');
+    backdrop.classList.toggle('is-hidden', !showPoster);
     poster.classList.toggle('is-hidden', !showPoster);
     canvasHost.classList.toggle('is-visible', !showPoster);
   }
@@ -743,16 +770,34 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
   }
 
   /**
-   * Fullscreen: the frame square for the mount's current size and insets. The poster (a square
-   * still of the same framing) is laid over it through CSS variables, so poster, text fallback and
-   * canvas show the object in the same place at every aspect.
+   * The frame square for the mount's current size and insets. The poster (a square still of the
+   * same framing) is laid over it through CSS variables, so poster, text fallback and canvas show
+   * the object in the same place at every aspect. v1.7 posters: the square layout too, with no
+   * insets (the centred square: the whole stage at 1:1); a square-layout mount the host sizes to
+   * another aspect is framed like fullscreen, so its poster sits on the square the canvas frames,
+   * over the backdrop, instead of being cover-cropped to the mount. Each edge of the poster that
+   * lies inside the stage gets the feather (POSTER_FEATHER); one on the stage's edge stays sharp.
    */
   function updateFrame() {
-    if (!fullscreen) return;
-    const f = (frameRect = frameSquare(root.clientWidth || 1, root.clientHeight || 1, shownInsets));
+    const w = root.clientWidth || 1, h = root.clientHeight || 1;
+    const f = frameSquare(w, h, fullscreen ? shownInsets : NO_INSETS);
+    frameRect = fullscreen ? f : null;
     root.style.setProperty('--lt-frame-x', `${f.x}px`);
     root.style.setProperty('--lt-frame-y', `${f.y}px`);
     root.style.setProperty('--lt-frame-size', `${f.size}px`);
+    const feather = POSTER_FEATHER * f.size;
+    const edges = { left: f.x, top: f.y, right: w - f.x - f.size, bottom: h - f.y - f.size };
+    let inside = false;
+    for (const [edge, gap] of Object.entries(edges)) {
+      const open = gap > 0.5;
+      inside ||= open;
+      root.style.setProperty(`--lt-poster-feather-${edge}`, open ? `${feather}px` : '0px');
+    }
+    poster.classList.toggle('is-feathered', inside);
+    if (inside !== frameInside) {
+      frameInside = inside;
+      updatePoster();
+    }
   }
 
   function resize() {
@@ -760,7 +805,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
     if (!stage) return;
     const w = root.clientWidth || 1;
     const h = root.clientHeight || w;
-    stage.setFrameInsets(fullscreen ? shownInsets : null);
+    stage.setFrameInsets(fullscreen ? shownInsets : NO_INSETS);
     stage.resize(w, h, quality.dprCap);
   }
 
@@ -1105,7 +1150,7 @@ export function createInvitation(options: InvitationOptions): InvitationHandle {
       media?.removeEventListener('change', onMotionPreference);
       root.replaceChildren();
       root.classList.remove('lt-stage', 'lt-stage--fullscreen');
-      for (const v of ['--lt-frame-x', '--lt-frame-y', '--lt-frame-size']) root.style.removeProperty(v);
+      for (const v of ['--lt-frame-x', '--lt-frame-y', '--lt-frame-size', ...['left', 'top', 'right', 'bottom'].map((e) => `--lt-poster-feather-${e}`)]) root.style.removeProperty(v);
       setResource('disposed', 'disposed');
     },
   };

@@ -116,6 +116,28 @@ test('the poster sits on the frame square, with the backdrop still around it', a
     expect(b.x + b.width).toBeGreaterThanOrEqual(width);
     expect(b.y + b.height).toBeGreaterThanOrEqual(height);
     expect(await page.locator('.lt-stage__backdrop').evaluate((el) => getComputedStyle(el).backgroundImage)).toMatch(/backdrop.*\.webp/);
+    // v1.7 posters: the backdrop shows under its loaded poster.
+    await expect.poll(() => page.locator('.lt-stage__backdrop').evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+  }
+});
+
+test('v1.7 posters: the poster is feathered over 2 % of the frame, only on its edges inside the stage', async ({ page }) => {
+  // 1440 × 900: the dock at the right, the frame square inside the viewport on every side; 390 × 844
+  // in guest mode: the frame square spans the phone's width, so its left and right edges are the
+  // stage's own and stay sharp (v1.4–v1.6: 9 % on every edge, which faded the content there).
+  for (const [width, height, mode] of [[1440, 900, 'Host'], [390, 844, 'Guest']] as const) {
+    await page.setViewportSize({ width, height });
+    await ready(page, '/?scene=sports');
+    await page.getByRole('button', { name: mode, exact: true }).click();
+    await settled(page);
+    const f = await frame(page);
+    const vars = await page.evaluate(() => Object.fromEntries(['left', 'top', 'right', 'bottom'].map((e) => [e, parseFloat(getComputedStyle(document.querySelector('.lt-stage')!).getPropertyValue(`--lt-poster-feather-${e}`))])));
+    const gaps = { left: f.x, top: f.y, right: width - f.x - f.size, bottom: height - f.y - f.size };
+    for (const edge of ['left', 'top', 'right', 'bottom'] as const) {
+      expect(vars[edge], `${width} ${edge}`).toBeCloseTo(gaps[edge] > 0.5 ? 0.02 * f.size : 0, 3);
+    }
+    if (width === 390) expect([vars.left, vars.right]).toEqual([0, 0]);
+    await expect(page.locator('.lt-stage__poster')).toHaveClass(/is-feathered/);
   }
 });
 
@@ -150,9 +172,11 @@ test('phone: the frame square eases with the sheet (no one-frame jump of the obj
   expect(p).toEqual([after.x, after.y, after.size]);
 });
 
-test('a pulled-back declined poster sits over its own backdrop; the other poses and scenes over the rest backdrop', async ({ page }) => {
+test('each answered poster sits over its own backdrop (the pulled-back declined ones at their framing); guest-ready over the rest backdrop', async ({ page }) => {
   // v1.5 decline pull-back: Birthday's and Dinner's declined pose is at the decline fit, wider than
   // the rest fit the other posters are at, so its poster melts only into backdrop-declined.webp.
+  // v1.7 posters: every scene's backdrops have the scene in them, one per pose, so every declined
+  // poster has its own (Party's lid is closed, Business's lanyard has swung, outside the frame).
   for (const [width, height] of [[1440, 900], [390, 844]] as const) {
     await page.setViewportSize({ width, height });
     for (const scene of ['birthday', 'dinner', 'party'] as const) {
@@ -165,7 +189,7 @@ test('a pulled-back declined poster sits over its own backdrop; the other poses 
       await page.getByRole('button', { name: 'Decline' }).click();
       await expect(page.locator('.lt-stage__poster')).toHaveAttribute('src', /declined/);
       await expect(page.locator('.lt-stage__poster')).toBeVisible();
-      await expect.poll(backdrop).toMatch(scene === 'party' ? /backdrop\.webp/ : /backdrop-declined\.webp/);
+      await expect.poll(backdrop).toMatch(/backdrop-declined\.webp/);
       // Still on the frame square, and the backdrop still covers the viewport around it.
       const f = await frame(page);
       const p = await rect(page, '.lt-stage__poster');

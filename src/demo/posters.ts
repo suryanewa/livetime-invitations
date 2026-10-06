@@ -17,17 +17,19 @@ export function posterUrl(category: Category, preset: string, pose: CanonicalPos
 }
 
 /**
- * Fullscreen backdrop stills (bare studio, BACKDROP_FIELD = 7 × the frame): assets/scenes/<category>/backdrop.webp
- * at the scene's rest framing, and (v1.5 decline pull-back) backdrop-declined.webp at its decline
- * framing for the scenes whose declined pose is pulled back (Birthday, Dinner). A scene without one
- * has one framing, so its declined poster takes the rest backdrop. v1.7 (#42): Dinner's accepted
- * pose is the close-up on the card, so its accepted poster melts into backdrop-accepted.webp, the
- * close-up at the same field *with* the scene in it (the plate runs past the poster's edges on
- * every side, so a bare-studio still would cut it off at the feather).
+ * Backdrop stills (BACKDROP_FIELD = 7 × the frame), the studio around the square poster wherever the
+ * stage is larger than the frame square (fullscreen; v1.7 posters, also a square-layout mount of
+ * another aspect), one per canonical pose: assets/scenes/<category>/backdrop.webp (guest-ready, and
+ * the fallback), backdrop-host-ready.webp, backdrop-accepted.webp (Dinner's on its close-up on the
+ * card, v1.7 #42) and backdrop-declined.webp (at the decline's framing where the decline pulls back,
+ * Birthday and Dinner, v1.5). v1.7 posters: every still has the scene in it at its pose (v1.4–v1.6:
+ * the bare studio): what the live view shows outside the frame square (cast shadows, Business's
+ * lanyard, which swings with the badge once answered, Dinner's plate) is there before the scene is
+ * live, and the poster's feather blends like with like.
  */
 const backdrops = import.meta.glob('../../assets/scenes/*/backdrop*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
 export function backdropUrl(category: Category, pose: CanonicalPose = 'guest-ready'): string | null {
   const find = (file: string) => Object.entries(backdrops).find(([path]) => path.endsWith(`/scenes/${category}/${file}`))?.[1] ?? null;
-  return (pose === 'declined' ? find('backdrop-declined.webp') : pose === 'accepted' ? find('backdrop-accepted.webp') : null) ?? find('backdrop.webp');
+  return (pose === 'guest-ready' ? null : find(`backdrop-${pose}.webp`)) ?? find('backdrop.webp');
 }

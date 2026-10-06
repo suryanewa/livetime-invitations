@@ -1,0 +1,502 @@
+[
+ {
+  "view": "laptop",
+  "scene": "party",
+  "pose": "host-ready",
+  "frame": {
+   "max": 32,
+   "over": 0.158,
+   "mean": 1.34
+  },
+  "core": {
+   "max": 19,
+   "over": 0.0,
+   "mean": 1.37
+  },
+  "band": {
+   "max": 32,
+   "over": 0.479,
+   "mean": 1.3
+  },
+  "outside": {
+   "max": 34,
+   "over": 0.517,
+   "mean": 1.19
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "party",
+  "pose": "guest-ready",
+  "frame": {
+   "max": 32,
+   "over": 0.161,
+   "mean": 1.31
+  },
+  "core": {
+   "max": 19,
+   "over": 0.0,
+   "mean": 1.32
+  },
+  "band": {
+   "max": 32,
+   "over": 0.488,
+   "mean": 1.3
+  },
+  "outside": {
+   "max": 34,
+   "over": 0.517,
+   "mean": 1.19
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "party",
+  "pose": "accepted",
+  "frame": {
+   "max": 32,
+   "over": 0.161,
+   "mean": 1.32
+  },
+  "core": {
+   "max": 23,
+   "over": 0.0,
+   "mean": 1.33
+  },
+  "band": {
+   "max": 32,
+   "over": 0.488,
+   "mean": 1.3
+  },
+  "outside": {
+   "max": 34,
+   "over": 0.517,
+   "mean": 1.19
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "party",
+  "pose": "declined",
+  "frame": {
+   "max": 12,
+   "over": 0.0,
+   "mean": 1.06
+  },
+  "core": {
+   "max": 12,
+   "over": 0.0,
+   "mean": 1.14
+  },
+  "band": {
+   "max": 4,
+   "over": 0.0,
+   "mean": 0.88
+  },
+  "outside": {
+   "max": 4,
+   "over": 0.0,
+   "mean": 0.99
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "birthday",
+  "pose": "host-ready",
+  "frame": {
+   "max": 29,
+   "over": 0.068,
+   "mean": 1.49
+  },
+  "core": {
+   "max": 19,
+   "over": 0.0,
+   "mean": 1.6
+  },
+  "band": {
+   "max": 29,
+   "over": 0.205,
+   "mean": 1.25
+  },
+  "outside": {
+   "max": 30,
+   "over": 0.043,
+   "mean": 1.02
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "birthday",
+  "pose": "guest-ready",
+  "frame": {
+   "max": 29,
+   "over": 0.068,
+   "mean": 1.49
+  },
+  "core": {
+   "max": 29,
+   "over": 0.005,
+   "mean": 1.61
+  },
+  "band": {
+   "max": 29,
+   "over": 0.195,
+   "mean": 1.24
+  },
+  "outside": {
+   "max": 30,
+   "over": 0.043,
+   "mean": 1.0
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "birthday",
+  "pose": "accepted",
+  "frame": {
+   "max": 29,
+   "over": 0.065,
+   "mean": 1.48
+  },
+  "core": {
+   "max": 20,
+   "over": 0.0,
+   "mean": 1.6
+  },
+  "band": {
+   "max": 29,
+   "over": 0.195,
+   "mean": 1.24
+  },
+  "outside": {
+   "max": 30,
+   "over": 0.043,
+   "mean": 1.0
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "birthday",
+  "pose": "declined",
+  "frame": {
+   "max": 71,
+   "over": 1.107,
+   "mean": 1.83
+  },
+  "core": {
+   "max": 53,
+   "over": 0.029,
+   "mean": 1.16
+  },
+  "band": {
+   "max": 71,
+   "over": 3.291,
+   "mean": 3.2
+  },
+  "outside": {
+   "max": 20,
+   "over": 0.0,
+   "mean": 1.05
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "sports",
+  "pose": "host-ready",
+  "frame": {
+   "max": 124,
+   "over": 2.192,
+   "mean": 2.58
+  },
+  "core": {
+   "max": 23,
+   "over": 0.0,
+   "mean": 1.35
+  },
+  "band": {
+   "max": 124,
+   "over": 6.631,
+   "mean": 5.08
+  },
+  "outside": {
+   "max": 40,
+   "over": 5.618,
+   "mean": 2.96
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "sports",
+  "pose": "guest-ready",
+  "frame": {
+   "max": 69,
+   "over": 1.83,
+   "mean": 2.25
+  },
+  "core": {
+   "max": 24,
+   "over": 0.0,
+   "mean": 1.36
+  },
+  "band": {
+   "max": 69,
+   "over": 5.537,
+   "mean": 4.05
+  },
+  "outside": {
+   "max": 40,
+   "over": 5.618,
+   "mean": 2.96
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "sports",
+  "pose": "accepted",
+  "frame": {
+   "max": 127,
+   "over": 2.208,
+   "mean": 2.6
+  },
+  "core": {
+   "max": 23,
+   "over": 0.0,
+   "mean": 1.35
+  },
+  "band": {
+   "max": 127,
+   "over": 6.68,
+   "mean": 5.15
+  },
+  "outside": {
+   "max": 40,
+   "over": 5.626,
+   "mean": 2.97
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "sports",
+  "pose": "declined",
+  "frame": {
+   "max": 62,
+   "over": 1.488,
+   "mean": 2.07
+  },
+  "core": {
+   "max": 23,
+   "over": 0.0,
+   "mean": 1.37
+  },
+  "band": {
+   "max": 62,
+   "over": 4.502,
+   "mean": 3.49
+  },
+  "outside": {
+   "max": 40,
+   "over": 5.618,
+   "mean": 2.96
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "dinner",
+  "pose": "host-ready",
+  "frame": {
+   "max": 61,
+   "over": 3.109,
+   "mean": 3.06
+  },
+  "core": {
+   "max": 24,
+   "over": 0.0,
+   "mean": 1.37
+  },
+  "band": {
+   "max": 61,
+   "over": 9.404,
+   "mean": 6.5
+  },
+  "outside": {
+   "max": 43,
+   "over": 0.393,
+   "mean": 1.11
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "dinner",
+  "pose": "guest-ready",
+  "frame": {
+   "max": 61,
+   "over": 3.099,
+   "mean": 2.93
+  },
+  "core": {
+   "max": 23,
+   "over": 0.0,
+   "mean": 1.2
+  },
+  "band": {
+   "max": 61,
+   "over": 9.375,
+   "mean": 6.46
+  },
+  "outside": {
+   "max": 43,
+   "over": 0.393,
+   "mean": 1.12
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "dinner",
+  "pose": "accepted",
+  "frame": {
+   "max": 35,
+   "over": 0.281,
+   "mean": 1.29
+  },
+  "core": {
+   "max": 9,
+   "over": 0.0,
+   "mean": 1.11
+  },
+  "band": {
+   "max": 35,
+   "over": 0.85,
+   "mean": 1.65
+  },
+  "outside": {
+   "max": 82,
+   "over": 0.959,
+   "mean": 2.0
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "dinner",
+  "pose": "declined",
+  "frame": {
+   "max": 23,
+   "over": 0.0,
+   "mean": 1.06
+  },
+  "core": {
+   "max": 23,
+   "over": 0.0,
+   "mean": 1.07
+  },
+  "band": {
+   "max": 14,
+   "over": 0.0,
+   "mean": 1.04
+  },
+  "outside": {
+   "max": 4,
+   "over": 0.0,
+   "mean": 1.03
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "business",
+  "pose": "host-ready",
+  "frame": {
+   "max": 162,
+   "over": 0.707,
+   "mean": 1.83
+  },
+  "core": {
+   "max": 19,
+   "over": 0.0,
+   "mean": 1.28
+  },
+  "band": {
+   "max": 162,
+   "over": 2.139,
+   "mean": 2.94
+  },
+  "outside": {
+   "max": 170,
+   "over": 0.744,
+   "mean": 2.06
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "business",
+  "pose": "guest-ready",
+  "frame": {
+   "max": 162,
+   "over": 0.707,
+   "mean": 1.83
+  },
+  "core": {
+   "max": 22,
+   "over": 0.0,
+   "mean": 1.29
+  },
+  "band": {
+   "max": 162,
+   "over": 2.139,
+   "mean": 2.94
+  },
+  "outside": {
+   "max": 170,
+   "over": 0.744,
+   "mean": 2.06
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "business",
+  "pose": "accepted",
+  "frame": {
+   "max": 162,
+   "over": 0.772,
+   "mean": 1.9
+  },
+  "core": {
+   "max": 25,
+   "over": 0.005,
+   "mean": 1.31
+  },
+  "band": {
+   "max": 162,
+   "over": 2.324,
+   "mean": 3.07
+  },
+  "outside": {
+   "max": 173,
+   "over": 0.475,
+   "mean": 1.71
+  }
+ },
+ {
+  "view": "laptop",
+  "scene": "business",
+  "pose": "declined",
+  "frame": {
+   "max": 162,
+   "over": 0.775,
+   "mean": 1.89
+  },
+  "core": {
+   "max": 26,
+   "over": 0.005,
+   "mean": 1.3
+  },
+  "band": {
+   "max": 162,
+   "over": 2.334,
+   "mean": 3.07
+  },
+  "outside": {
+   "max": 173,
+   "over": 0.475,
+   "mean": 1.71
+  }
+ }
+]
