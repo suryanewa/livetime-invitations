@@ -1,9 +1,8 @@
 import { Box3, type Camera, type Object3D, Quaternion, Vector3, type WebGLRenderer } from 'three';
 import glbUrl from '../../../assets/scenes/sports/sports.glb?url';
 import {
-  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netRestRadius, POLE, recoilPoint, RIM, RIM_CENTER, RIM_LOCAL, rigSports, SPORTS_WALL_Z, SPORTS_WORLD_SCALE, STAND, type BallPreset, type SportsRig,
+  BALL_AT, BALL_R, BOARD, HOOP_ROOT, NET, netRestRadius, POLE, RIM, RIM_CENTER, rigSports, SPORTS_WALL_Z, SPORTS_WORLD_SCALE, STAND, type BallPreset, type SportsRig,
 } from '../../../models/sports.ts';
-import type { BallContact, HoopSprings, NetSim } from '../../../models/sportsNet.ts';
 import { bindMaterialsByName } from '../../../models/types.ts';
 import { disposeImported, gltfLoader, loadMaterialVariants, prepareImported, setImportedLowDetail } from '../../../models/imported.ts';
 import { silhouettePoints } from '../../render/framing.ts';
@@ -11,6 +10,7 @@ import { finalPose, type SceneInstance, type SceneLoadContext, type SceneModule 
 import type { CanonicalPose, SceneConfig, SequenceName } from '../../core/types.ts';
 import { DURATIONS, frameFor, newFrame, REST_AT, sampleTrack, type SportsFrame } from './sequences.ts';
 import { type Change, changeHandover, planChange, type Showing } from './change.ts';
+import { SportsNetChannel } from './net.ts';
 
 /** Outer net silhouette beyond its inner envelope (cords, knots, the far layer's thickness). */
 const NET_OUTSET = 0.05;
@@ -177,23 +177,20 @@ export class SportsScene implements SceneInstance {
   private sampling: Clock | null = null;
   /** The tail: the sequence's physics after its duration, played by `simulate`. */
   private tail: Clock | null = null;
-  /** The ball's time as the net last saw it (the net steps through the ball's path, not frame to frame). */
-  private netClock: Clock | null = null;
   /** What `interruptCut` found on screen; the new sequence's first sample plans the change from it. */
   private pending: Showing | null = null;
   /**
-   * The net's and the hoop springs' motion as the last `settle()` found it. An interruption (the
-   * director's cut or blend) settles and then calls `refresh()`, which restores it: the net keeps
-   * swinging through a change of mind. Reduced motion, a replay or a reset never refresh, so there
-   * the net stays snapped to rest. Dropped by the next sample or step.
+   * The net channel (`net.ts`): the net steps along the ball's own path, drives the hoop springs
+   * and carries its motion over the director's settle on an interruption.
    */
-  private carry: { net: ReturnType<NetSim['save']>; springs: ReturnType<HoopSprings['save']> } | null = null;
-  private readonly contact: BallContact = { center: new Vector3(), previous: new Vector3() };
+  private readonly net: SportsNetChannel<SequenceName, Change | null>;
 
   constructor(readonly rig: SportsRig, config: Extract<SceneConfig, { category: 'sports' }>) {
     this.root = rig.root;
     this.bounds = rig.bounds.clone();
     this.preset = config.ball;
+    const scratch = newFrame();
+    this.net = new SportsNetChannel(rig, (seq, change, t) => sampleProgram(seq, change, t, scratch).ballPos);
     const n = rig.nodes;
     // The blend interpolates the ball's path, the squash and the spin (ball_mesh carries the spin
     // over the master's rest orientation; ball_secondary only squashes).
@@ -228,57 +225,36 @@ export class SportsScene implements SceneInstance {
       return;
     }
     this.tail = null;
-    this.netClock = null;
+    this.net.forget();
     this.apply(frameFor(pose, this.frame));
   }
 
   sample(sequence: SequenceName, t: number): void {
-    this.carry = null;
     let change = this.sampling?.seq === sequence && t >= this.sampling.t - 1e-6 ? this.sampling.change : null;
     // The director's hand-over after `interruptCut` lands here at t = 0: plan the change of mind.
     if (this.pending && t === 0 && sequence !== 'host') change = planChange(this.pending, sequence);
     this.pending = null;
-    // A new run of a sequence starts the net's view of the ball afresh.
-    if (!this.netClock || this.netClock.seq !== sequence || this.netClock.change !== change || t < this.netClock.t - 1e-6 || this.tail) this.netClock = { seq: sequence, t, change };
+    // A new run of a sequence (or the first sample after a tail) starts the net's view of the ball afresh.
+    const afterTail = this.tail !== null;
     this.tail = null;
     this.sampling = { seq: sequence, t, change };
+    this.net.follow(this.sampling, afterTail);
     this.apply(sampleProgram(sequence, change, Math.min(t, DURATIONS[sequence]), this.frame));
   }
 
-  /** The continuous channel: the tail, the net (stepping along the ball's own path) and the hoop springs. */
+  /** The continuous channel: the tail, then the net (stepping along the ball's own path) and the hoop springs. */
   simulate(dt: number): void {
-    this.carry = null;
     if (this.tail) {
       const end = restAt(this.tail.seq, this.tail.change);
       this.tail.t = Math.min(this.tail.t + dt, end);
       this.apply(sampleProgram(this.tail.seq, this.tail.change, this.tail.t, this.frame));
       if (this.tail.t >= end) this.tail = null;
     }
-    const net = this.rig.net;
-    if (!net) return;
-    const target = this.tail ?? this.sampling;
-    const c = this.contact;
-    if (target && this.netClock && this.netClock.seq === target.seq && this.netClock.change === target.change) {
-      // Step the ball along its track by dt (never past where the director has it).
-      const t0 = Math.max(this.netClock.t, target.t - 0.1);
-      const t1 = Math.min(target.t, t0 + dt);
-      this.ballInNet(sampleProgram(target.seq, target.change, t0, this.scratch).ballPos, c.previous);
-      this.ballInNet(sampleProgram(target.seq, target.change, t1, this.scratch).ballPos, c.center);
-      this.netClock.t = t1;
-    } else {
-      this.ballInNet(this.rig.nodes.ball_authored!.position, c.center);
-      c.previous.copy(c.center);
-    }
-    const wasSettled = net.sim.settled;
-    net.sim.step(dt, c);
-    this.rig.springs.step(dt, net.sim.settled ? 0 : net.sim.hookTorqueRim, net.sim.settled ? 0 : net.sim.hookTorqueBoard);
-    this.rig.recoil.set(this.rig.springs.board, this.rig.springs.rim);
-    if (!(wasSettled && net.sim.settled)) net.skin.update();
+    this.net.step(dt, this.tail ?? this.sampling, this.rig.nodes.ball_authored!.position);
   }
-  private readonly scratch = newFrame();
 
   settling(): boolean {
-    return this.tail !== null || !(this.rig.net?.sim.settled ?? true) || !this.rig.springs.settled;
+    return this.tail !== null || this.net.settling();
   }
 
   /** Snap everything to rest: the tail to its end, the net to its hanging pose, the hoop to rest. */
@@ -286,27 +262,12 @@ export class SportsScene implements SceneInstance {
     if (this.tail) this.apply(sampleProgram(this.tail.seq, this.tail.change, restAt(this.tail.seq, this.tail.change), this.frame));
     this.tail = null;
     this.sampling = null;
-    this.netClock = null;
-    const net = this.rig.net;
-    this.carry = net && !net.sim.settled ? { net: net.sim.save(), springs: this.rig.springs.save() } : null;
-    if (net) {
-      net.sim.settle();
-      net.skin.update();
-    }
-    this.rig.springs.settle();
-    this.rig.recoil.set(0, 0);
+    this.net.settle();
   }
 
   /** Interruptions: the net's motion carries over the director's settle; the shadow follows the drawn ball. */
   refresh(): void {
-    const net = this.rig.net;
-    if (this.carry && net) {
-      net.sim.restore(this.carry.net);
-      this.rig.springs.restore(this.carry.springs);
-      this.rig.recoil.set(this.rig.springs.board, this.rig.springs.rim);
-      net.skin.update();
-    }
-    this.carry = null;
+    this.net.restore();
     const n = this.rig.nodes;
     this.updateShadow(n.ball_authored!.position, 1 - n.ball_secondary!.scale.y);
   }
@@ -348,16 +309,6 @@ export class SportsScene implements SceneInstance {
     disposeImported(this.root);
     this.root.traverse((o) => (o as { geometry?: { dispose(): void } }).geometry?.dispose());
     this.root.removeFromParent();
-  }
-
-  private readonly _o = new Vector3();
-  /** Ball centre (sports_root space) → net space (the net rides the rim's and board's recoil). */
-  private ballInNet(p: Vector3, out: Vector3): Vector3 {
-    const { board, rim } = this.rig.springs;
-    recoilPoint(RIM_LOCAL, board, rim, this._o);
-    out.copy(p).sub(HOOP_ROOT).sub(this._o);
-    const a = -(board + rim), c = Math.cos(a), s = Math.sin(a);
-    return out.set(out.x, out.y * c - out.z * s, out.y * s + out.z * c);
   }
 
   private apply(f: SportsFrame): void {
