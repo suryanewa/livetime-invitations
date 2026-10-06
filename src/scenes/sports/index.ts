@@ -232,9 +232,10 @@ export class SportsScene implements SceneInstance {
    */
   private hitClock: Clock | null = null;
   /**
-   * v1.7: the springs' motion when the director settles mid-rattle with the net at rest (the net
-   * channel carries the springs only with a moving net): `refresh()` puts it back, so a change of
-   * mind never snaps a shuddering rim. Dropped by the next sample or step.
+   * v1.7: the springs' motion when the director settles mid-rattle: `refresh()` puts it back, so a
+   * change of mind never snaps a shuddering rim. The net channel carries it too when the rig has
+   * its simulated net (since the net rebuild, whenever the springs move); this covers a rig
+   * without one. Dropped by the next sample or step.
    */
   private springsCarry: ReturnType<SportsRig['springs']['save']> | null = null;
   private readonly _axisQ = new Quaternion();

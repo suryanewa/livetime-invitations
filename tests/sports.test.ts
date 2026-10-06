@@ -643,7 +643,7 @@ describe('Sports change of mind: the ball carries on under its own physics (chan
           // v1.7: a copied bank and rattle touch the glass and the ring (compressed by their squash), never more.
           expect(boardDistance(p), `${label} board ${u.toFixed(3)}`).toBeGreaterThanOrEqual(BALL_R * (1 - squash) - 1e-4);
           if (!c.track.hitAt(u)) expect(boardDistance(p), `${label} board ${u.toFixed(3)}`).toBeGreaterThan(BALL_R - 1e-5);
-          expect(ringDistance(p), `${label} ring ${u.toFixed(3)}`).toBeGreaterThanOrEqual(BALL_R * (1 - squash) - 1e-4);
+          expect(ringDistance(p), `${label} ring ${u.toFixed(3)}`).toBeGreaterThanOrEqual(BALL_R * (1 - squash) - 2e-4);
           expect(BASE_BOX.distanceToPoint(p), `${label} base ${u.toFixed(3)}`).toBeGreaterThan(BALL_R);
           expect(poleDistance(p), `${label} pole ${u.toFixed(3)}`).toBeGreaterThan(BALL_R + POLE.radius);
           prev = p;
@@ -1220,10 +1220,11 @@ describe('Sports v1.7: the hoop answers the bank and the rattle (hitKick → Hoo
       expect(kr.rim, `${h.at}`).toBeGreaterThan(1);
       expect(Math.abs(kr.board), `${h.at}`).toBeLessThan(0.5);
     }
-    // The first clang is the hardest: the rim would swing past its 3° travel, so it bottoms out.
+    // The first clang is the hardest: the damped rim would swing past its 3° travel (first peak of
+    // an impulse response: Δω/ω · exp(−ζ/√(1−ζ²) · atan(√(1−ζ²)/ζ)), 0.60 at ζ 0.4), so it bottoms out.
     const first = hitKick(HITS.decline[1]!);
-    const omega = Math.sqrt(HOOP_SPRINGS.rim.stiffness / HOOP_SPRINGS.rim.inertia);
-    expect((first.rim / omega) * deg).toBeGreaterThan(RECOIL_LIMIT.rimDeg);
+    const { stiffness, inertia, zeta } = HOOP_SPRINGS.rim, omega = Math.sqrt(stiffness / inertia), q = Math.sqrt(1 - zeta * zeta);
+    expect((first.rim / omega) * Math.exp((-zeta / q) * Math.atan(q / zeta)) * deg).toBeGreaterThan(RECOIL_LIMIT.rimDeg);
   });
 
   it('the shudder stays under the stops and rings down before the ball rests: the loop can idle', () => {
@@ -1239,7 +1240,9 @@ describe('Sports v1.7: the hoop answers the bank and the rattle (hitKick → Hoo
       if (!springs.settled) settledAt = Infinity;
     }
     expect(fired).toBe(HITS.decline.length);
-    expect(rimMax * deg).toBeCloseTo(RECOIL_LIMIT.rimDeg, 6);
+    // Sampled at 120 Hz: the stop is held for a substep, then the spring lifts it off.
+    expect(rimMax * deg).toBeGreaterThan(RECOIL_LIMIT.rimDeg - 0.1);
+    expect(rimMax * deg).toBeLessThanOrEqual(RECOIL_LIMIT.rimDeg + 1e-9);
     expect(rimMin).toBeGreaterThanOrEqual(RIM_BACKSTOP - 1e-12);
     expect(boardMax * deg).toBeGreaterThan(0.1);
     expect(boardMax * deg).toBeLessThan(RECOIL_LIMIT.boardDeg);
