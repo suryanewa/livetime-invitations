@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_LIMITS, cardLine, presetOf, printOnlyChange, resolveConfig, sameConfig } from '../src/core/config.ts';
 import type { SceneConfig } from '../src/core/types.ts';
+import { CARD_LAYOUT, CARD_MM, CARD_PRINT_SIZE, layoutEyebrow, layoutName, layoutTitle } from '../src/render/cardPrint.ts';
 import { dinnerCard, EVENTS, POSTER_CARD, posterConfig, SAMPLE_INVITEE, withCard } from '../src/demo/fixtures.ts';
 
 /**
@@ -79,6 +80,34 @@ describe('sameConfig and the poster key', () => {
     expect(sameConfig(p1, { ...p1, songId: 'b' })).toBe(false);
     expect(sameConfig(p1, { ...p1, label: 'cobalt' })).toBe(false);
     expect(printOnlyChange(p1, { ...p1, songId: 'b' })).toBe(false);
+  });
+});
+
+describe('the clamps are what the card holds (v1.7 polish)', () => {
+  it('a card at every clamp prints whole: no ellipsis on the eyebrow, title or name', () => {
+    // Glyphs 0.55 em wide (Inter's lower case averages ≈ 0.5 em at these weights; the bundled face
+    // itself is checked in tests/browser/dinner.spec.ts).
+    let px = 10;
+    const ctx = {
+      set font(f: string) { px = Number(/ ([\d.]+)px/.exec(f)![1]); },
+      get font() { return ''; },
+      measureText: (t: string) => ({ width: [...t].length * 0.55 * px }),
+    } as unknown as CanvasRenderingContext2D;
+    const mm = CARD_PRINT_SIZE.full[0] / CARD_MM.width;
+    const max = (CARD_MM.width - 2 * CARD_LAYOUT.margin) * mm;
+    const long = 'x'.repeat(400);
+    const c = ok(dinner({
+      eyebrow: 'You’re invited to a very special evening with friends and family, ' + long,
+      title: 'A long table under the orchard lights: five courses, natural wines and slow talk, ' + long,
+      name: 'Anne-Sophie Vandenberghe-Østergaard de la Fuente ' + long,
+    }));
+    const card = c.category === 'dinner' ? c.card! : {};
+    expect([...card.eyebrow!].length).toBeLessThanOrEqual(CARD_LIMITS.eyebrow);
+    expect([...card.title!].length).toBeLessThanOrEqual(CARD_LIMITS.title);
+    expect([...card.name!].length).toBeLessThanOrEqual(CARD_LIMITS.name);
+    for (const r of [layoutEyebrow(ctx, card.eyebrow!.toUpperCase(), max, mm), layoutTitle(ctx, card.title!, max, mm), layoutName(ctx, card.name!, max, mm)]) {
+      expect(r.lines.join(' ')).not.toContain('…');
+    }
   });
 });
 

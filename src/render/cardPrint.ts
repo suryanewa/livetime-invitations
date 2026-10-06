@@ -80,13 +80,17 @@ export const CARD_INK = {
 
 /**
  * The layout in millimetres: side margin, sizes (font size, the em) and gaps. Sizes are the
- * largest; the title steps down (TITLE_MIN) and wraps to two balanced lines before it is cut.
+ * largest; the title steps down 4 % at a time, on one line or two balanced lines, then (from
+ * `three`) on three, to `min3` before it is cut; the name on one line to `min`, then on two
+ * balanced lines (or, one word, on one line) to `wrapMin` before it is cut; the eyebrow on one
+ * line to `min`, then two. v1.7 polish: the card holds what the config's clamps allow (eyebrow 60,
+ * title 80, name 48 characters) without an ellipsis.
  */
 export const CARD_LAYOUT = {
   margin: 10,
-  eyebrow: { size: 3.3, weight: 600, tracking: 0.2 },
-  title: { size: 9.2, min: 5.4, weight: 650, tracking: -0.018, leading: 1.1 },
-  name: { size: 5.6, min: 4.2, weight: 600, tracking: -0.01 },
+  eyebrow: { size: 3.3, min: 2.64, weight: 600, tracking: 0.2, leading: 1.6 },
+  title: { size: 9.2, min: 5.4, three: 6, min3: 4.8, weight: 650, tracking: -0.018, leading: 1.1 },
+  name: { size: 5.6, min: 4.2, wrapMin: 3.4, weight: 600, tracking: -0.01, leading: 1.18 },
   gapEyebrow: 4.6,
   gapRule: 5.2,
   gapName: 4.4,
@@ -122,34 +126,120 @@ function cut(ctx: Ctx, text: string, weight: number, px: number, em: number, max
   return `${s}…`;
 }
 
-/** The title's lines: one line, else two balanced at a word break, stepping the size down to fit; cut at the smallest. */
-export function layoutTitle(ctx: Ctx, title: string, max: number, mm: number): { lines: string[]; px: number } {
-  const T = CARD_LAYOUT.title;
-  const words = title.split(/\s+/).filter(Boolean);
-  for (let size = T.size; size >= T.min - 1e-6; size *= 0.96) {
-    const px = size * mm;
-    if (width(ctx, title, T.weight, px, T.tracking) <= max) return { lines: [title], px };
-    // The break that makes the longer line shortest.
-    let best: string[] | null = null, bestW = Infinity;
-    for (let i = 1; i < words.length; i++) {
-      const a = words.slice(0, i).join(' '), b = words.slice(i).join(' ');
-      const w = Math.max(width(ctx, a, T.weight, px, T.tracking), width(ctx, b, T.weight, px, T.tracking));
-      if (w < bestW) { bestW = w; best = [a, b]; }
-    }
-    if (best && bestW <= max) return { lines: best, px };
+/**
+ * The places a line may break: between words, and (`hyphens`) after a hyphen inside a word, which
+ * stays at the end of the line ("Vandenberghe-" / "Østergaard"). Pieces with the separator that
+ * follows each (a space, or nothing after a hyphen).
+ */
+function pieces(text: string, hyphens: boolean): { text: string; sep: string }[] {
+  const out: { text: string; sep: string }[] = [];
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const parts = hyphens ? word.split(/(?<=[-\u2010])(?=.)/) : [word];
+    parts.forEach((p, i) => out.push({ text: p, sep: i < parts.length - 1 ? '' : ' ' }));
   }
-  const px = T.min * mm;
-  if (words.length < 2) return { lines: [cut(ctx, title, T.weight, px, T.tracking, max)], px };
-  // Two lines at the smallest size: the first as full as fits, the rest cut.
-  let i = 1;
-  while (i < words.length - 1 && width(ctx, words.slice(0, i + 1).join(' '), T.weight, px, T.tracking) <= max) i++;
-  return { lines: [cut(ctx, words.slice(0, i).join(' '), T.weight, px, T.tracking, max), cut(ctx, words.slice(i).join(' '), T.weight, px, T.tracking, max)], px };
+  return out;
+}
+const joinPieces = (p: { text: string; sep: string }[]) => p.map((x, i) => x.text + (i < p.length - 1 ? x.sep : '')).join('');
+
+/** A break after a hyphen must shorten the longest line by more than this to be preferred to breaks between words. */
+const HYPHEN_BREAK = 1.12;
+/**
+ * `text` on exactly `n` lines (2 or 3) at its break opportunities, the breaks that make the
+ * longest line shortest (balanced); null if it has too few breaks or the best is wider than
+ * `max`. Breaks between words are preferred: a layout that also breaks after a hyphen is taken
+ * only when its longest line is HYPHEN_BREAK × shorter (or nothing else fits): "Anne-Sophie
+ * Vandenberghe-" / "Østergaard de la Fuente" rather than "Anne-Sophie" / a full-measure line.
+ */
+function balanced(ctx: Ctx, text: string, n: 2 | 3, weight: number, px: number, em: number, max: number): string[] | null {
+  let pick: string[] | null = null, pickScore = Infinity;
+  const words = pieces(text, false).length;
+  for (const hyphens of [false, true]) {
+    const p = pieces(text, hyphens);
+    if (p.length < n || (hyphens && p.length === words)) continue;
+    const w = (a: number, b: number) => width(ctx, joinPieces(p.slice(a, b)), weight, px, em);
+    let best: string[] | null = null, bestW = Infinity;
+    if (n === 2) {
+      for (let i = 1; i < p.length; i++) {
+        const m = Math.max(w(0, i), w(i, p.length));
+        if (m < bestW) { bestW = m; best = [joinPieces(p.slice(0, i)), joinPieces(p.slice(i))]; }
+      }
+    } else {
+      for (let i = 1; i < p.length - 1; i++) {
+        const a = w(0, i);
+        if (a >= bestW) continue;
+        for (let j = i + 1; j < p.length; j++) {
+          const m = Math.max(a, w(i, j), w(j, p.length));
+          if (m < bestW) { bestW = m; best = [joinPieces(p.slice(0, i)), joinPieces(p.slice(i, j)), joinPieces(p.slice(j))]; }
+        }
+      }
+    }
+    // Only a layout that breaks after a hyphen pays the penalty (with none, it is the word-break layout).
+    const score = bestW * (hyphens && best && best.some((l) => /[-\u2010]$/.test(l)) ? HYPHEN_BREAK : 1);
+    if (best && bestW <= max && score < pickScore) { pick = best; pickScore = score; }
+  }
+  return pick;
 }
 
-/** A single line shrunk to fit down to `min` (mm), then cut. */
-function fitLine(ctx: Ctx, text: string, weight: number, size: number, min: number, em: number, max: number, mm: number): { text: string; px: number } {
-  for (let s = size; s >= min - 1e-6; s *= 0.96) if (width(ctx, text, weight, s * mm, em) <= max) return { text, px: s * mm };
-  return { text: cut(ctx, text, weight, min * mm, em, max), px: min * mm };
+/** `text` on `n` lines at the smallest size: each line as full as fits, the last cut. */
+function filled(ctx: Ctx, text: string, n: number, weight: number, px: number, em: number, max: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let i = 0;
+  for (let l = 0; l < n - 1 && i < words.length - 1; l++) {
+    let j = i + 1;
+    while (j < words.length - 1 && width(ctx, words.slice(i, j + 1).join(' '), weight, px, em) <= max) j++;
+    lines.push(cut(ctx, words.slice(i, j).join(' '), weight, px, em, max));
+    i = j;
+  }
+  lines.push(cut(ctx, words.slice(i).join(' '), weight, px, em, max));
+  return lines;
+}
+
+/**
+ * The title's lines: at each size, from the largest down 4 % at a time, one line, else two
+ * balanced lines, else (from `three` down) three balanced lines; cut only at `min3`, on three
+ * lines (an 80-character title, the config's clamp, fits whole).
+ */
+export function layoutTitle(ctx: Ctx, title: string, max: number, mm: number): { lines: string[]; px: number } {
+  const T = CARD_LAYOUT.title;
+  for (let size = T.size; size >= T.min3 - 1e-6; size *= 0.96) {
+    const px = size * mm;
+    if (width(ctx, title, T.weight, px, T.tracking) <= max) return { lines: [title], px };
+    const two = balanced(ctx, title, 2, T.weight, px, T.tracking, max);
+    if (two) return { lines: two, px };
+    if (size <= T.three + 1e-6) {
+      const three = balanced(ctx, title, 3, T.weight, px, T.tracking, max);
+      if (three) return { lines: three, px };
+    }
+  }
+  const px = T.min3 * mm;
+  return { lines: filled(ctx, title, 3, T.weight, px, T.tracking, max), px };
+}
+
+/**
+ * The name's lines: one line from its size down to `min`; then two balanced lines (between
+ * words, or after a hyphen) from `min` down to `wrapMin` (a one-word name, which cannot break,
+ * one line down to `wrapMin`); cut only at `wrapMin` (a 48-character name, the clamp, fits whole).
+ */
+export function layoutName(ctx: Ctx, name: string, max: number, mm: number): { lines: string[]; px: number } {
+  const N = CARD_LAYOUT.name;
+  for (let s = N.size; s >= N.min - 1e-6; s *= 0.96) if (width(ctx, name, N.weight, s * mm, N.tracking) <= max) return { lines: [name], px: s * mm };
+  for (let s = N.min; s >= N.wrapMin - 1e-6; s *= 0.96) {
+    const px = s * mm;
+    const two = balanced(ctx, name, 2, N.weight, px, N.tracking, max);
+    if (two) return { lines: two, px };
+    if (pieces(name, true).length < 2 && width(ctx, name, N.weight, px, N.tracking) <= max) return { lines: [name], px };
+  }
+  const px = N.wrapMin * mm;
+  return { lines: filled(ctx, name, 2, N.weight, px, N.tracking, max), px };
+}
+
+/** The eyebrow (in capitals): one line down to `min`, then two balanced lines there, cut only then (60 characters, the clamp, fit). */
+export function layoutEyebrow(ctx: Ctx, eyebrow: string, max: number, mm: number): { lines: string[]; px: number } {
+  const E = CARD_LAYOUT.eyebrow;
+  for (let s = E.size; s >= E.min - 1e-6; s *= 0.96) if (width(ctx, eyebrow, E.weight, s * mm, E.tracking) <= max) return { lines: [eyebrow], px: s * mm };
+  const px = E.min * mm;
+  return { lines: balanced(ctx, eyebrow, 2, E.weight, px, E.tracking, max) ?? filled(ctx, eyebrow, 2, E.weight, px, E.tracking, max), px };
 }
 
 /** A deterministic hash in [0, 1) (no Math.random: the print is the same on every load). */
@@ -229,8 +319,11 @@ export function drawCardPrint(canvas: HTMLCanvasElement, text: CardText): { top:
   const lines: Line[] = [];
   const gaps: number[] = [];
   if (eyebrow) {
-    const e = fitLine(ctx, eyebrow.toLocaleUpperCase(), L.eyebrow.weight, L.eyebrow.size, L.eyebrow.size * 0.8, L.eyebrow.tracking, max, mm);
-    lines.push({ text: e.text, weight: L.eyebrow.weight, px: e.px, em: L.eyebrow.tracking, color: CARD_INK.eyebrow, cap: cap(L.eyebrow.weight, e.px), advance: 0 });
+    const e = layoutEyebrow(ctx, eyebrow.toLocaleUpperCase(), max, mm);
+    e.lines.forEach((s, i) => {
+      if (i > 0) gaps.push(e.px * L.eyebrow.leading - cap(L.eyebrow.weight, e.px));
+      lines.push({ text: s, weight: L.eyebrow.weight, px: e.px, em: L.eyebrow.tracking, color: CARD_INK.eyebrow, cap: cap(L.eyebrow.weight, e.px), advance: 0 });
+    });
   }
   if (title) {
     const t = layoutTitle(ctx, title, max, mm);
@@ -242,12 +335,15 @@ export function drawCardPrint(canvas: HTMLCanvasElement, text: CardText): { top:
   }
   let ruleAt = -1;
   if (name) {
-    const n = fitLine(ctx, name, L.name.weight, L.name.size, L.name.min, L.name.tracking, max, mm);
+    const n = layoutName(ctx, name, max, mm);
     if (lines.length) {
       ruleAt = lines.length;
       gaps.push((L.gapRule + L.gapName) * mm);
     }
-    lines.push({ text: n.text, weight: L.name.weight, px: n.px, em: L.name.tracking, color: CARD_INK.ink, cap: cap(L.name.weight, n.px), advance: 0 });
+    n.lines.forEach((s, i) => {
+      if (i > 0) gaps.push(n.px * L.name.leading - cap(L.name.weight, n.px));
+      lines.push({ text: s, weight: L.name.weight, px: n.px, em: L.name.tracking, color: CARD_INK.ink, cap: cap(L.name.weight, n.px), advance: 0 });
+    });
   }
   const total = lines.reduce((s, l) => s + l.cap, 0) + gaps.reduce((s, g) => s + g, 0);
   // Optical centre: a hair above the middle.

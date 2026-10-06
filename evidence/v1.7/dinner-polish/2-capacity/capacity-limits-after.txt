@@ -1,0 +1,49 @@
+name-48: 5 lines; block 13.7–55.1 mm of 70
+    "YOU’RE INVITED" 3.30 mm
+    "Supper club:" 9.20 mm
+    "autumn menu" 9.20 mm
+    "Anne-Sophie Vandenberghe-" 4.20 mm
+    "Østergaard de la Fuente" 4.20 mm
+name-48b: 5 lines; block 13.7–55.1 mm of 70
+    "YOU’RE INVITED" 3.30 mm
+    "Supper club:" 9.20 mm
+    "autumn menu" 9.20 mm
+    "Siobhán Ní Mhaoldomhnaigh-" 4.20 mm
+    "Fitzgerald-O’Callaghan" 4.20 mm
+name-35-oneword: 4 lines; block 16.1–52.7 mm of 70
+    "YOU’RE INVITED" 3.30 mm
+    "Supper club:" 9.20 mm
+    "autumn menu" 9.20 mm
+    "Wolfeschlegelsteinhausenbergerdorff" 4.38 mm
+title-80: 5 lines; block 15.5–53.3 mm of 70
+    "YOU’RE INVITED" 3.30 mm
+    "A long table under the" 5.87 mm
+    "orchard lights: five courses," 5.87 mm
+    "natural wines and slow talk" 5.87 mm
+    "Alex Rivera" 5.60 mm
+both-limits: 6 lines; block 13.5–55.3 mm of 70
+    "YOU’RE INVITED" 3.30 mm
+    "A long table under the" 5.87 mm
+    "orchard lights: five courses," 5.87 mm
+    "natural wines and slow talk" 5.87 mm
+    "Anne-Sophie Vandenberghe-" 4.20 mm
+    "Østergaard de la Fuente" 4.20 mm
+eyebrow-60: 5 lines; block 13.8–55.0 mm of 70
+    "YOU’RE INVITED TO A VERY SPECIAL" 2.64 mm
+    "EVENING WITH FRIENDS AND FAM" 2.64 mm
+    "Supper club:" 9.20 mm
+    "autumn menu" 9.20 mm
+    "Alex Rivera" 5.60 mm
+all-limits: 7 lines; block 11.6–57.2 mm of 70
+    "YOU’RE INVITED TO A VERY SPECIAL" 2.64 mm
+    "EVENING WITH FRIENDS AND FAM" 2.64 mm
+    "A long table under the" 5.87 mm
+    "orchard lights: five courses," 5.87 mm
+    "natural wines and slow talk" 5.87 mm
+    "Anne-Sophie Vandenberghe-" 4.20 mm
+    "Østergaard de la Fuente" 4.20 mm
+sample: 4 lines; block 15.7–53.2 mm of 70
+    "YOU’RE INVITED" 3.30 mm
+    "Supper club:" 9.20 mm
+    "autumn menu" 9.20 mm
+    "Alex Rivera" 5.60 mm

@@ -166,6 +166,42 @@ test('The accepted close-up prints the card legibly; a text change reprints it w
   expect((await inkOf(page, after)).outside).toBeLessThan(ink.inside / 50);
 });
 
+test('v1.7 polish: the print holds the config\'s clamps in the bundled face (no ellipsis)', async ({ page }) => {
+  await ready(page);
+  const out = await page.evaluate(async () => {
+    const m = await import(/* @vite-ignore */ '/src/render/cardPrint.ts' as string);
+    await m.loadCardFont();
+    const draw = (text: Record<string, string>) => {
+      const c = document.createElement('canvas');
+      c.width = 2048; c.height = 1434;
+      const ctx = c.getContext('2d')!;
+      const lines: { s: string; w: number }[] = [];
+      const fill = ctx.fillText.bind(ctx);
+      (ctx as any).fillText = (str: string, x: number, y: number) => { lines.push({ s: str, w: ctx.measureText(str).width }); fill(str, x, y); };
+      (c as any).getContext = () => ctx;
+      const block = m.drawCardPrint(c, text);
+      return { lines, block };
+    };
+    const max = (m.CARD_MM.width - 2 * m.CARD_LAYOUT.margin) * (2048 / m.CARD_MM.width);
+    return {
+      max,
+      limits: [
+        draw({ eyebrow: 'You’re invited to a very special evening with friends and fa', title: 'A long table under the orchard lights: five courses, natural wines and slow talk', name: 'Anne-Sophie Vandenberghe-Østergaard de la Fuente' }),
+        draw({ eyebrow: 'You’re invited', title: 'Supper club: autumn menu', name: 'Wolfeschlegelsteinhausenbergerdorff' }),
+        draw({ eyebrow: 'You’re invited', title: 'Supper club: autumn menu', name: 'Siobhán Ní Mhaoldomhnaigh-Fitzgerald-O’Callaghan' }),
+      ],
+    };
+  });
+  for (const r of out.limits) {
+    const text = r.lines.map((l) => l.s);
+    expect(text.join(' / '), 'printed whole').not.toContain('…');
+    for (const l of r.lines) expect(l.w, l.s).toBeLessThanOrEqual(out.max + 1);
+    // The block stays inside the card's 70 mm with a margin top and bottom.
+    expect(r.block!.top).toBeGreaterThan(8);
+    expect(r.block!.bottom).toBeLessThan(62);
+  }
+});
+
 test('A card text change mid-reveal reprints the card and does not restart or cut the reveal', async ({ page }) => {
   await ready(page);
   await page.getByRole('button', { name: 'Guest', exact: true }).click();

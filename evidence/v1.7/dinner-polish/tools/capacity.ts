@@ -10,7 +10,7 @@ const res = await page.evaluate(async () => {
   const names = ['Alex Rivera', 'Anne-Sophie Vandenberghe', 'María José Fernández-Ocampo', 'Anne-Sophie Vandenberghe-Østergaard', 'Dr. Christopher Montgomery-Whitfield III', 'Siobhán Ní Mhaoldomhnaigh-Fitzgerald'];
   const titles = ['Supper club: autumn menu', 'Harvest supper at the old mill: seven courses', 'Harvest supper at the old mill: seven courses with paired wines', 'A long table under the orchard lights: five courses, natural wines and slow talk'];
   const r: string[] = [];
-  for (const n of names) { const d = drawn({ eyebrow: 'You’re invited', title: 'Supper', name: n }); r.push(`name ${n.length}ch "${n}" -> "${d[d.length - 1]}"`); }
+  for (const n of names) { const d = drawn({ eyebrow: 'You’re invited', title: 'Supper', name: n }); r.push(`name ${n.length}ch "${n}" -> ${JSON.stringify(d.slice(2))}`); }
   // the longest name (in "average" letters) that fits: grow 'Abcdefgh ' pattern
   for (const t of titles) { const d = drawn({ eyebrow: 'You’re invited', title: t, name: 'Alex' }); r.push(`title ${t.length}ch -> ${JSON.stringify(d.slice(1, -1))}`); }
   return r;
