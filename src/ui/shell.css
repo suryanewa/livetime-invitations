@@ -134,8 +134,13 @@ body {
   transition: opacity 180ms ease-out;
 }
 
-.lt-stage--fullscreen .lt-stage__poster,
-.lt-stage--fullscreen .lt-stage__fallback {
+/*
+ * The controller publishes the frame square (--lt-frame-x/-y/-size) in both layouts (v1.7 posters:
+ * the square layout's is the centred square, the whole stage at 1:1); the square poster and the
+ * text fallback sit on it, where the canvas frames the object, never cover-cropped to the mount.
+ */
+.lt-stage .lt-stage__poster,
+.lt-stage .lt-stage__fallback {
   inset: auto;
   left: var(--lt-frame-x, 0px);
   top: var(--lt-frame-y, 0px);
@@ -143,20 +148,24 @@ body {
   height: var(--lt-frame-size, 100%);
 }
 
-/* The square poster melts into the backdrop still (the same studio, rendered bare and wider). */
-.lt-stage--fullscreen .lt-stage__poster {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent);
+/*
+ * The square poster melts into the backdrop still (the same studio and set, rendered wider) over
+ * the frame's clearance (POSTER_FEATHER, 2 % of the frame), on the edges that lie inside the stage
+ * only (--lt-poster-feather-*: 0 on an edge that is the stage's own). v1.4–v1.6: 9 % on every edge.
+ */
+.lt-stage__poster.is-feathered {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 var(--lt-poster-feather-left, 0px), #000 calc(100% - var(--lt-poster-feather-right, 0px)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--lt-poster-feather-top, 0px), #000 calc(100% - var(--lt-poster-feather-bottom, 0px)), transparent);
   -webkit-mask-composite: source-in;
-  mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent);
+  mask-image:
+    linear-gradient(to right, transparent, #000 var(--lt-poster-feather-left, 0px), #000 calc(100% - var(--lt-poster-feather-right, 0px)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--lt-poster-feather-top, 0px), #000 calc(100% - var(--lt-poster-feather-bottom, 0px)), transparent);
   mask-composite: intersect;
 }
 
-/* Fullscreen backdrop still: BACKDROP_FIELD frame squares wide, centred on the frame square. */
+/* Backdrop still: BACKDROP_FIELD frame squares wide, centred on the frame square. */
 .lt-stage__backdrop {
-  display: none;
-}
-
-.lt-stage--fullscreen .lt-stage__backdrop {
   display: block;
   position: absolute;
   left: calc(var(--lt-frame-x, 0px) - (var(--lt-backdrop-field) - 1) / 2 * var(--lt-frame-size, 100%));
@@ -171,6 +180,12 @@ body {
 .lt-stage__backdrop.is-hidden {
   opacity: 0;
   transition: opacity 0ms linear var(--lt-entrance, 240ms);
+}
+
+/* Until its poster has loaded (and while it has failed): the stage colour, never the still alone. */
+.lt-stage__backdrop.is-waiting {
+  opacity: 0;
+  transition: none;
 }
 
 .lt-stage__poster.is-hidden {
