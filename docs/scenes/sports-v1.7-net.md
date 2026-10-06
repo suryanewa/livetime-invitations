@@ -210,3 +210,51 @@ still matching the canonical pose). `tests/browser/posters.spec.ts` (sports) pas
   `net-strips.ts` (windowed 16 ms strips through the real controller, with crops, the device pixel ratio and clips),
   `cost-probe.ts`, `skin-cost.ts`, `build-time.ts`, `recon-probe1..3.ts` (the reconnaissance's, pointed at their own
   tree).
+
+## Polish round (2026-10-06): the tails, and the net on the swaying stand
+
+From the judge's ranked tells (`docs/qualification.md` v1.7, the net row) the first: *the bottom-right tail flicks
+outward 19 mm at 27 cm/s for ≈ 0.1 s after the exit*: the tails were welded to their bottom knots' frames, which turn
+at up to 383°/s as the bottom ring whips. Branch `v1.7/sports-polish` (`docs/scenes/sports-v1.7-decline.md`, "Polish
+round", for the rest of the round). No simulation constant changed (air drag 3/s stands).
+
+**The tails lag their knots in the skin** (`models/sportsNet.ts`):
+- `analyseNet` binds each tail (the 5 cm free end below a bottom knot) to its **own bone** (2·cords + nodes + its
+  index: 320 bones, was 310) and lists which knot it hangs from (`NetLattice.tails`).
+- `NetSkin.poseTails`: a tail sits at its knot and follows the knot's frame pulled **45 %** of the way back towards the
+  knot's rest frame (a free end hangs under gravity more than it turns with its knot), with a **first-order lag of
+  50 ms** on the net's own drawn time (`TAIL = { lag: 0.05, gravity: 0.45 }`; a 5 cm cord end's own swing,
+  √(L/g)/2π ≈ 0.07 s, damped by the air and its stiffness, settles its direction in a few tens of ms). At rest and in
+  the bind pose a tail *is* its knot's frame, so the hanging net, the posters and `posters.spec` are unchanged.
+- **Carried over a change of mind:** the channel's carry includes the tails' state (`saveTails`/`restoreTails`), so an
+  interruption continues their sway rather than snapping them to their knots (to 1e-6 rad against an uninterrupted
+  run).
+
+Measured with the judge's own probe (`judge-net/tools/judge-probe.ts`, adapted to read the tails off their bones:
+`evidence/v1.7/sports-polish/tools/tail-probe.ts`; before = the same build with the tails welded, `--tail=1e-9,0`;
+`measurements/tails-{before,after}-120hz.txt`), tail tip against its knot, at 120 Hz:
+
+| Window after the exit | Speed max | Offset from rest max | Outward flick max |
+| --- | --- | --- | --- |
+| 0–0.25 s | 27.2 → **10.6 cm/s** | 21.4 → **10.2 mm** | 19.2 → **8.5 mm** (at exit + 0.137 → 0.178 s) |
+| 0.25–0.5 s | 14.4 → 6.6 cm/s | 14.2 → 9.3 mm | 5.5 → 5.5 mm |
+| 0.5–1 s | 3.9 → 1.7 cm/s | 6.3 → 3.1 mm | 2.4 → 1.1 mm |
+| 1–2 s | 0.7 → 0.6 cm/s | 0.9 → 0.5 mm | 0.2 → 0.1 mm |
+
+The knots' own bones are untouched (their rates by row, 64/107/150/241/321/383°/s, are the judge's numbers). The flick
+becomes a slower sway that peaks later and lasts a little longer; at 8× (`strips/tail-8x-bottom-right-1200-1296-
+before-after.jpg`, `strips/tail-4x-accept-exit-1152-1408-every16-before-after.jpg`) the right-hand tail no longer
+kicks out and curls between 1232 and 1296 ms; it hangs and swings with the ring. The knot–tail junction shows no kink
+at 8× (the tail's root is within a centimetre of the knot's centre). Swept before choosing: lag 0.03–0.08 s, gravity
+0.35–0.5 (flick 7.4–11.2 mm; more gravity stiffens the tails against their knots).
+
+**The stand's sway** (the decline record's polish round) reaches the net in the same transform as the rim's recoil:
+the loops are pinned to the swaying rim and the net is simulated in the base's frame, so the knots lag the sway
+through the cords at no extra cost (no inertial term added to the integrator). `HoopSprings.active()` counts the sway
+by its energy, so a resting net wakes on a strike and is never re-woken by a dying sway. A glass strike now jolts the
+loops back at ≈ 8.5 cm/s and the hanging net swings ≈ 1.2 cm relative to the hoop before hanging still (the board's
+shudder alone: 0.3 cm). The accept is unchanged (the sway is driven by the strikes only, never by the net's pull).
+
+Tests: `tests/sports.test.ts` (the tails on their own bones and exact at rest; the tip's speed about its knot in the
+quarter second after the exit under 0.6 × the welded tail's; the carry; the net riding the sway), the lattice's bone
+bound updated for the tail bones.
