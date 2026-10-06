@@ -41,13 +41,14 @@ test('Pass ball plays the host sequence and ends at guest-ready', async ({ page 
   await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('guest-ready');
 });
 
-test('Accept scores and Decline airballs; the HTML says Declined, never Failed', async ({ page }) => {
+test('Accept scores and Decline banks off the glass and rattles out; the HTML says Declined, never Failed', async ({ page }) => {
   await ready(page);
   await page.getByRole('button', { name: 'Guest', exact: true }).click();
   await page.getByRole('button', { name: 'Accept' }).click();
   await expect.poll(async () => (await state(page)).visual, { timeout: 4000 }).toBe('accepted-pose');
   await expect(page.getByRole('status')).toHaveText('Accepted');
   await page.getByRole('button', { name: 'Decline' }).click();
+  // v1.7: the bank, the rattle and the carom: the director's 1.6 s, then the tail plays on (≈ 5 s).
   await expect.poll(async () => (await state(page)).visual, { timeout: 5000 }).toBe('declined-pose');
   await expect(page.getByRole('status')).toHaveText('Declined');
   await expect(page.getByText(/failed/i)).toHaveCount(0);
