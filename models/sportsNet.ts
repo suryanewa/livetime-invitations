@@ -1,7 +1,7 @@
 import {
   Bone, BufferAttribute, BufferGeometry, Float32BufferAttribute, Matrix4, type Material, type Mesh, type Object3D, Quaternion, Skeleton, SkinnedMesh, Uint16BufferAttribute, Vector3,
 } from 'three';
-import { BALL_R, BOARD, BOARD_PIVOT, NET, netHangRadius, netRestRadius, RECOIL_LIMIT, RIM_BACKSTOP, RIM_HINGE, RIM_LOCAL, SPORTS_CM_PER_UNIT } from './sportsContract.ts';
+import { BALL_R, BOARD, BOARD_PIVOT, NET, netHangRadius, netRestRadius, RECOIL_LIMIT, recoilPoint, RIM, RIM_BACKSTOP, RIM_HINGE, RIM_LOCAL, SPORTS_CM_PER_UNIT } from './sportsContract.ts';
 
 /**
  * Sports v1.5: the net is a simulated cord lattice that drives the master's net.
@@ -53,11 +53,12 @@ export interface NetLattice {
   /** Cord pieces: [upper node, lower node]. */
   cords: [number, number][];
   /**
-   * Mesh binding: per mesh, per vertex, up to two bones (a cord's index, or cords.length + node
-   * index for a knot) and the second's weight: a strand near a knot blends into the knot's bone, so
-   * the cord meets its knot without a seam however the two turn.
+   * Mesh binding: per mesh, per vertex, four (bone, weight) pairs. Bones: a cord's upper half (its
+   * index), a node (cords.length + node index), a cord's lower half (cords.length + nodes.length +
+   * cord index). A strand blends between its halves across its middle and into its knots near its
+   * ends, so the cord meets its knot without a seam however the two turn.
    */
-  binding: Map<BufferGeometry, { bone0: Uint16Array; bone1: Uint16Array; weight1: Float32Array }>;
+  binding: Map<BufferGeometry, { index: Uint16Array; weight: Float32Array }>;
 }
 
 const TAU = Math.PI * 2;
@@ -214,35 +215,38 @@ export function analyseNet(meshes: { geometry: BufferGeometry; kind: 'strands' |
   }
   for (const c of cordsK) { cords.push([knotNode.get(c.a)!, knotNode.get(c.b)!]); cordComps.push(c.comp); }
 
-  // Binding: strand vertices to their cord's bone, blending into the knot's bone over the last
-  // KNOT_BLEND of either end (pinned ends stay on the cord); knot and tail vertices to their knot's bone.
+  // Binding (v1.7): each strand has two bones, its upper half (from its upper node to its middle)
+  // and its lower half (from its middle to its lower node), so a slack cord bows at its true length
+  // instead of shrinking; the halves blend across the middle fifth, and each end blends into its
+  // knot's bone over KNOT_BLEND (pinned ends stay on the cord). Knot and tail vertices: their knot.
+  // Bones: [upper halves (cords.length), nodes (nodes.length), lower halves (cords.length)].
   const binding: NetLattice['binding'] = new Map();
+  const nodeBone = (i: number) => cords.length + i, lowerBone = (k: number) => cords.length + nodes.length + k;
   const nv = sPos.length / 3;
-  const sb = { bone0: new Uint16Array(nv), bone1: new Uint16Array(nv), weight1: new Float32Array(nv) };
-  const vp = new Vector3();
+  const sb = { index: new Uint16Array(nv * 4), weight: new Float32Array(nv * 4) };
+  const vp = new Vector3(), ax = new Vector3();
+  const smooth = (k: number) => k * k * (3 - 2 * k);
   cordComps.forEach((comp, ci) => {
     const [a, b] = cords[ci]!;
+    const A = nodes[a]!, B = nodes[b]!, len = A.distanceTo(B);
+    ax.subVectors(B, A).divideScalar(len);
     for (const v of comp.verts) {
-      sb.bone0[v] = ci;
       vp.set(sPos[v * 3]!, sPos[v * 3 + 1]!, sPos[v * 3 + 2]!);
-      let best = -1, bd = Infinity;
-      for (const end of [a, b]) {
-        if (pinned[end]) continue;
-        const d = vp.distanceTo(nodes[end]!);
-        if (d < bd) { bd = d; best = end; }
-      }
-      if (best >= 0 && bd < KNOT_BLEND) {
-        const k = 1 - bd / KNOT_BLEND;
-        sb.bone1[v] = cords.length + best;
-        sb.weight1[v] = k * k * (3 - 2 * k);
-      }
+      const u = Math.min(1, Math.max(0, vp.clone().sub(A).dot(ax) / len));
+      const wLower = smooth(Math.min(1, Math.max(0, (u - 0.4) / 0.2)));
+      const kA = pinned[a] ? 0 : smooth(Math.max(0, 1 - vp.distanceTo(A) / KNOT_BLEND));
+      const kB = pinned[b] ? 0 : smooth(Math.max(0, 1 - vp.distanceTo(B) / KNOT_BLEND));
+      const cord = Math.max(0, 1 - kA - kB);
+      const w = [[ci, cord * (1 - wLower)], [lowerBone(ci), cord * wLower], [nodeBone(a), kA], [nodeBone(b), kB]] as const;
+      const sum = w.reduce((s, [, x]) => s + x, 0) || 1;
+      w.forEach(([bone, x], j) => { sb.index[v * 4 + j] = bone; sb.weight[v * 4 + j] = x / sum; });
     }
   });
-  for (const t of tails) for (const v of t.comp.verts) sb.bone0[v] = cords.length + knotNode.get(t.knot)!;
+  for (const t of tails) for (const v of t.comp.verts) { sb.index[v * 4] = nodeBone(knotNode.get(t.knot)!); sb.weight[v * 4] = 1; }
   binding.set(strandMesh.geometry, sb);
   const nk = kPos.length / 3;
-  const kb = { bone0: new Uint16Array(nk), bone1: new Uint16Array(nk), weight1: new Float32Array(nk) };
-  knots.forEach((k, ki) => { for (const comp of k.comps) for (const v of comp.verts) kb.bone0[v] = cords.length + knotNode.get(ki)!; });
+  const kb = { index: new Uint16Array(nk * 4), weight: new Float32Array(nk * 4) };
+  knots.forEach((k, ki) => { for (const comp of k.comps) for (const v of comp.verts) { kb.index[v * 4] = nodeBone(knotNode.get(ki)!); kb.weight[v * 4] = 1; } });
   binding.set(knotMesh.geometry, kb);
   return { nodes, pinned, rows, loops, cords, binding };
 }
@@ -265,12 +269,18 @@ function rng(seed: number) {
 /** Physical constants of the net (SI where noted; the sim converts). */
 export const NET_SIM = {
   /**
-   * The sim's own fixed substep (s). It keeps its own clock (an accumulator), so whatever frame
-   * steps the director hands it, the net integrates in the same 1/480 s steps: Verlet with a varying
-   * step would misread the velocity, and one XPBD pass hangs a little differently at each step size
-   * (a 0.3 mm shimmer that never settles).
+   * The sim's own fixed substep (s), on its own clock: whatever frame steps the display runs at
+   * (60, 90, 120, 144 Hz), the net integrates the same 1/480 s substeps at the same times, the ball
+   * sampled on its own path at each, and the skin draws the net between the last two substeps at
+   * the frame's exact time (render interpolation), so no cadence shows as jitter.
    */
   step: 1 / 480,
+  /**
+   * Constraint passes per substep (v1.7): two, in a fixed topological order (rim to bottom, then
+   * bottom to rim), so the lattice converges to its nominal stiffness and corrections travel both
+   * ways (v1.5's one pass in mesh order left it several times softer and lopsided).
+   */
+  passes: 2,
   /** Whole-net mass (kg): a nylon mini net. */
   mass: 0.04,
   /**
@@ -278,8 +288,22 @@ export const NET_SIM = {
    * newton. The cord is stiff; what moves is the net's slack (its diamonds open and close).
    */
   cordCompliance: 0.002,
-  /** Diamond diagonals: soft (the knots' and braid's stiffness), compliance in su/N. */
-  shearCompliance: 0.4,
+  /**
+   * The cords' rest length over their hanging distance (v1.7): the net is hung slack, as a knotted
+   * net is, and its own weight takes the slack up; v1.5 kept the master's lengths on the opened hang,
+   * which left the lower rows pre-stretched 0.7–1.4 % (a taut membrane that rings).
+   */
+  cordSlack: 1.005,
+  /**
+   * Diamond diagonals (the knots' and braid's stiffness), compliance in su/N. The net's shape is
+   * found with `shapeCompliance` (the hanging pose: the knots hold its diamonds open against its
+   * own weight, the bottom clear of the ball); the diagonals then keep exactly those forces at that
+   * pose (their rest lengths preloaded) but answer any change of it with `shearCompliance`, ten
+   * times softer: the shape holds, and the net swings as a whole on gravity, not on a stiff lattice
+   * (v1.5's stiff diagonals rang the whole net at ≈ 7 Hz).
+   */
+  shapeCompliance: 0.4,
+  shearCompliance: 40,
   /**
    * Hard limits that keep the cords from crossing (pressed together they bunch, never pass through
    * each other): neighbouring knots in a row stay ≥ 70 % of their hanging spacing apart, a knot and
@@ -290,14 +314,28 @@ export const NET_SIM = {
   minVertical: 0.55,
   minThrough: 0.8,
   /** Air drag on the cords (1/s): velocity decays e^(−drag·t). */
-  drag: 1,
-  /** Ball–cord grip (fraction of the relative tangential velocity removed per contact step): the cords slide on the leather. */
-  friction: 0.3,
+  drag: 1.5,
+  /**
+   * The knots' and braid's internal friction (1/s): the relative velocity of every pair of
+   * neighbouring knots (along a cord or round a row) decays at this rate, momentum kept. It acts
+   * only where neighbours move apart from each other — a knot's own pendulum, the diamond 'scissor'
+   * — so those die within a cycle, while the net swinging as a whole (neighbours moving together)
+   * is left to the air drag: it sways once or twice and hangs still.
+   */
+  coupling: 8,
+  /** Ball–cord friction coefficient (Coulomb: the cords slide on the leather, never pushed faster than it). */
+  friction: 2,
   /** Cord radius at a knot (su): the ball keeps this clearance from a knot's centre. */
   knotRadius: 0.018,
-  /** Settled when every knot moves slower than this (su/s) and lies within `restTolerance` of rest. */
+  /**
+   * Settled when every knot moves slower than this (su/s) and lies within `restTolerance` of rest
+   * (checked on every substep, so on the same substep at every display rate): then it snaps to
+   * rest exactly and the render loop can idle.
+   */
   settleSpeed: 0.01,
-  restTolerance: 0.003,
+  restTolerance: 0.002,
+  /** The net wakes when the ball comes within this much (su) of its volume. */
+  wakeMargin: 0.3,
 } as const;
 
 export interface BallContact {
@@ -306,26 +344,59 @@ export interface BallContact {
   previous: Vector3;
 }
 
+/** The ball's centre (sim space) at sim time t into `out`, or null when there is no ball. */
+export type BallSampler = (t: number, out: Vector3) => Vector3 | null;
+
+/** The net's motion state, to carry it across an interruption. */
+export interface NetState {
+  x: Float64Array;
+  v: Float64Array;
+  xLast: Float64Array;
+  tick: number;
+  drawnTime: number;
+  alpha: number;
+  settled: boolean;
+  ballPrev: [number, number, number] | null;
+}
+
 /**
- * The net's dynamics: Verlet positions, XPBD cords (tension only) and shear springs, ball and
- * board collisions, and the pinned cords' pull on the rim (`hookForce`, `hookTorque`).
+ * The net's dynamics (v1.7, rebuilt in place): XPBD (Macklin et al. 2016) at fixed 1/480 s
+ * substeps with explicit velocities. Each substep: gravity and air drag, the pins (the loops on the
+ * rim's hooks, carried by the rim's and board's recoil), two ordered constraint passes (cords:
+ * elastic, tension only; diamond diagonals: soft springs; the no-crossing minimum distances: hard),
+ * the ball as a moving sphere and the board face as a wall, then the velocities: the ball contact
+ * inelastic with Coulomb friction (it injects no energy), and the knots' internal friction.
+ *
+ * Sim space is the hoop at rest with the origin at the rim centre (net space at zero recoil): the
+ * net is inertial and its loops move with the rim, so the rim's spring ringing drags the net's top
+ * rather than shaking the whole net rigidly. The skin carries it into the recoiled net node.
  */
 export class NetSim {
   readonly n: number;
-  /** Positions, previous positions and the hanging rest pose (net space, flat xyz). */
+  /** Positions and velocities at the latest substep, positions one substep earlier, and the hanging rest pose (sim space, flat xyz). */
   readonly x: Float64Array;
-  readonly prev: Float64Array;
+  readonly v: Float64Array;
+  readonly xLast: Float64Array;
   readonly rest: Float64Array;
   private readonly invMass: Float64Array;
-  /** Constraints: a, b, length, compliance, mode (0 spring, 1 cord: tension only, 2 apart: a minimum distance). */
+  /** Constraints: a, b, length, compliance (sim units), mode (0 spring, 1 cord: tension only, 2 apart: a minimum distance). */
   private readonly ca: Uint16Array;
   private readonly cb: Uint16Array;
   private readonly cl: Float64Array;
   private readonly cc: Float64Array;
   private readonly mode: Uint8Array;
+  private readonly lambda: Float64Array;
+  /** The second pass's order (the first runs 0…m−1): the bilateral constraints bottom up, then the hard limits bottom up. */
+  private readonly orderUp: Uint16Array;
+  /** Neighbour pairs the internal friction acts on (cords and row neighbours), flat a, b. */
+  private readonly edges: Uint16Array;
+  private readonly pins: number[];
+  private readonly contact: Uint8Array;
+  private readonly normal: Float64Array;
   /**
-   * Net force (N, net space) the cords pull on the rim's hooks with, and the change of its moment
-   * about the rim hinge and the board pivot from the hanging net's (N·m, about +x).
+   * Net force (N, sim space) the cords pull on the rim's hooks with, and the change of its moment
+   * about the rim hinge and the board pivot from the hanging net's (N·m, about +x), averaged over
+   * the last advance's substeps.
    */
   readonly hookForce = new Vector3();
   hookTorqueRim = 0;
@@ -334,20 +405,35 @@ export class NetSim {
   restTorqueRim = 0;
   restTorqueBoard = 0;
   settled = true;
-  /** Wall: the board face plane (net space z) the net cannot pass. */
+  /** The sim's clock: the latest substep is number `tick` (time tick·step); the skin draws at `drawnTime`, `alpha` of the way from the previous substep to it. */
+  tick = 0;
+  drawnTime = 0;
+  alpha = 1;
+  /** Wall: the board face plane (sim space z) the net cannot pass. */
   private readonly wallZ: number;
+  private readonly ballPrev = new Vector3();
+  private ballPrevValid = false;
+  private pinBoard = 0;
+  private pinRim = 0;
+  private stepRim = 0;
+  private stepBoard = 0;
+  private readonly _b = new Vector3();
+  private readonly _vb = new Vector3();
+  private readonly _p = new Vector3();
 
   constructor(readonly lattice: NetLattice, seed = 7) {
     const L = lattice;
     this.n = L.nodes.length;
     this.x = new Float64Array(this.n * 3);
-    this.prev = new Float64Array(this.n * 3);
+    this.v = new Float64Array(this.n * 3);
+    this.xLast = new Float64Array(this.n * 3);
     this.rest = new Float64Array(this.n * 3);
     this.invMass = new Float64Array(this.n);
+    this.contact = new Uint8Array(this.n);
+    this.normal = new Float64Array(this.n * 3);
     const rand = rng(seed);
     const free = L.pinned.filter((p) => !p).length;
-    // The knots start on the hanging envelope (contract NET_HANG): the master's, opened in its lower
-    // half; the cords keep the master's lengths, so the opened rows ride up a little as they hang.
+    // The knots start on the hanging envelope (contract NET_HANG): the master's, opened in its lower half.
     const hang = L.nodes.map((p, i) => {
       if (L.pinned[i]) return p.clone();
       const t = Math.min(1, Math.max(0, -p.y / NET.depth));
@@ -358,18 +444,26 @@ export class NetSim {
       p.toArray(this.x, i * 3);
       this.invMass[i] = L.pinned[i] ? 0 : 1 / ((NET_SIM.mass / free) * (0.9 + 0.2 * rand()));
     });
-    // Constraints: the cords (tension only, the master's lengths), each diamond's horizontal and
-    // vertical diagonals (soft springs at the hanging spacing, and hard minimum distances), and the
-    // cords running straight through each knot (hard minimum distances).
-    const cons: { a: number; b: number; len: number; compliance: number; mode: 0 | 1 | 2 }[] = [];
+    this.pins = L.pinned.flatMap((p, i) => (p ? [i] : []));
+    // Constraints, each with its level (the lower end's row; the loops are −1) and angle for the order.
+    const level = new Int8Array(this.n).fill(-1);
+    L.rows.forEach((row, r) => row.forEach((k) => (level[k] = r)));
+    const cons: { a: number; b: number; len: number; compliance: number; mode: 0 | 1 | 2; key: number }[] = [];
     const MODE = { spring: 0, cord: 1, apart: 2 } as const;
-    for (const [a, b] of L.cords) cons.push({ a, b, len: L.nodes[a]!.distanceTo(L.nodes[b]!), compliance: NET_SIM.cordCompliance, mode: MODE.cord });
+    const key = (a: number, b: number) => Math.max(level[a]!, level[b]!) * 16 + (((angleOf(hang[a]!.clone().add(hang[b]!)) + TAU) % TAU) / TAU) * 15;
+    const edges: number[] = [];
+    // The cords: tension only, hung slack (their hanging distance × cordSlack).
+    for (const [a, b] of L.cords) {
+      cons.push({ a, b, len: hang[a]!.distanceTo(hang[b]!) * NET_SIM.cordSlack, compliance: NET_SIM.cordCompliance, mode: MODE.cord, key: key(a, b) });
+      edges.push(a, b);
+    }
+    // Each diamond's horizontal and vertical diagonals: soft springs at the hanging spacing, and hard minimum distances.
     const pair = (a: number, b: number, min: number) => {
       const len = hang[a]!.distanceTo(hang[b]!);
-      cons.push({ a, b, len, compliance: NET_SIM.shearCompliance, mode: MODE.spring });
-      cons.push({ a, b, len: len * min, compliance: 0, mode: MODE.apart });
+      cons.push({ a, b, len, compliance: NET_SIM.shapeCompliance, mode: MODE.spring, key: key(a, b) });
+      cons.push({ a, b, len: len * min, compliance: 0, mode: MODE.apart, key: key(a, b) });
     };
-    for (const row of L.rows) row.forEach((a, i) => pair(a, row[(i + 1) % row.length]!, NET_SIM.minRing));
+    for (const row of L.rows) row.forEach((a, i) => { pair(a, row[(i + 1) % row.length]!, NET_SIM.minRing); edges.push(a, row[(i + 1) % row.length]!); });
     const levels = [L.loops, ...L.rows];
     const wrap = (d: number) => Math.atan2(Math.sin(d), Math.cos(d));
     for (let r = 0; r + 2 < levels.length; r++) {
@@ -382,20 +476,26 @@ export class NetSim {
         pair(a, best, NET_SIM.minVertical);
       }
     }
+    // The cords running straight through each knot never fold back (hard minimum distances).
     for (let b = 0; b < this.n; b++) {
       const ups = L.cords.filter(([, lo]) => lo === b).map(([up]) => up), downs = L.cords.filter(([up]) => up === b).map(([, lo]) => lo);
       for (const a of ups) for (const c of downs) {
         const s1 = wrap(angleOf(L.nodes[b]!) - angleOf(L.nodes[a]!)), s2 = wrap(angleOf(L.nodes[c]!) - angleOf(L.nodes[b]!));
-        if (Math.sign(s1) === Math.sign(s2)) cons.push({ a, b: c, len: hang[a]!.distanceTo(hang[c]!) * NET_SIM.minThrough, compliance: 0, mode: MODE.apart });
+        if (Math.sign(s1) === Math.sign(s2)) cons.push({ a, b: c, len: hang[a]!.distanceTo(hang[c]!) * NET_SIM.minThrough, compliance: 0, mode: MODE.apart, key: key(a, c) });
       }
     }
-    const m = cons.length;
+    // The order: the bilateral constraints (cords, springs) from the rim down, then the hard limits from the rim down.
+    const bi = cons.filter((c) => c.mode !== MODE.apart).sort((p, q) => p.key - q.key);
+    const hard = cons.filter((c) => c.mode === MODE.apart).sort((p, q) => p.key - q.key);
+    const sorted = [...bi, ...hard];
+    const m = sorted.length;
     this.ca = new Uint16Array(m);
     this.cb = new Uint16Array(m);
     this.cl = new Float64Array(m);
     this.cc = new Float64Array(m);
     this.mode = new Uint8Array(m);
-    cons.forEach((c, i) => {
+    this.lambda = new Float64Array(m);
+    sorted.forEach((c, i) => {
       this.ca[i] = c.a;
       this.cb[i] = c.b;
       this.cl[i] = c.len;
@@ -403,169 +503,326 @@ export class NetSim {
       this.cc[i] = c.compliance * SU_M;
       this.mode[i] = c.mode;
     });
+    this.orderUp = new Uint16Array(m);
+    for (let i = 0; i < bi.length; i++) this.orderUp[i] = bi.length - 1 - i;
+    for (let i = 0; i < hard.length; i++) this.orderUp[bi.length + i] = m - 1 - i;
+    this.edges = Uint16Array.from(edges);
     this.wallZ = BOARD.face - RIM_LOCAL.z + NET_SIM.knotRadius;
-    // Hanging rest pose: the equilibrium under gravity (strongly damped relaxation).
-    this.prev.set(this.x);
-    for (let i = 0; i < 1600; i++) this.substep(NET_SIM.step, null, 0, 40);
-    // Relax to a full stop, then read the hanging net's steady pull on the rim (no drag, so the
-    // constraints carry its whole weight).
-    for (let i = 0; i < 4; i++) this.prev.set(this.x), this.substep(NET_SIM.step, null, 0, 1e6);
-    this.prev.set(this.x);
-    const f = this.substep(NET_SIM.step, null, 0, 0);
-    this.restTorqueRim = f.rim;
-    this.restTorqueBoard = f.board;
+    // The hanging rest pose: the equilibrium under gravity. Relax with heavy air drag, then to a
+    // standstill (the substep's own fixed point), then read the hanging net's steady pull on the rim.
+    this.xLast.set(this.x);
+    const h = NET_SIM.step;
+    const relax = (heavy: number) => {
+      for (let i = 0; i < heavy; i++) this.substep(h, null, 40, 0, 0, 0);
+      for (let i = 0; i < 20000; i++) {
+        this.v.fill(0);
+        this.substep(h, null, 0, 0, 0, 0);
+        let d = 0;
+        for (let j = 0; j < this.x.length; j++) d = Math.max(d, Math.abs(this.x[j]! - this.xLast[j]!));
+        if (d < 1e-15) break;
+      }
+    };
+    relax(2400);
+    // Preload the diagonals: the same force at this pose (C/α kept) with the softer compliance.
+    const soft = NET_SIM.shearCompliance * SU_M;
+    for (let c = 0; c < m; c++) {
+      if (this.mode[c] !== MODE.spring) continue;
+      const a = this.ca[c]!, b = this.cb[c]!;
+      const d = Math.hypot(this.x[b * 3]! - this.x[a * 3]!, this.x[b * 3 + 1]! - this.x[a * 3 + 1]!, this.x[b * 3 + 2]! - this.x[a * 3 + 2]!);
+      this.cl[c] = d - (soft / this.cc[c]!) * (d - this.cl[c]!);
+      this.cc[c] = soft;
+    }
+    relax(0);
+    this.v.fill(0);
+    this.substep(h, null, 0, 0, 0, 0);
+    this.restTorqueRim = this.stepRim;
+    this.restTorqueBoard = this.stepBoard;
     this.rest.set(this.x);
     this.settle();
   }
 
-  /** The motion state (positions, previous positions), to carry it across an interruption. */
-  save(): { x: Float64Array; prev: Float64Array; settled: boolean } {
-    return { x: this.x.slice(), prev: this.prev.slice(), settled: this.settled };
+  /** The motion state (positions, velocities, the clock), to carry it across an interruption. */
+  save(): NetState {
+    return {
+      x: this.x.slice(), v: this.v.slice(), xLast: this.xLast.slice(), tick: this.tick, drawnTime: this.drawnTime, alpha: this.alpha, settled: this.settled,
+      ballPrev: this.ballPrevValid ? [this.ballPrev.x, this.ballPrev.y, this.ballPrev.z] : null,
+    };
   }
-  restore(state: { x: Float64Array; prev: Float64Array; settled: boolean }): void {
+  restore(state: NetState): void {
     this.x.set(state.x);
-    this.prev.set(state.prev);
+    this.v.set(state.v);
+    this.xLast.set(state.xLast);
+    this.tick = state.tick;
+    this.drawnTime = state.drawnTime;
+    this.alpha = state.alpha;
     this.settled = state.settled;
+    this.ballPrevValid = state.ballPrev !== null;
+    if (state.ballPrev) this.ballPrev.fromArray(state.ballPrev);
   }
 
-  /** Snap to the hanging rest pose. */
+  /** Snap to the hanging rest pose (the clock carries on). */
   settle(): void {
     this.x.set(this.rest);
-    this.prev.set(this.rest);
+    this.xLast.set(this.rest);
+    this.v.fill(0);
     this.hookForce.set(0, 0, 0);
     this.hookTorqueRim = 0;
     this.hookTorqueBoard = 0;
-    this.pending = 0;
+    this.alpha = 1;
+    this.ballPrevValid = false;
     this.settled = true;
   }
 
-  /** The sim's clock lead: frame time not yet integrated (less than one substep). */
-  private pending = 0;
-  /** Advance by dt with the ball (net space, moving from `previous` to `center` over dt), or none. */
-  step(dt: number, ball: BallContact | null): void {
+  /** Re-base the clock (a resting net has no time of its own): the substep at or before time t. */
+  setClock(t: number): void {
+    this.tick = Math.floor(t / NET_SIM.step + 1e-9);
+    this.drawnTime = t;
+  }
+
+  /**
+   * Advance the sim's clock to `until` (its own time, s): every substep up to the first at or after
+   * it, the ball (sim space) sampled at each substep's time, the hoop springs (if given) driven by
+   * the net's pull and carrying its loops. The skin then draws `alpha` of the way from the last but
+   * one substep to the last, exactly at `until`. A resting net sleeps until the ball comes near or
+   * the springs are struck; it settles (snaps to rest) on the substep its motion has died.
+   */
+  advance(until: number, ball: BallSampler | null, springs: HoopSprings | null = null): void {
     const h = NET_SIM.step;
-    const near = ball && this.ballNear(ball);
-    if (this.settled && !near) { this.pending = 0; return; }
+    const target = Math.ceil(until / h - 1e-9);
+    const b = this._b;
+    if (this.settled) {
+      const near = ball !== null && ball(Math.max(target, this.tick) * h, b) !== null && this.near(b);
+      if (!near && !(springs?.active() ?? false)) {
+        // Asleep: the clock moves on, the springs (if still ringing below waking) ring down on it.
+        for (; this.tick < target; this.tick++) if (springs && !springs.settled) springs.substep(h, 0, 0);
+        this.tick = Math.max(this.tick, target);
+        this.drawnTime = until;
+        this.alpha = 1;
+        return;
+      }
+      this.wake(springs);
+    }
+    let fx = 0, fy = 0, fz = 0, tr = 0, tb = 0, count = 0;
+    const vb = this._vb;
+    while (this.tick < target) {
+      this.tick++;
+      if (this.settled) {
+        if (springs && !springs.settled) springs.substep(h, 0, 0);
+        continue;
+      }
+      const t = this.tick * h;
+      const c = ball ? ball(t, b) : null;
+      if (c && this.ballPrevValid) vb.subVectors(c, this.ballPrev).divideScalar(h);
+      else if (c && ball) {
+        const p = ball(t - h, this._p);
+        vb.set(0, 0, 0);
+        if (p) vb.subVectors(c, p).divideScalar(h);
+      } else vb.set(0, 0, 0);
+      const near = c !== null && this.near(c);
+      this.substep(h, near ? c : null, NET_SIM.drag, NET_SIM.coupling, springs?.board ?? 0, springs?.rim ?? 0);
+      fx += this.hookForce.x; fy += this.hookForce.y; fz += this.hookForce.z;
+      tr += this.stepRim; tb += this.stepBoard; count++;
+      springs?.substep(h, this.stepRim - this.restTorqueRim, this.stepBoard - this.restTorqueBoard);
+      if (c) { this.ballPrev.copy(c); this.ballPrevValid = true; } else this.ballPrevValid = false;
+      if (!near && this.calm()) this.settle();
+    }
+    if (count) {
+      this.hookForce.set(fx / count, fy / count, fz / count);
+      this.hookTorqueRim = tr / count - this.restTorqueRim;
+      this.hookTorqueBoard = tb / count - this.restTorqueBoard;
+    }
+    this.drawnTime = until;
+    this.alpha = this.settled ? 1 : Math.min(1, Math.max(0, 1 - (this.tick * h - until) / h));
+  }
+
+  /**
+   * Advance by dt with the ball (net space, moving from `previous` to `center` over dt), or none,
+   * the loops held at rest (no springs): the v1.5 interface, for tools and tests.
+   */
+  step(dt: number, ball: BallContact | null): void {
+    const t0 = this.drawnTime;
+    const sampler: BallSampler | null = ball ? (t, out) => out.lerpVectors(ball.previous, ball.center, dt > 0 ? (t - t0) / dt : 1) : null;
+    this.advance(t0 + dt, sampler, null);
+  }
+
+  /** The ball is near the net's volume (sim space). */
+  near(c: Vector3): boolean {
+    const r = BALL_R + NET_SIM.wakeMargin;
+    return c.y < r && c.y > -NET.depth - r && Math.hypot(c.x, c.z) < RIM.innerRadius + 2 * RIM.tube + r;
+  }
+
+  /** Every knot slow and back at rest. */
+  private calm(): boolean {
+    const x = this.x, v = this.v, r = this.rest, s = NET_SIM.settleSpeed, d = NET_SIM.restTolerance;
+    for (let i = 0; i < x.length; i++) if (Math.abs(v[i]!) > s || Math.abs(x[i]! - r[i]!) > d) return false;
+    return true;
+  }
+
+  /** Wake from rest: the knots where the resting net hangs on the rim as it stands now. */
+  private wake(springs: HoopSprings | null): void {
     this.settled = false;
-    // Substeps ending inside this frame step; the ball is placed by each substep's end time.
-    const from = this.pending;
-    let count = Math.floor((from + dt) / h + 1e-9);
-    this.pending = from + dt - count * h;
-    if (this.pending < 0) this.pending = 0;
-    if (count === 0) return;
-    this.hookForce.set(0, 0, 0);
-    if (near && dt > 0) this._vb.subVectors(ball.center, ball.previous).divideScalar(dt);
-    else this._vb.set(0, 0, 0);
-    let torqueRim = 0, torqueBoard = 0;
-    for (let s = 1; s <= count; s++) {
-      const f = this.substep(h, near ? ball : null, dt > 0 ? Math.min(1, Math.max(0, (s * h - from) / dt)) : 1, NET_SIM.drag);
-      torqueRim += f.rim / count;
-      torqueBoard += f.board / count;
-    }
-    this.hookForce.divideScalar(count);
-    // The rim's springs hold the hanging net already: they feel only the change.
-    this.hookTorqueRim = torqueRim - this.restTorqueRim;
-    this.hookTorqueBoard = torqueBoard - this.restTorqueBoard;
-    // Settled: everything slow and back at rest (then snap exactly, so the bones return to rest).
-    let vmax = 0, dmax = 0;
-    for (let i = 0; i < this.n * 3; i++) {
-      vmax = Math.max(vmax, Math.abs(this.x[i]! - this.prev[i]!) / h);
-      dmax = Math.max(dmax, Math.abs(this.x[i]! - this.rest[i]!));
-    }
-    if (!near && vmax < NET_SIM.settleSpeed && dmax < NET_SIM.restTolerance) this.settle();
+    this.v.fill(0);
+    const board = springs?.board ?? 0, rim = springs?.rim ?? 0;
+    for (let i = 0; i < this.n; i++) this.recoiled(i, board, rim, this.x);
+    this.xLast.set(this.x);
+    this.pinBoard = board;
+    this.pinRim = rim;
+    this.ballPrevValid = false;
   }
 
-  private ballNear(ball: BallContact): boolean {
-    // Anywhere near the net's volume (rim plane to below the bottom row, within the rim radius).
-    const r = BALL_R + 0.1;
-    for (const c of [ball.center, ball.previous]) {
-      if (c.y < 0.1 + r && c.y > -1.2 && Math.hypot(c.x, c.z) < 0.6 + r) return true;
-    }
-    return false;
+  /** Rest node i carried by a recoil (board, rim) into sim space, written to `out` at i. */
+  private recoiled(i: number, board: number, rim: number, out: Float64Array): void {
+    const p = this._p.fromArray(this.rest, i * 3);
+    if (board === 0 && rim === 0) { p.toArray(out, i * 3); return; }
+    p.add(RIM_LOCAL);
+    recoilPoint(p, board, rim, p).sub(RIM_LOCAL).toArray(out, i * 3);
   }
 
-  private readonly _c = new Vector3();
-  private readonly _vb = new Vector3();
-  /** One substep: integrate, constraints (one XPBD pass), collisions. Returns the hook moments (N·m). */
-  private substep(h: number, ball: BallContact | null, frac: number, drag: number): { rim: number; board: number } {
-    const x = this.x, prev = this.prev, w = this.invMass, n = this.n;
-    const damp = Math.exp(-drag * h);
+  /** The loops follow the rim's and the board's recoil. */
+  private setPins(board: number, rim: number): void {
+    if (board === this.pinBoard && rim === this.pinRim) return;
+    this.pinBoard = board;
+    this.pinRim = rim;
+    for (const i of this.pins) this.recoiled(i, board, rim, this.x);
+  }
+
+  /**
+   * One substep: the pins to the recoil (board, rim), gravity and air drag, the constraint passes
+   * (with the ball and the wall), then the velocities (ball contact, internal friction). Leaves the
+   * hooks' pull in hookForce, stepRim, stepBoard.
+   */
+  private substep(h: number, ball: Vector3 | null, drag: number, coupling: number, board: number, rim: number): void {
+    const x = this.x, v = this.v, xl = this.xLast, w = this.invMass, n = this.n;
+    const damp = Math.exp(-drag * h), gh = G * h;
+    for (let j = 0; j < x.length; j++) xl[j] = x[j]!;
+    this.setPins(board, rim);
     for (let i = 0; i < n; i++) {
       if (w[i] === 0) continue;
-      for (let k = 0; k < 3; k++) {
-        const j = i * 3 + k;
-        const v = (x[j]! - prev[j]!) * damp;
-        prev[j] = x[j]!;
-        x[j] = x[j]! + v + (k === 1 ? -G * h * h : 0);
+      const j = i * 3;
+      v[j + 1] = v[j + 1]! - gh;
+      v[j] = v[j]! * damp; v[j + 1] = v[j + 1]! * damp; v[j + 2] = v[j + 2]! * damp;
+      x[j] = x[j]! + v[j]! * h; x[j + 1] = x[j + 1]! + v[j + 1]! * h; x[j + 2] = x[j + 2]! + v[j + 2]! * h;
+    }
+    this.lambda.fill(0);
+    this.contact.fill(0);
+    this.hookForce.set(0, 0, 0);
+    this.stepRim = 0;
+    this.stepBoard = 0;
+    const m = this.ca.length;
+    for (let p = 0; p < NET_SIM.passes; p++) {
+      const up = p % 2 === 1;
+      for (let q = 0; q < m; q++) this.project(up ? this.orderUp[q]! : q, h);
+      this.collide(ball);
+    }
+    // Velocities from the motion, then the contacts' and the knots' own dissipation.
+    const vbx = this._vb.x, vby = this._vb.y, vbz = this._vb.z, mu = NET_SIM.friction;
+    for (let i = 0; i < n; i++) {
+      const j = i * 3;
+      let nvx = (x[j]! - xl[j]!) / h, nvy = (x[j + 1]! - xl[j + 1]!) / h, nvz = (x[j + 2]! - xl[j + 2]!) / h;
+      const c = this.contact[i]!;
+      if (c & 1) {
+        // The ball: inelastic along its normal (never pushed off faster than it was moving away),
+        // Coulomb friction along its surface (the tangential slip cut by at most μ × the normal change).
+        const nx = this.normal[j]!, ny = this.normal[j + 1]!, nz = this.normal[j + 2]!;
+        const rnPre = (v[j]! - vbx) * nx + (v[j + 1]! - vby) * ny + (v[j + 2]! - vbz) * nz;
+        const rx = nvx - vbx, ry = nvy - vby, rz = nvz - vbz;
+        const rn = rx * nx + ry * ny + rz * nz;
+        const rnNew = Math.min(rn, Math.max(0, rnPre));
+        const tx = rx - rn * nx, ty = ry - rn * ny, tz = rz - rn * nz;
+        const tl = Math.hypot(tx, ty, tz);
+        const keep = tl > 1e-12 ? 1 - Math.min(1, (mu * Math.max(0, rnNew - rnPre)) / tl) : 1;
+        nvx = vbx + rnNew * nx + tx * keep; nvy = vby + rnNew * ny + ty * keep; nvz = vbz + rnNew * nz + tz * keep;
+      }
+      if (c & 2 && nvz < 0) nvz = 0;
+      v[j] = nvx; v[j + 1] = nvy; v[j + 2] = nvz;
+    }
+    if (coupling > 0) {
+      const f = 1 - Math.exp(-coupling * h), e = this.edges;
+      for (let q = 0; q < e.length; q += 2) {
+        const a = e[q]!, b = e[q + 1]!, wa = w[a]!, wb = w[b]!, ws = wa + wb;
+        if (ws === 0) continue;
+        const ka = (f * wa) / ws, kb = (f * wb) / ws;
+        for (let k = 0; k < 3; k++) {
+          const dv = v[b * 3 + k]! - v[a * 3 + k]!;
+          v[a * 3 + k] = v[a * 3 + k]! + ka * dv;
+          v[b * 3 + k] = v[b * 3 + k]! - kb * dv;
+        }
       }
     }
-    // Constraints.
-    const h2 = h * h;
-    let rim = 0, board = 0;
-    for (let c = 0; c < this.ca.length; c++) {
-      const a = this.ca[c]!, b = this.cb[c]!;
-      const dx = x[b * 3]! - x[a * 3]!, dy = x[b * 3 + 1]! - x[a * 3 + 1]!, dz = x[b * 3 + 2]! - x[a * 3 + 2]!;
-      const d = Math.hypot(dx, dy, dz);
-      if (d < 1e-9) continue;
-      const C = d - this.cl[c]!;
-      const mode = this.mode[c]!;
-      if ((mode === 1 && C <= 0) || (mode === 2 && C >= 0)) continue;
-      const wa = w[a]!, wb = w[b]!;
-      const alpha = this.cc[c]! / h2;
-      // XPBD with one pass per substep (λ starts at 0 each substep).
-      const dl = -C / (wa + wb + alpha);
-      const nx = dx / d, ny = dy / d, nz = dz / d;
-      x[a * 3] = x[a * 3]! - wa * dl * nx; x[a * 3 + 1] = x[a * 3 + 1]! - wa * dl * ny; x[a * 3 + 2] = x[a * 3 + 2]! - wa * dl * nz;
-      x[b * 3] = x[b * 3]! + wb * dl * nx; x[b * 3 + 1] = x[b * 3 + 1]! + wb * dl * ny; x[b * 3 + 2] = x[b * 3 + 2]! + wb * dl * nz;
-      if (wa === 0 || wb === 0) {
-        // The constraint's pull on its pinned end (sim units → N): ∓dl·n/h² (towards the free node when stretched).
-        const k = ((wa === 0 ? -dl : dl) / h2) * SU_M;
-        const fx = k * nx, fy = k * ny, fz = k * nz;
-        const pin = wa === 0 ? a : b;
-        this.hookForce.x += fx; this.hookForce.y += fy; this.hookForce.z += fz;
-        const py = x[pin * 3 + 1]! + RIM_LOCAL.y, pz = x[pin * 3 + 2]! + RIM_LOCAL.z;
-        // Moments about +x (front down positive): (r − pivot) × F, x component, in N·m.
-        rim += ((py - RIM_HINGE.y) * fz - (pz - RIM_HINGE.z) * fy) * SU_M;
-        board += ((py - BOARD_PIVOT.y) * fz - (pz - BOARD_PIVOT.z) * fy) * SU_M;
-      }
+  }
+
+  /** XPBD projection of constraint c with its multiplier accumulated over the substep's passes. */
+  private project(c: number, h: number): void {
+    const x = this.x, w = this.invMass;
+    const a = this.ca[c]!, b = this.cb[c]!;
+    const dx = x[b * 3]! - x[a * 3]!, dy = x[b * 3 + 1]! - x[a * 3 + 1]!, dz = x[b * 3 + 2]! - x[a * 3 + 2]!;
+    const d = Math.hypot(dx, dy, dz);
+    if (d < 1e-9) return;
+    const C = d - this.cl[c]!;
+    const mode = this.mode[c]!;
+    const lam = this.lambda[c]!;
+    if (mode !== 0 && lam === 0 && (mode === 1 ? C <= 0 : C >= 0)) return;
+    const wa = w[a]!, wb = w[b]!;
+    const alpha = this.cc[c]! / (h * h);
+    let dl = (-C - alpha * lam) / (wa + wb + alpha);
+    // Tension only (λ ≤ 0) for a cord, push only (λ ≥ 0) for a minimum distance.
+    if (mode === 1) dl = Math.min(0, lam + dl) - lam;
+    else if (mode === 2) dl = Math.max(0, lam + dl) - lam;
+    if (dl === 0) return;
+    this.lambda[c] = lam + dl;
+    const nx = dx / d, ny = dy / d, nz = dz / d;
+    x[a * 3] = x[a * 3]! - wa * dl * nx; x[a * 3 + 1] = x[a * 3 + 1]! - wa * dl * ny; x[a * 3 + 2] = x[a * 3 + 2]! - wa * dl * nz;
+    x[b * 3] = x[b * 3]! + wb * dl * nx; x[b * 3 + 1] = x[b * 3 + 1]! + wb * dl * ny; x[b * 3 + 2] = x[b * 3 + 2]! + wb * dl * nz;
+    if (wa === 0 || wb === 0) {
+      // The constraint's pull on its pinned end (sim units → N): ∓Δλ·n/h² (towards the free node when stretched).
+      const k = ((wa === 0 ? -dl : dl) / (h * h)) * SU_M;
+      const fx = k * nx, fy = k * ny, fz = k * nz;
+      const pin = wa === 0 ? a : b;
+      this.hookForce.x += fx; this.hookForce.y += fy; this.hookForce.z += fz;
+      const py = x[pin * 3 + 1]! + RIM_LOCAL.y, pz = x[pin * 3 + 2]! + RIM_LOCAL.z;
+      // Moments about +x (front down positive): (r − pivot) × F, x component, in N·m.
+      this.stepRim += ((py - RIM_HINGE.y) * fz - (pz - RIM_HINGE.z) * fy) * SU_M;
+      this.stepBoard += ((py - BOARD_PIVOT.y) * fz - (pz - BOARD_PIVOT.z) * fy) * SU_M;
     }
-    // Collisions: the ball (moving sphere, friction) and the board face.
+  }
+
+  /** The ball (a sphere: knots pushed out along its normal) and the board face (a wall). */
+  private collide(ball: Vector3 | null): void {
+    const x = this.x, w = this.invMass, n = this.n;
     if (ball) {
-      const c = this._c.lerpVectors(ball.previous, ball.center, frac);
       const R = BALL_R + NET_SIM.knotRadius;
-      const vbx = this._vb.x, vby = this._vb.y, vbz = this._vb.z;
       for (let i = 0; i < n; i++) {
         if (w[i] === 0) continue;
         const j = i * 3;
-        const dx = x[j]! - c.x, dy = x[j + 1]! - c.y, dz = x[j + 2]! - c.z;
+        const dx = x[j]! - ball.x, dy = x[j + 1]! - ball.y, dz = x[j + 2]! - ball.z;
         const d = Math.hypot(dx, dy, dz);
         if (d >= R || d < 1e-9) continue;
         const nx = dx / d, ny = dy / d, nz = dz / d;
-        x[j] = c.x + nx * R; x[j + 1] = c.y + ny * R; x[j + 2] = c.z + nz * R;
-        // Velocity relative to the ball: keep the separating normal part, drag the tangential part.
-        let rvx = (x[j]! - prev[j]!) / h - vbx, rvy = (x[j + 1]! - prev[j + 1]!) / h - vby, rvz = (x[j + 2]! - prev[j + 2]!) / h - vbz;
-        const rn = Math.max(0, rvx * nx + rvy * ny + rvz * nz);
-        const tx = rvx - (rvx * nx + rvy * ny + rvz * nz) * nx, ty = rvy - (rvx * nx + rvy * ny + rvz * nz) * ny, tz = rvz - (rvx * nx + rvy * ny + rvz * nz) * nz;
-        const keep = 1 - NET_SIM.friction;
-        rvx = rn * nx + tx * keep; rvy = rn * ny + ty * keep; rvz = rn * nz + tz * keep;
-        prev[j] = x[j]! - (rvx + vbx) * h; prev[j + 1] = x[j + 1]! - (rvy + vby) * h; prev[j + 2] = x[j + 2]! - (rvz + vbz) * h;
+        x[j] = ball.x + nx * R; x[j + 1] = ball.y + ny * R; x[j + 2] = ball.z + nz * R;
+        this.contact[i] = this.contact[i]! | 1;
+        this.normal[j] = nx; this.normal[j + 1] = ny; this.normal[j + 2] = nz;
       }
     }
     for (let i = 0; i < n; i++) {
-      if (w[i] === 0) continue;
-      if (x[i * 3 + 2]! < this.wallZ) { x[i * 3 + 2] = this.wallZ; prev[i * 3 + 2] = this.wallZ; }
+      if (w[i] === 0 || x[i * 3 + 2]! >= this.wallZ) continue;
+      x[i * 3 + 2] = this.wallZ;
+      this.contact[i] = this.contact[i]! | 2;
     }
-    return { rim, board };
   }
 
-  /** Node i's position (net space). */
+  /** Node i's position at the latest substep (sim space). */
   node(i: number, out = new Vector3()): Vector3 {
     return out.set(this.x[i * 3]!, this.x[i * 3 + 1]!, this.x[i * 3 + 2]!);
+  }
+  /** Node i as drawn: between the last two substeps, at `drawnTime` (sim space). */
+  drawn(i: number, out = new Vector3()): Vector3 {
+    const a = this.alpha, j = i * 3, x = this.x, l = this.xLast;
+    return out.set(l[j]! + (x[j]! - l[j]!) * a, l[j + 1]! + (x[j + 1]! - l[j + 1]!) * a, l[j + 2]! + (x[j + 2]! - l[j + 2]!) * a);
   }
   restNode(i: number, out = new Vector3()): Vector3 {
     return out.set(this.rest[i * 3]!, this.rest[i * 3 + 1]!, this.rest[i * 3 + 2]!);
   }
-  /** Largest knot speed (su/s) over the last substep — diagnostics. */
+  /** Largest coordinate displacement from rest (su) — diagnostics. */
   maxDisplacement(): number {
     let d = 0;
     for (let i = 0; i < this.n * 3; i++) d = Math.max(d, Math.abs(this.x[i]! - this.rest[i]!));
@@ -577,33 +834,46 @@ export class NetSim {
  * The spring-action rim on its bracket hinge and the board on its pole, driven by the net's pull.
  * Real constants (SI): the rim (steel ring and bracket, 0.9 kg about 20 cm in front of the hinge,
  * I ≈ 0.045 kg·m²) on a break-away spring of 80 N·m/rad (5° under 7 N·m: a firm hand pull at the
- * front of a mini rim), ζ 0.15 (7 Hz); the board (3 kg polycarbonate in a steel frame, I ≈ 0.27
- * kg·m² about its back) on a 1¾" steel pole and its clamp, 2500 N·m/rad, ζ 0.06 (15 Hz). A swish
- * (≈ 6 N on the hooks at its peak) dips the rim about a degree, and it springs back onto its stop
- * against the board; the board moves a few hundredths of a degree: the net does the work.
+ * front of a mini rim), ζ 0.4 (7 Hz; v1.7: the spring's housing and the bracket's rubber stop damp
+ * it, so its ring onto the back stop dies in a fifth of a second instead of shaking the net for
+ * half a second); the board (3 kg polycarbonate in a steel frame, I ≈ 0.27 kg·m² about its back) on
+ * a 1¾" steel pole and its clamp, 2500 N·m/rad, ζ 0.06 (15 Hz). A swish (≈ 4 N on the hooks at its
+ * peak) dips the rim about half a degree, and it springs back onto its stop against the board; the
+ * board moves a few hundredths of a degree: the net does the work.
  */
 export const HOOP_SPRINGS = {
-  rim: { inertia: 0.045, stiffness: 80, zeta: 0.15 },
+  rim: { inertia: 0.045, stiffness: 80, zeta: 0.4 },
   board: { inertia: 0.27, stiffness: 2500, zeta: 0.06 },
 } as const;
+
+/** The springs' own integration step (s), when stepped by a frame's dt (`step`). */
+const SPRING_STEP = 1 / 960;
 
 export class HoopSprings {
   rim = 0;
   board = 0;
+  /** The angles one substep earlier (the net's render interpolation draws between the two). */
+  prevRim = 0;
+  prevBoard = 0;
   private rimV = 0;
   private boardV = 0;
   settled = true;
+  /** Advance by a frame's dt (equal substeps ≤ 1/960 s): tools and tests; the net channel steps `substep` on the net's clock. */
   step(dt: number, torqueRim: number, torqueBoard: number): void {
     if (this.settled && torqueRim === 0 && torqueBoard === 0) return;
+    const sub = Math.max(1, Math.ceil(dt / SPRING_STEP - 1e-9));
+    for (let i = 0; i < sub; i++) this.substep(dt / sub, torqueRim, torqueBoard);
+  }
+  /** One step of h under the net's pull (semi-implicit Euler), against the travel limit, the back stop and the board's play. */
+  substep(h: number, torqueRim: number, torqueBoard: number): void {
+    this.prevRim = this.rim;
+    this.prevBoard = this.board;
+    if (this.settled && torqueRim === 0 && torqueBoard === 0) return;
     this.settled = false;
-    const sub = 8, h = dt / sub;
     const spring = (x: number, v: number, tq: number, p: { inertia: number; stiffness: number; zeta: number }) => {
       const c = 2 * p.zeta * Math.sqrt(p.stiffness * p.inertia);
-      for (let i = 0; i < sub; i++) {
-        v += ((tq - p.stiffness * x - c * v) / p.inertia) * h;
-        x += v * h;
-      }
-      return [x, v] as const;
+      v += ((tq - p.stiffness * x - c * v) / p.inertia) * h;
+      return [x + v * h, v] as const;
     };
     [this.rim, this.rimV] = spring(this.rim, this.rimV, torqueRim, HOOP_SPRINGS.rim);
     [this.board, this.boardV] = spring(this.board, this.boardV, torqueBoard, HOOP_SPRINGS.board);
@@ -613,6 +883,10 @@ export class HoopSprings {
     if (this.rim < RIM_BACKSTOP) { this.rim = RIM_BACKSTOP; this.rimV = Math.max(0, -0.3 * this.rimV); }
     if (Math.abs(this.board) > bl) { this.board = Math.sign(this.board) * bl; this.boardV = 0; }
     if (torqueRim === 0 && torqueBoard === 0 && Math.abs(this.rim) < 1e-5 && Math.abs(this.rimV) < 1e-4 && Math.abs(this.board) < 1e-6 && Math.abs(this.boardV) < 1e-5) this.settle();
+  }
+  /** Moving enough to stir a resting net (the loops ride the rim): a strike, not the last of a ring-down. */
+  active(): boolean {
+    return !this.settled && (Math.abs(this.rimV) > 0.02 || Math.abs(this.boardV) > 0.02 || Math.abs(this.rim) > 1e-3);
   }
   /**
    * The ball's strike on the rim/board (the decline's bank), applied once at the contact time by
@@ -636,6 +910,7 @@ export class HoopSprings {
   }
   settle(): void {
     this.rim = this.board = this.rimV = this.boardV = 0;
+    this.prevRim = this.prevBoard = 0;
     this.settled = true;
   }
   save(): [number, number, number, number, boolean] {
@@ -643,18 +918,32 @@ export class HoopSprings {
   }
   restore(state: [number, number, number, number, boolean]): void {
     [this.rim, this.board, this.rimV, this.boardV, this.settled] = state;
+    this.prevRim = this.rim;
+    this.prevBoard = this.board;
   }
 }
 
 /**
- * Skinning of the master net onto the lattice: the strand and knot meshes become skinned meshes
- * (one bone per vertex); `update()` sets the bones from the simulation.
+ * Skinning of the master net onto the lattice: the strand and knot meshes become skinned meshes;
+ * `update()` sets the bones from the simulation as drawn (between its last two substeps, carried
+ * into the recoiled net node).
+ *
+ * v1.7: every strand has two bones, its upper and lower half, and is drawn at its rest length: a
+ * cord whose knots have come closer than that bows (the two halves meet at its sagging middle)
+ * instead of shrinking, and one pulled tight stretches only by its real elastic strain. A knot's
+ * frame takes its up from all its cords (the two above and the two below, or for the bottom row
+ * its two above and the row's own run), so a knot turns with the net round it, not with its own
+ * small sway; the tails, welded to the bottom knots, hang from those frames.
  */
 export class NetSkin {
   readonly bones: Bone[] = [];
   /** The shared skeleton (its bone texture is a GPU resource: `dispose()` frees it). */
   readonly skeleton: Skeleton;
-  private readonly restLen: number[];
+  /** Each cord's drawn length (its rest chord in the net node) and its bind (master) length. */
+  private readonly drawLen: number[];
+  private readonly bindLen: number[];
+  /** Each cord's drawn length over its rest length after the last update (1: at rest or bowed; > 1: stretched). */
+  readonly strand: Float64Array;
   private readonly m = new Matrix4();
   private readonly q = new Quaternion();
   private readonly t = new Vector3();
@@ -662,16 +951,31 @@ export class NetSkin {
   private readonly b = new Vector3();
   private readonly a = new Vector3();
   private readonly c = new Vector3();
+  private readonly mid = new Vector3();
   private readonly up = new Vector3();
-  /** Upper neighbours per node (for the knot frames). */
+  private readonly s = new Vector3();
+  private readonly o = new Vector3();
+  /** Upper and lower neighbours per node (for the knot frames). */
   private readonly upper: number[][];
+  private readonly lower: number[][];
+  /** Node positions as drawn (net node space, flat). */
+  private readonly drawnPos: Float64Array;
+  private readonly ringNext: Int16Array;
+  private readonly ringPrev: Int16Array;
 
   constructor(net: Object3D, private readonly sim: NetSim, meshes: Mesh[]) {
     const L = sim.lattice;
     this.upper = L.nodes.map(() => []);
-    for (const [a, b] of L.cords) this.upper[b]!.push(a);
-    this.restLen = L.cords.map(([a, b]) => sim.restNode(a).distanceTo(sim.restNode(b)));
-    const count = L.cords.length + L.nodes.length;
+    this.lower = L.nodes.map(() => []);
+    for (const [a, b] of L.cords) { this.upper[b]!.push(a); this.lower[a]!.push(b); }
+    this.ringNext = new Int16Array(L.nodes.length).fill(-1);
+    this.ringPrev = new Int16Array(L.nodes.length).fill(-1);
+    for (const row of L.rows) row.forEach((k, i) => { this.ringNext[k] = row[(i + 1) % row.length]!; this.ringPrev[k] = row[(i + row.length - 1) % row.length]!; });
+    this.drawLen = L.cords.map(([a, b]) => sim.restNode(a).distanceTo(sim.restNode(b)));
+    this.bindLen = L.cords.map(([a, b]) => L.nodes[a]!.distanceTo(L.nodes[b]!));
+    this.strand = new Float64Array(L.cords.length).fill(1);
+    this.drawnPos = new Float64Array(L.nodes.length * 3);
+    const count = 2 * L.cords.length + L.nodes.length;
     for (let i = 0; i < count; i++) {
       const bone = new Bone();
       bone.name = `net_bone_${i}`;
@@ -679,23 +983,16 @@ export class NetSkin {
       this.bones.push(bone);
     }
     // Bind pose: the master's own geometry, so the bones' rest frames come from the lattice as analysed.
-    this.pose((i, out) => out.copy(L.nodes[i]!), true);
+    L.nodes.forEach((p, i) => p.toArray(this.drawnPos, i * 3));
+    this.pose(true);
     net.updateMatrixWorld(true);
     const skeleton = (this.skeleton = new Skeleton(this.bones));
     for (const mesh of meshes) {
       const bind = L.binding.get(mesh.geometry);
       if (!bind) continue;
       const g = mesh.geometry;
-      const n = bind.bone0.length;
-      const idx = new Uint16Array(n * 4), wt = new Float32Array(n * 4);
-      for (let i = 0; i < n; i++) {
-        idx[i * 4] = bind.bone0[i]!;
-        idx[i * 4 + 1] = bind.bone1[i]!;
-        wt[i * 4] = 1 - bind.weight1[i]!;
-        wt[i * 4 + 1] = bind.weight1[i]!;
-      }
-      g.setAttribute('skinIndex', new Uint16BufferAttribute(idx, 4));
-      g.setAttribute('skinWeight', new Float32BufferAttribute(wt, 4));
+      g.setAttribute('skinIndex', new Uint16BufferAttribute(bind.index, 4));
+      g.setAttribute('skinWeight', new Float32BufferAttribute(bind.weight, 4));
       const skinned = new SkinnedMesh(g, mesh.material as Material);
       skinned.name = mesh.name;
       skinned.castShadow = mesh.castShadow;
@@ -713,40 +1010,80 @@ export class NetSkin {
     this.update();
   }
 
-  /** Set the bones from node positions (`at`). `bind` uses unit stretch. */
-  private pose(at: (i: number, out: Vector3) => Vector3, bind = false): void {
-    const L = this.sim.lattice;
-    const { t, nn, b, a, c, up, q, m } = this;
+  private at(i: number, out: Vector3): Vector3 {
+    return out.fromArray(this.drawnPos, i * 3);
+  }
+
+  /** Set the bones from the drawn node positions. `bind`: the master's pose, unit scale, no bow. */
+  private pose(bind = false): void {
+    const L = this.sim.lattice, nc = L.cords.length, nn = L.nodes.length;
+    const { t, b, a, c, mid, up, s, q, m } = this;
     L.cords.forEach(([ia, ib], k) => {
-      at(ia, a);
-      at(ib, c);
+      this.at(ia, a);
+      this.at(ib, c);
       t.subVectors(c, a);
-      const len = t.length();
-      t.divideScalar(len || 1);
-      const bone = this.bones[k]!;
-      this.frame(t, (a.x + c.x) / 2, (a.z + c.z) / 2, nn, b);
-      m.makeBasis(t, nn, b);
-      bone.quaternion.setFromRotationMatrix(m);
-      bone.position.copy(a);
-      bone.scale.set(bind ? 1 : len / this.restLen[k]!, 1, 1);
+      const d = t.length();
+      t.divideScalar(d || 1);
+      mid.addVectors(a, c).multiplyScalar(0.5);
+      const L0 = bind ? d : this.drawLen[k]!;
+      if (!bind && d < L0) {
+        // Slack: the cord keeps its length and bows, its middle sagging down and out of the net.
+        const sag = Math.sqrt(L0 * L0 - d * d) / 2;
+        const r = Math.hypot(mid.x, mid.z) || 1;
+        s.set((0.5 * mid.x) / r, -1, (0.5 * mid.z) / r);
+        s.addScaledVector(t, -s.dot(t));
+        if (s.lengthSq() < 1e-12) s.set(mid.x / r, 0, mid.z / r).addScaledVector(t, -t.x * (mid.x / r) - t.z * (mid.z / r));
+        mid.addScaledVector(s.normalize(), sag);
+      }
+      this.strand[k] = bind ? 1 : Math.max(d, L0) / L0;
+      const half = (bind ? d : this.bindLen[k]!) / 2;
+      this.halfBone(this.bones[k]!, a, mid, half);
+      this.halfBone(this.bones[nc + nn + k]!, mid, c, half);
     });
-    L.nodes.forEach((_, i) => {
-      const bone = this.bones[L.cords.length + i]!;
-      at(i, a);
-      const ups = this.upper[i]!;
-      if (ups.length) {
-        up.set(0, 0, 0);
-        for (const u of ups) up.add(at(u, c));
-        up.divideScalar(ups.length).sub(a).normalize();
-      } else up.set(0, 1, 0);
+    for (let i = 0; i < nn; i++) {
+      const bone = this.bones[nc + i]!;
+      this.at(i, a);
+      this.knotUp(i, up);
       // Knot frame: (radial, up, radial × up).
-      this.frame(up, a.x, a.z, nn, b);
-      m.makeBasis(nn, up, b.negate());
+      this.frame(up, a.x, a.z, this.nn, b);
+      m.makeBasis(this.nn, up, b.negate());
       q.setFromRotationMatrix(m);
       bone.quaternion.copy(q);
       bone.position.copy(a);
       bone.scale.set(1, 1, 1);
-    });
+    }
+  }
+
+  /** A strand half from p to e (bind length `half`): frame along it, radial, binormal; stretched along it. */
+  private halfBone(bone: Bone, p: Vector3, e: Vector3, half: number): void {
+    const { o, nn, b, m } = this;
+    o.subVectors(e, p);
+    const len = o.length();
+    o.divideScalar(len || 1);
+    this.frame(o, (p.x + e.x) / 2, (p.z + e.z) / 2, nn, b);
+    m.makeBasis(o, nn, b);
+    bone.quaternion.setFromRotationMatrix(m);
+    bone.position.copy(p);
+    // The bind half is `half` long at unit scale: scale = drawn half / bind half.
+    bone.scale.set(len / half, 1, 1);
+  }
+
+  /** A knot's up: from all its cords (up the ones above, down the ones below); the bottom row's from the cords above and its row's run. */
+  private knotUp(i: number, out: Vector3): Vector3 {
+    const { a, c } = this;
+    const ups = this.upper[i]!, downs = this.lower[i]!;
+    this.at(i, a);
+    out.set(0, 0, 0);
+    for (const u of ups) out.add(this.at(u, c).sub(a).normalize());
+    for (const d of downs) out.sub(this.at(d, c).sub(a).normalize());
+    if (!ups.length && !downs.length) return out.set(0, 1, 0);
+    if (!downs.length && this.ringNext[i]! >= 0) {
+      // Bottom row: square the cords' up to the row's own run through the knot (its neighbours).
+      const run = this.at(this.ringNext[i]!, c).sub(this.at(this.ringPrev[i]!, this.s));
+      const l = run.length();
+      if (l > 1e-9) out.addScaledVector(run, -out.dot(run) / (l * l));
+    }
+    return out.normalize();
   }
 
   /** Radial direction at (x, z) made perpendicular to `axis`, and axis × radial. */
@@ -759,9 +1096,34 @@ export class NetSkin {
     outB.crossVectors(axis, outN);
   }
 
-  /** Bones from the simulation's current positions. */
-  update(): void {
-    this.pose((i, out) => this.sim.node(i, out));
+  /**
+   * Bones from the simulation as drawn, in the net node carried by the recoil (board, rim): a resting
+   * net hangs at rest on the rim; a moving one is drawn from sim space into the recoiled node.
+   */
+  update(board = 0, rim = 0): void {
+    const sim = this.sim, n = sim.n, p = this.a;
+    if (sim.settled) this.drawnPos.set(sim.rest);
+    else {
+      recoilPoint(RIM_LOCAL, board, rim, this.o);
+      const ang = -(board + rim), cs = Math.cos(ang), sn = Math.sin(ang);
+      for (let i = 0; i < n; i++) {
+        sim.drawn(i, p).add(RIM_LOCAL).sub(this.o);
+        this.drawnPos[i * 3] = p.x;
+        this.drawnPos[i * 3 + 1] = p.y * cs - p.z * sn;
+        this.drawnPos[i * 3 + 2] = p.y * sn + p.z * cs;
+      }
+    }
+    this.pose();
+  }
+
+  /** Node i as drawn after the last update (net node space). */
+  drawnNode(i: number, out = new Vector3()): Vector3 {
+    return out.fromArray(this.drawnPos, i * 3);
+  }
+
+  /** Each strand's drawn length over its rest length (1 at rest and when bowed slack). */
+  strandScales(): number[] {
+    return [...this.strand];
   }
 
   dispose(): void {

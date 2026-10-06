@@ -17,6 +17,13 @@ const { FixedStepper } = await import(P + '/src/motion/spring.ts');
 
 const args = process.argv.slice(2);
 const HZ = Number(args.find((a) => /^\d+$/.test(a)) ?? 120);
+// --set key=value,...: override NET_SIM (or rim.zeta / board.zeta of HOOP_SPRINGS) for a sweep.
+const SET = args.find((a) => a.startsWith('--set='))?.slice(6);
+if (SET) for (const kv of SET.split(',')) {
+  const [k, v] = kv.split('=') as [string, string];
+  if (k.startsWith('rim.') || k.startsWith('board.')) { const [part, f] = k.split('.') as ['rim' | 'board', string]; (NETMOD.HOOP_SPRINGS as any)[part][f] = Number(v); }
+  else (NETMOD.NET_SIM as any)[k] = Number(v);
+}
 const SU_M = 0.36, DEG = 180 / Math.PI, G = 9.81 / SU_M;
 
 const doc = await createIO().read(P + '/assets/scenes/sports/sports.glb');
@@ -204,6 +211,23 @@ function analyse(hz: number) {
     const b = win.flatMap((s) => [s.knots[q2 * 3]! - restK[q2 * 3]!, s.knots[q2 * 3 + 2]! - restK[q2 * 3 + 2]!]);
     adjXY += corr(a, b) / 10;
   }
+  // The ring's in-plane motion by angular mode: breathing (n0 radial), twist (n0 tangential),
+  // translation (n1), ovalling (n2) and finer (n3–5), RMS over the window (mm).
+  const modes = new Float64Array(7);
+  for (let w = 0; w < win.length; w++) {
+    for (let nmode = 0; nmode <= 5; nmode++) {
+      let rc = 0, rs = 0, tc = 0, ts = 0;
+      for (let j = 0; j < 10; j++) {
+        const th = (2 * Math.PI * j) / 10;
+        rc += rad[j]![w]! * Math.cos(nmode * th) / 10; rs += rad[j]![w]! * Math.sin(nmode * th) / 10;
+        tc += tang[j]![w]! * Math.cos(nmode * th) / 10; ts += tang[j]![w]! * Math.sin(nmode * th) / 10;
+      }
+      const k = nmode === 0 || nmode === 5 ? 1 : 2;
+      if (nmode === 0) { modes[0] += rc * rc; modes[1] += tc * tc; }
+      else modes[nmode + 1] += k * (rc * rc + rs * rs + tc * tc + ts * ts);
+    }
+  }
+  out.ringModes_mm = Object.fromEntries(['breathe', 'twist', 'n1', 'n2', 'n3', 'n4', 'n5'].map((name, i) => [name, +(Math.sqrt(modes[i]! / win.length) * SU_M * 1000).toFixed(2)]));
   out.ringRigidRms_mm = Math.sqrt(coh2 / win.length) * SU_M * 1000;
   out.ringRelativeRms_mm = Math.sqrt(inc2 / win.length) * SU_M * 1000;
   out.ringRigidOverRelative = out.ringRigidRms_mm / out.ringRelativeRms_mm;
@@ -294,7 +318,20 @@ function analyse(hz: number) {
   return out;
 }
 
-if (args.includes('--det')) {
+if (args.includes('--series')) {
+  // The bottom ring's mean displacement (mm, hoop space) and the ball, every 1/30 s from contact.
+  const { snaps } = run(HZ, NET_PASSAGE.exitAt + 2.5);
+  const rest = snaps[0]!;
+  const idx = (k: number) => KNOTS.indexOf(k);
+  let last = -1;
+  for (const s of snaps) {
+    if (s.t < CONTACT_AT - 0.05 || s.t - last < 1 / 30 - 1e-9) continue;
+    last = s.t;
+    const m = [0, 1, 2].map((c) => (BOTTOM.reduce((a, k) => a + s.knots[idx(k) * 3 + c]! - rest.knots[idx(k) * 3 + c]!, 0) / 10) * SU_M * 1000);
+    const row3 = [0, 1, 2].map((c) => (L.rows[3]!.reduce((a: number, k: number) => a + s.knots[idx(k) * 3 + c]! - rest.knots[idx(k) * 3 + c]!, 0) / 10) * SU_M * 1000);
+    console.log(`${(s.t - NET_PASSAGE.exitAt).toFixed(3).padStart(7)}  ring5 x ${m[0]!.toFixed(2).padStart(7)} y ${m[1]!.toFixed(2).padStart(7)} z ${m[2]!.toFixed(2).padStart(7)} | ring3 x ${row3[0]!.toFixed(2).padStart(7)} y ${row3[1]!.toFixed(2).padStart(7)} z ${row3[2]!.toFixed(2).padStart(7)} | ball ${(s.ball.x - RIM_LOCAL.x).toFixed(3)} ${(s.ball.y - RIM_LOCAL.y).toFixed(3)} ${(s.ball.z - RIM_LOCAL.z).toFixed(3)}`);
+  }
+} else if (args.includes('--det')) {
   // Determinism: drawn knots at the run times every cadence shares (the tail's times included).
   const runs = [60, 90, 120, 144].map((hz) => ({ hz, snaps: run(hz, 4).snaps }));
   const key = (s: Snap) => Math.round(s.run * 1e6);
@@ -312,7 +349,10 @@ if (args.includes('--det')) {
   }
 } else {
   const r = analyse(HZ);
-  if (args.includes('--json')) console.log(JSON.stringify(r));
+  if (args.includes('--brief')) {
+    const f = (x: number, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : String(x));
+    console.log(`${SET ?? 'default'} | settle ${f(r.settleAfterExit)} | sway x ${r.swayX.peakHz}Hz ${f(r.swayX.ampl_mm)}mm hf ${f(r.swayX.hfOverLf, 3)} z ${r.swayZ.peakHz}Hz ${f(r.swayZ.ampl_mm)}mm | rigid ${f(r.ringRigidRms_mm)} rel ${f(r.ringRelativeRms_mm)} ${JSON.stringify(r.ringModes_mm)} ratio ${f(r.ringRigidOverRelative)} adj ${f(r.adjTangentialCorr)}/${f(r.adjInPlaneCorr)} | KE1% ${f(r.keBelow1pctAfterExit)} Erise ${f(r.eMaxFrameRise, 3)} | late ${f(r.lateSwingAtExit2_mm)} | tilt ${f(r.tiltRateAfterExit025_degps, 0)}dps ${f(r.tiltDevAfterExit1_deg)}deg | scale ${f(r.strandScaleAfterExit[0], 3)}-${f(r.strandScaleAfterExit[1], 3)} | open ${f(r.maxOpen_su, 3)} gap ${f(r.minGap_su, 4)} lift ${f(r.lift_su, 3)} | F ${f(r.hookForceMax_N)}N rim ${f(r.rimMax_deg)}/${f(r.rimMin_deg)} quiet ${f(r.rimQuietAfterContact)} | dy ${JSON.stringify(r.bottomMeanDy_mm)}`);
+  } else if (args.includes('--json')) console.log(JSON.stringify(r));
   else for (const [k, v] of Object.entries(r)) console.log(k.padEnd(28), typeof v === 'number' ? +v.toPrecision(4) : JSON.stringify(v));
 }
 void masses; void RELEASE_AT;
