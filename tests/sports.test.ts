@@ -4,7 +4,7 @@ import { Box3, BufferAttribute, BufferGeometry, Matrix4, Mesh, Object3D, Orthogr
 import type { Document, Node } from '@gltf-transform/core';
 import type { KHRMaterialsVariants } from '@gltf-transform/extensions';
 import { listTextureSlots } from '@gltf-transform/functions';
-import { cameraDirection, fitCameraToBounds, PERSPECTIVE_FOV, solveHeroFits } from '../src/render/camera.ts';
+import { cameraDirection, fitCameraToBounds, PERSPECTIVE_FOV, placeHeroView, pulledView, solveCloseFit, solveHeroFits } from '../src/render/camera.ts';
 import { HERO_FILL, PATH_CLEARANCE } from '../src/render/framing.ts';
 import { SEAM_FRAME } from '../src/render/ballMaterial.ts';
 import {
@@ -28,6 +28,7 @@ import {
   BLEND_MARGIN, blendClearance, hitKick, hoopDistance, SPORTS_HERO_EXCLUDE, SPORTS_HERO_FILL, sportsFramePoints, sportsInterruptCut, SportsScene,
 } from '../src/scenes/sports/index.ts';
 import { type Change, planChange, type Showing } from '../src/scenes/sports/change.ts';
+import { FOCUS, focusIn, sportsFocus } from '../src/scenes/sports/focus.ts';
 import type { CanonicalPose, SceneConfig, SequenceName } from '../src/core/types.ts';
 import { netCost } from './netCost.ts';
 
@@ -1458,5 +1459,180 @@ describe('Sports v1.7 polish: the stand sways on the strikes (HoopSprings.stand,
     expect(rig.springs.stand).toBe(0);
     scene.refresh();
     expect(rig.springs.save()).toEqual(moving);
+  });
+});
+
+describe('Sports v1.7 polish: the decline pushes in on the bank (focus.ts, the scene\'s focus channel)', () => {
+  const camera = new PerspectiveCamera(PERSPECTIVE_FOV, 1, 0.05, 400);
+  const aim = SPORTS_BOUNDS.getCenter(new Vector3());
+  // The rest hero as the fill test has it (the board, the ring, the net's bottom, the ball at guest-ready).
+  const hero: Vector3[] = [];
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const z of [BOARD.front, BOARD.front - BOARD.thickness]) hero.push(new Vector3(HOOP_ROOT.x + (sx * BOARD.width) / 2, BOARD.centerY + (sy * BOARD.height) / 2, HOOP_ROOT.z + z));
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a);
+    hero.push(new Vector3(RIM_CENTER.x + c * (RIM.innerRadius + 2 * RIM.tube), RIM_CENTER.y, RIM_CENTER.z + sn * (RIM.innerRadius + 2 * RIM.tube)));
+    hero.push(new Vector3(RIM_CENTER.x + c * netRestRadius(1), RIM_CENTER.y - NET.depth, RIM_CENTER.z + sn * netRestRadius(1)));
+  }
+  for (const d of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) hero.push(BALL_AT.guest.clone().add(new Vector3(...d).multiplyScalar(BALL_R)));
+  const paths = sportsFramePoints();
+  const focus = sportsFocus();
+  const fits = (aspect: number) => ({
+    rest: solveHeroFits(camera, aim, aspect, hero, [paths], SPORTS_HERO_FILL, PATH_CLEARANCE)[0]!,
+    focus: solveCloseFit(camera, aim, aspect, focus, focus.points, PATH_CLEARANCE, undefined, focus.paths),
+  });
+  /** The camera at focus k between the two fits (the stage's dolly), and the ball's worst NDC margin. */
+  const place = (f: ReturnType<typeof fits>, aspect: number, k: number) => {
+    const v = pulledView(f.rest, f.focus, k);
+    placeHeroView(camera, aim, aspect, v.distance, v.offset);
+  };
+  const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], ...[[1, 1, 0], [1, -1, 0], [-1, 1, 0], [-1, -1, 0], [0, 1, 1], [0, 1, -1], [0, -1, 1], [0, -1, -1], [1, 0, 1], [1, 0, -1], [-1, 0, 1], [-1, 0, -1]].map((d) => d.map((x) => x * Math.SQRT1_2))] as const;
+  const margin = (c: Vector3) => {
+    let m = Infinity;
+    for (const d of DIRS) {
+      const q = new Vector3(c.x + d[0]! * BALL_R, c.y + d[1]! * BALL_R, c.z + d[2]! * BALL_R).project(camera);
+      m = Math.min(m, 1 - Math.abs(q.x), 1 - Math.abs(q.y));
+    }
+    return m;
+  };
+
+  it('the channel: 0 to the launch, 1 before the glass and through the rattle, home before the first floor contact; C1, a lean not a punch', () => {
+    const glass = BANK_HIT.at, rattleEnd = HITS.decline.at(-1)!.at + BOUNCE.contactTime, floor = CONTACTS.decline[0]!.at;
+    expect(FOCUS.in[0]).toBeLessThan(RELEASES.decline);
+    expect(focusIn(FOCUS.in[0])).toBe(0);
+    expect(focusIn(glass - 0.01)).toBe(1);
+    expect(FOCUS.out[0]).toBeGreaterThanOrEqual(rattleEnd - 1e-9);
+    for (let t = glass - 0.01; t <= rattleEnd; t += 0.001) expect(focusIn(t)).toBe(1);
+    expect(FOCUS.out[1]).toBeLessThan(floor);
+    for (const t of [0, 0.2, FOCUS.out[1], floor, 3, REST_AT.decline]) expect(focusIn(t)).toBe(0);
+    // C1: the rate is continuous (zero at both ends of each ease), and never steps between frames.
+    const rate = (t: number) => (focusIn(t + 1e-5) - focusIn(t - 1e-5)) / 2e-5;
+    for (const t of [...FOCUS.in, ...FOCUS.out]) expect(Math.abs(rate(t))).toBeLessThan(1e-3);
+    let peak = 0;
+    for (let t = 0; t < 2.4; t += 1 / 240) {
+      expect(Math.abs(focusIn(t + 1 / 240) - focusIn(t))).toBeLessThan(0.025);
+      peak = Math.max(peak, Math.abs(rate(t)));
+    }
+    // The ease's peak rate is 1.72 × the mean (CSS ease-in-out): 3.3 /s in over 0.53 s, 3.4 /s out over 0.5 s.
+    expect(peak).toBeLessThan(1.75 / Math.min(FOCUS.in[1] - FOCUS.in[0], FOCUS.out[1] - FOCUS.out[0]));
+  });
+
+  it('the focus fit: 1.6–1.8 × closer at 1:1 and 3:2 (the ball at the strike ≥ 14 % of the frame), the pole cut ≈ 45 cm up, the base out of frame; never path-limited', () => {
+    const toCmY = (y: number) => y * SPORTS_CM_PER_UNIT;
+    const base: Vector3[] = [];
+    // The base's top corners and the socket's boss round the pole (6 cm over the top: the GLB's is 4 cm).
+    for (const sx of [-1, 1]) for (const z of [STAND.base.front, STAND.base.back]) base.push(new Vector3(HOOP_ROOT.x + sx * STAND.base.halfWidth, STAND.base.height, HOOP_ROOT.z + z));
+    base.push(HOOP_ROOT.clone().add(POLE.foot).setY(STAND.base.height + 6 / SPORTS_CM_PER_UNIT));
+    const foot = HOOP_ROOT.clone().add(POLE.foot), head = HOOP_ROOT.clone().add(POLE.head);
+    for (const aspect of [0.75, 1, 1.5]) {
+      const f = fits(aspect), label = `${aspect}`;
+      expect(f.focus.pathLimited, label).toBe(false);
+      const zoom = f.rest.distance / f.focus.distance;
+      expect(zoom, label).toBeGreaterThan(aspect < 1 ? 1.5 : 1.6);
+      expect(zoom, label).toBeLessThan(1.85);
+      place(f, aspect, 1);
+      for (const p of base) expect(p.clone().project(camera).y, label).toBeLessThan(-1);
+      // Where the frame's bottom crosses the pole (cm above the floor).
+      let u = 0;
+      while (u < 1 && foot.clone().lerp(head, u).project(camera).y < -1) u += 0.001;
+      expect(toCmY(foot.y + (head.y - foot.y) * u), label).toBeGreaterThan(aspect < 1 ? 38 : 44);
+      if (aspect >= 1) {
+        const b = BANK_HIT.point;
+        const h = (b.clone().setY(b.y + BALL_R).project(camera).y - b.clone().setY(b.y - BALL_R).project(camera).y) / 2;
+        expect(h, label).toBeGreaterThan(0.14);
+      }
+    }
+  });
+
+  it('the ball is inside the frame at every frame of the decline with the channel applied (1/240 s, 3:4, 1:1, 3:2)', () => {
+    const fr = newFrame();
+    for (const aspect of [0.75, 1, 1.5]) {
+      const f = fits(aspect);
+      let worst = Infinity, at = 0;
+      for (let t = 0; t <= 2.4; t += 1 / 240) {
+        place(f, aspect, focusIn(t));
+        const m = margin(sampleTrack('decline', t, fr).ballPos);
+        if (m < worst) { worst = m; at = t; }
+      }
+      expect(worst, `${aspect} at ${at.toFixed(3)} s`).toBeGreaterThanOrEqual(PATH_CLEARANCE);
+    }
+  });
+
+  it('the scene: 0 at every pose, focusIn along the decline (its tail too), no push-in for the accept or a decline from the accepted pose', () => {
+    const rig = fakeRig();
+    const scene = new SportsScene(rig, { category: 'sports', ball: 'orange' } as Extract<SceneConfig, { category: 'sports' }>);
+    for (const p of ['host-ready', 'guest-ready', 'accepted', 'declined'] as CanonicalPose[]) {
+      scene.pose(p);
+      expect(scene.frameClose(), p).toBe(0);
+    }
+    expect(scene.closeUp.kind).toBe('focus');
+    scene.pose('guest-ready');
+    for (let t = 0; t <= DURATIONS.decline + 1e-9; t += 1 / 60) {
+      scene.sample('decline', t);
+      expect(scene.frameClose()).toBeCloseTo(focusIn(Math.min(t, DURATIONS.decline)), 12);
+    }
+    // The director poses the final pose right after its last sample; the tail plays on in simulate.
+    scene.pose('declined');
+    let t = DURATIONS.decline;
+    for (let i = 0; i < 120; i++) {
+      scene.simulate(1 / 120);
+      t += 1 / 120;
+      expect(scene.frameClose()).toBeCloseTo(focusIn(t), 9);
+    }
+    scene.settle();
+    expect(scene.frameClose()).toBe(0);
+    scene.pose('guest-ready');
+    for (let u = 0; u <= DURATIONS.accept; u += 1 / 60) {
+      scene.sample('accept', u);
+      expect(scene.frameClose()).toBe(0);
+    }
+    // A decline from the accepted pose (a saved accept): a change track that never banks, no push-in.
+    scene.pose('accepted');
+    expect(scene.interruptCut()).toBe(true);
+    scene.settle();
+    scene.pose('guest-ready');
+    scene.refresh();
+    for (let u = 0; u <= DURATIONS.decline; u += 1 / 60) {
+      scene.sample('decline', u);
+      expect(scene.frameClose()).toBe(0);
+    }
+  });
+
+  it('a change of mind mid-push-in comes home C1 (no jump in place or speed), within 0.7 s, the ball inside the frame all the way', () => {
+    const f1 = fits(1);
+    for (const tau of [0.6, 0.8, 0.95, 1.3, 1.6, 1.8, 2.0]) {
+      const rig = fakeRig();
+      const scene = new SportsScene(rig, { category: 'sports', ball: 'orange' } as Extract<SceneConfig, { category: 'sports' }>);
+      const dt = 1 / 240;
+      const seq: number[] = [];
+      let t = 0;
+      for (; t <= Math.min(tau, DURATIONS.decline) + 1e-9; t += dt) { scene.sample('decline', t); seq.push(scene.frameClose()); }
+      if (tau > DURATIONS.decline) {
+        scene.pose('declined');
+        for (let u = DURATIONS.decline; u < tau - 1e-9; u += dt) { scene.simulate(dt); seq.push(scene.frameClose()); }
+      }
+      const before = seq.at(-1)!, rateBefore = (seq.at(-1)! - seq.at(-2)!) / dt;
+      // The director's cut: interruptCut, settle, guest-ready, refresh, then the new sequence from 0.
+      expect(scene.interruptCut(), `${tau}`).toBe(true);
+      scene.settle();
+      scene.pose('guest-ready');
+      scene.refresh();
+      scene.sample('accept', 0);
+      expect(scene.frameClose(), `${tau}`).toBeCloseTo(before, 9);
+      const after: number[] = [scene.frameClose()];
+      let homeAt = before > 0 ? Infinity : 0, worst = Infinity;
+      for (let u = dt; u <= DURATIONS.accept; u += dt) {
+        scene.sample('accept', u);
+        const k = scene.frameClose();
+        after.push(k);
+        if (k === 0 && homeAt === Infinity) homeAt = u;
+        place(f1, 1, k);
+        worst = Math.min(worst, margin(rig.nodes.ball_authored!.position));
+      }
+      const rateAfter = (after[1]! - after[0]!) / dt;
+      expect(Math.abs(rateAfter - rateBefore), `${tau}`).toBeLessThan(0.15);
+      for (let i = 1; i < after.length; i++) expect(Math.abs(after[i]! - after[i - 1]!), `${tau}`).toBeLessThan(0.025);
+      expect(homeAt, `${tau}`).toBeLessThanOrEqual(0.7 + 1e-9);
+      expect(worst, `${tau}`).toBeGreaterThanOrEqual(PATH_CLEARANCE);
+    }
   });
 });

@@ -52,9 +52,10 @@ export function hoopFramePoints(): Vector3[] {
  * hand at 0.525 s; `in[0]` just before, as the hand lifts it) to the focus before the glass (0.95 s),
  * holds through the rattle (its last strike at 1.586 s, 20 ms long), and eases back to the rest
  * frame before the ball's first floor contact (2.135 s). `path`: the ball's airborne path the focus
- * fit holds, from where the channel is three quarters in to the end of the hold.
+ * fit holds, from where the channel is four fifths in (0.78 s) to the end of the hold; before it the
+ * ball is inside the frame by the ease (a per-frame check at 1/240 s, tests/sports.test.ts).
  */
-export const FOCUS = { in: [0.4, 0.93], out: [1.6, 2.1], path: [0.7, 1.6] } as const;
+export const FOCUS = { in: [0.4, 0.93], out: [1.61, 2.1], path: [0.78, 1.61] } as const;
 /**
  * The ease both ways: CSS's ease-in-out, cubic-bezier(0.42, 0, 0.58, 1): zero speed at both ends,
  * symmetric, its peak only 1.72 × the mean (Dinner's close-up's (0.4, 0, 0.4, 1) 2.06 ×, the
@@ -64,10 +65,13 @@ export const FOCUS_EASE = cubicBezier(0.42, 0, 0.58, 1);
 /**
  * The focus fit (the hero rule along the shared direction): the board, the rim and the net fill
  * this much of the frame's height (and at most this much of its width), every point of the ball's
- * airborne path PATH_CLEARANCE inside. Measured (tests/sports.test.ts, the real stage): at 1:1
- * the frame's bottom crosses the pole ≈ 41 cm above the floor, under its clamp collar, and the
- * base is out of frame; everything is 1.54× larger than at rest (the ball at the strike 8.9 → 14 %
- * of the frame's height).
+ * airborne path (FOCUS.path) PATH_CLEARANCE inside. Measured (tests/sports.test.ts; the GLB's
+ * stand; the real stage): at 1:1 and 3:2 everything is 1.67× larger than at rest (the ball at the
+ * strike ≈ 15 % of the frame's height, 76 CSS px on the laptop against 43), the frame's bottom
+ * crosses the pole ≈ 45 cm above the floor, under its clamp collar, and the base's highest point
+ * (its socket's boss, 17 cm) is 5 % of the frame below it (27 px on the laptop, past the 16 px the
+ * fullscreen view shows under the frame square; on the phone 10 px under the dock); at 3:4 the
+ * width binds: 1.59×, the base 2 % below the frame. 0.7 left the base's boss in the laptop's view.
  */
 export const SPORTS_FOCUS_FILL = { height: 0.8, width: 0.8 } as const;
 
