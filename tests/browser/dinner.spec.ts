@@ -353,8 +353,8 @@ test('v1.7: a saved accept\'s live close-up is a chosen accept\'s (no band acros
   const live = await compare(saved.live, chosen.live);
   const still = await compare(saved.still, chosen.still);
   console.log('dinner saved vs chosen accept, live 3:4:', JSON.stringify(live), 'still 512:', JSON.stringify(still));
-  // Byte-identical on this build (before the fix: the live stage 12 % of its pixels over 24/255, max 129;
-  // the square still 0.2 %, max 35). Within GPU noise: no pixel over 24/255 beyond 0.05 %.
+  // Byte-identical on this build (before the fix: the live stage 8.8 % of its pixels over 24/255, max 140,
+  // mean 7.1; the square still 0.2 %, max 35). Within GPU noise: no more than 0.05 % over 24/255.
   for (const r of [live, still]) {
     expect(r.share).toBeLessThan(0.0005);
     expect(r.mean).toBeLessThan(0.1);
