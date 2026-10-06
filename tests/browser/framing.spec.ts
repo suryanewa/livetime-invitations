@@ -41,8 +41,9 @@ for (const scene of SCENES) {
         for (const v of [-x0, x1, -y0, y1]) expect(v, label).toBeLessThanOrEqual(CLEAR);
       }
       // v1.7 (#43): Sports frames its board, rim, net and ball at its own fill, the largest that
-      // keeps every path inside the clearance (0.92 of the height; at 3:4 0.76 of the width binds).
-      const fill = scene === 'sports' ? { height: 0.92, width: 0.76 } : { height: 0.6, width: 0.75 };
+      // keeps every path inside the clearance, with the air the judge gave back (the polish round:
+      // 0.85 of the height; at 3:4 0.70 of the width binds).
+      const fill = scene === 'sports' ? { height: 0.85, width: 0.7 } : { height: 0.6, width: 0.75 };
       expect(rest.heroHeight, label).toBeLessThanOrEqual(fill.height + 1e-3);
       expect(rest.heroWidth, label).toBeLessThanOrEqual(fill.width + 1e-3);
       if (scene === 'dinner') {

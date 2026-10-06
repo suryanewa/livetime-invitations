@@ -559,7 +559,7 @@ describe('Sports legibility: the airball is a shot, the declined pose is not the
     expect(screen(pose('accepted').ballPos).distanceTo(screen(pose('guest-ready').ballPos)) / (2 * BALL_R)).toBeGreaterThanOrEqual(1.2);
   });
 
-  it('v1.7: the hero is the board, rim, net and ball; at the Sports fill no path is cut at 3:4, 1:1 or 3:2 and the ball reads 1.5 × bigger', () => {
+  it('v1.7: the hero is the board, rim, net and ball; at the Sports fill no path is cut at 3:4, 1:1 or 3:2 and the ball reads 1.4 × bigger', () => {
     // The hero (#43): the board's corners, the ring, the net's hanging envelope and the ball at
     // guest-ready; no stand (v1.4–v1.6: the base's corners widened it).
     const hero: Vector3[] = [];
@@ -581,15 +581,18 @@ describe('Sports legibility: the airball is a shot, the declined pose is not the
       expect(f.pathLimited, label).toBe(false);
       for (const v of f.pathExtents) expect(Math.abs(v), label).toBeLessThanOrEqual(1 - PATH_CLEARANCE + 1e-9);
     }
-    // Height binds at 1:1 and 3:2 (0.92: the paths below the hero, the made ball's rest nearest the
-    // camera, allow 0.927); at 3:4 the hero's width binds at 0.76 (the paths' width allows ≈ 0.77).
+    // Height binds at 1:1 and 3:2 (the polish round's 0.85: the paths would allow 0.927); at 3:4 the
+    // hero's width binds at 0.70 (its height 0.836). The air the judge asked for: the paths (the
+    // board's top, the made ball's rest) 6 % inside the frame's top and bottom at 1:1 and 3:2, 6.7 %
+    // at 3:4 (#43 built at 0.92 / 0.76 had them on the 2 % rule).
     expect(fits[1]!.binding).toBe('height');
-    expect(fits[1]!.heroHeight).toBeCloseTo(0.92, 3);
-    expect(fits[2]!.heroHeight).toBeCloseTo(0.92, 3);
+    expect(fits[1]!.heroHeight).toBeCloseTo(0.85, 3);
+    expect(fits[2]!.heroHeight).toBeCloseTo(0.85, 3);
     expect(fits[0]!.binding).toBe('width');
-    expect(fits[0]!.heroWidth).toBeCloseTo(0.76, 3);
-    expect(fits[0]!.heroHeight).toBeGreaterThan(0.85);
-    // The ball's height on screen at the square stage: 9.1 % (v1.5–v1.6: 5.9 %).
+    expect(fits[0]!.heroWidth).toBeCloseTo(0.7, 3);
+    expect(fits[0]!.heroHeight).toBeGreaterThan(0.83);
+    for (const f of fits) for (const v of [f.pathExtents[2], f.pathExtents[3]]) expect(1 - Math.abs(v)).toBeGreaterThan(0.11);
+    // The ball's height on screen at the square stage: 8.2 % (#43 at 0.92: 8.9 %; v1.5–v1.6: 5.9 %).
     const f1 = solveHeroFits(camera, aim, 1, hero, [paths], SPORTS_HERO_FILL, PATH_CLEARANCE)[0]!;
     camera.aspect = 1;
     camera.position.copy(aim).addScaledVector(cameraDirection(), f1.distance);
@@ -598,7 +601,8 @@ describe('Sports legibility: the airball is a shot, the declined pose is not the
     camera.clearViewOffset();
     camera.updateProjectionMatrix();
     const top = BALL_AT.guest.clone().setY(2 * BALL_R).project(camera), bottom = BALL_AT.guest.clone().setY(0).project(camera);
-    expect((top.y - bottom.y) / 2).toBeGreaterThan(0.085);
+    expect((top.y - bottom.y) / 2).toBeGreaterThan(0.08);
+    expect((top.y - bottom.y) / 2).toBeLessThan(0.085);
     // The old fill on the old hero, for the record: the shared 0.6 held the ball at 5.9 %.
     expect(HERO_FILL.height).toBe(0.6);
   });

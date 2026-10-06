@@ -204,30 +204,33 @@ describe('v1.7: a scene\'s own hero fill (Sports, #43) reaches the fit through S
   for (const d of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) hero.push(BALL_AT.guest.clone().add(new Vector3(...d).multiplyScalar(BALL_R)));
   const paths = sportsFramePoints();
 
-  it('Sports fills 0.92 of the height at 1:1 and 3:2 and 0.76 of the width at 3:4, never path-limited; without its fill the shared 0.6 holds', () => {
+  it('Sports fills 0.85 of the height at 1:1 and 3:2 and 0.70 of the width at 3:4, never path-limited; without its fill the shared 0.6 holds', () => {
     const s = stage();
     s.resize(800, 800);
     s.setContent(content(), SPORTS_BOUNDS, undefined, paths, hero, undefined, undefined, SPORTS_HERO_FILL);
     const at = (a: number) => s.measureFraming(a)!.rest;
     for (const a of [1, 1.5]) {
       expect(at(a).binding, `${a}`).toBe('height');
-      expect(at(a).heroHeight, `${a}`).toBeCloseTo(0.92, 3);
+      expect(at(a).heroHeight, `${a}`).toBeCloseTo(0.85, 3);
       expect(at(a).pathLimited, `${a}`).toBe(false);
     }
     expect(at(0.75).binding).toBe('width');
-    expect(at(0.75).heroWidth).toBeCloseTo(0.76, 3);
-    expect(at(0.75).heroHeight).toBeGreaterThan(0.89);
+    expect(at(0.75).heroWidth).toBeCloseTo(0.7, 3);
+    expect(at(0.75).heroHeight).toBeGreaterThan(0.83);
     expect(at(0.75).pathLimited).toBe(false);
     // The phone's fullscreen frame square (dock insets) is fitted as the square stage.
     s.resize(390, 844);
     s.setFrameInsets({ top: 180, right: 0, bottom: 330, left: 0 });
-    expect(s.framing!.rest.heroHeight).toBeCloseTo(0.92, 3);
+    expect(s.framing!.rest.heroHeight).toBeCloseTo(0.85, 3);
     expect(s.framing!.rest.pathLimited).toBe(false);
     // The same content without its fill: the shared rule.
     const t = stage();
     t.resize(800, 800);
     t.setContent(content(), SPORTS_BOUNDS, undefined, paths, hero);
     expect(t.measureFraming(1)!.rest.heroHeight).toBeCloseTo(HERO_FILL.height, 3);
-    expect(t.measureFraming(1)!.rest.distance / s.measureFraming(1)!.rest.distance).toBeGreaterThan(1.45);
+    // Everything 1.40× larger than the shared rule (#43 at 0.92: 1.50×).
+    const ratio = t.measureFraming(1)!.rest.distance / s.measureFraming(1)!.rest.distance;
+    expect(ratio).toBeGreaterThan(1.38);
+    expect(ratio).toBeLessThan(1.45);
   });
 });
