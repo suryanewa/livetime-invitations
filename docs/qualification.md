@@ -154,6 +154,20 @@ Sports stand whole at rest (#43); the laptop close-up's scale and a sliver of th
 of mind during the close-up's move snapping home in ≈ 0.27 s. **"Is v1.7 ready for main? Yes. Nothing I saw blocks
 it"**; the two caveats are decisions for Surya, not bugs.
 
+### Verification on the integrated build (v1.7, 649c4a6)
+
+- `pnpm typecheck` clean; the unit suite **536/536** (34 files, `--testTimeout=1800000`).
+- The browser suite **127/127** on a freshly started dev server on mains power (2026-10-07). A first run on 2026-10-06
+  was cut short when the Mac slept at 2 % battery; on battery the browser is throttled to 30 fps, which had also failed
+  `idle.spec`'s Party case on v1.6 `main` — it passes on mains.
+- Frame pacing (the judges' `pace-scene.ts` and `pace-sports.ts`, real-time rAF intervals over whole sequences, three
+  runs each, load 4.8–6.8, `evidence/v1.7/verification/pacing-final.txt`): the Dinner accept (the reveal, the steam,
+  the move to the close-up), the Sports decline (the wind-up, the push-in, the bank, the rattle, the pull-back) and the
+  Sports accept, at laptop 1280 × 720 @2 and phone 390 × 844 @3: **p50 16.70, p95 16.70–16.80, max 16.8, no frame over
+  20 ms** — except one Sports-accept phone set whose first run ran wholly at 33.3 ms from its first frame and whose
+  second had 13 such frames at its start (a browser-wide 30 Hz throttle, the battery at ≈ 20 % and charging); six
+  re-runs of that set were clean.
+
 ### Known limitations (v1.7)
 
 1. The shared Dinner posters, the gallery cell and the Static tier show the card with "YOU'RE INVITED" only (the
@@ -176,9 +190,8 @@ it"**; the two caveats are decisions for Surya, not bugs.
    on this Mac, likely 3–5× on a phone CPU (bake or cache it later, #44).
 8. A square-layout mount at a non-square aspect frames like fullscreen (the poster layer): objects 7–25 % smaller at 3:4
    than the old per-aspect fit (decision 5).
-9. Frame pacing on the fully integrated build is to be re-measured on mains power (the per-branch measurements: p95
-   16.7–16.8 ms, no frame over 20 ms, at both sizes; the guest judge's session ran on a battery that throttled the
-   browser to 30 fps).
+9. Frame pacing was re-measured on the integrated build on mains power (above); measurements taken on battery are
+   not comparable (macOS throttles the browser to 30 fps).
 
 ## v1.6: the Hollywood pass (2026-10-03 → 05), first judging (2026-10-03)
 

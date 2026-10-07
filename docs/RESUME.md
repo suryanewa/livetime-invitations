@@ -109,7 +109,9 @@ rebuilt in place: slack hang, damped XPBD, smoothed skin, render interpolation);
 5703); integration on `v1.7/integration` (worktree `.claude/worktrees/v16-int`, port 5508) merging net → decline → dinner;
 then one judge per revision and a guest-experience judge through the real controller, polish rounds, the docs, `main`.
 
-State at the last write (2026-10-06, 16:45): **everything built is merged on `v1.7/integration` and pushed (35aa7a6)** —
+State at the last write (2026-10-07): **v1.7 is on `main`** — verified on 649c4a6 (typecheck clean, unit 536/536, browser
+127/127 on mains power, pacing p95 16.7–16.8 ms at both sizes; `docs/qualification.md` v1.7). Earlier state:
+everything built merged on `v1.7/integration` and pushed (35aa7a6) —
 the Dinner card (f2f2d05) and its polish (43105ab: neutral-print posters, capacity at the clamps, no lurch on a change of
 mind from the close-up, the move from 2.4 s, the card at 55 %, a cast shadow), the net (836b448; judged 8.6 / 8.5 against
 4.5, ship as built), the decline (dbe2234; judged ≈ 7 against 5) and its polish (fdf1d99: the fill 0.85 / 0.70, a 3 Hz
