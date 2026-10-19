@@ -6,7 +6,7 @@ import { buildDisposalBin } from '../models/disposalBin.ts';
 import { VisualDirector } from '../src/core/visualDirector.ts';
 import { DIRECTIONS, type MaterialLibrary } from '../src/render/materials.ts';
 import { DinnerScene } from '../src/scenes/dinner/index.ts';
-import { STEAM_LOOK } from '../models/dinnerSteam.ts';
+import { DinnerSteam, STEAM_LOOK } from '../models/dinnerSteam.ts';
 import { ACCEPT, DURATIONS, frameFor, newFrame, REVEAL_DIR, REWIND, sampleSequence } from '../src/scenes/dinner/sequences.ts';
 import {
   axisForward, axisInverse, CLOUD, cloudDensity, recedeWeight, cloudLook, cloudSeat, cloudState, crownFray, dragAt, dragCentre, EDGE, GUSH, heldDrag, gushOut, gushRise, leftSteamEnd, raisedGap, undercutAt, RAISED_DIR, riseAt, SPILL, spillFade,
@@ -360,6 +360,37 @@ describe('Dinner steam field (v1.6)', () => {
         }
       }
     }
+  });
+
+  it('v1.6 review: the gush\'s occupancy, its box and its drawn tube agree, however high its oldest parcels rise', () => {
+    // The drawn tube (the shader's \`spill\`): through the live parcels, its body over 1 % out to 1.72 of its radius (the
+    // edge's noise and puffs at their most: edge = d / 1.2 − 0.4625 under smoothstep(1, 0.55)'s 1 % point, 0.974); its
+    // top on each live segment is at one of the segment's ends.
+    const reach = 1.2 * (0.974 + 0.75 * 0.45 + 0.25 * 0.5);
+    let highest = 0;
+    for (let tau = 0.2; tau < SPILL.fade[1]; tau += 0.01) {
+      const lo = new Vector3(), hi = new Vector3();
+      steamBounds(cloudState(tau), { tau, emitStart: -Infinity, emitEnd: Infinity }, new Vector3(), new Vector3(), new Vector3(), new Vector3(), lo, hi);
+      let top = -Infinity, s0 = 0, t0 = 0;
+      for (let k = 0; k < SPILL.samples; k++) {
+        const a = k * SPILL.dt, g = raisedGap(tau - a), s = spillFade(tau) * spillSource(tau - a);
+        const t1 = plateTop(COVER.lipRadius) + 0.6 * g + gushRise(a) + reach * (GUSH.radius + 0.4 * g + GUSH.shownGrow * (gushOut(a) + gushRise(a)));
+        if (k > 0 && (s > 0 || s0 > 0)) top = Math.max(top, t0, t1);
+        s0 = s; t0 = t1;
+      }
+      if (top === -Infinity) continue;
+      expect(top).toBeLessThanOrEqual(hi.y);
+      highest = Math.max(highest, hi.y);
+    }
+    // Its oldest parcels' box reaches past the 1.3 su the probes' test once stopped at.
+    expect(highest).toBeGreaterThan(1.45);
+    // The probes' test (`spillOccupies`) stops at the box's top, not a constant: occupancy, box and tube agree.
+    const src = (new DinnerSteam() as unknown as { marchMaterial: { fragmentShader: string } }).marchMaterial.fragmentShader;
+    const at = src.indexOf('bool spillOccupies(vec3 p, int l)');
+    expect(at).toBeGreaterThan(0);
+    const body = src.slice(at, src.indexOf('\n}', at)).replace(/\/\/.*$/gm, '');
+    expect(body).toContain('p.y <= uSpillMax[l].y');
+    expect(body).not.toMatch(/p\.y < [0-9]/);
   });
 
   it('its base rolls outward and down over the plate\'s rim', () => {
@@ -721,7 +752,7 @@ describe('Dinner steam on stage (v1.5 clocks, v1.6 field)', () => {
     for (const fn of ['bool squeezeOccupies(vec3 p, int l)', 'float squeeze(vec3 p, int l)']) {
       const at = src.indexOf(fn);
       expect(at).toBeGreaterThan(0);
-      const body = src.slice(at, src.indexOf('\n}', at));
+      const body = src.slice(at, src.indexOf('\n}', at)).replace(/\/\/.*$/gm, '');
       expect(body).toContain('uK[l].z <= 0.0');
       expect(body).not.toContain('uA[l].w');
     }
@@ -766,7 +797,7 @@ describe('Dinner steam on stage (v1.5 clocks, v1.6 field)', () => {
     expect(held).toBeGreaterThan(3);
     // The shader draws them up by the latched lift, not the live one.
     const src = steam.marchMaterial.fragmentShader;
-    const frame = src.slice(src.indexOf('vec3 squeezeFrame('), src.indexOf('\n}', src.indexOf('vec3 squeezeFrame(')));
+    const frame = src.slice(src.indexOf('vec3 squeezeFrame('), src.indexOf('\n}', src.indexOf('vec3 squeezeFrame('))).replace(/\/\/.*$/gm, '');
     expect(frame).toContain('exp(-uWake[l]');
     expect(frame).not.toContain('exp(-uLift');
   });
